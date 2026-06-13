@@ -6,7 +6,8 @@
   "type": "module",
   "license": "MIT",
   "bin": {
-    "weapp-shipmate": "bin/weapp-shipmate.mjs"
+    "weapp-shipmate": "bin/weapp-shipmate.mjs",
+    "weapp-shipmate-mcp": "bin/weapp-shipmate-mcp.mjs"
   },
   "files": [
     "bin/",
