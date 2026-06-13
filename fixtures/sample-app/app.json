@@ -1,0 +1,9 @@
+{
+  "pages": ["pages/index/index"],
+  "requiredPrivateInfos": ["getLocation"],
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于展示附近内容"
+    }
+  }
+}
