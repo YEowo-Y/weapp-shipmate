@@ -1,0 +1,19 @@
+name: validate-rules
+
+# 规则数据门禁：每次 push / PR 自动校验 flow.yaml 与 rules/*.yaml
+# 是否符合 schema、flow 图是否完整、跨文件 stage 是否一致。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci || npm install
+      - run: npm test
