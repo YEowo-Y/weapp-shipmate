@@ -5,17 +5,31 @@
   "description": "你写代码，我陪你上线 —— 微信小程序合规上线导航与代码感知预检（规则即数据）。当前为文档先行阶段，仅含规则数据与校验基建。",
   "type": "module",
   "license": "MIT",
+  "bin": {
+    "weapp-shipmate": "bin/weapp-shipmate.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "schemas/",
+    "rules/",
+    "flow.yaml"
+  ],
   "scripts": {
-    "test": "node scripts/validate.mjs",
+    "test": "node scripts/validate.mjs && node --test",
     "validate": "node scripts/validate.mjs",
-    "lint:rules": "node scripts/validate.mjs"
+    "lint:rules": "node scripts/validate.mjs",
+    "check": "node bin/weapp-shipmate.mjs check",
+    "guide": "node bin/weapp-shipmate.mjs guide"
   },
   "engines": {
     "node": ">=20"
   },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
   "devDependencies": {
     "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1",
-    "js-yaml": "^4.1.0"
+    "ajv-formats": "^3.0.1"
   }
 }
