@@ -1,0 +1,4 @@
+<!-- 合成测试夹具：button 获取手机号 → 触发隐私手机号规则 -->
+<view class="container">
+  <button open-type="getPhoneNumber" bindgetphonenumber="onPhone">获取手机号</button>
+</view>
