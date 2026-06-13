@@ -49,6 +49,30 @@ rules:
     manual_required: true
 ```
 
+## 本地开发环境
+
+零运行时依赖；仅校验工具用到 devDependencies。
+
+```bash
+# Node 版本对齐 CI（见 .nvmrc，>=20）
+nvm use            # 或自行确保 node >=20
+
+npm install        # 安装 devDeps：ajv / ajv-formats / js-yaml
+npm test           # 等价 npm run lint:rules / npm run validate
+```
+
+`npm test` 即数据门禁，会校验：`schemas/*.json` 自身合法 → `flow.yaml` 与 `rules/*.yaml` 符合 schema → flow 图完整性（指向存在/唯一入口/唯一终点/无环）→ 跨文件 `stage` 一致性。CI（`.github/workflows/ci.yml`）在每次 push / PR 跑同一脚本。
+
+目录约定：
+
+| 路径 | 作用 |
+|---|---|
+| `schemas/*.json` | 规则与流程的数据模型（改这里＝改约束，慎重） |
+| `flow.yaml` | 上线阶段决策树骨架（导航） |
+| `rules/*.yaml` | 规则内容（社区 PR 主要改这里） |
+| `scripts/validate.mjs` | 校验门禁脚本 |
+| `docs/06-quality-and-acceptance.md` | DOD / 门禁 / 测试 / 修复分级 / Dogfood 规则 |
+
 ## 本地自检（提 PR 前）
 
 1. 用 `schemas/rules.schema.json` / `schemas/flow.schema.json` 校验你的 YAML（二期会提供 `npm run lint:rules` 脚本）。
