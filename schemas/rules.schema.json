@@ -1,0 +1,199 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/weapp-shipmate/schemas/rules.schema.json",
+  "title": "weapp-shipmate rules file",
+  "description": "校验 rules/*.yaml。一个文件是 { schema_version, rules: [...] }。导航与预检共用同一条规则；预检规则必须声明 scanner，避免把 LLM 猜测当成命中。",
+  "type": "object",
+  "required": ["schema_version", "rules"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "规则数据模型版本。破坏性变更时 +1，并提供迁移说明。"
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/rule" }
+    }
+  },
+  "definitions": {
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "kind",
+        "stage",
+        "subject_type",
+        "severity",
+        "confidence",
+        "why",
+        "official_url",
+        "source_quote",
+        "last_verified",
+        "manual_required"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+(\\.[a-zA-Z0-9-]+)+$",
+          "description": "稳定唯一标识，点分命名。首段小写；后续段允许大小写以贴合 API 名，如 privacy.getUserProfile、category.medical-hint。改名视为破坏性变更。"
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": ["preflight", "navigation", "both"],
+          "description": "preflight=代码感知命中；navigation=流程导航；both=两者。"
+        },
+        "stage": {
+          "enum": [
+            "registration",
+            "certification",
+            "category",
+            "filing",
+            "privacy",
+            "domain",
+            "review",
+            "release"
+          ],
+          "description": "挂到 flow.yaml 的哪个阶段节点（见 flow.schema.json）。"
+        },
+        "subject_type": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["personal", "individual_business", "enterprise"] }
+        },
+        "severity": {
+          "enum": ["info", "warning", "blocker"],
+          "description": "对上线的阻断程度。blocker=大概率被拒/无法继续。"
+        },
+        "confidence": {
+          "enum": ["low", "medium", "high"],
+          "description": "对该规则当前准确性的把握。low 仅能进 draft，不进默认规则集。"
+        },
+        "match": {
+          "type": "object",
+          "description": "预检如何在源码里命中。kind 含 preflight 时必填（见底部 if/then）。",
+          "additionalProperties": false,
+          "required": ["scanner"],
+          "properties": {
+            "api": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "要静态匹配的 API 调用，如 wx.request、uni.request。"
+            },
+            "config_key": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "要匹配的配置键，如 app.json 的 requiredPrivateInfos。"
+            },
+            "scanner": {
+              "enum": ["static_api_call", "static_config", "manual_only"],
+              "description": "static_*=可静态确定的命中；manual_only=无法可靠静态判定，只提示人工核对（如变量拼接出的动态域名）。禁止用 LLM 自由判断冒充 static_*。"
+            },
+            "dynamic_note": {
+              "type": "string",
+              "description": "当源码用变量/环境拼接（如 baseURL + path）导致静态扫描可能漏报时，给用户的人工核对提示。"
+            }
+          }
+        },
+        "signal": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "导航类规则的功能特征关键词（如 问诊/挂号/处方），用于类目/资质预警。"
+        },
+        "warn": {
+          "type": "string",
+          "description": "命中 signal 时给用户的预警文案。"
+        },
+        "requires": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "命中后要求用户去官方后台做什么（人工动作清单）。"
+        },
+        "why": {
+          "type": "string",
+          "minLength": 1,
+          "description": "为什么重要：不做会怎样（通常=被拒/被拦截的原因）。"
+        },
+        "official_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "官方或准官方来源主链接。硬约束：每条规则必带。"
+        },
+        "evidence_urls": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" }
+        },
+        "source_quote": {
+          "type": "string",
+          "minLength": 1,
+          "description": "官方原文短摘录，避免长引用。硬约束：每条规则必带。"
+        },
+        "last_verified": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "最后人工核验日期（ISO YYYY-MM-DD）。腐烂对抗的锚点；CI 会标记超期规则。"
+        },
+        "manual_required": {
+          "type": "boolean",
+          "description": "是否必须由用户本人在官方后台确认/提交。涉及注册/认证/备案/类目/隐私声明/发布的规则必须为 true（见底部 if/then）。"
+        },
+        "draft": {
+          "type": "boolean",
+          "description": "true=未充分核验，仅在显式开启时加载，不进默认规则集。"
+        }
+      },
+      "allOf": [
+        {
+          "$comment": "preflight 规则必须声明 match.scanner，避免把猜测当命中。",
+          "if": {
+            "properties": { "kind": { "enum": ["preflight", "both"] } }
+          },
+          "then": {
+            "required": ["match"]
+          }
+        },
+        {
+          "$comment": "涉及官方后台提交/身份/备案/类目/隐私/域名/发布的阶段，必须 manual_required=true。配置服务器域名白名单同样是后台人工动作，故 domain 也在内——当前 8 个阶段全部要求人工确认，与『绝不替用户提交』一致。",
+          "if": {
+            "properties": {
+              "stage": {
+                "enum": ["registration", "certification", "category", "filing", "privacy", "domain", "review", "release"]
+              }
+            }
+          },
+          "then": {
+            "properties": { "manual_required": { "const": true } }
+          }
+        },
+        {
+          "$comment": "low confidence 必须标 draft，不得进默认规则集。",
+          "if": {
+            "properties": { "confidence": { "const": "low" } }
+          },
+          "then": {
+            "properties": { "draft": { "const": true } },
+            "required": ["draft"]
+          }
+        },
+        {
+          "$comment": "纯导航规则（kind=navigation）必须至少带一个可执行字段，否则渲染不出动作。preflight/both 已由 match 保证可执行。",
+          "if": {
+            "properties": { "kind": { "const": "navigation" } }
+          },
+          "then": {
+            "anyOf": [
+              { "required": ["signal"] },
+              { "required": ["requires"] },
+              { "required": ["warn"] }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
