@@ -1,0 +1,96 @@
+# weapp-shipmate · 上线船友
+
+> **你写代码，我陪你上线。**
+> Your launch **mate** for WeChat Mini Programs — everything after the code.
+>
+> 代码之后，上架之前，那个陪你跑完全程的伙伴。
+
+一个**纯公益、开源**的工具，做 AI 编码工具（Claude Code / Codex 等）与微信小程序官方生态之间的**上线衔接层**，聚焦"**不是写代码**"但决定能否上线的环节：注册、主体认证、类目、ICP 备案、服务器域名白名单、用户隐私保护指引、提交审核、发布、运营合规。
+
+面向人群：**个人开发者、个体工商户、零基础创业者**——AI 已经能帮他们把代码写出来，却帮不上"怎么合规地把它送上微信货架"这一段。
+
+---
+
+## 为什么需要它
+
+AI 编码工具基本解决了"写代码"。但一个零基础的人真正卡死、放弃的地方，几乎都在**上线流程**：类目选错被拒、域名没配白名单、隐私协议漏填、备案卡在工信部、审核理由看不懂……
+
+而这些环节**不适合被粗暴自动化**——涉及实名认证、付费、政府备案、人工审核，技术和法律上都不该由 Agent 代劳。所以 weapp-shipmate **不是"一键上线"**，而是把这条路做成：
+
+1. **导航（Navigation）** —— 你现在在第几步、下一步点哪里、要准备什么材料、卡住了对照哪条官方规则。
+2. **代码感知预检（Preflight）** —— 扫描你的小程序源码，生成**个性化**上线清单：调用了哪些域名（要去配白名单）、用了哪些隐私 API（隐私指引必填哪几项）、功能特征对应的类目建议与高频被拒预警。
+3. **AI 衔接（Glue）** —— 封装成 **CLI 内核 + MCP 适配层**，让刚帮你写完代码的那个 Agent，直接跑预检、生成隐私指引字段映射、待确认草稿和审核备注建议，并一步步引导你在后台该点哪里。
+
+---
+
+## v0 先做什么
+
+weapp-shipmate 不先做"平台"，先做一个可验证的最小闭环：
+
+1. **规则库**：先种 30 条以内高质量规则，覆盖备案、服务类目、用户隐私保护指引、服务器域名白名单、提交审核材料和常见拒审原因。
+2. **问答式导航**：`weapp-shipmate guide` 根据主体类型、是否经营、是否支付、是否收集手机号/位置/头像、是否有服务器域名，输出下一步清单。
+3. **本地代码预检**：`weapp-shipmate check ./app` 只在本地扫描源码，v0 先识别 `wx.request` / `uni.request` 域名、隐私相关 API、`app.json` / `project.config.json` 和高风险 open-type。
+4. **GitHub 协作入口**：先让社区能提交规则变更、拒审案例、官方链接变更和新手卡点，再扩展 MCP。
+
+---
+
+## 它明确不是什么（边界）
+
+> 以下为速览；权威边界清单见 [`docs/02-positioning-and-naming.md`](docs/02-positioning-and-naming.md)，本节与其保持一致。
+
+- ❌ **不是代码框架 / UI 库** —— 那是 Taro、uni-app、FirstUI 的地盘。
+- ❌ **不是"Agent 一键上线"** —— 实名认证 / ICP 备案 / 人工审核不可代劳，也不该代劳。
+- ❌ **不是又一个"操作微信开发者工具"的 MCP** —— 那块已是红海（见 `docs/01-research.md`）；我们做的是它**下游**的合规上线。
+- ❌ **不做合规担保** —— 只给导航 + 官方原文引用 + 最后校验日期，决策权永远在用户手里。
+- ❌ **不上传源码 / 不收集密钥** —— 预检默认本地执行，不采集 AppSecret、上传密钥、身份证照、营业执照等敏感材料。
+- ❌ **不代写正式合规文件** —— 只生成待确认草稿、字段映射和检查清单；正式提交内容由用户按官方后台和自身真实业务确认。
+
+---
+
+## 形态与架构（一句话）
+
+**CLI 内核 + MCP 适配层**，底座是一份**"规则即数据"的知识库**（`rules/*.yaml`），外加一份薄流程骨架（`flow.yaml`）承载上线阶段的顺序与分支。导航与预检是同一份规则库上的两个渲染器——社区 PR 一条规则，两者同时更新、不改代码。详见 `docs/03-decisions-and-architecture.md`。
+
+```
+weapp-shipmate check ./my-app      # 代码感知预检：出个性化上线清单
+weapp-shipmate guide               # 上线流程导航：你在哪一步、下一步做什么
+```
+
+> ⚠️ 以上命令为**二期形态预览**，当前仓库为文档先行阶段，尚不可安装/运行（见「当前状态」）。
+
+---
+
+## 当前状态
+
+🟡 **立项阶段（2026-06-13）** —— 调研、定位、命名已定稿；**代码骨架待二期**。
+
+本目录现为**文档先行**，尚无代码。文档导航：
+
+| 文档 | 内容 |
+|---|---|
+| [`docs/01-research.md`](docs/01-research.md) | GitHub + 官方生态调研：竞品全景、自动化能力边界 |
+| [`docs/02-positioning-and-naming.md`](docs/02-positioning-and-naming.md) | 定位、命名沿革、slogan、边界 |
+| [`docs/03-decisions-and-architecture.md`](docs/03-decisions-and-architecture.md) | 7 项决定、核心架构支点、导航图模型、规则 schema 草图 |
+| [`docs/04-roadmap.md`](docs/04-roadmap.md) | 二期建仓路线、冷启动待决问题 |
+| [`docs/05-feasibility.md`](docs/05-feasibility.md) | 完整可行性评审、Go/No-Go 条件、风险与验证实验 |
+| [`docs/06-quality-and-acceptance.md`](docs/06-quality-and-acceptance.md) | 质量与验收规则：分阶段 DOD、质量门禁、测试策略、修复分级、Dogfood |
+
+---
+
+## In English
+
+**weapp-shipmate** is a free, open-source **go-live navigator** that bridges AI coding agents (Claude Code / Codex) and WeChat's official Mini Program ecosystem — covering every **non-coding** step from registration to release: entity verification, service category, ICP filing, server-domain allowlist, the User Privacy Protection Guideline, review submission, and release.
+
+AI has largely solved *writing the code*; what still blocks zero-to-one creators is *shipping it compliantly onto WeChat's shelf*. These steps — real-name verification, payment, government filing, human review — **should not be blindly automated**, so weapp-shipmate is **not** a "one-click launch" agent. Instead it offers three things on top of one **rules-as-data** knowledge base (`rules/*.yaml`):
+
+1. **Navigation** — which step you're on, what to click next, what to prepare.
+2. **Code-aware preflight** — scans your source locally to produce a *personalized* go-live checklist (request domains to allowlist, privacy APIs that mandate guideline fields, category hints & common rejection warnings).
+3. **AI glue** — a zero-dependency **CLI core + MCP adapter** so the agent that just wrote your code can run the preflight and explain results, without bypassing the official console.
+
+**Not** a code framework/UI lib · **not** one-click launch · **not** another DevTools-driving MCP · **no** compliance guarantees · **never** uploads source or secrets. Status: **inception (2026-06-13)** — docs-first, code skeleton in phase two.
+
+---
+
+## License
+
+MIT，见 [`LICENSE`](LICENSE)。项目维护者承诺纯公益、无商业化计划；MIT 许可证本身允许社区合法复用，治理文档 [`GOVERNANCE.md`](GOVERNANCE.md) 已明确"不接代办、不卖课、不接广告、不做合规担保"的边界。
