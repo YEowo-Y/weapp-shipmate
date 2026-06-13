@@ -56,15 +56,24 @@ weapp-shipmate check ./my-app      # 代码感知预检：出个性化上线清�
 weapp-shipmate guide               # 上线流程导航：你在哪一步、下一步做什么
 ```
 
-> ⚠️ 以上命令为**二期形态预览**，当前仓库为文档先行阶段，尚不可安装/运行（见「当前状态」）。
+**本地运行**（尚未发布到 npm，先从源码跑）：
+
+```bash
+npm install
+node bin/weapp-shipmate.mjs guide --subject personal --sensitive --domain
+node bin/weapp-shipmate.mjs check ./my-app --subject personal
+# 默认只输出来源已核验的规则；加 --include-drafts 可含未核验的种子规则
+```
+
+> ⚠️ 当前种子规则均为 `draft`（来源待人工核验），故默认 `check`/`guide` 输出从简；这是"宁可少说、不做担保"的有意约束。
 
 ---
 
 ## 当前状态
 
-🟡 **立项阶段（2026-06-13）** —— 调研、定位、命名已定稿；**代码骨架待二期**。
+🟢 **二期进行中（2026-06-13）** —— 调研/定位/命名定稿；规则 schema、`flow.yaml`、首批 draft 种子规则、数据校验门禁与 CI 已落地；**CLI 内核 `check`/`guide` 已可从源码运行**（见下「本地运行」）。下一步：种子规则来源核验（draft→default）与 MCP 适配层。
 
-本目录现为**文档先行**，尚无代码。文档导航：
+文档导航：
 
 | 文档 | 内容 |
 |---|---|
