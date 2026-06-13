@@ -4,6 +4,9 @@
 
 ## 二期：建 GitHub 仓骨架（按依赖顺序）
 
+> 进度（2026-06-13）：① 开源包装 ✅ ② schema ✅ ③ 种子规则 ✅（8 条 draft，待来源核验）④ CLI `check` ✅ ⑤ CLI `guide` ✅ ⑥ MCP 适配层 ⏳ 未开始。
+> 另已超出原计划补上：数据校验门禁 + `flow.yaml` 图 linter + GitHub CI + node:test 测试套件 + 样例夹具（见 `docs/06`、`scripts/validate.mjs`、`tests/`）。
+
 1. **开源包装** —— README（中英）/ LICENSE（MIT）/ CONTRIBUTING / SECURITY / GOVERNANCE / issue 模板 / 规则贡献指南。先让项目能被安全地讨论和贡献。
 2. **`flow.yaml` + `rules/*.yaml` schema** —— 第一批数据文件，不是 CLI。先把**流程图骨架**（导航的阶段顺序/分支/前置）和**规则数据模型**一起定死（见 `03-decisions-and-architecture.md` 的「导航图模型」与「规则 schema 草图」）。配一个 schema 校验脚本，保证社区 PR 的规则结构合法、必带 `official_url`、`source_quote`、`last_verified`；`flow.yaml` 同样带来源与校验日期。
 3. **种子规则** —— 手工灌入 30 条以内高质量规则，优先备案、服务类目、隐私、服务器域名、提审材料和常见拒审原因。
