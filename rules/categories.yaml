@@ -1,0 +1,40 @@
+# rules/categories.yaml —— 功能特征 → 服务类目建议 + 高频被拒预警
+# ⚠️ 冷启动种子：draft: true，source_quote 待核验。signal 关键词为启发式，
+#    仅用于提示用户人工确认类目，不作为命中判定的事实结论。见 CONTRIBUTING.md。
+schema_version: 1
+rules:
+  - id: category.medical-hint
+    title: "医疗相关功能类目预警"
+    kind: navigation
+    stage: category
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: blocker
+    confidence: medium
+    signal: ["问诊", "挂号", "处方", "诊断", "医生"]
+    warn: "涉及医疗，需《医疗机构执业许可证》等资质，个人主体大概率被拒；请对照官方服务类目确认所需资质。"
+    requires:
+      - "对照官方『服务类目』确认医疗类所需资质，个人主体慎选"
+    why: "医疗类目要求专项资质，主体不符会被拒"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
+    source_quote: "（待核验：官方服务类目说明原文短摘录）"
+    last_verified: "2026-06-13"
+    manual_required: true
+    draft: true
+
+  - id: category.payment-hint
+    title: "支付/收款功能类目与资质预警"
+    kind: navigation
+    stage: category
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: medium
+    signal: ["支付", "收款", "充值", "微信支付", "下单"]
+    warn: "涉及交易/支付，类目与微信支付开通通常要求企业/个体工商户主体，个人主体多受限。"
+    requires:
+      - "确认主体类型是否满足支付类目要求；个人小程序通常不支持微信支付"
+    why: "支付能力与类目对主体资质有要求，个人主体常无法开通"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
+    source_quote: "（待核验：官方原文短摘录）"
+    last_verified: "2026-06-13"
+    manual_required: true
+    draft: true
