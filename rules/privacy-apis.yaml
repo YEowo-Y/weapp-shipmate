@@ -1,0 +1,63 @@
+# rules/privacy-apis.yaml —— 隐私 API → 必填《用户隐私保护指引》项
+# ⚠️ 冷启动种子：以下规则 official_url 为真实官方页，但 source_quote 尚未逐条核验，
+#    故全部 draft: true，不进默认规则集。核验官方原文后将 source_quote 补实、draft 置 false。
+#    见 CONTRIBUTING.md「规则准入门禁」与 GOVERNANCE.md。
+schema_version: 1
+rules:
+  - id: privacy.getUserProfile
+    title: "用户信息隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: medium
+    match:
+      api: ["wx.getUserProfile", "wx.getUserInfo"]
+      scanner: static_api_call
+    requires:
+      - "在《用户隐私保护指引》声明：用户信息（昵称、头像）"
+    why: "采集用户身份信息，未声明会在审核被拒"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/"
+    source_quote: "（待核验：官方《用户隐私保护指引》原文短摘录）"
+    last_verified: "2026-06-13"
+    manual_required: true
+    draft: true
+
+  - id: privacy.getLocation
+    title: "地理位置隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: medium
+    match:
+      api: ["wx.getLocation", "wx.chooseLocation", "wx.onLocationChange", "wx.startLocationUpdate"]
+      scanner: static_api_call
+    requires:
+      - "在《用户隐私保护指引》声明：地理位置信息"
+      - "在 app.json 的 requiredPrivateInfos 声明相应接口"
+    why: "采集精确/模糊位置，未声明或未在 requiredPrivateInfos 配置会调用失败或被拒"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/"
+    source_quote: "（待核验：官方原文短摘录）"
+    last_verified: "2026-06-13"
+    manual_required: true
+    draft: true
+
+  - id: privacy.getPhoneNumber
+    title: "手机号隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: medium
+    match:
+      config_key: ["button.open-type=getPhoneNumber"]
+      scanner: static_config
+    requires:
+      - "在《用户隐私保护指引》声明：手机号"
+    why: "通过 button open-type=getPhoneNumber 获取手机号，属敏感信息，未声明会被拒"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/"
+    source_quote: "（待核验：官方原文短摘录）"
+    last_verified: "2026-06-13"
+    manual_required: true
+    draft: true
