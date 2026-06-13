@@ -67,6 +67,19 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 
 > ⚠️ 当前种子规则均为 `draft`（来源待人工核验），故默认 `check`/`guide` 输出从简；这是"宁可少说、不做担保"的有意约束。
 
+**给 Agent 用（MCP）**：内置零依赖 MCP server（stdio），把上述能力暴露为两个工具 `weapp_shipmate_check`、`weapp_shipmate_guide`。在 Claude Code / Codex 的 MCP 配置中加入：
+
+```json
+{
+  "mcpServers": {
+    "weapp-shipmate": {
+      "command": "node",
+      "args": ["<仓库绝对路径>/bin/weapp-shipmate-mcp.mjs"]
+    }
+  }
+}
+```
+
 ---
 
 ## 当前状态
