@@ -1,0 +1,19 @@
+# rules/qualification.yaml —— 资质 / 审批材料
+# 已核验官方来源（2026-06-14）：引自《运营规范》4.2，平台明文规则，confidence=high、默认输出。
+# 挂 stage: review（提审时交材料），不挂 category——避免破坏"类目阶段全 draft"的门禁前提。
+schema_version: 1
+rules:
+  - id: qualification.provide-materials
+    title: "按要求提供审批/备案等资质材料"
+    kind: navigation
+    stage: review
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    requires:
+      - "按平台要求提供与服务对应的审批、备案等资质文件，且材料须真实、合法、有效"
+    why: "未按要求提供真实有效资质材料会影响审核结果甚至被拒"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/"
+    source_quote: "你应当按照我们的要求提供相应的审批、备案等资质文件材料"
+    last_verified: "2026-06-14"
+    manual_required: true
