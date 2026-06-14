@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "weapp-shipmate",
+  "display_name": "上线船友 weapp-shipmate",
+  "version": "0.0.0",
+  "description": "微信小程序合规上线导航与代码感知预检（规则即数据）。",
+  "long_description": "你写代码，我陪你上线。把已核验官方来源的微信小程序上线规则暴露为两个本地工具：weapp_shipmate_check（扫描本地源码输出个性化上线预检清单）与 weapp_shipmate_guide（按主体/功能输出上线流程导航）。纯本地执行，不上传源码或密钥；不代办、不做合规担保——官方提交仍由用户本人确认。",
+  "author": {
+    "name": "weapp-shipmate contributors"
+  },
+  "license": "MIT",
+  "keywords": ["weixin", "miniprogram", "小程序", "上线", "合规", "preflight", "mcp"],
+  "server": {
+    "type": "node",
+    "entry_point": "bin/weapp-shipmate-mcp.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/bin/weapp-shipmate-mcp.mjs"]
+    }
+  },
+  "tools": [
+    {
+      "name": "weapp_shipmate_check",
+      "description": "扫描本地微信小程序源码，输出个性化上线预检清单。仅本地执行，不上传源码或密钥。"
+    },
+    {
+      "name": "weapp_shipmate_guide",
+      "description": "按主体类型与功能特征，输出微信小程序上线流程的下一步导航清单。不代办、不做合规担保。"
+    }
+  ],
+  "compatibility": {
+    "claude_desktop": ">=1.0.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=20"
+    }
+  }
+}
