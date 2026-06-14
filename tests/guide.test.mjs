@@ -50,6 +50,7 @@ test("guide 默认含已核验的支付/资质/未成年人规则", () => {
   assert.ok(ids.has("payment.virtual-must-use-official"), "应含虚拟支付规则");
   assert.ok(ids.has("qualification.provide-materials"), "应含资质材料规则");
   assert.ok(ids.has("minor.protect"), "应含未成年人保护规则");
+  assert.ok(ids.has("data.collection-consent"), "应含数据收集告知/同意规则");
 });
 
 test("guide draft 门禁：默认类目降级为阶段标记，--include-drafts 才展开细则", () => {
