@@ -27,6 +27,15 @@ test("guide 收集敏感信息时含隐私阶段", () => {
   assert.ok(stages.has("privacy"));
 });
 
+test("guide 默认含已核验的提交审核规则（review 阶段）", () => {
+  const r = runGuide({ subject_type: "personal" });
+  const reviewIds = r.items.filter((i) => i.stage === "review").map((i) => i.ruleId);
+  assert.ok(reviewIds.includes("review.no-inducement"), "应含禁诱导规则");
+  assert.ok(reviewIds.includes("review.must-be-finished"), "应含完成品规则");
+  assert.ok(reviewIds.includes("review.test-account"), "应含测试号规则");
+  assert.ok(reviewIds.length >= 6, "review 阶段应有 6 条已核验规则");
+});
+
 test("guide draft 门禁：默认类目降级为阶段标记，--include-drafts 才展开细则", () => {
   const def = runGuide({ subject_type: "personal" });
   const defIds = def.items.filter((i) => i.stage === "category").map((i) => i.ruleId);
