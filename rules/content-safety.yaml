@@ -1,0 +1,36 @@
+# rules/content-safety.yaml —— 内容安全 / UGC（用户生成内容）
+# 已核验官方来源（2026-06-14）：逐字引自《微信小程序平台常见拒绝情形》(reject.html 3.2.10/3.2.11)，
+# 平台明文规则，confidence=high、默认输出。kind=navigation，全部 manual_required: true。
+schema_version: 1
+rules:
+  - id: content.filter-mechanism
+    title: "UGC 须提供不当内容过滤措施"
+    kind: navigation
+    stage: review
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: blocker
+    confidence: high
+    signal: ["评论", "发帖", "发布", "社区", "动态", "笔记", "弹幕", "聊天", "留言"]
+    warn: "含用户可发布内容（UGC）的小程序，须提供过滤色情/赌博/违法违规等不当内容的措施（如接入内容安全 API），否则会被拒。"
+    requires:
+      - "为用户可发布内容接入内容安全措施（如内容安全 API），对色情/赌博/违法违规词汇做过滤提示"
+    why: "UGC 无内容过滤机制是常见拒审项，且涉违法有害信息风险"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
+    source_quote: "小程序的服务提供者必须提供过滤不当内容的措施。示例：设置对发布色情、赌博等涉嫌违法违规的词汇进行过滤提示的措施"
+    last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: content.ugc-consent
+    title: "代用户发布内容前须经授权"
+    kind: navigation
+    stage: review
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    requires:
+      - "在代用户发表、发送、转交任何内容前，征得用户明确同意和授权"
+    why: "未经同意代用户发布/转交内容属明令拒审项"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
+    source_quote: "小程序代替用户发表、发送、转交任何内容前，必须征得用户明确同意和授权"
+    last_verified: "2026-06-14"
+    manual_required: true
