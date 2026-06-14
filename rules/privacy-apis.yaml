@@ -131,3 +131,75 @@ rules:
     source_quote: "使用你的相册（仅写入）权限 wx.authorize({scope: 'scope.writePhotosAlbum'})、wx.saveImageToPhotosAlbum、wx.saveVideoToPhotosAlbum"
     last_verified: "2026-06-14"
     manual_required: true
+
+  - id: privacy.choosePhotoVideo
+    title: "照片/视频隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.chooseImage", "wx.chooseMedia", "wx.chooseVideo"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：照片或视频"
+    why: "收集用户选中的照片/视频属处理用户个人信息，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "收集你选中的照片或视频信息"
+    last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: privacy.chooseLocation
+    title: "选择位置隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.chooseLocation", "wx.choosePoi"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：选择的位置信息"
+    why: "收集用户选择的位置信息属处理用户个人信息，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "收集你选择的位置信息"
+    last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: privacy.chooseAddress
+    title: "地址隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.chooseAddress"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：地址"
+    why: "收集用户地址属处理用户个人信息，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "收集你的地址"
+    last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: privacy.chooseInvoice
+    title: "发票信息隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.chooseInvoiceTitle", "wx.chooseInvoice"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：发票信息"
+    why: "收集用户发票信息属处理用户个人信息，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "收集你的发票信息"
+    last_verified: "2026-06-14"
+    manual_required: true
