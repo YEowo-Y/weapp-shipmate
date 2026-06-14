@@ -65,7 +65,7 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 # 默认只输出来源已核验的规则；加 --include-drafts 可含未核验的种子规则
 ```
 
-> ⚠️ 当前 21 条种子规则中 19 条已核验官方来源（备案 1、域名 2、隐私 3、提审 6、登录 5、内容 2），默认即输出；其余 2 条类目规则因"个人主体被拒原因"无官方原文，仍按 `draft` 处理，需加 `--include-drafts` 才显示。这是"宁可少说、不做担保"的有意约束。
+> ⚠️ 当前 24 条种子规则中 22 条已核验官方来源（备案 1、域名 2、隐私 3、提审 6、登录 5、内容 2、支付 1、资质 1、未成年 1），默认即输出；其余 2 条类目规则因"个人主体被拒原因"无官方原文，仍按 `draft` 处理，需加 `--include-drafts` 才显示。这是"宁可少说、不做担保"的有意约束。
 
 **给 Agent 用（MCP）**：内置零依赖 MCP server（stdio），把上述能力暴露为两个工具 `weapp_shipmate_check`、`weapp_shipmate_guide`。在 Claude Code / Codex 的 MCP 配置中加入：
 
