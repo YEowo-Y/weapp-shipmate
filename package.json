@@ -21,7 +21,8 @@
     "validate": "node scripts/validate.mjs",
     "lint:rules": "node scripts/validate.mjs",
     "check": "node bin/weapp-shipmate.mjs check",
-    "guide": "node bin/weapp-shipmate.mjs guide"
+    "guide": "node bin/weapp-shipmate.mjs guide",
+    "build:mcpb": "node scripts/build-mcpb.mjs"
   },
   "engines": {
     "node": ">=20"
