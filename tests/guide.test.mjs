@@ -21,8 +21,19 @@ test("guide 按输入跳过隐私/域名阶段", () => {
   assert.ok(stages.has("filing"), "备案阶段应始终出现");
 });
 
-test("guide 收集敏感信息时含隐私阶段（含 draft）", () => {
-  const r = runGuide({ subject_type: "personal", collects_sensitive: true }, { includeDrafts: true });
+test("guide 收集敏感信息时含隐私阶段", () => {
+  const r = runGuide({ subject_type: "personal", collects_sensitive: true });
   const stages = new Set(r.items.map((i) => i.stage));
   assert.ok(stages.has("privacy"));
+});
+
+test("guide draft 门禁：默认类目降级为阶段标记，--include-drafts 才展开细则", () => {
+  const def = runGuide({ subject_type: "personal" });
+  const defIds = def.items.filter((i) => i.stage === "category").map((i) => i.ruleId);
+  assert.deepEqual(defIds, ["flow.category"], "默认（无 draft）类目只显示阶段标记");
+
+  const withDrafts = runGuide({ subject_type: "personal" }, { includeDrafts: true });
+  const draftIds = withDrafts.items.filter((i) => i.stage === "category").map((i) => i.ruleId);
+  assert.ok(draftIds.includes("category.medical-hint"), "--include-drafts 应展开 draft 类目规则");
+  assert.ok(!draftIds.includes("flow.category"), "展开后不再用阶段标记占位");
 });
