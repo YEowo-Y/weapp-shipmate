@@ -80,6 +80,8 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 }
 ```
 
+**Claude Desktop 一键安装（`.mcpb`）**：无需手写上面的 JSON。本地执行 `npm run build:mcpb` 会打出一个 `.mcpb` 安装包（暂存 + 冒烟自检 + 官方 `mcpb pack`，产物在 `build/`，需联网拉取打包 CLI），在 Claude Desktop 中双击或经扩展设置导入即可使用。船友是纯规则引擎、不调用任何 LLM，故安装包不需要任何 API key。
+
 ---
 
 ## 当前状态
