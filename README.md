@@ -65,7 +65,7 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 # 默认只输出来源已核验的规则；加 --include-drafts 可含未核验的种子规则
 ```
 
-> ⚠️ 当前种子规则均为 `draft`（来源待人工核验），故默认 `check`/`guide` 输出从简；这是"宁可少说、不做担保"的有意约束。
+> ⚠️ 当前 8 条种子规则中 6 条已核验官方来源（备案 1、域名 2、隐私 3），默认即输出；其余 2 条类目规则因"个人主体被拒原因"无官方原文，仍按 `draft` 处理，需加 `--include-drafts` 才显示。这是"宁可少说、不做担保"的有意约束。
 
 **给 Agent 用（MCP）**：内置零依赖 MCP server（stdio），把上述能力暴露为两个工具 `weapp_shipmate_check`、`weapp_shipmate_guide`。在 Claude Code / Codex 的 MCP 配置中加入：
 
@@ -84,7 +84,7 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 
 ## 当前状态
 
-🟢 **二期进行中（2026-06-13）** —— 调研/定位/命名定稿；规则 schema、`flow.yaml`、首批 draft 种子规则、数据校验门禁与 CI 已落地；**CLI 内核 `check`/`guide` 已可从源码运行**（见下「本地运行」）。下一步：种子规则来源核验（draft→default）与 MCP 适配层。
+🟢 **v0 骨架已打通（2026-06-13）** —— 调研/定位/命名定稿；规则 schema、`flow.yaml`、种子规则、数据校验门禁与 CI 已落地；**CLI 内核 `check`/`guide` 与零依赖 MCP server 均可从源码运行**（见下「本地运行」「给 Agent 用」）；8 条种子规则中 6 条已核验官方来源、默认输出。下一步：扩充规则覆盖、规则腐烂监控（官方链接体检 + `last_verified` 时效）。
 
 文档导航：
 
