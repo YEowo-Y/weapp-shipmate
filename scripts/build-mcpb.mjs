@@ -90,14 +90,51 @@ async function smoke() {
 }
 await smoke();
 
+// CI/快速模式：只验"暂存 + 冒烟"（防分发回归的核心），跳过需联网的打包/签名。
+if (process.env.WEAPP_SHIPMATE_NO_PACK === "1") {
+  log("· 跳过打包/签名（WEAPP_SHIPMATE_NO_PACK=1）；暂存与冒烟自检已完成。");
+  process.exit(0);
+}
+
 // 5) 用官方 mcpb CLI 打包（需要网络拉取 npx 包）。失败则保留暂存目录并给出手动指令。
-const npx = process.platform === "win32" ? "npx.cmd" : "npx";
-const r = spawnSync(npx, ["--yes", "@anthropic-ai/mcpb", "pack", STAGE, OUT], { stdio: "inherit" });
-if (r.status === 0) {
-  log(`\n✓ 打包完成：${OUT}`);
-  log("  安装：在 Claude Desktop 中双击该 .mcpb，或经扩展设置导入。");
-} else {
+// 经 shell 调 npx：兼容 Windows 的 .cmd 解析；参数加引号以容纳含空格的路径。
+const mcpb = (args) =>
+  spawnSync(`npx --yes @anthropic-ai/mcpb ${args.map((a) => `"${a}"`).join(" ")}`, {
+    stdio: "inherit",
+    cwd: ROOT,
+    shell: true,
+  });
+const packed = mcpb(["pack", STAGE, OUT]);
+if (packed.status !== 0) {
   log(`\n⚠ mcpb 打包未成功（可能离线或未装）。暂存目录已就绪：${STAGE}`);
   log(`  请联网后手动执行：npx --yes @anthropic-ai/mcpb pack "${STAGE}" "${OUT}"`);
   process.exitCode = 0; // 暂存与自检已完成，不视为致命失败。
+} else {
+  log(`\n✓ 打包完成：${OUT}`);
+
+  // 6) 签名（分发可信，按需开启）。注意：`mcpb verify` 不接受外部证书，只能信任系统链，
+  //    所以自签名永远过不了 verify——故区分两路，且都不把 verify 失败当致命。
+  const cert = process.env.WEAPP_SHIPMATE_SIGN_CERT;
+  const key = process.env.WEAPP_SHIPMATE_SIGN_KEY;
+  if (cert && key) {
+    // 正式分发：受信证书 → 签名并校验（verify 此时有意义）。
+    log("· 用受信证书签名…");
+    const signed = mcpb(["sign", OUT, "-c", cert, "-k", key]);
+    const verified = signed.status === 0 ? mcpb(["verify", OUT]) : { status: 1 };
+    log(verified.status === 0 ? "✓ 签名并校验通过。" : "⚠ 签名或校验未通过，请检查证书与链。");
+  } else if (process.env.WEAPP_SHIPMATE_SELF_SIGN === "1") {
+    // 内部/TOFU：自签名密钥写进 build/（已 gitignore），绝不入库。
+    const devCert = join(ROOT, "build", "self-signed-cert.pem");
+    const devKey = join(ROOT, "build", "self-signed-key.pem");
+    log("· 自签名（TOFU）…");
+    const signed = mcpb(["sign", OUT, "--self-signed", "-c", devCert, "-k", devKey]);
+    log(
+      signed.status === 0
+        ? "✓ 已自签名。注意：自签名证书不在系统信任链，`mcpb verify` 不会判为可信，仅供内部/TOFU 分发。"
+        : "⚠ 自签名未成功。",
+    );
+  } else {
+    log("· 未签名（默认，安装包仍是合法 zip）。正式分发设 WEAPP_SHIPMATE_SIGN_CERT/KEY；内部分发设 WEAPP_SHIPMATE_SELF_SIGN=1。");
+  }
+  log("  安装：在 Claude Desktop 中双击该 .mcpb，或经扩展设置导入。");
 }
