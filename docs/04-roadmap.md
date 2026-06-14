@@ -4,10 +4,10 @@
 
 ## 二期：建 GitHub 仓骨架（按依赖顺序）
 
-> 进度（2026-06-13）：① 开源包装 ✅ ② schema ✅ ③ 种子规则 ✅（14 条，其中 12 条已核验官方来源、默认输出：备案 1 / 域名 2 / 隐私 3 / 提审 6；2 条类目规则因"个人主体被拒原因"无官方原文保留 draft）④ CLI `check` ✅ ⑤ CLI `guide` ✅ ⑥ MCP 适配层 ✅（零依赖 stdio，工具 `weapp_shipmate_check`/`weapp_shipmate_guide`）⑦ `.mcpb` 一键安装包 ✅（`npm run build:mcpb`：暂存+冒烟自检+官方 `mcpb pack`，manifest 通过官方 v0.4 schema 校验）。
+> 进度（2026-06-13）：① 开源包装 ✅ ② schema ✅ ③ 种子规则 ✅（21 条，其中 19 条已核验官方来源、默认输出：备案 1 / 域名 2 / 隐私 3 / 提审 6 / 登录 5 / 内容 2；2 条类目规则因"个人主体被拒原因"无官方原文保留 draft）④ CLI `check` ✅ ⑤ CLI `guide` ✅ ⑥ MCP 适配层 ✅（零依赖 stdio，工具 `weapp_shipmate_check`/`weapp_shipmate_guide`）⑦ `.mcpb` 一键安装包 ✅（`npm run build:mcpb`：暂存+冒烟自检+官方 `mcpb pack`，manifest 通过官方 v0.4 schema 校验）。
 > 另已超出原计划补上：数据校验门禁 + `flow.yaml` 图 linter + GitHub CI + node:test 测试套件（21 例）+ 样例夹具（见 `docs/06`、`scripts/validate.mjs`、`tests/`）。
 >
-> **v0 骨架已全部打通**，首轮种子规则来源核验完成（6/8 promote 为默认、2 条类目保留 draft），且产品终态轻量首步已落地——`.mcpb` Desktop 扩展可一键装进 Claude Desktop（属决策 #8「自建桌面 agent」的 P1；技术调研见 `docs/07`，内置终端等终态重活按"难做则缓"原则后置）。后续重点：继续扩充规则覆盖（提审材料/常见拒因首批 6 条已落地，下一批可补登录规范、内容安全等）、规则腐烂监控（官方链接体检 + `last_verified` 时效定时任务）。
+> **v0 骨架已全部打通**，首轮种子规则来源核验完成（6/8 promote 为默认、2 条类目保留 draft），且产品终态轻量首步已落地——`.mcpb` Desktop 扩展可一键装进 Claude Desktop（属决策 #8「自建桌面 agent」的 P1；技术调研见 `docs/07`，内置终端等终态重活按"难做则缓"原则后置）。后续重点：继续扩充规则覆盖（提审/拒因 6 条 + 登录规范 5 条 + 内容安全 2 条已落地，下一批可补支付/资质、未成年人保护等）、规则腐烂监控（官方链接体检 + `last_verified` 时效定时任务）。
 
 1. **开源包装** —— README（中英）/ LICENSE（MIT）/ CONTRIBUTING / SECURITY / GOVERNANCE / issue 模板 / 规则贡献指南。先让项目能被安全地讨论和贡献。
 2. **`flow.yaml` + `rules/*.yaml` schema** —— 第一批数据文件，不是 CLI。先把**流程图骨架**（导航的阶段顺序/分支/前置）和**规则数据模型**一起定死（见 `03-decisions-and-architecture.md` 的「导航图模型」与「规则 schema 草图」）。配一个 schema 校验脚本，保证社区 PR 的规则结构合法、必带 `official_url`、`source_quote`、`last_verified`；`flow.yaml` 同样带来源与校验日期。
