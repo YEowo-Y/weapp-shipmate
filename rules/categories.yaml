@@ -1,6 +1,7 @@
 # rules/categories.yaml —— 功能特征 → 服务类目建议 + 高频被拒预警
-# ⚠️ 冷启动种子：draft: true，source_quote 待核验。signal 关键词为启发式，
-#    仅用于提示用户人工确认类目，不作为命中判定的事实结论。见 CONTRIBUTING.md。
+# ⚠️ 保持 draft: true。原因：官方类目页已核验"部分类目需专项资质""个人主体开放类目明显少于
+#    非个人主体"，但**未明确表述"个人主体在某类目大概率被拒"的具体原因**——该断言为合理推断，
+#    非官方原文，按 GOVERNANCE.md 不进默认规则集。signal 为启发式，仅提示人工确认。
 schema_version: 1
 rules:
   - id: category.medical-hint
@@ -11,12 +12,12 @@ rules:
     severity: blocker
     confidence: medium
     signal: ["问诊", "挂号", "处方", "诊断", "医生"]
-    warn: "涉及医疗，需《医疗机构执业许可证》等资质，个人主体大概率被拒；请对照官方服务类目确认所需资质。"
+    warn: "医疗服务类目通常需《医疗机构执业许可证》等专项资质；个人主体开放类目明显少于非个人主体，选择前请对照官方类目所需材料确认。"
     requires:
       - "对照官方『服务类目』确认医疗类所需资质，个人主体慎选"
-    why: "医疗类目要求专项资质，主体不符会被拒"
+    why: "医疗类目要求专项资质，主体或材料不符会被拒"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
-    source_quote: "（待核验：官方服务类目说明原文短摘录）"
+    source_quote: "各类目均有具体资质要求，如医疗服务类需提供《医疗机构执业许可证》；个人主体小程序开放类目明显少于非个人主体。"
     last_verified: "2026-06-13"
     manual_required: true
     draft: true
@@ -29,12 +30,12 @@ rules:
     severity: warning
     confidence: medium
     signal: ["支付", "收款", "充值", "微信支付", "下单"]
-    warn: "涉及交易/支付，类目与微信支付开通通常要求企业/个体工商户主体，个人主体多受限。"
+    warn: "涉及交易/电商的类目通常要求《增值电信业务经营许可证》等资质，个人主体开放类目有限，请对照官方类目所需材料确认。"
     requires:
-      - "确认主体类型是否满足支付类目要求；个人小程序通常不支持微信支付"
-    why: "支付能力与类目对主体资质有要求，个人主体常无法开通"
+      - "对照官方『服务类目』确认交易/支付类所需资质与主体要求"
+    why: "交易/电商类目对资质与主体有要求，个人主体常受限"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
-    source_quote: "（待核验：官方原文短摘录）"
+    source_quote: "电商平台需提供《增值电信业务经营许可证》等；个人主体小程序开放类目明显少于非个人主体。"
     last_verified: "2026-06-13"
     manual_required: true
     draft: true
