@@ -1,0 +1,21 @@
+# rules/payment.yaml —— 支付 / 虚拟支付规范
+# 已核验官方来源（2026-06-14）：引自《运营规范》5.13，平台明文规则，confidence=high、默认输出。
+# source_quote 取 5.13 中无省略的连续片段（短摘录）。kind=navigation，manual_required: true。
+schema_version: 1
+rules:
+  - id: payment.virtual-must-use-official
+    title: "虚拟商品须用小程序虚拟支付，不得外跳"
+    kind: navigation
+    stage: review
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: blocker
+    confidence: high
+    signal: ["充值", "会员", "虚拟", "点券", "游戏币", "解锁", "订阅", "付费"]
+    warn: "小程序内售卖虚拟商品（会员/解锁/订阅/虚拟币等）须接入『小程序虚拟支付』，不得引导用户到 App/公众号/H5/个人号/网站完成支付。"
+    requires:
+      - "虚拟商品的购买与支付接入小程序虚拟支付，不得外跳到 App/公众号/H5/网站等完成支付"
+    why: "虚拟商品绕开小程序虚拟支付、引导外部渠道支付会被限制功能或拒审"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/"
+    source_quote: "购买和支付均需接入小程序虚拟支付；不得引导至app、公众号、h5、个人号、网站完成支付"
+    last_verified: "2026-06-14"
+    manual_required: true
