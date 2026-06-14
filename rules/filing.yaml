@@ -1,5 +1,5 @@
 # rules/filing.yaml —— ICP 备案相关导航规则
-# ⚠️ 冷启动种子：draft: true，source_quote 待核验。见 CONTRIBUTING.md。
+# 已核验官方来源（2026-06-13），promote 为默认规则集。
 schema_version: 1
 rules:
   - id: filing.required-before-release
@@ -8,13 +8,12 @@ rules:
     stage: filing
     subject_type: ["personal", "individual_business", "enterprise"]
     severity: blocker
-    confidence: medium
+    confidence: high
     requires:
-      - "在 mp 后台发起小程序备案：备案信息填写 → 平台初审 → 工信部短信核验 → 通管局审核"
+      - "在 mp 后台发起小程序备案：备案信息填写 → 平台初审 → 工信部短信核验 → 通管局审核 → 备案成功"
       - "收到工信部短信后 24 小时内完成核验，否则备案失败需重提"
-    why: "自 2023 年起小程序纳入备案监管，未完成备案无法正常上线"
+    why: "依《反电信网络诈骗法》第二十三条，设立移动互联网应用程序须办理备案；未完成备案无法正常上线"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/record_guidelines.html"
-    source_quote: "（待核验：官方备案指引原文短摘录）"
+    source_quote: "备案整体流程总共分为五个环节：备案信息填写、平台初审、工信部短信核验、通管局审核和备案成功。"
     last_verified: "2026-06-13"
     manual_required: true
-    draft: true
