@@ -13,7 +13,8 @@ test("check 默认即命中已核验的隐私与域名规则", () => {
   assert.ok(ids.includes("privacy.getLocation"));
   assert.ok(ids.includes("privacy.getPhoneNumber"));
   assert.ok(ids.includes("domain.request-whitelist"));
-  assert.ok(r.items.length >= 4);
+  assert.ok(ids.includes("privacy.clipboard"), "扫到 wx.getClipboardData 应命中剪贴板隐私规则");
+  assert.ok(r.items.length >= 5);
 });
 
 test("check 命中项均为非 draft（已核验来源）", () => {
