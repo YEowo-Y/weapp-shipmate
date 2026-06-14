@@ -1,0 +1,21 @@
+name: rule-rot
+
+# 规则腐烂监控：定期体检 last_verified 时效与 official_url 存活。
+# 政策会腐烂——这道定时任务让过期规则与失效来源浮出水面，提醒人工重新核验。
+on:
+  schedule:
+    - cron: "0 0 1 * *"   # 每月 1 日 00:00 UTC
+  workflow_dispatch: {}    # 也可手动触发
+
+jobs:
+  rot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci || npm install
+      # 含链接体检（联网）；超期规则或确证失效链接会让此 job 失败以示告警。
+      # 反爬 403/405 归类为"待人工"不触发失败，避免误报。
+      - run: npm run rot -- --links
