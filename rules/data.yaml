@@ -1,0 +1,22 @@
+# rules/data.yaml —— 用户数据收集：告知用途 + 明确同意
+# 已核验官方来源（2026-06-14）：引自《微信小程序平台常见拒绝情形》(reject.html 3.4.1)，
+# 平台明文规则，confidence=high、默认输出。与 privacy-apis.yaml（隐私指引声明）互补：
+# 此条是收集数据时"告知用途 + 取得明确同意授权"的通则。kind=navigation，manual_required: true。
+schema_version: 1
+rules:
+  - id: data.collection-consent
+    title: "收集用户数据须告知用途并取得同意"
+    kind: navigation
+    stage: review
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    signal: ["收集", "采集", "填写", "注册", "实名", "身份证", "手机号", "用户信息"]
+    warn: "收集用户数据前须明确告知用户该数据的用途，并取得用户明确同意和授权；勿默认勾选或在用户不知情时收集。"
+    requires:
+      - "在收集用户数据前明确告知用途，取得用户明确同意和授权"
+    why: "未告知用途或未取得明确同意即收集用户数据会被拒审，并涉个人信息保护合规风险"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
+    source_quote: "明确告知用户该数据的用途，确保经过用户明确同意和授权"
+    last_verified: "2026-06-14"
+    manual_required: true
