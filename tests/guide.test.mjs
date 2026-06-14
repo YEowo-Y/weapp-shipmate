@@ -36,6 +36,14 @@ test("guide 默认含已核验的提交审核规则（review 阶段）", () => {
   assert.ok(reviewIds.length >= 6, "review 阶段应有 6 条已核验规则");
 });
 
+test("guide 默认含已核验的登录规范与内容安全规则", () => {
+  const r = runGuide({ subject_type: "personal" });
+  const ids = new Set(r.items.filter((i) => i.stage === "review").map((i) => i.ruleId));
+  assert.ok(ids.has("login.after-experience"), "应含登录后置规则");
+  assert.ok(ids.has("login.cancellable"), "应含可取消登录规则");
+  assert.ok(ids.has("content.filter-mechanism"), "应含 UGC 内容过滤规则");
+});
+
 test("guide draft 门禁：默认类目降级为阶段标记，--include-drafts 才展开细则", () => {
   const def = runGuide({ subject_type: "personal" });
   const defIds = def.items.filter((i) => i.stage === "category").map((i) => i.ruleId);
