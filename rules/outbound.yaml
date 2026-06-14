@@ -1,0 +1,38 @@
+# rules/outbound.yaml —— 对外导流 / 外链限制
+# 已核验官方来源（2026-06-14）：逐字引自《运营规范》3.9、5.20，平台明文规则，confidence=high、默认输出。
+# id 首段须单段小写（schema 约束），故用 outbound.*。kind=navigation，带 signal，manual_required: true。
+schema_version: 1
+rules:
+  - id: outbound.no-recommend-others
+    title: "不得展示/推荐其他小程序或公众号"
+    kind: navigation
+    stage: review
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    signal: ["其他小程序", "公众号", "推荐小程序", "跳转小程序", "关注公众号", "小程序矩阵"]
+    warn: "未经允许/授权，不得在小程序内展示或推荐其他微信小程序或公众号，也不得让功能使用依赖于其他小程序/应用。"
+    requires:
+      - "移除未经授权的对其他小程序/公众号的展示或推荐；勿让本小程序功能以使用其他小程序/应用为条件"
+    why: "未经授权展示/推荐其他小程序或公众号、或功能依赖其他应用会被拒审"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/"
+    source_quote: "未经允许或未经腾讯公司授权的情况下，也不得展示或者推荐其他微信小程序或公众号。"
+    last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: outbound.no-induced-app-download
+    title: "不得诱导跳转/下载 App"
+    kind: navigation
+    stage: review
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: blocker
+    confidence: high
+    signal: ["下载App", "下载 App", "下载应用", "打开App", "跳转下载", "扫码下载", "安装App", "二维码下载"]
+    warn: "不得用与功能无实质关联的利益、或强行中断业务流程的方式，诱导用户跳转/下载 App。"
+    requires:
+      - "移除诱导用户跳转/下载 App 的行为：勿以无关利益诱导、勿强行中断流程要求下载 App 才能继续"
+    why: "诱导跳转/下载 App、破坏功能流程完整性会被拒审"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/"
+    source_quote: "小程序提供的服务中，不得存在影响功能服务或业务流程完整性、顺畅性的诱导用户跳转/下载APP的行为。"
+    last_verified: "2026-06-14"
+    manual_required: true
