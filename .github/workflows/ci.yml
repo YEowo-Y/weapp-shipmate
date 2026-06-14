@@ -17,3 +17,9 @@ jobs:
           node-version: "20"
       - run: npm ci || npm install
       - run: npm test
+      # .mcpb 打包冒烟：暂存纯生产副本 + 启动 staged server 自检，防分发回归。
+      # NO_PACK 跳过需联网的 mcpb pack，只验我们自己拥有的部分，快且不依赖外部 CLI。
+      - name: mcpb package smoke
+        run: npm run build:mcpb
+        env:
+          WEAPP_SHIPMATE_NO_PACK: "1"
