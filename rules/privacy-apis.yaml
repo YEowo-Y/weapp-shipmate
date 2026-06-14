@@ -1,7 +1,6 @@
 # rules/privacy-apis.yaml —— 隐私 API → 必填《用户隐私保护指引》项
-# ⚠️ 冷启动种子：以下规则 official_url 为真实官方页，但 source_quote 尚未逐条核验，
-#    故全部 draft: true，不进默认规则集。核验官方原文后将 source_quote 补实、draft 置 false。
-#    见 CONTRIBUTING.md「规则准入门禁」与 GOVERNANCE.md。
+# 已核验官方总则来源（2026-06-13）：处理用户个人信息均需补充隐私保护指引，否则提审受阻。
+# confidence=medium：总则已核验，单条 API 与具体声明项的精确映射为合理推断（官方页未逐项列出）。
 schema_version: 1
 rules:
   - id: privacy.getUserProfile
@@ -15,13 +14,12 @@ rules:
       api: ["wx.getUserProfile", "wx.getUserInfo"]
       scanner: static_api_call
     requires:
-      - "在《用户隐私保护指引》声明：用户信息（昵称、头像）"
-    why: "采集用户身份信息，未声明会在审核被拒"
+      - "在《小程序用户隐私保护指引》中声明：用户信息（昵称、头像）"
+    why: "处理用户个人信息需在隐私指引声明；声明与接口调用不符或为空会在提审被拦截"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/"
-    source_quote: "（待核验：官方《用户隐私保护指引》原文短摘录）"
+    source_quote: "小程序、插件中涉及处理用户个人信息的开发者，均需补充相应用户隐私保护指引；提审时若隐私接口调用情况与隐私协议内容有出入或为空，会被提醒更新。"
     last_verified: "2026-06-13"
     manual_required: true
-    draft: true
 
   - id: privacy.getLocation
     title: "地理位置隐私声明"
@@ -34,14 +32,13 @@ rules:
       api: ["wx.getLocation", "wx.chooseLocation", "wx.onLocationChange", "wx.startLocationUpdate"]
       scanner: static_api_call
     requires:
-      - "在《用户隐私保护指引》声明：地理位置信息"
-      - "在 app.json 的 requiredPrivateInfos 声明相应接口"
-    why: "采集精确/模糊位置，未声明或未在 requiredPrivateInfos 配置会调用失败或被拒"
+      - "在《小程序用户隐私保护指引》中声明：地理位置信息"
+      - "在 app.json 的 requiredPrivateInfos 声明相应位置接口（请对照官方位置接口文档确认）"
+    why: "处理位置信息需在隐私指引声明；声明缺失会在提审被拦截，部分位置接口未在 requiredPrivateInfos 声明会调用失败"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/"
-    source_quote: "（待核验：官方原文短摘录）"
+    source_quote: "小程序、插件中涉及处理用户个人信息的开发者，均需补充相应用户隐私保护指引。"
     last_verified: "2026-06-13"
     manual_required: true
-    draft: true
 
   - id: privacy.getPhoneNumber
     title: "手机号隐私声明"
@@ -54,10 +51,9 @@ rules:
       config_key: ["button.open-type=getPhoneNumber"]
       scanner: static_config
     requires:
-      - "在《用户隐私保护指引》声明：手机号"
-    why: "通过 button open-type=getPhoneNumber 获取手机号，属敏感信息，未声明会被拒"
+      - "在《小程序用户隐私保护指引》中声明：手机号"
+    why: "通过 button open-type=getPhoneNumber 获取手机号属处理用户个人信息，未声明会在提审被拦截"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/"
-    source_quote: "（待核验：官方原文短摘录）"
+    source_quote: "小程序、插件中涉及处理用户个人信息的开发者，均需补充相应用户隐私保护指引。"
     last_verified: "2026-06-13"
     manual_required: true
-    draft: true
