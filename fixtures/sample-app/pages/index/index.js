@@ -3,6 +3,7 @@ Page({
   onLoad() {
     wx.getUserProfile({ desc: "展示用户信息" });
     wx.getLocation({ type: "gcj02" });
+    wx.getClipboardData({}); // 触发剪贴板隐私接口预检
 
     // 静态字面量域名
     wx.request({ url: "https://api.example.com/data" });
