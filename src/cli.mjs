@@ -19,6 +19,7 @@ const HELP = `weapp-shipmate · 你写代码，我陪你上线
   --subject <personal|individual_business|enterprise>   主体类型
   --json                输出 JSON（默认 Markdown）
   --include-drafts      包含未核验来源的 draft 规则（默认排除）
+  --blockers-only       只输出阻断项（severity=blocker），快速聚焦上线拦路项
   --help, -h            显示帮助
   --version, -v         显示版本
 
@@ -60,11 +61,17 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
   const flags = parseFlags(args.slice(1));
   const format = flags.json ? "json" : "markdown";
   const includeDrafts = !!flags["include-drafts"];
+  const blockersOnly = !!flags["blockers-only"];
+  // 仅过滤展示用的 items；阻断退出码仍按过滤后的结果判定（无阻断则 0）。
+  const focus = (result) => {
+    if (blockersOnly) result.items = result.items.filter((i) => i.severity === "blocker");
+    return result;
+  };
 
   try {
     if (cmd === "check") {
       const dir = flags._[0] || ".";
-      const result = runCheck(dir, { subjectType: flags.subject, includeDrafts });
+      const result = focus(runCheck(dir, { subjectType: flags.subject, includeDrafts }));
       out.write(render(result, format) + "\n");
       return result.items.some((i) => i.severity === "blocker") ? 2 : 0;
     }
@@ -76,7 +83,7 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
         collects_sensitive: !!flags.sensitive,
         has_server_domain: !!flags.domain,
       };
-      const result = runGuide(inputs, { includeDrafts });
+      const result = focus(runGuide(inputs, { includeDrafts }));
       out.write(render(result, format) + "\n");
       return 0;
     }
