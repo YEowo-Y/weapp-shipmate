@@ -75,9 +75,33 @@ export function checkBackendApiInFrontend(scan = {}) {
   };
 }
 
+/**
+ * 硬编码密钥安全核验：scanner 已抓到疑似密钥的"文件 + 键名"（绝不含值）。
+ * @param {{secretHints?:{file:string,key:string}[]}} scan
+ * @returns {object|null}
+ */
+export function checkHardcodedSecrets(scan = {}) {
+  const hints = scan.secretHints || [];
+  if (!hints.length) return null;
+  const list = hints.map((h) => `${h.file}（${h.key}）`).join("、");
+  return {
+    ruleId: "security.hardcoded-secret",
+    title: "疑似硬编码密钥（AppSecret/商户密钥）",
+    stage: "review",
+    severity: "blocker",
+    why: "AppSecret/商户密钥等后端专用密钥不得打进小程序前端包，一旦随包下发即视为泄露，可被他人冒用",
+    requires: [`移除前端源码中的疑似密钥，改由后端持有并调用：${list}`],
+    warn: null,
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/server/API/mp-access-token/api_getaccesstoken.html",
+    source_quote: "AppSecret是账号使用后台API接口的密钥，请开发者妥善保管，避免因泄露造成账号被其他人冒用等风险。",
+    last_verified: "2026-06-15",
+    manual_required: true,
+  };
+}
+
 /** 所有交叉核验的入口；后续可在此追加更多一致性核验。 */
 export function crossChecks(scan) {
-  return [checkRequiredPrivateInfos(scan), checkBackendApiInFrontend(scan)].filter(Boolean);
+  return [checkRequiredPrivateInfos(scan), checkBackendApiInFrontend(scan), checkHardcodedSecrets(scan)].filter(Boolean);
 }
 
 export const _LOCATION_DECL_APIS = LOCATION_DECL_APIS; // 供测试
