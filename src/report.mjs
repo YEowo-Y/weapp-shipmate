@@ -1,6 +1,8 @@
 // src/report.mjs —— 把检查/导航结果渲染为 Markdown 或 JSON
 // 输出口径受 GOVERNANCE.md 约束：只给"待用户确认"的建议，绝不声称"已合规/保证过审"。
 const SEV_ICON = { blocker: "🔴", warning: "🟠", info: "🟡" };
+const SEV_RANK = { blocker: 0, warning: 1, info: 2 };
+const SEV_LABEL = { blocker: "阻断", warning: "警告", info: "提示" };
 const STAGE_TITLE = {
   registration: "注册账号", certification: "主体认证", filing: "ICP 备案",
   category: "服务类目", privacy: "用户隐私保护指引", domain: "服务器域名白名单",
@@ -22,6 +24,14 @@ export function toMarkdown(result) {
 
   if (result.meta?.summary) lines.push(result.meta.summary, "");
 
+  // 严重度概览：让用户一眼看到有几项阻断/警告/提示
+  const counts = { blocker: 0, warning: 0, info: 0 };
+  for (const it of result.items) if (counts[it.severity] !== undefined) counts[it.severity]++;
+  const overview = ["blocker", "warning", "info"]
+    .filter((s) => counts[s] > 0)
+    .map((s) => `${SEV_ICON[s]} ${counts[s]} ${SEV_LABEL[s]}`);
+  if (overview.length) lines.push(`**概览**：${overview.join(" · ")}`, "");
+
   // 按 flow 阶段顺序分组
   const order = Object.keys(STAGE_TITLE);
   const byStage = new Map();
@@ -33,7 +43,9 @@ export function toMarkdown(result) {
     const items = byStage.get(stage);
     if (!items || !items.length) continue;
     lines.push(`## ${STAGE_TITLE[stage]}（${stage}）`, "");
-    for (const it of items) {
+    // 同一阶段内按严重度排序：阻断 → 警告 → 提示（稳定排序，平级保持原序）
+    const sorted = [...items].sort((a, b) => (SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9));
+    for (const it of sorted) {
       lines.push(`### ${SEV_ICON[it.severity] || "•"} ${it.title}  \`${it.ruleId}\``);
       if (it.why) lines.push(`- 为什么：${it.why}`);
       for (const r of it.requires || []) lines.push(`- [ ] ${r}`);
