@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkRequiredPrivateInfos } from "../src/crosscheck.mjs";
+import { checkRequiredPrivateInfos, checkBackendApiInFrontend } from "../src/crosscheck.mjs";
 
 test("调用位置接口但未声明 requiredPrivateInfos → 命中（blocker）", () => {
   const item = checkRequiredPrivateInfos({ apis: ["wx.getLocation"], configKeys: [] });
@@ -31,4 +31,19 @@ test("部分声明：只报缺失的那个", () => {
   assert.ok(item);
   assert.match(item.requires[0], /chooseLocation/);
   assert.ok(!/getLocation、/.test(item.requires[0]), "已声明的 getLocation 不应再报");
+});
+
+test("前端出现 api.weixin.qq.com → 命中安全核验（blocker）", () => {
+  const item = checkBackendApiInFrontend({ domains: ["api.weixin.qq.com"] });
+  assert.ok(item);
+  assert.equal(item.ruleId, "security.backend-api-in-frontend");
+  assert.equal(item.severity, "blocker");
+});
+
+test("容灾变体 sh.api.weixin.qq.com 也命中", () => {
+  assert.ok(checkBackendApiInFrontend({ domains: ["sh.api.weixin.qq.com"] }));
+});
+
+test("普通业务域名不命中安全核验", () => {
+  assert.equal(checkBackendApiInFrontend({ domains: ["api.example.com"] }), null);
 });
