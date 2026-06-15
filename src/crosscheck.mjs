@@ -99,9 +99,37 @@ export function checkHardcodedSecrets(scan = {}) {
   };
 }
 
+/**
+ * 明文请求安全核验：小程序网络请求只支持 https/wss，扫到 http/ws 域名即提示。
+ * @param {{insecureHosts?:string[]}} scan
+ * @returns {object|null}
+ */
+export function checkInsecureRequest(scan = {}) {
+  const hosts = scan.insecureHosts || [];
+  if (!hosts.length) return null;
+  return {
+    ruleId: "security.insecure-request",
+    title: "明文 http/ws 请求（须改为 https/wss）",
+    stage: "domain",
+    severity: "warning",
+    why: "小程序网络请求只支持 https/wss，明文 http/ws 域名上线后会被拦截、无法通信",
+    requires: [`将以下域名改为 https/wss 协议：${hosts.join("、")}`],
+    warn: null,
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html",
+    source_quote: "域名只支持 https（wx.request、wx.uploadFile、wx.downloadFile）和 wss（wx.connectSocket）协议",
+    last_verified: "2026-06-15",
+    manual_required: true,
+  };
+}
+
 /** 所有交叉核验的入口；后续可在此追加更多一致性核验。 */
 export function crossChecks(scan) {
-  return [checkRequiredPrivateInfos(scan), checkBackendApiInFrontend(scan), checkHardcodedSecrets(scan)].filter(Boolean);
+  return [
+    checkRequiredPrivateInfos(scan),
+    checkBackendApiInFrontend(scan),
+    checkHardcodedSecrets(scan),
+    checkInsecureRequest(scan),
+  ].filter(Boolean);
 }
 
 export const _LOCATION_DECL_APIS = LOCATION_DECL_APIS; // 供测试
