@@ -35,9 +35,10 @@ test("check 报告动态域名警示并附静态域名清单", () => {
   assert.ok(domainItem.requires.some((x) => x.includes("api.example.com")));
 });
 
-test("check 在反例夹具上命中两条安全交叉核验", () => {
+test("check 在反例夹具上命中三条安全交叉核验", () => {
   const r = runCheck(LEAK, { subjectType: "personal" });
   const ids = r.items.map((i) => i.ruleId);
   assert.ok(ids.includes("security.hardcoded-secret"), "应命中硬编码密钥");
   assert.ok(ids.includes("security.backend-api-in-frontend"), "应命中前端直连微信服务端 API");
+  assert.ok(ids.includes("security.insecure-request"), "应命中明文 http 请求");
 });

@@ -4,6 +4,7 @@ import {
   checkRequiredPrivateInfos,
   checkBackendApiInFrontend,
   checkHardcodedSecrets,
+  checkInsecureRequest,
 } from "../src/crosscheck.mjs";
 
 test("调用位置接口但未声明 requiredPrivateInfos → 命中（blocker）", () => {
@@ -64,4 +65,16 @@ test("scanner 给出 secretHints → 命中硬编码密钥（blocker，只列文
 test("无 secretHints → 不命中", () => {
   assert.equal(checkHardcodedSecrets({ secretHints: [] }), null);
   assert.equal(checkHardcodedSecrets({}), null);
+});
+
+test("明文 http/ws 域名 → 命中（warning），列出域名", () => {
+  const item = checkInsecureRequest({ insecureHosts: ["plain.example.com"] });
+  assert.ok(item);
+  assert.equal(item.ruleId, "security.insecure-request");
+  assert.equal(item.severity, "warning");
+  assert.match(item.requires[0], /plain\.example\.com/);
+});
+
+test("无明文域名 → 不命中", () => {
+  assert.equal(checkInsecureRequest({ insecureHosts: [] }), null);
 });
