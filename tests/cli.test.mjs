@@ -25,6 +25,18 @@ test("guide --json 输出可解析的 JSON", () => {
   assert.equal(JSON.parse(out.get()).command, "guide");
 });
 
+test("guide --blockers-only 只保留阻断项", () => {
+  const out = capture(), err = capture();
+  const code = main(
+    ["node", "cli", "guide", "--subject", "personal", "--sensitive", "--domain", "--blockers-only", "--json"],
+    out, err,
+  );
+  assert.equal(code, 0);
+  const items = JSON.parse(out.get()).items;
+  assert.ok(items.length > 0, "应有阻断项");
+  assert.ok(items.every((i) => i.severity === "blocker"), "所有项均为 blocker");
+});
+
 test("未知命令返回 1", () => {
   const out = capture(), err = capture();
   assert.equal(main(["node", "cli", "frobnicate"], out, err), 1);
