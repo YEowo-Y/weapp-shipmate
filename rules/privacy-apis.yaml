@@ -203,3 +203,111 @@ rules:
     source_quote: "收集你的发票信息"
     last_verified: "2026-06-14"
     manual_required: true
+
+  - id: privacy.bluetooth
+    title: "蓝牙隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.openBluetoothAdapter", "wx.getBluetoothDevices", "wx.createBLEConnection"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：蓝牙"
+    why: "访问蓝牙属处理用户个人信息/设备权限，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "访问你的蓝牙"
+    last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: privacy.addPhoneContact
+    title: "通讯录（写入）隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.addPhoneContact"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：通讯录（仅写入）"
+    why: "向通讯录写入联系人属调用受限权限，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "使用你的通讯录（仅写入）权限"
+    last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: privacy.addPhoneCalendar
+    title: "日历（写入）隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.addPhoneCalendar", "wx.addPhoneRepeatCalendar"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：日历（仅写入）"
+    why: "向日历写入事件属调用受限权限，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "使用你的日历（仅写入）权限"
+    last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: privacy.chooseFile
+    title: "文件隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.chooseMessageFile"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：文件"
+    why: "收集用户选中的文件属处理用户个人信息，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "收集你选中的文件"
+    last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: privacy.chooseLicensePlate
+    title: "车牌号隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.chooseLicensePlate"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：车牌号"
+    why: "收集用户车牌号属处理用户个人信息，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "收集你的车牌号"
+    last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: privacy.werun
+    title: "微信运动步数隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.getWeRunData"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：微信运动步数"
+    why: "收集用户微信运动步数属处理用户个人信息，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "收集你的微信运动步数"
+    last_verified: "2026-06-14"
+    manual_required: true
