@@ -45,6 +45,7 @@ export function scanProject(dir) {
   const domains = new Set();
   const configKeys = new Set();
   const secretHints = new Set(); // "相对路径::键名"，去重；绝不含密钥值
+  const insecureHosts = new Set(); // 用了明文 http/ws 的域名
   let dynamicRequest = false;
   let filesScanned = 0;
 
@@ -54,7 +55,11 @@ export function scanProject(dir) {
     filesScanned++;
 
     for (const m of text.matchAll(API_RE)) apis.add(`${m[1]}.${m[2]}`);
-    for (const m of text.matchAll(URL_RE)) domains.add(m[3].toLowerCase());
+    for (const m of text.matchAll(URL_RE)) {
+      const host = m[3].toLowerCase();
+      domains.add(host);
+      if (m[2] === "http://" || m[2] === "ws://") insecureHosts.add(host); // 明文协议（须 https/wss）
+    }
     if (REQUEST_DYNAMIC_RE.test(text)) dynamicRequest = true;
     if (PHONE_BTN_RE.test(text)) configKeys.add("button.open-type=getPhoneNumber");
     // 只取键名（m[1]）与相对路径，永不读取/记录密钥值本身。
@@ -84,5 +89,6 @@ export function scanProject(dir) {
       const [file, key] = s.split("::");
       return { file, key };
     }),
+    insecureHosts: [...insecureHosts].sort(),
   };
 }
