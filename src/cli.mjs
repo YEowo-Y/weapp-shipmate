@@ -18,6 +18,7 @@ const HELP = `weapp-shipmate · 你写代码，我陪你上线
 选项：
   --subject <personal|individual_business|enterprise>   主体类型
   --json                输出 JSON（默认 Markdown）
+  --checklist           输出可勾选清单（只列待办动作，便于粘进任务清单/issue）
   --include-drafts      包含未核验来源的 draft 规则（默认排除）
   --blockers-only       只输出阻断项（severity=blocker），快速聚焦上线拦路项
   --help, -h            显示帮助
@@ -59,7 +60,7 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
   if (cmd === "--version" || cmd === "-v") { out.write(VERSION + "\n"); return 0; }
 
   const flags = parseFlags(args.slice(1));
-  const format = flags.json ? "json" : "markdown";
+  const format = flags.json ? "json" : flags.checklist ? "checklist" : "markdown";
   const includeDrafts = !!flags["include-drafts"];
   const blockersOnly = !!flags["blockers-only"];
   // 仅过滤展示用的 items；阻断退出码仍按过滤后的结果判定（无阻断则 0）。
