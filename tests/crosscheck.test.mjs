@@ -5,6 +5,7 @@ import {
   checkBackendApiInFrontend,
   checkHardcodedSecrets,
   checkInsecureRequest,
+  checkIpOrLocalhost,
 } from "../src/crosscheck.mjs";
 
 test("调用位置接口但未声明 requiredPrivateInfos → 命中（blocker）", () => {
@@ -77,4 +78,17 @@ test("明文 http/ws 域名 → 命中（warning），列出域名", () => {
 
 test("无明文域名 → 不命中", () => {
   assert.equal(checkInsecureRequest({ insecureHosts: [] }), null);
+});
+
+test("公网 IP 与 localhost → 命中（warning）", () => {
+  const item = checkIpOrLocalhost({ domains: ["203.0.113.5", "localhost", "api.example.com"] });
+  assert.ok(item);
+  assert.equal(item.ruleId, "domain.ip-or-localhost");
+  assert.match(item.requires[0], /203\.0\.113\.5/);
+  assert.match(item.requires[0], /localhost/);
+  assert.ok(!/api\.example\.com/.test(item.requires[0]), "正常域名不应被列入");
+});
+
+test("局域网 IP 与正常域名 → 不命中（官方除外）", () => {
+  assert.equal(checkIpOrLocalhost({ domains: ["192.168.1.10", "10.0.0.2", "172.16.5.5", "api.example.com"] }), null);
 });
