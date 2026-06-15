@@ -2,7 +2,7 @@
 // 安全：默认 local-only；忽略密钥/证照/私有配置；只输出 API 名、域名 host、配置键、文件路径，
 //       绝不回显文件内容、Token、手机号、身份证号等（见 SECURITY.md）。
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, basename, extname } from "node:path";
+import { join, basename, extname, relative } from "node:path";
 
 // 目录忽略
 const IGNORE_DIRS = new Set([
@@ -33,6 +33,8 @@ const URL_RE = /(["'`])(https?:\/\/|wss?:\/\/)([^"'`\s/?#]+)/g;
 const REQUEST_DYNAMIC_RE =
   /\b(?:wx|uni)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{[^}]*\burl\s*:\s*(?!["'`])/;
 const PHONE_BTN_RE = /open-?type\s*=\s*["']getPhoneNumber["']/;
+// 疑似硬编码的微信密钥（AppSecret/商户密钥等后端专用）。捕获组只取键名，绝不记录密钥值。
+const SECRET_RE = /\b(appsecret|app_secret|mch_?key|partner_?key|apiclient_key)\b\s*[:=]\s*["'`][^"'`]{6,}["'`]/gi;
 
 /**
  * 扫描一个小程序项目目录。
@@ -42,6 +44,7 @@ export function scanProject(dir) {
   const apis = new Set();
   const domains = new Set();
   const configKeys = new Set();
+  const secretHints = new Set(); // "相对路径::键名"，去重；绝不含密钥值
   let dynamicRequest = false;
   let filesScanned = 0;
 
@@ -54,6 +57,9 @@ export function scanProject(dir) {
     for (const m of text.matchAll(URL_RE)) domains.add(m[3].toLowerCase());
     if (REQUEST_DYNAMIC_RE.test(text)) dynamicRequest = true;
     if (PHONE_BTN_RE.test(text)) configKeys.add("button.open-type=getPhoneNumber");
+    // 只取键名（m[1]）与相对路径，永不读取/记录密钥值本身。
+    const rel = relative(dir, file).replace(/\\/g, "/");
+    for (const m of text.matchAll(SECRET_RE)) secretHints.add(`${rel}::${m[1].toLowerCase()}`);
 
     if (basename(file) === "app.json") {
       try {
@@ -74,5 +80,9 @@ export function scanProject(dir) {
     domains: [...domains].sort(),
     dynamicRequest,
     configKeys: [...configKeys].sort(),
+    secretHints: [...secretHints].sort().map((s) => {
+      const [file, key] = s.split("::");
+      return { file, key };
+    }),
   };
 }
