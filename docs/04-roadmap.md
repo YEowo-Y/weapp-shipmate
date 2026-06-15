@@ -4,7 +4,7 @@
 
 ## 二期：建 GitHub 仓骨架（按依赖顺序）
 
-> 进度（2026-06-13）：① 开源包装 ✅ ② schema ✅ ③ 种子规则 ✅（35 条，其中 33 条已核验官方来源、默认输出：备案 1 / 域名 2 / 隐私 11 / 提审 6 / 登录 5 / 内容 2 / 支付 1 / 资质 1 / 未成年 1 / 数据 1 / 导流 2；2 条类目规则因"个人主体被拒原因"无官方原文保留 draft。隐私含剪贴板/麦克风/摄像头/相册/照片视频/选择位置/地址/发票等代码可感知预检）④ CLI `check` ✅ ⑤ CLI `guide` ✅ ⑥ MCP 适配层 ✅（零依赖 stdio，工具 `weapp_shipmate_check`/`weapp_shipmate_guide`）⑦ `.mcpb` 一键安装包 ✅（`npm run build:mcpb`：暂存+冒烟自检+官方 `mcpb pack`，manifest 通过官方 v0.4 schema 校验）⑧ 规则腐烂监控 ✅（`npm run rot`：last_verified 时效 + official_url 链接体检，每月定时任务告警）。
+> 进度（2026-06-13）：① 开源包装 ✅ ② schema ✅ ③ 种子规则 ✅（41 条，其中 39 条已核验官方来源、默认输出：备案 1 / 域名 2 / 隐私 17 / 提审 6 / 登录 5 / 内容 2 / 支付 1 / 资质 1 / 未成年 1 / 数据 1 / 导流 2；2 条类目规则因"个人主体被拒原因"无官方原文保留 draft。隐私覆盖官方《用户隐私保护指引内容介绍》信息类型表 17 个接口族的代码可感知预检，仅 4 个运动传感器低频项暂略）④ CLI `check` ✅ ⑤ CLI `guide` ✅ ⑥ MCP 适配层 ✅（零依赖 stdio，工具 `weapp_shipmate_check`/`weapp_shipmate_guide`）⑦ `.mcpb` 一键安装包 ✅（`npm run build:mcpb`：暂存+冒烟自检+官方 `mcpb pack`，manifest 通过官方 v0.4 schema 校验）⑧ 规则腐烂监控 ✅（`npm run rot`：last_verified 时效 + official_url 链接体检，每月定时任务告警）。
 > 另已超出原计划补上：数据校验门禁 + `flow.yaml` 图 linter + GitHub CI + node:test 测试套件（21 例）+ 样例夹具（见 `docs/06`、`scripts/validate.mjs`、`tests/`）。
 >
 > **v0 骨架已全部打通**，首轮种子规则来源核验完成（6/8 promote 为默认、2 条类目保留 draft），且产品终态轻量首步已落地——`.mcpb` Desktop 扩展可一键装进 Claude Desktop（属决策 #8「自建桌面 agent」的 P1；技术调研见 `docs/07`，内置终端等终态重活按"难做则缓"原则后置）。后续重点：继续扩充规则覆盖（提审/拒因 6 + 登录 5 + 内容 2 + 支付/资质/未成年 各 1 已落地，下一批可补诱导下载/外链、数据安全等）。规则腐烂监控已落地（`npm run rot` + 每月定时任务）。
