@@ -65,6 +65,40 @@ export function toMarkdown(result) {
   return lines.join("\n");
 }
 
+// 可勾选清单：把待办动作从叙事里抽出来拍平，按阶段分组 + 严重度排序，便于粘进任务清单。
+export function toChecklist(result) {
+  const lines = [];
+  const title = result.command === "check" ? "上线预检清单" : "上线导航清单";
+  lines.push(`# weapp-shipmate · ${title}（可勾选）`, "");
+  lines.push(`> ${DISCLAIMER}`, "");
+
+  const byStage = new Map();
+  for (const it of result.items) {
+    if (!byStage.has(it.stage)) byStage.set(it.stage, []);
+    byStage.get(it.stage).push(it);
+  }
+  let total = 0;
+  for (const stage of Object.keys(STAGE_TITLE)) {
+    const items = byStage.get(stage);
+    if (!items || !items.length) continue;
+    const sorted = [...items].sort((a, b) => (SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9));
+    const actions = [];
+    for (const it of sorted) {
+      const icon = SEV_ICON[it.severity] || "•";
+      // 优先用 requires（动作项）；无 requires 但有 warn 的导航规则，退而用 warn。
+      const todos = it.requires?.length ? it.requires : it.warn ? [it.warn] : [];
+      for (const t of todos) actions.push(`- [ ] ${icon} ${t}  （${it.ruleId}）`);
+    }
+    if (!actions.length) continue;
+    lines.push(`## ${STAGE_TITLE[stage]}（${stage}）`, ...actions, "");
+    total += actions.length;
+  }
+  if (!total) lines.push("_无可执行清单项。_", "");
+  return lines.join("\n");
+}
+
 export function render(result, format = "markdown") {
-  return format === "json" ? toJson(result) : toMarkdown(result);
+  if (format === "json") return toJson(result);
+  if (format === "checklist") return toChecklist(result);
+  return toMarkdown(result);
 }
