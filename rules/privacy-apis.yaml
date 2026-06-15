@@ -311,3 +311,75 @@ rules:
     source_quote: "收集你的微信运动步数"
     last_verified: "2026-06-14"
     manual_required: true
+
+  - id: privacy.accelerometer
+    title: "加速传感器隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.startAccelerometer"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：加速度计"
+    why: "调用加速传感器属处理用户设备信息，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "调用你的加速传感器"
+    last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: privacy.compass
+    title: "磁场传感器隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.startCompass"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：磁场传感器"
+    why: "调用磁场传感器属处理用户设备信息，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "调用你的磁场传感器"
+    last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: privacy.deviceMotion
+    title: "方向传感器隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.startDeviceMotionListening"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：方向传感器"
+    why: "调用方向传感器属处理用户设备信息，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "调用你的方向传感器"
+    last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: privacy.gyroscope
+    title: "陀螺仪隐私声明"
+    kind: both
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.startGyroscope"]
+      scanner: static_api_call
+    requires:
+      - "在《小程序用户隐私保护指引》中声明：陀螺仪"
+    why: "调用陀螺仪传感器属处理用户设备信息，未声明会在提审被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
+    source_quote: "调用你的陀螺仪传感器"
+    last_verified: "2026-06-14"
+    manual_required: true
