@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkRequiredPrivateInfos, checkBackendApiInFrontend } from "../src/crosscheck.mjs";
+import {
+  checkRequiredPrivateInfos,
+  checkBackendApiInFrontend,
+  checkHardcodedSecrets,
+} from "../src/crosscheck.mjs";
 
 test("调用位置接口但未声明 requiredPrivateInfos → 命中（blocker）", () => {
   const item = checkRequiredPrivateInfos({ apis: ["wx.getLocation"], configKeys: [] });
@@ -46,4 +50,18 @@ test("容灾变体 sh.api.weixin.qq.com 也命中", () => {
 
 test("普通业务域名不命中安全核验", () => {
   assert.equal(checkBackendApiInFrontend({ domains: ["api.example.com"] }), null);
+});
+
+test("scanner 给出 secretHints → 命中硬编码密钥（blocker，只列文件+键名）", () => {
+  const item = checkHardcodedSecrets({ secretHints: [{ file: "pages/index/index.js", key: "appsecret" }] });
+  assert.ok(item);
+  assert.equal(item.ruleId, "security.hardcoded-secret");
+  assert.equal(item.severity, "blocker");
+  assert.match(item.requires[0], /appsecret/);
+  assert.match(item.requires[0], /index\.js/);
+});
+
+test("无 secretHints → 不命中", () => {
+  assert.equal(checkHardcodedSecrets({ secretHints: [] }), null);
+  assert.equal(checkHardcodedSecrets({}), null);
 });
