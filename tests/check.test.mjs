@@ -14,6 +14,10 @@ test("check 默认即命中已核验的隐私与域名规则", () => {
   assert.ok(ids.includes("privacy.getPhoneNumber"));
   assert.ok(ids.includes("domain.request-whitelist"));
   assert.ok(ids.includes("privacy.clipboard"), "扫到 wx.getClipboardData 应命中剪贴板隐私规则");
+  assert.ok(
+    !ids.includes("consistency.requiredPrivateInfos"),
+    "夹具 app.json 已声明 getLocation，交叉核验不应误报",
+  );
   assert.ok(r.items.length >= 5);
 });
 
