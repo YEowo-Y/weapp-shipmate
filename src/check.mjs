@@ -1,6 +1,7 @@
 // src/check.mjs —— 代码感知预检引擎：扫描结果 × preflight 规则 → 个性化清单
 import { loadData, ruleToItem } from "./data.mjs";
 import { scanProject } from "./scanner.mjs";
+import { crossChecks } from "./crosscheck.mjs";
 
 /**
  * @param {string} dir 小程序项目目录
@@ -29,6 +30,9 @@ export function runCheck(dir, { subjectType, includeDrafts = false } = {}) {
     }
     items.push(item);
   }
+
+  // 声明↔调用一致性核验（如位置接口调用了但 app.json 未声明 requiredPrivateInfos）。
+  for (const finding of crossChecks(scan)) items.push(finding);
 
   const notes = [];
   if (scan.dynamicRequest)
