@@ -122,6 +122,39 @@ export function checkInsecureRequest(scan = {}) {
   };
 }
 
+const IPV4_RE = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+// 官方"局域网 IP 除外"：排除 10/8、172.16-31/12、192.168/16 私有网段。
+function isPrivateLan(host) {
+  const m = IPV4_RE.exec(host);
+  if (!m) return false;
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+}
+
+/**
+ * 请求域名为 IP/localhost 的核验：服务器域名白名单不支持（局域网 IP 除外）。
+ * @param {{domains?:string[]}} scan
+ * @returns {object|null}
+ */
+export function checkIpOrLocalhost(scan = {}) {
+  const hits = (scan.domains || []).filter((d) => d === "localhost" || (IPV4_RE.test(d) && !isPrivateLan(d)));
+  if (!hits.length) return null;
+  return {
+    ruleId: "domain.ip-or-localhost",
+    title: "请求使用 IP/localhost（不可作合法服务器域名）",
+    stage: "domain",
+    severity: "warning",
+    why: "服务器域名白名单不支持 IP 地址（局域网 IP 除外）或 localhost，上线后这些请求会被拦截",
+    requires: [`将以下 IP/localhost 改为已备案的域名：${hits.join("、")}`],
+    warn: null,
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html",
+    source_quote: "域名不能使用 IP 地址（小程序的局域网 IP 除外）或 localhost",
+    last_verified: "2026-06-15",
+    manual_required: true,
+  };
+}
+
 /** 所有交叉核验的入口；后续可在此追加更多一致性核验。 */
 export function crossChecks(scan) {
   return [
@@ -129,6 +162,7 @@ export function crossChecks(scan) {
     checkBackendApiInFrontend(scan),
     checkHardcodedSecrets(scan),
     checkInsecureRequest(scan),
+    checkIpOrLocalhost(scan),
   ].filter(Boolean);
 }
 
