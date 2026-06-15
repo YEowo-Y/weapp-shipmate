@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { runCheck } from "../src/check.mjs";
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "sample-app");
+const LEAK = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "leaky-app");
 
 test("check 默认即命中已核验的隐私与域名规则", () => {
   const r = runCheck(FIX, { subjectType: "personal" });
@@ -32,4 +33,11 @@ test("check 报告动态域名警示并附静态域名清单", () => {
   assert.ok(r.notes.some((n) => n.includes("动态")));
   const domainItem = r.items.find((i) => i.ruleId === "domain.request-whitelist");
   assert.ok(domainItem.requires.some((x) => x.includes("api.example.com")));
+});
+
+test("check 在反例夹具上命中两条安全交叉核验", () => {
+  const r = runCheck(LEAK, { subjectType: "personal" });
+  const ids = r.items.map((i) => i.ruleId);
+  assert.ok(ids.includes("security.hardcoded-secret"), "应命中硬编码密钥");
+  assert.ok(ids.includes("security.backend-api-in-frontend"), "应命中前端直连微信服务端 API");
 });
