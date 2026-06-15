@@ -1,41 +1,40 @@
-# rules/categories.yaml —— 功能特征 → 服务类目建议 + 高频被拒预警
-# ⚠️ 保持 draft: true。原因：官方类目页已核验"部分类目需专项资质""个人主体开放类目明显少于
-#    非个人主体"，但**未明确表述"个人主体在某类目大概率被拒"的具体原因**——该断言为合理推断，
-#    非官方原文，按 GOVERNANCE.md 不进默认规则集。signal 为启发式，仅提示人工确认。
+# rules/categories.yaml —— 功能特征 → 服务类目资质预警
+# 已核验官方来源（2026-06-14，《服务类目》material 页）：各类目所需专项资质（许可证名）为官方逐字；
+# 个人主体开放类目由官方『个人主体小程序开放的服务类目』单独列举，医疗/金融/电商平台等需企业资质的
+# 类目个人主体未开放。据此 promote 为非 draft；不再断言"个人主体大概率被拒"（改为对照官方类目确认）。
+# confidence=medium：许可证名逐字可核验，但 signal→类目→资质 的映射含启发式，故不取 high。
 schema_version: 1
 rules:
   - id: category.medical-hint
-    title: "医疗相关功能类目预警"
+    title: "医疗相关功能类目资质预警"
     kind: navigation
     stage: category
     subject_type: ["personal", "individual_business", "enterprise"]
     severity: blocker
     confidence: medium
-    signal: ["问诊", "挂号", "处方", "诊断", "医生"]
-    warn: "医疗服务类目通常需《医疗机构执业许可证》等专项资质；个人主体开放类目明显少于非个人主体，选择前请对照官方类目所需材料确认。"
+    signal: ["问诊", "挂号", "处方", "诊断", "医生", "买药"]
+    warn: "医疗相关功能通常属需专项资质的类目（如《医疗机构执业许可证》《互联网药品信息服务资格证》等）；此类需企业资质的类目个人主体未开放——选类目前请对照官方『服务类目』与『个人主体小程序开放的服务类目』确认。"
     requires:
-      - "对照官方『服务类目』确认医疗类所需资质，个人主体慎选"
-    why: "医疗类目要求专项资质，主体或材料不符会被拒"
+      - "对照官方『服务类目』确认医疗类所需专项资质；个人主体另对照『个人主体开放类目』确认是否可申请"
+    why: "医疗类目要求专项资质（许可证），主体或材料不符会被拒；个人主体未开放此类需企业资质的类目"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
-    source_quote: "各类目均有具体资质要求，如医疗服务类需提供《医疗机构执业许可证》；个人主体小程序开放类目明显少于非个人主体。"
-    last_verified: "2026-06-13"
+    source_quote: "《医疗机构执业许可证》"
+    last_verified: "2026-06-14"
     manual_required: true
-    draft: true
 
   - id: category.payment-hint
-    title: "支付/收款功能类目与资质预警"
+    title: "交易/电商功能类目与资质预警"
     kind: navigation
     stage: category
     subject_type: ["personal", "individual_business", "enterprise"]
     severity: warning
     confidence: medium
-    signal: ["支付", "收款", "充值", "微信支付", "下单"]
-    warn: "涉及交易/电商的类目通常要求《增值电信业务经营许可证》等资质，个人主体开放类目有限，请对照官方类目所需材料确认。"
+    signal: ["支付", "收款", "充值", "微信支付", "下单", "商城", "电商"]
+    warn: "涉及交易/电商平台的类目通常需《增值电信业务经营许可证》等资质；此类需企业资质的类目个人主体未开放——请对照官方『服务类目』与『个人主体开放类目』确认。"
     requires:
-      - "对照官方『服务类目』确认交易/支付类所需资质与主体要求"
-    why: "交易/电商类目对资质与主体有要求，个人主体常受限"
+      - "对照官方『服务类目』确认交易/电商类所需专项资质与主体要求"
+    why: "交易/电商平台类目要求专项资质（如增值电信业务经营许可证），个人主体未开放此类需企业资质的类目"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
-    source_quote: "电商平台需提供《增值电信业务经营许可证》等；个人主体小程序开放类目明显少于非个人主体。"
-    last_verified: "2026-06-13"
+    source_quote: "《增值电信业务经营许可证》（核准服务项目包含“在线数据处理与交易处理业务”）"
+    last_verified: "2026-06-14"
     manual_required: true
-    draft: true
