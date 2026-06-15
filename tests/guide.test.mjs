@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { evalExpr, runGuide } from "../src/guide.mjs";
+import { loadData } from "../src/data.mjs";
 
 test("evalExpr 支持 == / != / && / || 与空表达式", () => {
   assert.equal(evalExpr("collects_sensitive == true", { collects_sensitive: true }), true);
@@ -55,13 +56,12 @@ test("guide 默认含已核验的支付/资质/未成年人规则", () => {
   assert.ok(ids.has("outbound.no-induced-app-download"), "应含不得诱导下载 App 规则");
 });
 
-test("guide draft 门禁：默认类目降级为阶段标记，--include-drafts 才展开细则", () => {
-  const def = runGuide({ subject_type: "personal" });
-  const defIds = def.items.filter((i) => i.stage === "category").map((i) => i.ruleId);
-  assert.deepEqual(defIds, ["flow.category"], "默认（无 draft）类目只显示阶段标记");
-
-  const withDrafts = runGuide({ subject_type: "personal" }, { includeDrafts: true });
-  const draftIds = withDrafts.items.filter((i) => i.stage === "category").map((i) => i.ruleId);
-  assert.ok(draftIds.includes("category.medical-hint"), "--include-drafts 应展开 draft 类目规则");
-  assert.ok(!draftIds.includes("flow.category"), "展开后不再用阶段标记占位");
+test("draft 门禁：默认集不含 draft 规则，--include-drafts 为其超集", () => {
+  // 不依赖某条具体 draft 规则存在，直接验证门禁不变量（当前已无 draft 规则，机制仍须成立）。
+  const def = loadData({ includeDrafts: false });
+  const all = loadData({ includeDrafts: true });
+  assert.ok(def.rules.every((r) => !r.draft), "默认规则集不得包含 draft 规则");
+  assert.ok(all.rules.length >= def.rules.length, "include-drafts 应为默认集的超集");
+  const defIds = new Set(def.rules.map((r) => r.id));
+  for (const r of all.rules) if (!defIds.has(r.id)) assert.ok(r.draft, `多出的 ${r.id} 必为 draft`);
 });
