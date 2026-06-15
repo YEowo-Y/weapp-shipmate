@@ -43,9 +43,41 @@ export function checkRequiredPrivateInfos(scan = {}) {
   };
 }
 
+// 微信服务端 API 域名（含容灾/就近接入点）——只该在后端调用，前端直连会泄露 AppSecret。
+const BACKEND_HOSTS = [
+  "api.weixin.qq.com",
+  "api2.weixin.qq.com",
+  "sh.api.weixin.qq.com",
+  "sz.api.weixin.qq.com",
+  "hk.api.weixin.qq.com",
+];
+
+/**
+ * 前端直连微信服务端 API 的安全核验（AppSecret/access_token 泄露风险）。
+ * @param {{domains?:string[]}} scan
+ * @returns {object|null}
+ */
+export function checkBackendApiInFrontend(scan = {}) {
+  const hit = (scan.domains || []).filter((d) => BACKEND_HOSTS.includes(d));
+  if (!hit.length) return null;
+  return {
+    ruleId: "security.backend-api-in-frontend",
+    title: "前端直连微信服务端 API（AppSecret 泄露风险）",
+    stage: "domain",
+    severity: "blocker",
+    why: "在小程序前端调用 api.weixin.qq.com 等服务端接口，会把 AppSecret/access_token 暴露在客户端，且该域名无法配置进服务器域名白名单；须改为后端服务器调用",
+    requires: [`移除前端对以下微信服务端域名的直连，改由后端调用：${hit.join("、")}`],
+    warn: null,
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/server-ability/backend-api.html",
+    source_quote: "后端 API 不能直接在小程序内通过 wx.request 调用，即 api.weixin.qq.com 不能被配置为服务器域名。",
+    last_verified: "2026-06-15",
+    manual_required: true,
+  };
+}
+
 /** 所有交叉核验的入口；后续可在此追加更多一致性核验。 */
 export function crossChecks(scan) {
-  return [checkRequiredPrivateInfos(scan)].filter(Boolean);
+  return [checkRequiredPrivateInfos(scan), checkBackendApiInFrontend(scan)].filter(Boolean);
 }
 
 export const _LOCATION_DECL_APIS = LOCATION_DECL_APIS; // 供测试
