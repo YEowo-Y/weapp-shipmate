@@ -21,8 +21,10 @@ const readYaml = (p) => yaml.load(readFileSync(join(ROOT, p), "utf-8"));
 
 const rulesSchema = readJson("schemas/rules.schema.json");
 const flowSchema = readJson("schemas/flow.schema.json");
+const rejectionsSchema = readJson("schemas/rejections.schema.json");
 const validateRules = ajv.compile(rulesSchema);
 const validateFlow = ajv.compile(flowSchema);
+const validateRejections = ajv.compile(rejectionsSchema);
 
 // 1) flow.yaml schema
 const flow = readYaml("flow.yaml");
@@ -56,15 +58,28 @@ if (entries.length === 1) {
 
 // 3) rules/*.yaml schema + 跨文件 stage 一致性
 let total = 0;
+const ruleIds = new Set();
 for (const f of readdirSync(join(ROOT, "rules")).filter((f) => f.endsWith(".yaml")).sort()) {
   const doc = readYaml(join("rules", f));
   if (validateRules(doc)) ok(`rules/${f} (${doc.rules.length} 条)`);
   else fail(`rules/${f}: ` + ajv.errorsText(validateRules.errors));
   for (const r of doc.rules) {
     total++;
+    ruleIds.add(r.id);
     if (!stageSet.has(r.stage)) fail(`rules/${f} 规则 ${r.id} 的 stage ${r.stage} 不在 flow 中`);
   }
 }
+
+// 3b) rejections.yaml schema + 引用完整性：每个拒因映射的 rule id 必须真实存在
+const rejections = readYaml("rejections.yaml");
+if (validateRejections(rejections)) ok(`rejections.yaml (${rejections.rejections.length} 条)`);
+else fail("rejections.yaml schema: " + ajv.errorsText(validateRejections.errors));
+let danglingLinks = 0;
+for (const rj of rejections.rejections ?? []) {
+  for (const rid of rj.rules ?? [])
+    if (!ruleIds.has(rid)) { fail(`rejections ${rj.id} 引用了不存在的规则 id: ${rid}`); danglingLinks++; }
+}
+if (!danglingLinks && rejections.rejections) ok("rejections 引用的规则 id 全部存在");
 
 // 4) 两 schema 的 stage 枚举一致
 const re = new Set(rulesSchema.definitions.rule.properties.stage.enum);
