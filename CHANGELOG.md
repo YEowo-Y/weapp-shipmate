@@ -17,7 +17,7 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 
 ### Added — 拒因反查（"规则即数据"的第四个渲染器）
 
-- **拒因反查 `explain <审核反馈|关键词>`**（`rejections.yaml` + `src/explain.mjs`）：把用户实际看到的拒审信号（审核反馈文案 / 关键词）反向索引到 `rules/*.yaml` 中**已逐字核验**的规则，输出对应规则的 why / 修复步骤 / 官方原文链接。**不新增未核验断言**——修复步骤与来源全部来自被链接规则。
+- **拒因反查 `explain <审核反馈|关键词>`**（`rejections.yaml` 21 条 + `src/explain.mjs`）：把用户实际看到的拒审信号（审核反馈文案 / 关键词）反向索引到 `rules/*.yaml` 中**已逐字核验**的规则，输出对应规则的 why / 修复步骤 / 官方原文链接。**不新增未核验断言**——修复步骤与来源全部来自被链接规则。覆盖诱导/营销/测试版/测试号/功能简介/类目可达/登录/头像昵称/隐私指引/推荐他人/UGC/资质/备案/域名白名单/未成年/虚拟支付/电商类目/数据收集/剪贴板/相机相册/麦克风。
 - 中文按子串双向匹配（贴整段反馈或敲单个关键词皆可命中）；错误码键位（`codes`）保留但暂空——如 `61040` 在官方 `app.html` 查无明文，宁缺毋造，待官方错误码表可逐字核验再补。
 - 引用完整性门禁：`rejections.schema.json` 强制每条 `rules≥1`，`validate.mjs` 强制每个被引用的规则 id 真实存在——拒因库永不指向幽灵规则。
 
@@ -36,7 +36,7 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 ### Added — 质量基建
 
 - 规则腐烂监控（`npm run rot`）：`last_verified` 时效检查 + `official_url` 链接体检；每月定时 GitHub workflow 告警。
-- 测试套件（`node:test`，54 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck）+ 样例夹具；GitHub CI（含 `.mcpb` 打包冒烟）。
+- 测试套件（`node:test`，56 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck）+ 样例夹具；GitHub CI（含 `.mcpb` 打包冒烟）。
 
 ### Added — 治理与文档
 
