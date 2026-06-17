@@ -97,8 +97,45 @@ export function toChecklist(result) {
   return lines.join("\n");
 }
 
+// 拒因反查渲染：按"拒审原因"分组（而非 flow 阶段），每组列出背后已核验规则的修复步骤与官方来源。
+export function toExplain(result) {
+  const lines = [];
+  lines.push("# weapp-shipmate · 拒因解读", "");
+  lines.push(`> ${DISCLAIMER}`, "");
+  if (result.meta?.summary) lines.push(result.meta.summary, "");
+
+  // 按 rejectId 分组，保持 items 的命中排序（已按相关度降序）
+  const byReject = new Map();
+  for (const it of result.items) {
+    const key = it.rejectId || "_";
+    if (!byReject.has(key)) byReject.set(key, { summary: it.rejectSummary, items: [] });
+    byReject.get(key).items.push(it);
+  }
+  for (const { summary, items } of byReject.values()) {
+    lines.push(`## ${summary}`, "");
+    const sorted = [...items].sort((a, b) => (SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9));
+    for (const it of sorted) {
+      lines.push(`### ${SEV_ICON[it.severity] || "•"} ${it.title}  \`${it.ruleId}\``);
+      if (it.why) lines.push(`- 为什么：${it.why}`);
+      for (const r of it.requires || []) lines.push(`- [ ] ${r}`);
+      if (it.manual_required) lines.push(`- 👤 需你本人在官方后台完成，工具不代办`);
+      if (it.official_url) lines.push(`- 来源：${it.official_url}（最后核验 ${it.last_verified}）`);
+      lines.push("");
+    }
+  }
+
+  if (result.notes?.length) {
+    lines.push("## 备注", "");
+    for (const n of result.notes) lines.push(`- ${n}`);
+    lines.push("");
+  }
+  if (!result.items.length) lines.push("_未匹配到已收录的拒审原因。_", "");
+  return lines.join("\n");
+}
+
 export function render(result, format = "markdown") {
   if (format === "json") return toJson(result);
   if (format === "checklist") return toChecklist(result);
+  if (result.command === "explain") return toExplain(result);
   return toMarkdown(result);
 }
