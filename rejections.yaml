@@ -91,3 +91,66 @@ rejections:
     codes: []
     rules: ["category.medical-hint", "qualification.provide-materials"]
     last_verified: "2026-06-17"
+
+  - id: reject.filing
+    summary: "未完成 ICP 备案即发布（备案是发布前置）"
+    aliases: ["备案", "ICP备案", "ICP 备案", "未备案", "工信部", "备案号", "域名备案"]
+    codes: []
+    rules: ["filing.required-before-release"]
+    last_verified: "2026-06-17"
+
+  - id: reject.domain-whitelist
+    summary: "请求域名未在小程序后台配置服务器域名白名单"
+    aliases: ["服务器域名", "合法域名", "域名白名单", "未配置域名", "域名校验", "request 合法域名", "不在以下合法域名列表"]
+    codes: []
+    rules: ["domain.request-whitelist", "domain.uni-request"]
+    last_verified: "2026-06-17"
+
+  - id: reject.minors
+    summary: "面向未成年人 / 含不宜未成年内容但未做保护处理"
+    aliases: ["未成年", "青少年", "未成年人", "未成年人保护", "儿童"]
+    codes: []
+    rules: ["minor.protect"]
+    last_verified: "2026-06-17"
+
+  - id: reject.virtual-payment
+    summary: "虚拟商品绕开小程序虚拟支付、引导外部渠道（App/H5/公众号）完成支付"
+    aliases: ["虚拟支付", "虚拟商品", "外跳支付", "引导外部支付", "内购", "会员充值", "解锁付费", "苹果支付"]
+    codes: []
+    rules: ["payment.virtual-must-use-official"]
+    last_verified: "2026-06-17"
+
+  - id: reject.ecommerce-category
+    summary: "电商 / 交易类功能缺少经营资质或主体不符（如增值电信业务经营许可证）"
+    aliases: ["电商", "交易类", "商城类目", "增值电信", "在线交易", "经营许可证", "电商平台"]
+    codes: []
+    rules: ["category.payment-hint"]
+    last_verified: "2026-06-17"
+
+  - id: reject.data-consent
+    summary: "收集用户数据未告知用途 / 未取得用户明确同意"
+    aliases: ["收集数据", "用户数据", "未告知", "未取得同意", "个人信息收集", "未明示", "数据用途"]
+    codes: []
+    rules: ["data.collection-consent"]
+    last_verified: "2026-06-17"
+
+  - id: reject.privacy-clipboard
+    summary: "读取剪贴板但未在《用户隐私保护指引》声明"
+    aliases: ["剪贴板", "getClipboardData", "读取剪贴板", "粘贴板"]
+    codes: []
+    rules: ["privacy.clipboard"]
+    last_verified: "2026-06-17"
+
+  - id: reject.privacy-camera-album
+    summary: "使用相机/相册（拍摄、选图、存图）但未在《用户隐私保护指引》声明"
+    aliases: ["相机", "摄像头", "相册", "保存到相册", "选择照片", "选择视频", "拍照"]
+    codes: []
+    rules: ["privacy.camera", "privacy.writePhotosAlbum", "privacy.choosePhotoVideo"]
+    last_verified: "2026-06-17"
+
+  - id: reject.privacy-record
+    summary: "使用麦克风录音但未在《用户隐私保护指引》声明"
+    aliases: ["麦克风", "录音", "录制音频", "getRecorderManager"]
+    codes: []
+    rules: ["privacy.record"]
+    last_verified: "2026-06-17"
