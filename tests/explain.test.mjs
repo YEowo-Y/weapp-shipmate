@@ -51,6 +51,31 @@ test("引用完整性：每条拒因映射的 rule id 必须在规则库真实�
       assert.ok(ids.has(rid), `拒因 ${e.id} 引用了不存在的规则 id: ${rid}`);
 });
 
+test("扩充覆盖：备案/域名/隐私接口/未成年等关键词各自路由到对应规则", () => {
+  const cases = [
+    ["备案", "filing.required-before-release"],
+    ["域名白名单", "domain.request-whitelist"],
+    ["麦克风", "privacy.record"],
+    ["剪贴板", "privacy.clipboard"],
+    ["相机", "privacy.camera"],
+    ["未成年", "minor.protect"],
+    ["收集数据", "data.collection-consent"],
+  ];
+  for (const [q, expected] of cases) {
+    const ids = runExplain(q).items.map((i) => i.ruleId);
+    assert.ok(ids.includes(expected), `「${q}」应命中 ${expected}，实得 ${ids.join(",") || "(空)"}`);
+  }
+});
+
+test("语义拆分：虚拟支付与电商类目互不串味", () => {
+  const vp = runExplain("虚拟支付").items.map((i) => i.ruleId);
+  assert.ok(vp.includes("payment.virtual-must-use-official"));
+  assert.ok(!vp.includes("category.payment-hint"), "虚拟支付不应混入电商类目规则");
+  const ec = runExplain("电商").items.map((i) => i.ruleId);
+  assert.ok(ec.includes("category.payment-hint"));
+  assert.ok(!ec.includes("payment.virtual-must-use-official"), "电商不应混入虚拟支付规则");
+});
+
 test("explain 渲染按拒因分组并附带官方来源", () => {
   const md = render(runExplain("测试号"), "markdown");
   assert.match(md, /拒因解读/);
