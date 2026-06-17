@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { runCheck } from "./check.mjs";
 import { runGuide } from "./guide.mjs";
+import { runExplain } from "./explain.mjs";
 import { render } from "./report.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -14,6 +15,7 @@ const HELP = `weapp-shipmate · 你写代码，我陪你上线
 用法：
   weapp-shipmate check [目录] [选项]   代码感知预检：扫描源码 → 个性化上线清单
   weapp-shipmate guide [选项]          上线流程导航：你在哪一步、下一步做什么
+  weapp-shipmate explain <反馈|关键词>  拒因反查：审核反馈/关键词 → 对应规则 + 官方原文 + 修复步骤
 
 选项：
   --subject <personal|individual_business|enterprise>   主体类型
@@ -33,6 +35,8 @@ guide 额外输入（布尔开关，出现即为 true）：
 示例：
   weapp-shipmate check ./my-app --subject personal
   weapp-shipmate guide --subject personal --sensitive --domain
+  weapp-shipmate explain 诱导分享
+  weapp-shipmate explain "您的小程序存在营销广告用途"
 
 注意：本工具只给"待你确认"的导航建议，不代办、不做合规担保。`;
 
@@ -85,6 +89,17 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
         has_server_domain: !!flags.domain,
       };
       const result = focus(runGuide(inputs, { includeDrafts }));
+      out.write(render(result, format) + "\n");
+      return 0;
+    }
+    if (cmd === "explain") {
+      const query = flags._.join(" ").trim();
+      if (!query) {
+        err.write("用法：weapp-shipmate explain <审核反馈或关键词>\n例如：weapp-shipmate explain 诱导分享\n");
+        return 1;
+      }
+      // explain 是信息查询而非上线门禁，不返回阻断退出码。
+      const result = focus(runExplain(query, { includeDrafts }));
       out.write(render(result, format) + "\n");
       return 0;
     }
