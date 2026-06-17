@@ -1,0 +1,93 @@
+# rejections.yaml —— 拒因反查知识库（explain 渲染器的"事实源"）
+# 设计：本文件不重复造拒因，而是给"用户实际看到的拒审信号"（审核反馈文案 / 错误码）
+# 建一条反向索引，指回 rules/*.yaml 中已逐字核验官方来源的规则。修复步骤与官方原文
+# 全部来自被链接规则，绝不在此新增未核验断言（治理见 GOVERNANCE.md）。
+# - aliases: 审核反馈里高频出现的关键词（中文按子串匹配，无需分词）。
+# - rules:   已核验规则 id（schema 强制 minItems≥1；validate 强制每个 id 真实存在）。
+# - codes:   官方错误码（保留字段）。仅当能从官方错误码表逐字核验时才填——
+#            如 61040 在官方 app.html 查无明文，故暂不收录，宁缺毋造。
+schema_version: 1
+rejections:
+  - id: reject.inducement
+    summary: "页面存在诱导分享 / 诱导关注 / 诱导下载等诱导类行为"
+    aliases: ["诱导分享", "诱导关注", "诱导添加", "诱导下载", "诱导", "分享才能", "关注公众号才能", "分享后才可"]
+    codes: []
+    rules: ["review.no-inducement", "outbound.no-induced-app-download"]
+    last_verified: "2026-06-17"
+
+  - id: reject.marketing-ads
+    summary: "页面内容主要为营销或广告用途"
+    aliases: ["营销", "广告", "广告位", "招商", "推广为主"]
+    codes: []
+    rules: ["review.not-mainly-ads"]
+    last_verified: "2026-06-17"
+
+  - id: reject.unfinished
+    summary: "小程序为测试版 / 无法正常打开运行（非完成品）"
+    aliases: ["测试版", "无法打开", "闪退", "崩溃", "白屏", "空白页", "半成品", "完成品", "无法运行"]
+    codes: []
+    rules: ["review.must-be-finished"]
+    last_verified: "2026-06-17"
+
+  - id: reject.no-test-account
+    summary: "存在账号体系但未提供可体验全部功能的测试号"
+    aliases: ["测试账号", "测试号", "账号体系", "体验账号", "账号和密码", "未提供账号"]
+    codes: []
+    rules: ["review.test-account"]
+    last_verified: "2026-06-17"
+
+  - id: reject.function-mismatch
+    summary: "实际功能点与小程序简介不一致"
+    aliases: ["功能与简介", "简介不一致", "简介不符", "功能不符", "与描述不符", "简介"]
+    codes: []
+    rules: ["review.function-matches-intro"]
+    last_verified: "2026-06-17"
+
+  - id: reject.category-unreachable
+    summary: "提交的服务类目功能在首页不可直达（需 2 次点击内可达）"
+    aliases: ["类目功能", "首页不可达", "类目不符", "服务类目", "2次点击", "两次点击", "类目页面"]
+    codes: []
+    rules: ["review.category-reachable-on-home"]
+    last_verified: "2026-06-17"
+
+  - id: reject.forced-login
+    summary: "强制登录 / 未体验功能即要求授权登录 / 登录无法取消"
+    aliases: ["强制登录", "强制授权", "未体验", "一进入就登录", "登录才能", "无法取消登录", "必须登录", "授权登录"]
+    codes: []
+    rules: ["login.after-experience", "login.cancellable"]
+    last_verified: "2026-06-17"
+
+  - id: reject.userdata-misuse
+    summary: "未经授权显示用户头像昵称 / 请求或诱导输入微信用户名密码"
+    aliases: ["未授权显示", "头像昵称", "昵称头像", "微信密码", "用户名密码", "用户名或密码", "未经授权"]
+    codes: []
+    rules: ["login.no-unauthorized-userdata", "login.no-password-input"]
+    last_verified: "2026-06-17"
+
+  - id: reject.privacy-guideline
+    summary: "调用隐私接口收集个人信息但未配置 / 声明《用户隐私保护指引》"
+    aliases: ["隐私保护指引", "用户隐私", "隐私协议", "隐私授权", "收集个人信息", "未声明隐私", "getUserProfile", "getPhoneNumber", "手机号"]
+    codes: []
+    rules: ["privacy.getUserProfile", "privacy.getPhoneNumber", "privacy.getLocation"]
+    last_verified: "2026-06-17"
+
+  - id: reject.recommend-others
+    summary: "未经授权展示 / 推荐其他小程序或公众号、或诱导跳转外部应用"
+    aliases: ["推荐其他小程序", "跳转其他小程序", "其他公众号", "外部小程序", "导流", "外链"]
+    codes: []
+    rules: ["outbound.no-recommend-others"]
+    last_verified: "2026-06-17"
+
+  - id: reject.ugc-content
+    summary: "含用户可发布内容（UGC）但缺少内容安全过滤机制"
+    aliases: ["内容安全", "UGC", "用户发布", "评论功能", "不当内容", "色情", "赌博", "违法违规", "内容过滤"]
+    codes: []
+    rules: ["content.filter-mechanism", "content.ugc-consent"]
+    last_verified: "2026-06-17"
+
+  - id: reject.special-category-qualification
+    summary: "特殊行业类目缺少对应资质材料（如医疗类许可证）"
+    aliases: ["资质", "许可证", "医疗", "执业许可", "资质材料", "专项资质", "资质不符"]
+    codes: []
+    rules: ["category.medical-hint", "qualification.provide-materials"]
+    last_verified: "2026-06-17"
