@@ -18,6 +18,14 @@
     "uni-app",
     "taro"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YEowo-Y/weapp-shipmate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/YEowo-Y/weapp-shipmate/issues"
+  },
+  "homepage": "https://github.com/YEowo-Y/weapp-shipmate#readme",
   "bin": {
     "weapp-shipmate": "bin/weapp-shipmate.mjs",
     "weapp-shipmate-mcp": "bin/weapp-shipmate-mcp.mjs"
