@@ -3,4 +3,5 @@
   <button open-type="chooseAvatar" bindchooseavatar="onAvatar">选择头像</button>
   <camera device-position="back" flash="off"></camera>
   <live-pusher url="" mode="RTC" enable-camera="{{true}}"></live-pusher>
+  <web-view src="https://embed.example/page"></web-view>
 </view>
