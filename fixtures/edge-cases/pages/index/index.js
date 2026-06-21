@@ -12,5 +12,10 @@ Page({
     wx.request({ url: "https://api.example.com:8443/data" });
     // 带 userinfo → host 须归一为 cdn.example.com（不是 user@cdn.example.com）
     wx.request({ url: "https://user@cdn.example.com/asset" });
+
+    // 明文 http 在请求 url: → 算明文请求；在媒体 src → 不算（微信只对 4 个网络 API 强制 https）
+    wx.request({ url: "http://plain.req.test/data" });
+    const poster = { src: "http://img.media.test/p.png" };
+    return poster;
   },
 });
