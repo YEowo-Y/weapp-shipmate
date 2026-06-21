@@ -1,5 +1,5 @@
 // src/check.mjs —— 代码感知预检引擎：扫描结果 × preflight 规则 → 个性化清单
-import { loadData, ruleToItem } from "./data.mjs";
+import { loadData, ruleToItem, apiMatches } from "./data.mjs";
 import { scanProject } from "./scanner.mjs";
 import { crossChecks } from "./crosscheck.mjs";
 
@@ -18,7 +18,7 @@ export function runCheck(dir, { subjectType, includeDrafts = false } = {}) {
     if (r.kind !== "preflight" && r.kind !== "both") continue;
     if (subjectType && !r.subject_type.includes(subjectType)) continue;
     const m = r.match || {};
-    const apiHit = m.api && m.api.some((a) => apiSet.has(a));
+    const apiHit = m.api && m.api.some((a) => apiMatches(apiSet, a)); // uni.X ≡ wx.X
     const cfgHit = m.config_key && m.config_key.some((k) => cfgSet.has(k));
     if (!apiHit && !cfgHit) continue;
 
