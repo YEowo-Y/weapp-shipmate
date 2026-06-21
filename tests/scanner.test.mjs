@@ -7,6 +7,7 @@ import { scanProject, _stripComments, _normalizeHost } from "../src/scanner.mjs"
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "sample-app");
 const EDGE = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "edge-cases");
 const UNI = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "uni-app");
+const TARO = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "taro-app");
 
 test("scanner 提取 wx API", () => {
   const r = scanProject(FIX);
@@ -100,5 +101,20 @@ test("uni-app: 解析 manifest.json 的 mp-weixin 隐私/权限声明（JSONC �
   assert.ok(
     r.configKeys.includes("app.json:permission:scope.userLocation"),
     "应从 manifest mp-weixin 读到 permission",
+  );
+});
+
+// ── Taro（React .tsx + Taro.* API + app.config.ts 声明）盲区 ──
+test("Taro: 扫描 .tsx 并提取 Taro.* 调用", () => {
+  const r = scanProject(TARO);
+  for (const a of ["Taro.getLocation", "Taro.chooseImage", "Taro.request"])
+    assert.ok(r.apis.includes(a), `应从 .tsx 提取 ${a}（.tsx 须在扫描扩展名内、API_RE 须认 Taro.）`);
+});
+
+test("Taro: 从 app.config.ts 提取 requiredPrivateInfos（非 JSON）", () => {
+  const r = scanProject(TARO);
+  assert.ok(
+    r.configKeys.includes("app.json:requiredPrivateInfos:getLocation"),
+    `应从 app.config.ts 读到 requiredPrivateInfos：${JSON.stringify(r.configKeys)}`,
   );
 });
