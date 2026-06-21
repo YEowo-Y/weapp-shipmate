@@ -6,6 +6,7 @@ import { scanProject, _stripComments, _normalizeHost } from "../src/scanner.mjs"
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "sample-app");
 const EDGE = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "edge-cases");
+const UNI = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "uni-app");
 
 test("scanner 提取 wx API", () => {
   const r = scanProject(FIX);
@@ -61,4 +62,43 @@ test("scanner 归一带端口/userinfo 的请求域名", () => {
   assert.ok(!r.domains.some((d) => d.includes(":")), "域名不应残留端口");
   assert.ok(r.domains.includes("cdn.example.com"), "带 userinfo 的域名应归一为裸 host");
   assert.ok(!r.domains.some((d) => d.includes("@")), "域名不应残留 userinfo");
+});
+
+// ── uni-app 真实结构盲区（dogfood day-private-sample 暴露）──
+test("uni-app: 忽略构建/lock/类型声明，框架运行时与募捐域名不污染结果", () => {
+  const r = scanProject(UNI);
+  assert.ok(!r.apis.includes("wx.createSubpackageApp"), "unpackage 编译产物不应被扫");
+  assert.ok(!r.apis.includes("uni.addInterceptor"), ".d.ts 类型声明不应被当成真实调用");
+  assert.ok(!r.domains.includes("danger.example"), "unpackage 里的域名不应进结果");
+  assert.ok(!r.domains.includes("feross.org"), "package-lock.json 的募捐域名不应进结果");
+});
+
+test("uni-app: 真实 uni.* 调用被正常提取", () => {
+  const r = scanProject(UNI);
+  for (const a of ["uni.getLocation", "uni.chooseImage", "uni.request", "uni.connectSocket"])
+    assert.ok(r.apis.includes(a), `应提取 ${a}`);
+});
+
+test("uni-app: 模板字面量 host 被拒，只留合法域名", () => {
+  const r = scanProject(UNI);
+  assert.ok(r.domains.includes("api.example.com"), "合法请求域名应保留");
+  assert.ok(!r.domains.some((d) => /[${}]/.test(d)), `占位符 host 不应进域名：${JSON.stringify(r.domains)}`);
+});
+
+test("SVG/XML 命名空间 host（www.w3.org）不被当成请求域名", () => {
+  const r = scanProject(UNI);
+  assert.ok(!r.domains.includes("www.w3.org"), "xmlns 命名空间不应进域名");
+  assert.ok(!r.insecureHosts.includes("www.w3.org"), "xmlns 不应触发明文请求告警");
+});
+
+test("uni-app: 解析 manifest.json 的 mp-weixin 隐私/权限声明（JSONC 带注释）", () => {
+  const r = scanProject(UNI);
+  assert.ok(
+    r.configKeys.includes("app.json:requiredPrivateInfos:getLocation"),
+    `应从 manifest mp-weixin 读到 requiredPrivateInfos：${JSON.stringify(r.configKeys)}`,
+  );
+  assert.ok(
+    r.configKeys.includes("app.json:permission:scope.userLocation"),
+    "应从 manifest mp-weixin 读到 permission",
+  );
 });
