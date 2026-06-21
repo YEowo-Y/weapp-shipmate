@@ -14,6 +14,7 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 - **请求域名归一化**：URL host 去掉 `user[:pass]@` 前缀与 `:port` 后缀并小写，使 `api.weixin.qq.com:8443`、`user@host` 等不再绕过 IP / 微信服务端 API 直连等**精确匹配的安全交叉核验**。
 - **明文请求改为请求语境感知**（6 个真实 app 正确性 triage 暴露的首位假阳性）：`security.insecure-request` 原本对**任意** `http://`/`ws://` 字符串字面量都告警（`<image src>`、`<video>`、`coverImgUrl`、`plus.openURL`、mock 数据里的 `url` 字段都被误报"须改 https"）。微信只对 `request`/`connectSocket`/`uploadFile`/`downloadFile` 四个网络 API 强制 https/wss；故改为**仅匹配请求 API 调用里的 `url:` 参数**。修后全语料仅剩 1 条真命中（官方 demo 的一个 http `downloadFile`），其余假阳性全部消除，真命中无一丢失。
 - **忽略非上线面目录**：`platforms`/`windows`（uni-app 的 App/H5 端代码，编译到微信不参与）、`scripts`/`test`/`tests`/`__tests__`/`__mocks__`/`e2e`（构建脚本与测试，不随包上传）——消除 App/H5 域名与构建脚本里的 kroki/iconify 等噪声。
+- **uni-app 条件编译剔离**：在剥离注释前先处理 `#ifdef`/`#ifndef`/`#endif`，编译到微信时只保留微信/含微信/非平台（如 `#ifdef VUE3` 因无法判定版本而保留）的分支，剔除 `#ifdef H5`/`APP-PLUS`/`APP-NVUE`、`#ifndef MP-WEIXIN` 等非微信端分支——清掉散落在共享文件里、目录排除兜不住的最后一类 App/H5 残留。
 
 ### Added — uni-app / Taro 真实项目支持（dogfood 真实小程序暴露并修复）
 
@@ -58,7 +59,7 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 ### Added — 质量基建
 
 - 规则腐烂监控（`npm run rot`）：`last_verified` 时效检查 + `official_url` 链接体检；每月定时 GitHub workflow 告警。
-- 测试套件（`node:test`，81 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck）+ 样例夹具（`edge-cases`、`uni-app`、`taro-app`、`mpx-app`、`wepy-app`、`template-signals`：chooseAvatar 按钮 + `<camera>`/`<live-pusher>` 组件）；GitHub CI（含 `.mcpb` 打包冒烟）。
+- 测试套件（`node:test`，82 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck）+ 样例夹具（`edge-cases`、`uni-app`、`taro-app`、`mpx-app`、`wepy-app`、`template-signals`、`uni-cond`：uni-app 条件编译 #ifdef）；GitHub CI（含 `.mcpb` 打包冒烟）。
 
 ### Added — 治理与文档
 
