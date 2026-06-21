@@ -103,7 +103,7 @@ rejections:
     summary: "请求域名未在小程序后台配置服务器域名白名单"
     aliases: ["服务器域名", "合法域名", "域名白名单", "未配置域名", "域名校验", "request 合法域名", "不在以下合法域名列表"]
     codes: []
-    rules: ["domain.request-whitelist", "domain.uni-request"]
+    rules: ["domain.request-whitelist"]
     last_verified: "2026-06-17"
 
   - id: reject.minors
