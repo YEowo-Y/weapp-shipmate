@@ -21,8 +21,8 @@ const IGNORE_FILE = [
   /-lock\.json$/, /^pnpm-lock\.yaml$/, /^yarn\.lock$/, // lock 文件：纯依赖元数据，含大量募捐/registry 域名
   /\.d\.ts$/,                                          // 类型声明：只有类型、无运行时调用
 ];
-// 参与扫描的文本扩展名
-const SCAN_EXT = new Set([".js", ".ts", ".mjs", ".wxml", ".wxs", ".json", ".vue", ".uvue"]);
+// 参与扫描的文本扩展名（.jsx/.tsx：Taro/React 小程序的页面与组件源码）
+const SCAN_EXT = new Set([".js", ".ts", ".jsx", ".tsx", ".mjs", ".wxml", ".wxs", ".json", ".vue", ".uvue"]);
 
 const ignored = (name) => IGNORE_FILE.some((re) => re.test(name));
 
@@ -39,13 +39,16 @@ function* walk(dir) {
   }
 }
 
-const API_RE = /\b(wx|uni)\.([a-zA-Z][a-zA-Z0-9]*)/g;
+const API_RE = /\b(wx|uni|Taro)\.([a-zA-Z][a-zA-Z0-9]*)/g; // Taro：React 系小程序的 API 命名空间
 const URL_RE = /(["'`])(https?:\/\/|wss?:\/\/)([^"'`\s/?#]+)/g;
 const REQUEST_DYNAMIC_RE =
   /\b(?:wx|uni)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{[^}]*\burl\s*:\s*(?!["'`])/;
 const PHONE_BTN_RE = /open-?type\s*=\s*["']getPhoneNumber["']/;
 // 疑似硬编码的微信密钥（AppSecret/商户密钥等后端专用）。捕获组只取键名，绝不记录密钥值。
 const SECRET_RE = /\b(appsecret|app_secret|mch_?key|partner_?key|apiclient_key)\b\s*[:=]\s*["'`][^"'`]{6,}["'`]/gi;
+// Taro 的 app.config.ts/js 是 TS/JS 模块（非 JSON），requiredPrivateInfos 以数组字面量声明。
+const REQUIRED_PRIVATE_RE = /requiredPrivateInfos\s*:\s*\[([^\]]*)\]/;
+const QUOTED_NAME_RE = /["'`]([a-zA-Z][a-zA-Z0-9]*)["'`]/g;
 
 /**
  * 字符串感知地剥离 // 行注释与 / * * / 块注释，但完整保留字符串字面量内容
@@ -150,6 +153,10 @@ export function scanProject(dir) {
           for (const k of Object.keys(mp.permission)) configKeys.add(`app.json:permission:${k}`);
         }
       } catch { /* 非标准/含尾逗号的配置，跳过（降级为无配置信号，不崩） */ }
+    } else if (/^app\.config\.[jt]sx?$/.test(base)) {
+      // Taro：app.config.ts/js 是模块而非 JSON，正则抽取 requiredPrivateInfos 数组里的接口名。
+      const m = code.match(REQUIRED_PRIVATE_RE);
+      if (m) for (const q of m[1].matchAll(QUOTED_NAME_RE)) configKeys.add(`app.json:requiredPrivateInfos:${q[1]}`);
     }
   }
 
