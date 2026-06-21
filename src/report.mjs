@@ -56,12 +56,30 @@ export function toMarkdown(result) {
     }
   }
 
+  // 可能适用 · 自查区：内容相关规则（取决于业务），不计入上面的确定阻断概览。
+  if (result.selfCheck?.length) {
+    lines.push("## 可能适用 · 请按你的业务自查", "");
+    lines.push(
+      "> 以下规则是否适用取决于你的小程序具体功能；导航看不到你的源码，无法替你判定，故列出供自查。涉及代码可感知的部分，可运行 `check ./你的项目` 精确判定。",
+      "",
+    );
+    for (const it of result.selfCheck) {
+      lines.push(`### ${SEV_ICON[it.severity] || "•"} ${it.title}  \`${it.ruleId}\``);
+      if (it.signal?.length) lines.push(`- 自查：若你的小程序涉及【${it.signal.join(" / ")}】`);
+      if (it.why) lines.push(`- 为什么：${it.why}`);
+      for (const r of it.requires || []) lines.push(`- [ ] ${r}`);
+      if (it.manual_required) lines.push(`- 👤 需你本人在官方后台完成，工具不代办`);
+      if (it.official_url) lines.push(`- 来源：${it.official_url}（最后核验 ${it.last_verified}）`);
+      lines.push("");
+    }
+  }
+
   if (result.notes?.length) {
     lines.push("## 备注", "");
     for (const n of result.notes) lines.push(`- ${n}`);
     lines.push("");
   }
-  if (!result.items.length) lines.push("_未命中任何规则。_", "");
+  if (!result.items.length && !result.selfCheck?.length) lines.push("_未命中任何规则。_", "");
   return lines.join("\n");
 }
 
@@ -93,6 +111,22 @@ export function toChecklist(result) {
     lines.push(`## ${STAGE_TITLE[stage]}（${stage}）`, ...actions, "");
     total += actions.length;
   }
+
+  // 可能适用 · 自查清单（取决于业务，条件触达）。
+  if (result.selfCheck?.length) {
+    const actions = [];
+    for (const it of result.selfCheck) {
+      const icon = SEV_ICON[it.severity] || "•";
+      const cond = it.signal?.length ? `若涉及【${it.signal.join(" / ")}】：` : "";
+      const todos = it.requires?.length ? it.requires : it.warn ? [it.warn] : [];
+      for (const t of todos) actions.push(`- [ ] ${icon} ${cond}${t}  （${it.ruleId}）`);
+    }
+    if (actions.length) {
+      lines.push("## 可能适用 · 自查（取决于你的业务）", ...actions, "");
+      total += actions.length;
+    }
+  }
+
   if (!total) lines.push("_无可执行清单项。_", "");
   return lines.join("\n");
 }
