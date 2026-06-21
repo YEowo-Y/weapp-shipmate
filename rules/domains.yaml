@@ -12,29 +12,10 @@ rules:
     match:
       api: ["wx.request", "wx.connectSocket", "wx.uploadFile", "wx.downloadFile"]
       scanner: static_api_call
-      dynamic_note: "若 url 由变量/环境拼接（如 baseURL + path），静态扫描可能漏报真实域名，请人工核对所有出站域名是否已加入白名单。"
+      dynamic_note: "若 url 由变量/环境拼接（如 baseURL + path），静态扫描可能漏报真实域名，请人工核对所有出站域名是否已加入白名单。uni-app 同理：uni.* 请求编译到微信即 wx.*，条件编译 #ifdef MP-WEIXIN 分支内的域名也需配置。"
     requires:
       - "在『小程序后台 - 开发 - 开发设置 - 服务器域名』中配置代码出现的全部域名"
     why: "小程序只可以跟指定的域名进行网络通信；未配置的域名在真机环境会被拦截"
-    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html"
-    source_quote: "服务器域名请在「小程序后台 - 开发 - 开发设置 - 服务器域名」中进行配置；小程序只可以跟指定的域名进行网络通信。"
-    last_verified: "2026-06-13"
-    manual_required: true
-
-  - id: domain.uni-request
-    title: "uni-app 请求域名白名单"
-    kind: preflight
-    stage: domain
-    subject_type: ["personal", "individual_business", "enterprise"]
-    severity: warning
-    confidence: high
-    match:
-      api: ["uni.request", "uni.connectSocket", "uni.uploadFile", "uni.downloadFile"]
-      scanner: static_api_call
-      dynamic_note: "uni-app 编译到微信后等价 wx.* 请求；条件编译 #ifdef MP-WEIXIN 分支内的域名也需配置。变量拼接域名请人工核对。"
-    requires:
-      - "把 uni.* 请求中出现的域名加入『小程序后台 - 开发 - 开发设置 - 服务器域名』白名单"
-    why: "uni-app 编译到微信小程序后，未配置的域名同样在真机被拦截"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html"
     source_quote: "服务器域名请在「小程序后台 - 开发 - 开发设置 - 服务器域名」中进行配置；小程序只可以跟指定的域名进行网络通信。"
     last_verified: "2026-06-13"
