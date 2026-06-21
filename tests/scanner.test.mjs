@@ -9,6 +9,7 @@ const EDGE = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "ed
 const UNI = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "uni-app");
 const TARO = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "taro-app");
 const MPX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "mpx-app");
+const WEPY = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "wepy-app");
 
 test("scanner 提取 wx API", () => {
   const r = scanProject(FIX);
@@ -147,4 +148,11 @@ test("mpx: 从 app.mpx 的 <script type=application/json> 块提取 requiredPriv
     r.configKeys.includes("app.json:requiredPrivateInfos:getLocation"),
     `应从 app.mpx 内嵌 json 块读到 requiredPrivateInfos：${JSON.stringify(r.configKeys)}`,
   );
+});
+
+// ── wepy（.wpy 单文件 + wepy.* 命名空间）盲区 ──
+test("wepy: 扫描 .wpy 并提取 wepy.* 调用", () => {
+  const r = scanProject(WEPY);
+  for (const a of ["wepy.getUserInfo", "wepy.request"])
+    assert.ok(r.apis.includes(a), `应从 .wpy 提取 ${a}（.wpy 须在扫描扩展名内、API_RE 须认 wepy.）`);
 });
