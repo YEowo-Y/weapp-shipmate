@@ -38,8 +38,8 @@ export function rulesForStage(rules, stage, subjectType, kinds) {
   );
 }
 
-// 跨框架 API 命名空间：源码里写 uni./Taro.，编译到微信小程序都等价 wx.*。
-const API_ALIASES = ["wx", "uni", "Taro"];
+// 跨框架 API 命名空间：源码里写 uni./Taro./wepy.，编译到微信小程序都等价 wx.*。
+const API_ALIASES = ["wx", "uni", "Taro", "wepy"];
 
 /** 规则的 API 名是否命中扫描到的 API 集合；`wx.X`/`uni.X`/`Taro.X` 三者视为等价
  *  （不归一则对 uni-app、Taro 全盘漏报隐私/域名预检）。 */
