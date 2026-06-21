@@ -37,6 +37,51 @@ const PHONE_BTN_RE = /open-?type\s*=\s*["']getPhoneNumber["']/;
 const SECRET_RE = /\b(appsecret|app_secret|mch_?key|partner_?key|apiclient_key)\b\s*[:=]\s*["'`][^"'`]{6,}["'`]/gi;
 
 /**
+ * 字符串感知地剥离 // 行注释与 / * * / 块注释，但完整保留字符串字面量内容
+ * （含其中的 https:// 与 //）。这是可信度的关键：被注释掉的 wx.getLocation() 不应再触发
+ * 隐私/域名预检；而朴素的「//→行尾」剥离会破坏 "https://x" 反而引入新错误，故必须感知字符串。
+ * 不处理正则字面量与 WXML/HTML 注释（范围之外；保持现状即可，最坏只是少剥一处、不会误删真实代码）。
+ */
+export function stripComments(text) {
+  let out = "";
+  let str = null; // 当前字符串定界符（' " 或 反引号），null 表示不在字符串内
+  for (let i = 0, n = text.length; i < n; ) {
+    const c = text[i];
+    if (str) {
+      out += c;
+      if (c === "\\") { if (i + 1 < n) out += text[i + 1]; i += 2; continue; } // 转义：原样保留下一字符
+      if (c === str) str = null;
+      i += 1;
+      continue;
+    }
+    if (c === "/" && text[i + 1] === "/") { // 行注释：跳到行尾（保留换行）
+      i += 2;
+      while (i < n && text[i] !== "\n") i += 1;
+      continue;
+    }
+    if (c === "/" && text[i + 1] === "*") { // 块注释：跳到 */（保留其中换行以维持行结构）
+      i += 2;
+      while (i < n && !(text[i] === "*" && text[i + 1] === "/")) { if (text[i] === "\n") out += "\n"; i += 1; }
+      i += 2;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") str = c; // 进入字符串
+    out += c;
+    i += 1;
+  }
+  return out;
+}
+
+/** 把请求 host 归一为裸域名：去掉 user[:pass]@ 前缀与 :port 后缀并小写——否则带端口/凭据的
+ *  域名会绕过 IP/微信服务端 API 等精确匹配的安全交叉核验。 */
+export function normalizeHost(raw) {
+  let h = String(raw).toLowerCase();
+  const at = h.lastIndexOf("@");
+  if (at !== -1) h = h.slice(at + 1); // 去 userinfo
+  return h.replace(/:\d+$/, "");      // 去端口
+}
+
+/**
  * 扫描一个小程序项目目录。
  * @returns {{ filesScanned:number, apis:string[], domains:string[], dynamicRequest:boolean, configKeys:string[] }}
  */
@@ -54,17 +99,19 @@ export function scanProject(dir) {
     try { text = readFileSync(file, "utf-8"); } catch { continue; }
     filesScanned++;
 
-    for (const m of text.matchAll(API_RE)) apis.add(`${m[1]}.${m[2]}`);
-    for (const m of text.matchAll(URL_RE)) {
-      const host = m[3].toLowerCase();
+    // 在剥离注释后的代码上做事实提取：被注释掉的调用/域名不计入命中（app.json 仍按原文解析）。
+    const code = stripComments(text);
+    for (const m of code.matchAll(API_RE)) apis.add(`${m[1]}.${m[2]}`);
+    for (const m of code.matchAll(URL_RE)) {
+      const host = normalizeHost(m[3]); // 去端口/userinfo，防止绕过精确匹配的安全核验
       domains.add(host);
       if (m[2] === "http://" || m[2] === "ws://") insecureHosts.add(host); // 明文协议（须 https/wss）
     }
-    if (REQUEST_DYNAMIC_RE.test(text)) dynamicRequest = true;
-    if (PHONE_BTN_RE.test(text)) configKeys.add("button.open-type=getPhoneNumber");
+    if (REQUEST_DYNAMIC_RE.test(code)) dynamicRequest = true;
+    if (PHONE_BTN_RE.test(code)) configKeys.add("button.open-type=getPhoneNumber");
     // 只取键名（m[1]）与相对路径，永不读取/记录密钥值本身。
     const rel = relative(dir, file).replace(/\\/g, "/");
-    for (const m of text.matchAll(SECRET_RE)) secretHints.add(`${rel}::${m[1].toLowerCase()}`);
+    for (const m of code.matchAll(SECRET_RE)) secretHints.add(`${rel}::${m[1].toLowerCase()}`);
 
     if (basename(file) === "app.json") {
       try {
@@ -92,3 +139,5 @@ export function scanProject(dir) {
     insecureHosts: [...insecureHosts].sort(),
   };
 }
+
+export { stripComments as _stripComments, normalizeHost as _normalizeHost }; // 供测试直接验证纯函数
