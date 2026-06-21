@@ -13,6 +13,8 @@
 >
 > **B「真实验证」首轮 dogfood 完成（2026-06-21）**：在一个真实可上线的 uni-app 小程序 + 官方 `miniprogram-demo`/`hello-uniapp` 上跑 `check`，暴露工具原本**只对原生 wx 有效、对 uni-app 几乎全盘失效**（真实项目唯一命中是假阳性、且漏真实隐私调用）。已修 8 类盲区并加 uni-app 夹具（68 例测试）：`uni.X≡wx.X` 等价匹配、解析 `manifest.json` 的 `mp-weixin`、忽略构建/lock/`.d.ts`、host 校验+命名空间排除、删冗余 `domain.uni-request`。修后真实 uni-app 项目从"1 条全假"变为"1 条真命中、0 假阳性"，并在官方 hello-uniapp 上正确报出真实的 `requiredPrivateInfos` 缺声明阻断。**Taro 盲区随后也已修**（真实 `lsqy/taro-music` 验证）：`.tsx/.jsx` 纳入扫描、`Taro.*` API 提取与等价匹配、`app.config.ts` 正则抽取 `requiredPrivateInfos`——从 0 命中变为正确扫到。覆盖至此含原生 wx / uni-app / Taro 三大主流形态（71 例测试）。
 >
+> **框架样本再扩（mpvue + mpx）**：补 mpvue（`.vue`+`wx.*`，已支持）与 mpx（`didi/mpx` 的 `.mpx` 单文件）。mpx 是「增强原生」、API 仍 `wx.*`，盲区是 `.mpx` 扩展名未扫 + 配置在 `app.mpx` 内嵌 json 块；已修（`.mpx`/`.wpy`/`.nvue` 入扫描 + 解析内嵌 json 的 requiredPrivateInfos）。真实 `mpx-cloud` 从 0 命中→正确提取 `wx.*` 并命中相册隐私。覆盖至此含原生 wx / uni-app / Taro / mpvue / mpx（76 例测试）。
+>
 > **正确性 triage（2026-06-21，扩样本）**：再加 mpvue（美团外卖）+ 原生电商（wechat-app-mall）两类真实 app，对 6 个真实项目逐条核验命中（读真实代码判 TP/FP/FN）。结论：隐私/密钥/后端 API 规则假阳性≈0（强结论），假阳性集中在唯一一条 `security.insecure-request`（对任意 http 字符串告警，含 `<image src>`/mock 数据）。已修：明文请求改为**仅匹配请求 API 调用的 `url:` 参数** + 忽略非上线面目录（`platforms`/`windows`/`scripts`/测试目录）；修后全语料 insecure-request 仅剩 1 条真命中、假阳性全消、真命中无损（73 例测试）。**待补的覆盖缺口（下一批，需官方来源核验）**：① `wx.requestPayment` 无预检规则（支付指引缺失，3/6 app 用到）；② 模板 `open-type="chooseAvatar"`（头像 PII）、`<live-pusher>`/`<camera>`（相机/麦克风）等模板级隐私入口未解析；③ uni-app `#ifdef` 条件编译分支未剥离。**仍待做（B 剩余）**：5 个目标用户读 `guide` 复述下一步（outreach，工具替代不了）。
 
 1. **开源包装** —— README（中英）/ LICENSE（MIT）/ CONTRIBUTING / SECURITY / GOVERNANCE / issue 模板 / 规则贡献指南。先让项目能被安全地讨论和贡献。
