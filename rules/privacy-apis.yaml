@@ -12,6 +12,7 @@ rules:
     confidence: medium
     match:
       api: ["wx.getUserProfile", "wx.getUserInfo"]
+      config_key: ["button.open-type=chooseAvatar"] # 头像填写能力同样收集头像（本规则 requires 已含头像）
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：用户信息（昵称、头像）"
@@ -87,6 +88,7 @@ rules:
     confidence: high
     match:
       api: ["wx.startRecord", "wx.getRecorderManager", "wx.joinVoIPChat"]
+      config_key: ["component.live-pusher"] # <live-pusher> 直播推流采集麦克风（官方组件需 scope.record）
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：麦克风"
@@ -105,6 +107,7 @@ rules:
     confidence: high
     match:
       api: ["wx.createCameraContext", "wx.createVKSession"]
+      config_key: ["component.camera", "component.live-pusher"] # <camera> 见 source_quote 原文；<live-pusher> 同采集摄像头
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：摄像头"
