@@ -8,6 +8,7 @@ const FIX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "sam
 const EDGE = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "edge-cases");
 const UNI = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "uni-app");
 const TARO = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "taro-app");
+const MPX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "mpx-app");
 
 test("scanner 提取 wx API", () => {
   const r = scanProject(FIX);
@@ -130,5 +131,20 @@ test("Taro: 从 app.config.ts 提取 requiredPrivateInfos（非 JSON）", () => 
   assert.ok(
     r.configKeys.includes("app.json:requiredPrivateInfos:getLocation"),
     `应从 app.config.ts 读到 requiredPrivateInfos：${JSON.stringify(r.configKeys)}`,
+  );
+});
+
+// ── mpx（.mpx 单文件 + 内嵌 json 配置块）盲区 ──
+test("mpx: 扫描 .mpx 并从 <script> 提取 wx.* 调用", () => {
+  const r = scanProject(MPX);
+  for (const a of ["wx.getLocation", "wx.chooseImage", "wx.request"])
+    assert.ok(r.apis.includes(a), `应从 .mpx 的 <script> 提取 ${a}`);
+});
+
+test("mpx: 从 app.mpx 的 <script type=application/json> 块提取 requiredPrivateInfos", () => {
+  const r = scanProject(MPX);
+  assert.ok(
+    r.configKeys.includes("app.json:requiredPrivateInfos:getLocation"),
+    `应从 app.mpx 内嵌 json 块读到 requiredPrivateInfos：${JSON.stringify(r.configKeys)}`,
   );
 });
