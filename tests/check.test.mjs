@@ -65,6 +65,12 @@ test("wepy: check 让 wepy.* 命中 wx.* 规则（.wpy 单文件）", () => {
   assert.ok(ids.includes("domain.request-whitelist"), "wepy.request 应命中域名白名单规则");
 });
 
+test("payment: wx.requestPayment 命中支付商户准入预检规则（覆盖 uni/Taro/wepy 变体）", () => {
+  const r = runCheck(WEPY, { subjectType: "personal" }); // wepy 夹具含 wx.requestPayment
+  const ids = r.items.map((i) => i.ruleId);
+  assert.ok(ids.includes("payment.requires-merchant"), "wx.requestPayment 应命中支付商户准入规则");
+});
+
 test("Taro: check 让 Taro.* 命中 wx.* 规则，app.config 声明免误报", () => {
   const r = runCheck(TARO, { subjectType: "personal" });
   const ids = r.items.map((i) => i.ruleId);
