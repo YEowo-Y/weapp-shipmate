@@ -8,6 +8,8 @@
 > 另已超出原计划补上：数据校验门禁 + `flow.yaml` 图 linter + GitHub CI + node:test 测试套件（54 例）+ 样例夹具 + **代码↔配置交叉核验**（`crosscheck` 五项：位置接口 vs `requiredPrivateInfos`；前端直连微信服务端 API；硬编码 AppSecret/商户密钥；明文 http/ws 请求；IP/localhost 域名——安全核验只报文件+键名/域名、不回显密钥值）+ **拒因反查 `explain`**（`rejections.yaml` 21 条：审核反馈/关键词 → 已核验规则的修复步骤与官方原文，是同一份规则库的第四个渲染器；引用完整性由 schema + validate 双重门禁，错误码键位查无官方明文者宁缺毋造）+ 规则腐烂监控 + `.mcpb` 打包 + 报告 checklist 导出（见 `docs/06`、`scripts/`、`tests/`）。
 >
 > **v0 骨架已全部打通**，首轮种子规则来源核验完成（6/8 promote 为默认、2 条类目保留 draft），且产品终态轻量首步已落地——`.mcpb` Desktop 扩展可一键装进 Claude Desktop（属决策 #8「自建桌面 agent」的 P1；技术调研见 `docs/07`，内置终端等终态重活按"难做则缓"原则后置）。后续重点：继续扩充规则覆盖（提审/拒因 6 + 登录 5 + 内容 2 + 支付/资质/未成年 各 1 已落地，下一批可补诱导下载/外链、数据安全等）。规则腐烂监控已落地（`npm run rot` + 每月定时任务）。
+>
+> **路线收紧（2026-06-21）**：工程已完成但**未在真实小程序/真实用户上验证过，且尚未发布**（Go/No-Go 的两个验证勾仍空）。据此定下 **修可信度 → 真实验证 → 发 v0.1.0 公开预览** 的次序，先证明价值再扩张；广覆盖加规则与 P2 桌面 agent 暂缓（P2 绑定"P1 验证勾全过"为重启触发条件）。**修可信度（trust）首批已落地**（61 例测试）：① `guide` 把带 `signal` 的内容相关规则从确定阻断移入「可能适用 · 自查」区（不再对无业务信号的应用误报医疗等假阻断）；② 扫描器字符串感知地剥离注释，注释掉的调用不再命中；③ 请求域名去端口/userinfo 归一，堵住安全交叉核验被绕过。
 
 1. **开源包装** —— README（中英）/ LICENSE（MIT）/ CONTRIBUTING / SECURITY / GOVERNANCE / issue 模板 / 规则贡献指南。先让项目能被安全地讨论和贡献。
 2. **`flow.yaml` + `rules/*.yaml` schema** —— 第一批数据文件，不是 CLI。先把**流程图骨架**（导航的阶段顺序/分支/前置）和**规则数据模型**一起定死（见 `03-decisions-and-architecture.md` 的「导航图模型」与「规则 schema 草图」）。配一个 schema 校验脚本，保证社区 PR 的规则结构合法、必带 `official_url`、`source_quote`、`last_verified`；`flow.yaml` 同样带来源与校验日期。
