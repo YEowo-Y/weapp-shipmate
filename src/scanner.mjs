@@ -103,6 +103,42 @@ export function stripComments(text) {
   return out;
 }
 
+// ── uni-app 条件编译（#ifdef/#ifndef/#endif）：编译到微信时只保留微信相关分支 ──
+// 已知“非微信小程序”平台标记（编译到微信时这些 #ifdef 分支不参与）。
+const NON_WEIXIN_PLATFORMS = new Set([
+  "H5", "APP", "APP-PLUS", "APP-NVUE", "APP-PLUS-NVUE", "APP-VUE", "APP-HARMONY", "APP-ANDROID", "APP-IOS",
+  "MP-ALIPAY", "MP-BAIDU", "MP-TOUTIAO", "MP-LARK", "MP-QQ", "MP-KUAISHOU", "MP-JD", "MP-360", "MP-XHS",
+  "QUICKAPP-WEBVIEW", "QUICKAPP-WEBVIEW-UNION", "QUICKAPP-WEBVIEW-HUAWEI",
+]);
+const WEIXIN_TOKENS = new Set(["MP-WEIXIN", "MP"]); // MP = 所有小程序端，含微信
+const condTokens = (expr) => expr.split("||").map((t) => t.trim().toUpperCase()).filter(Boolean);
+// #ifdef expr：仅当所有 token 都是“非微信平台”时才剔除（含非平台标记如 VUE3/VUE2 则保留，因无法判定版本）。
+const ifdefStrips = (expr) => { const ts = condTokens(expr); return ts.length > 0 && ts.every((t) => NON_WEIXIN_PLATFORMS.has(t)); };
+// #ifndef expr：当 expr 指向微信（MP-WEIXIN/MP）时，这个“非微信”分支剔除。
+const ifndefStrips = (expr) => condTokens(expr).some((t) => WEIXIN_TOKENS.has(t));
+const COND_LINE_RE = /^\s*(?:\/\/|<!--|\/\*|#)\s*#(ifdef|ifndef|endif)\b([^\n]*?)\s*(?:-->|\*\/)?\s*$/;
+
+/** 剔除 uni-app 中不参与微信小程序编译的条件分支（H5 / APP / 其它小程序端）。
+ *  必须在 stripComments 之前对原文执行——条件编译标记本身是注释，会被 stripComments 抹掉。 */
+export function stripUniConditional(text) {
+  if (!/#if(?:n)?def\b/.test(text)) return text; // 无条件编译标记，快路径原样返回
+  const out = [];
+  const keepStack = []; // 每层是否保留；嵌套时全部为真才输出
+  const kept = () => keepStack.every(Boolean);
+  for (const line of text.split("\n")) {
+    const m = line.match(COND_LINE_RE);
+    if (m) {
+      if (m[1] === "endif") { keepStack.pop(); continue; }
+      const expr = m[2].replace(/-->|\*\//g, "").trim();
+      const strip = m[1] === "ifdef" ? ifdefStrips(expr) : ifndefStrips(expr);
+      keepStack.push(!strip);
+      continue; // 标记行本身不输出
+    }
+    if (kept()) out.push(line);
+  }
+  return out.join("\n");
+}
+
 /** 把请求 host 归一为裸域名：去掉 user[:pass]@ 前缀与 :port 后缀并小写——否则带端口/凭据的
  *  域名会绕过 IP/微信服务端 API 等精确匹配的安全交叉核验。 */
 export function normalizeHost(raw) {
@@ -142,8 +178,8 @@ export function scanProject(dir) {
     try { text = readFileSync(file, "utf-8"); } catch { continue; }
     filesScanned++;
 
-    // 在剥离注释后的代码上做事实提取：被注释掉的调用/域名不计入命中（app.json 仍按原文解析）。
-    const code = stripComments(text);
+    // 先剔除 uni-app 非微信端的条件编译分支，再剥离注释，最后在结果上提取事实。
+    const code = stripComments(stripUniConditional(text));
     for (const m of code.matchAll(API_RE)) apis.add(`${m[1]}.${m[2]}`);
     for (const m of code.matchAll(URL_RE)) {
       const host = normalizeHost(m[3]); // 去端口/userinfo，防止绕过精确匹配的安全核验
