@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { runCheck } from "./check.mjs";
 import { runGuide } from "./guide.mjs";
+import { runExplain } from "./explain.mjs";
 import { render } from "./report.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -48,6 +49,20 @@ export const TOOLS = [
       },
     },
   },
+  {
+    name: "weapp_shipmate_explain",
+    description:
+      "拒因反查：把审核反馈文案或关键词，反向索引到已核验规则的 why / 修复步骤 / 官方原文链接。仅引用已核验规则，不新增未核验断言。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "审核反馈文案或关键词（如：诱导分享 / 营销广告 / 服务器域名）" },
+        includeDrafts: { type: "boolean", description: "是否包含 draft 规则（默认 false）" },
+        format: { type: "string", enum: ["markdown", "json"], description: "输出格式（默认 markdown）" },
+      },
+      required: ["query"],
+    },
+  },
 ];
 
 function callTool(name, args = {}) {
@@ -67,6 +82,10 @@ function callTool(name, args = {}) {
       },
       { includeDrafts: !!args.includeDrafts },
     );
+    return { text: render(result, format), result };
+  }
+  if (name === "weapp_shipmate_explain") {
+    const result = runExplain(args.query || "", { includeDrafts: !!args.includeDrafts });
     return { text: render(result, format), result };
   }
   throw new Error(`未知工具: ${name}`);
