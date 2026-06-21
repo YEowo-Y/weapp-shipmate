@@ -20,3 +20,22 @@ rules:
     source_quote: "服务器域名请在「小程序后台 - 开发 - 开发设置 - 服务器域名」中进行配置；小程序只可以跟指定的域名进行网络通信。"
     last_verified: "2026-06-13"
     manual_required: true
+
+  - id: domain.web-view-business
+    title: "web-view 网页需配置业务域名（个人主体不支持）"
+    kind: preflight
+    stage: domain
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      config_key: ["component.web-view"]
+      scanner: static_config
+    requires:
+      - "把 <web-view> 打开的网页域名登录『小程序管理后台』配置为业务域名（与服务器域名是两套白名单），并按要求放置校验文件"
+      - "确认主体类型：个人类型小程序不支持 web-view 组件"
+    why: "web-view 打开的网页需在后台配置业务域名，否则无法加载；且个人类型小程序不支持 web-view"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/component/web-view.html"
+    source_quote: "其它网页需登录小程序管理后台配置业务域名。"
+    last_verified: "2026-06-21"
+    manual_required: true
