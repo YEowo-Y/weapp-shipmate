@@ -37,23 +37,43 @@ test("guide 默认含已核验的提交审核规则（review 阶段）", () => {
   assert.ok(reviewIds.length >= 6, "review 阶段应有 6 条已核验规则");
 });
 
-test("guide 默认含已核验的登录规范与内容安全规则", () => {
+test("guide 默认含已核验的登录规范（无 signal → 确定适用，进 items）", () => {
   const r = runGuide({ subject_type: "personal" });
   const ids = new Set(r.items.filter((i) => i.stage === "review").map((i) => i.ruleId));
   assert.ok(ids.has("login.after-experience"), "应含登录后置规则");
   assert.ok(ids.has("login.cancellable"), "应含可取消登录规则");
-  assert.ok(ids.has("content.filter-mechanism"), "应含 UGC 内容过滤规则");
+  assert.ok(ids.has("qualification.provide-materials"), "资质材料规则无 signal，应进 items");
 });
 
-test("guide 默认含已核验的支付/资质/未成年人规则", () => {
+test("内容相关规则带 signal（取决于业务）→ 进 selfCheck 而非 items 的确定清单", () => {
   const r = runGuide({ subject_type: "personal" });
-  const ids = new Set(r.items.filter((i) => i.stage === "review").map((i) => i.ruleId));
-  assert.ok(ids.has("payment.virtual-must-use-official"), "应含虚拟支付规则");
-  assert.ok(ids.has("qualification.provide-materials"), "应含资质材料规则");
-  assert.ok(ids.has("minor.protect"), "应含未成年人保护规则");
-  assert.ok(ids.has("data.collection-consent"), "应含数据收集告知/同意规则");
-  assert.ok(ids.has("outbound.no-recommend-others"), "应含不得推荐其他小程序规则");
-  assert.ok(ids.has("outbound.no-induced-app-download"), "应含不得诱导下载 App 规则");
+  const itemIds = new Set(r.items.map((i) => i.ruleId));
+  const selfIds = new Set((r.selfCheck || []).map((i) => i.ruleId));
+  // 这些规则是否适用取决于小程序具体功能：不应作为「确定适用」混进 items，应进自查区。
+  for (const id of [
+    "content.filter-mechanism",
+    "payment.virtual-must-use-official",
+    "minor.protect",
+    "data.collection-consent",
+    "outbound.no-recommend-others",
+    "outbound.no-induced-app-download",
+    "category.medical-hint",
+    "category.payment-hint",
+  ]) {
+    assert.ok(selfIds.has(id), `${id} 应进 selfCheck`);
+    assert.ok(!itemIds.has(id), `${id} 不应进 items 的确定清单`);
+  }
+});
+
+test("空白 guide 不再把内容相关规则当成确定阻断（修假阳性）", () => {
+  // 一个未提供任何业务信号的请求：items 的确定清单里不应出现医疗等假阻断。
+  const r = runGuide({ subject_type: "personal" });
+  const blockers = r.items.filter((i) => i.severity === "blocker").map((i) => i.ruleId);
+  assert.ok(!blockers.includes("category.medical-hint"), "医疗类目不应作为确定阻断");
+  assert.ok(!blockers.includes("outbound.no-induced-app-download"), "诱导下载不应作为确定阻断");
+  assert.ok(!blockers.includes("content.filter-mechanism"), "UGC 过滤不应作为确定阻断");
+  // selfCheck 仍保留这些规则（不静默丢弃），供用户按业务自查。
+  assert.ok((r.selfCheck || []).length >= 6, "内容相关规则应完整保留在 selfCheck");
 });
 
 test("draft 门禁：默认集不含 draft 规则，--include-drafts 为其超集", () => {
