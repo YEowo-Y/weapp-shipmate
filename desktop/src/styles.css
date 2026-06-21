@@ -1,0 +1,95 @@
+:root {
+  font-family: "Segoe UI", Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  color: #1a1a1a;
+  background-color: #f6f7f9;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+
+.container {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+header h1 { margin: 0 0 4px; font-size: 1.5rem; }
+header h1 small { font-size: 0.8rem; font-weight: 500; color: #8a94a6; }
+.tagline { margin: 0 0 16px; color: #5a6373; }
+
+.controls {
+  background: #fff;
+  border: 1px solid #e6e8ec;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.dir {
+  flex: 1;
+  min-width: 200px;
+  padding: 6px 10px;
+  background: #f1f3f5;
+  border-radius: 8px;
+  color: #344;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.subject { display: flex; align-items: center; gap: 8px; color: #5a6373; font-size: 0.9rem; }
+
+select, button {
+  font: inherit;
+  border-radius: 8px;
+  border: 1px solid #d4d8de;
+  background: #fff;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+select { cursor: default; padding: 7px 10px; }
+button:hover:not(:disabled) { border-color: #2b6cb0; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.primary { background: #2b6cb0; color: #fff; border-color: #2b6cb0; }
+button.primary:hover:not(:disabled) { background: #265991; }
+
+.status { min-height: 22px; margin: 14px 2px 8px; font-size: 0.9rem; }
+.status.busy { color: #2b6cb0; }
+.status.error { color: #c53030; white-space: pre-wrap; }
+.status.ok { color: #2f855a; }
+
+.report {
+  flex: 1;
+  margin: 0;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid #e6e8ec;
+  border-radius: 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: "Cascadia Code", "Consolas", ui-monospace, monospace;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #2a2f3a;
+}
+.report .hint { color: #9aa3b2; }
+
+@media (prefers-color-scheme: dark) {
+  :root { color: #e6e8ec; background-color: #1a1d23; }
+  .controls, .report { background: #23272f; border-color: #333a45; }
+  .dir { background: #2c313a; color: #cdd3dc; }
+  select, button { background: #2c313a; color: #e6e8ec; border-color: #3a414c; }
+  button.primary { background: #2b6cb0; }
+  .report { color: #d4d9e0; }
+}

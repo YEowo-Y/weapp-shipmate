@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>上线船友 · 桌面预检</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+
+  <body>
+    <main class="container">
+      <header>
+        <h1>上线船友 <small>桌面预检 · P2.0</small></h1>
+        <p class="tagline">你写代码，我陪你上线 —— 选一个微信小程序文件夹，跑上线预检与流程导航。</p>
+      </header>
+
+      <section class="controls">
+        <div class="row">
+          <button id="pick-btn" type="button">📁 选择小程序文件夹…</button>
+          <code id="dir" class="dir">（未选择）</code>
+        </div>
+        <div class="row">
+          <label class="subject">主体类型
+            <select id="subject">
+              <option value="personal">个人</option>
+              <option value="individual_business">个体工商户</option>
+              <option value="enterprise">企业</option>
+            </select>
+          </label>
+          <button id="check-btn" class="primary" type="button" disabled>① 代码预检 check</button>
+          <button id="guide-btn" type="button">② 流程导航 guide</button>
+        </div>
+      </section>
+
+      <section id="status" class="status"></section>
+      <pre id="report" class="report"><span class="hint">报告将显示在这里。先选一个小程序项目文件夹，再点「代码预检」。</span></pre>
+    </main>
+  </body>
+</html>
