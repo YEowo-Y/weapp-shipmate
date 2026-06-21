@@ -70,7 +70,7 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 >
 > 🧩 **跨框架支持**：预检不只认原生 `wx.*`——`uni.*`（uni-app）、`Taro.*`（Taro）、`wepy.*`（wepy）经等价匹配归一到同一套规则；`.vue`/`.tsx`/`.mpx`/`.wpy`/`.nvue` 等单文件源码、以及 `app.json`/`manifest.json`(mp-weixin)/`app.config.ts`/`app.mpx` 内嵌等多种配置位置都能识别；uni-app `#ifdef` 条件编译、构建产物目录与媒体 `<image src>` 噪声均已剔除。已在真实开源小程序上 dogfood 验证（见下）。
 
-**给 Agent 用（MCP）**：内置零依赖 MCP server（stdio），把上述能力暴露为两个工具 `weapp_shipmate_check`、`weapp_shipmate_guide`。在 Claude Code / Codex 的 MCP 配置中加入：
+**给 Agent 用（MCP）**：内置零依赖 MCP server（stdio），把上述能力暴露为三个工具 `weapp_shipmate_check`、`weapp_shipmate_guide`、`weapp_shipmate_explain`。在 Claude Code / Codex 的 MCP 配置中加入：
 
 ```json
 {
