@@ -7,6 +7,12 @@
 
 v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码感知预检"。
 
+### Fixed — 预检可信度（真实使用前的信任修复）
+
+- **`guide` 不再把"内容相关"规则当成确定阻断**：带 `signal` 的规则（医疗类目、UGC 内容过滤、虚拟支付、未成年人保护、诱导下载 App、电商类目等）其适用与否取决于小程序具体功能；导航看不到源码，故改为列入新增的「可能适用 · 请按业务自查」区（`runGuide` 返回 `selfCheck`），并**不计入概览的阻断/警告计数**。修复前一个无业务信号的 `guide` 会输出 12 项阻断（含医疗等假阳性），修复后仅保留 8 项普遍适用的提审/备案基线阻断，内容相关项完整保留在自查区、不静默丢弃。
+- **扫描器剥离注释后再提取事实**：被注释掉的 `// wx.getLocation()` / 块注释里的调用不再触发隐私/域名预检命中。注释剥离为**字符串感知**（保留 `"https://x"` 内的 `//`，避免朴素剥离破坏域名提取而引入新错误）；`app.json` 仍按原文 JSON 解析。
+- **请求域名归一化**：URL host 去掉 `user[:pass]@` 前缀与 `:port` 后缀并小写，使 `api.weixin.qq.com:8443`、`user@host` 等不再绕过 IP / 微信服务端 API 直连等**精确匹配的安全交叉核验**。
+
 ### Added — 规则数据（"规则即数据"脊柱）
 
 - 规则 schema（`schemas/rules.schema.json`、`schemas/flow.schema.json`）与 `flow.yaml` 上线流程决策树骨架。
@@ -36,7 +42,7 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 ### Added — 质量基建
 
 - 规则腐烂监控（`npm run rot`）：`last_verified` 时效检查 + `official_url` 链接体检；每月定时 GitHub workflow 告警。
-- 测试套件（`node:test`，56 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck）+ 样例夹具；GitHub CI（含 `.mcpb` 打包冒烟）。
+- 测试套件（`node:test`，61 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck）+ 样例夹具（含 `edge-cases` 边界夹具：注释里的 API、带端口/userinfo 的域名）；GitHub CI（含 `.mcpb` 打包冒烟）。
 
 ### Added — 治理与文档
 
