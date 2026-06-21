@@ -11,6 +11,7 @@ const UNI = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "uni
 const TARO = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "taro-app");
 const MPX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "mpx-app");
 const WEPY = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "wepy-app");
+const TPL = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "template-signals");
 
 test("check 默认即命中已核验的隐私与域名规则", () => {
   const r = runCheck(FIX, { subjectType: "personal" });
@@ -69,6 +70,14 @@ test("payment: wx.requestPayment 命中支付商户准入预检规则（覆盖 u
   const r = runCheck(WEPY, { subjectType: "personal" }); // wepy 夹具含 wx.requestPayment
   const ids = r.items.map((i) => i.ruleId);
   assert.ok(ids.includes("payment.requires-merchant"), "wx.requestPayment 应命中支付商户准入规则");
+});
+
+test("模板级隐私：chooseAvatar/相机/直播组件命中对应隐私规则（JS 调用扫不到）", () => {
+  const r = runCheck(TPL, { subjectType: "personal" });
+  const ids = r.items.map((i) => i.ruleId);
+  assert.ok(ids.includes("privacy.getUserProfile"), "chooseAvatar（头像）应命中用户信息隐私规则");
+  assert.ok(ids.includes("privacy.camera"), "<camera>/<live-pusher> 应命中摄像头隐私规则");
+  assert.ok(ids.includes("privacy.record"), "<live-pusher> 应命中麦克风隐私规则");
 });
 
 test("Taro: check 让 Taro.* 命中 wx.* 规则，app.config 声明免误报", () => {
