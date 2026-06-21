@@ -26,7 +26,9 @@ export function checkRequiredPrivateInfos(scan = {}) {
   const declared = new Set(
     (scan.configKeys || []).filter((k) => k.startsWith(DECL_PREFIX)).map((k) => k.slice(DECL_PREFIX.length)),
   );
-  const missing = LOCATION_DECL_APIS.filter((name) => apis.has(`wx.${name}`) && !declared.has(name));
+  // uni.X ≡ wx.X：uni-app 源码写 uni.getLocation，编译到微信即 wx.getLocation。
+  const called = (name) => apis.has(`wx.${name}`) || apis.has(`uni.${name}`);
+  const missing = LOCATION_DECL_APIS.filter((name) => called(name) && !declared.has(name));
   if (!missing.length) return null;
   return {
     ruleId: "consistency.requiredPrivateInfos",
