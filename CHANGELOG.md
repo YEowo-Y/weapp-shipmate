@@ -23,6 +23,7 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 - **Taro 源码可见**：`.tsx`/`.jsx` 纳入扫描扩展名（Taro/React 页面与组件）；`Taro.*` 纳入 API 提取；从 `app.config.ts`（TS 模块、非 JSON）正则抽取 `requiredPrivateInfos`。真实 `taro-music` 从 0 命中变为正确扫到 66 文件、17 个 API、命中域名白名单规则。
 - **mpx 源码可见**：`.mpx`（mpx 单文件，mpx 是「增强原生」、API 仍是 `wx.*`）连同 `.wpy`（wepy）、`.nvue`（uni-app 原生页）纳入扫描扩展名；mpx 的应用配置在 `app.mpx` 内嵌的 `<script type="application/json">` 块里（非独立 app.json），据此提取 `requiredPrivateInfos`。真实 `didi/mpx` 的 `mpx-cloud` 示例从 0 命中变为正确提取 `wx.*` 并命中相册隐私规则。
 - **wepy 命名空间**：wepy 把 wx API 包成 promise 化的 `wepy.*`（网络/隐私调用常走它而非 `wx.*`）；将 `wepy` 纳入 API 命名空间与三方等价匹配（现 `wx`/`uni`/`Taro`/`wepy` 四者等价）。真实 `dyq086/wepy-mall` 从 0 命中变为正确命中 `domain.request-whitelist`（`wepy.request`）与 `privacy.getUserProfile`（`wepy.getUserInfo`）。覆盖至此含原生 wx / uni-app / Taro / mpvue / mpx / wepy 六大形态。
+- **支付预检规则**（`payment.requires-merchant`，闭合 triage 首位假阴性）：调用 `wx.requestPayment`（经等价匹配亦覆盖 uni/Taro/wepy 变体）→ 命中"微信支付需商户准入资质、个人主体不支持"。来源为微信支付《小程序支付》产品介绍「准入条件」逐字原文（准入主体为个体工商户/企业/事业单位/政府机关/社会组织，个人主体不在其列）。在 native/uni-app/wepy 4 个真实用到支付的 app 上验证命中（此前零指引）。
 - **解析 `manifest.json` 的 `mp-weixin` 块**（uni-app 的隐私接口声明/权限所在，且常为 JSONC 带注释，复用 `stripComments` 解析）；与原生 `app.json` 统一为同一逻辑配置键。在官方 `hello-uniapp` 上据此正确报出"调用 `uni.getLocation` 但未声明 `requiredPrivateInfos`"的真实 61040 类阻断。
 - **扫描忽略扩展**：构建/服务端/工具目录（uni-app `unpackage`、HBuilderX `_mp_devtools`、`cloudfunctions`、`output`/`tmp`/`releases`/`.omx` 等）、lock 文件（`*-lock.json`）、`*.d.ts` 类型声明——否则框架运行时 API、依赖募捐域名、类型定义会污染结果。
 - **请求 host 校验**：拒模板字面量 `${host}` 等非法 host；排除 `www.w3.org` 等 XML/SVG 命名空间（内联 SVG 的 `xmlns` 不是请求域名，曾假报明文请求）。
@@ -56,7 +57,7 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 ### Added — 质量基建
 
 - 规则腐烂监控（`npm run rot`）：`last_verified` 时效检查 + `official_url` 链接体检；每月定时 GitHub workflow 告警。
-- 测试套件（`node:test`，78 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck）+ 样例夹具（`edge-cases`、`uni-app`、`taro-app`、`mpx-app`：`.mpx` 单文件 + 内嵌 json 配置块、`wepy-app`：`.wpy` 单文件 + `wepy.*` 命名空间）；GitHub CI（含 `.mcpb` 打包冒烟）。
+- 测试套件（`node:test`，79 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck）+ 样例夹具（`edge-cases`、`uni-app`、`taro-app`、`mpx-app`：`.mpx` 单文件 + 内嵌 json 配置块、`wepy-app`：`.wpy` 单文件 + `wepy.*` 命名空间）；GitHub CI（含 `.mcpb` 打包冒烟）。
 
 ### Added — 治理与文档
 
