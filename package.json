@@ -1,10 +1,23 @@
 {
   "name": "weapp-shipmate",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "你写代码，我陪你上线 —— 微信小程序合规上线导航与代码感知预检（规则即数据）。CLI 内核 + MCP 适配层；预检支持原生 wx / uni-app / Taro / mpvue / mpx / wepy。",
   "type": "module",
   "license": "MIT",
+  "author": "YEowo-Y",
+  "keywords": [
+    "weapp",
+    "miniprogram",
+    "wechat-miniprogram",
+    "小程序",
+    "上线",
+    "合规",
+    "compliance",
+    "preflight",
+    "mcp",
+    "uni-app",
+    "taro"
+  ],
   "bin": {
     "weapp-shipmate": "bin/weapp-shipmate.mjs",
     "weapp-shipmate-mcp": "bin/weapp-shipmate-mcp.mjs"
