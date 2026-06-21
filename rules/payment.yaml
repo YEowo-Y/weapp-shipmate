@@ -1,6 +1,10 @@
 # rules/payment.yaml —— 支付 / 虚拟支付规范
-# 已核验官方来源（2026-06-14）：引自《运营规范》5.13，平台明文规则，confidence=high、默认输出。
-# source_quote 取 5.13 中无省略的连续片段（短摘录）。kind=navigation，manual_required: true。
+# 已核验官方来源：
+#   - virtual-must-use-official：《运营规范》5.13（developers.weixin.qq.com/miniprogram/product/），
+#     source_quote 取 5.13 无省略的连续片段。
+#   - requires-merchant：微信支付《小程序支付》产品介绍「准入条件」（pay.weixin.qq.com/docs/...），
+#     source_quote 取准入主体类型的连续原文（个人主体不在其列）。
+# 两条均 confidence=high、默认输出、manual_required: true。
 schema_version: 1
 rules:
   - id: payment.virtual-must-use-official
@@ -18,4 +22,22 @@ rules:
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "购买和支付均需接入小程序虚拟支付；不得引导至app、公众号、h5、个人号、网站完成支付"
     last_verified: "2026-06-14"
+    manual_required: true
+
+  - id: payment.requires-merchant
+    title: "微信支付需商户准入资质（个人主体不支持）"
+    kind: preflight
+    stage: review
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    match:
+      api: ["wx.requestPayment"]
+      scanner: static_api_call
+    requires:
+      - "确认主体具备微信支付准入资质：个体工商户/企业/事业单位/政府机关/社会组织之一；个人主体不在准入范围、无法开通微信支付"
+    why: "调用 wx.requestPayment 需具备微信支付商户准入资质；个人主体不在准入主体范围内，无法开通微信支付（商户密钥泄露另见硬编码密钥核验）"
+    official_url: "https://pay.weixin.qq.com/docs/merchant/products/mini-program-payment/introduction.html"
+    source_quote: "支持的主体类型：个体工商户、企业、事业单位、政府机关、社会组织"
+    last_verified: "2026-06-21"
     manual_required: true
