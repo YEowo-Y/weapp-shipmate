@@ -14,6 +14,10 @@ const IGNORE_DIRS = new Set([
   ".omx", ".npm-cache", ".wxci", ".vscode", ".idea",
   // 云函数：服务端代码，不随小程序包上传；后端持有密钥、直调服务端 API 属正常，扫了只会误报。
   "cloudfunctions",
+  // uni-app 的非微信端代码（5+App / H5），编译到微信时不参与，扫了会把 plus.*、App/H5 域名误当微信代码。
+  "platforms", "windows",
+  // 构建脚本与测试目录：不随小程序包上传，其域名/调用不是上线面（如 scripts 里的 kroki/iconify、测试夹具数据）。
+  "scripts", "test", "tests", "__tests__", "__mocks__", "e2e",
 ]);
 // 文件忽略（与 SECURITY.md 一致）
 const IGNORE_FILE = [
@@ -43,6 +47,10 @@ const API_RE = /\b(wx|uni|Taro)\.([a-zA-Z][a-zA-Z0-9]*)/g; // Taro：React 系�
 const URL_RE = /(["'`])(https?:\/\/|wss?:\/\/)([^"'`\s/?#]+)/g;
 const REQUEST_DYNAMIC_RE =
   /\b(?:wx|uni)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{[^}]*\burl\s*:\s*(?!["'`])/;
+// 明文请求：http/ws 作为 *请求 API 调用* 的 url: 参数（不是任意 url 字段、不是 <image src>/媒体数据）。
+// 微信只对 request/connectSocket/uploadFile/downloadFile 强制 https/wss；据此精确定位，避免对图片数据误报。
+const INSECURE_REQUEST_RE =
+  /\b(?:wx|uni|Taro)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{[^{}]*?\burl["'`]?\s*:\s*["'`](http|ws):\/\/([^"'`\s/?#]+)/g;
 const PHONE_BTN_RE = /open-?type\s*=\s*["']getPhoneNumber["']/;
 // 疑似硬编码的微信密钥（AppSecret/商户密钥等后端专用）。捕获组只取键名，绝不记录密钥值。
 const SECRET_RE = /\b(appsecret|app_secret|mch_?key|partner_?key|apiclient_key)\b\s*[:=]\s*["'`][^"'`]{6,}["'`]/gi;
@@ -106,6 +114,7 @@ function isPlausibleHost(h) {
   return h === "localhost" || (/^[a-z0-9._-]+$/.test(h) && h.includes("."));
 }
 
+
 /**
  * 扫描一个小程序项目目录。
  * @returns {{ filesScanned:number, apis:string[], domains:string[], dynamicRequest:boolean, configKeys:string[] }}
@@ -131,7 +140,11 @@ export function scanProject(dir) {
       const host = normalizeHost(m[3]); // 去端口/userinfo，防止绕过精确匹配的安全核验
       if (!isPlausibleHost(host)) continue; // 跳过 `${host}` 等模板占位/非法 host 噪声
       domains.add(host);
-      if (m[2] === "http://" || m[2] === "ws://") insecureHosts.add(host); // 明文协议（须 https/wss）
+    }
+    // 明文请求：仅取请求 API 调用里 url: 的 http/ws（不含媒体 src、navigator/href、mock 数据的 url 字段）
+    for (const m of code.matchAll(INSECURE_REQUEST_RE)) {
+      const host = normalizeHost(m[2]);
+      if (isPlausibleHost(host)) insecureHosts.add(host);
     }
     if (REQUEST_DYNAMIC_RE.test(code)) dynamicRequest = true;
     if (PHONE_BTN_RE.test(code)) configKeys.add("button.open-type=getPhoneNumber");
