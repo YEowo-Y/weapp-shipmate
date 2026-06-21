@@ -59,6 +59,7 @@ const PHONE_BTN_RE = /open-?type\s*=\s*["']getPhoneNumber["']/;
 const AVATAR_BTN_RE = /open-?type\s*=\s*["']chooseAvatar["']/; // 头像填写能力（收集头像 PII）
 const CAMERA_TAG_RE = /<camera[\s/>]/;          // <camera> 组件 → 摄像头
 const LIVE_PUSHER_TAG_RE = /<live-pusher[\s/>]/; // <live-pusher> 直播推流 → 摄像头 + 麦克风
+const WEB_VIEW_TAG_RE = /<web-view[\s/>]/;       // <web-view> → 业务域名白名单（个人主体不支持）
 // 疑似硬编码的微信密钥（AppSecret/商户密钥等后端专用）。捕获组只取键名，绝不记录密钥值。
 const SECRET_RE = /\b(appsecret|app_secret|mch_?key|partner_?key|apiclient_key)\b\s*[:=]\s*["'`][^"'`]{6,}["'`]/gi;
 // Taro 的 app.config.ts/js 是 TS/JS 模块（非 JSON），requiredPrivateInfos 以数组字面量声明。
@@ -196,6 +197,7 @@ export function scanProject(dir) {
     if (AVATAR_BTN_RE.test(code)) configKeys.add("button.open-type=chooseAvatar");
     if (CAMERA_TAG_RE.test(code)) configKeys.add("component.camera");
     if (LIVE_PUSHER_TAG_RE.test(code)) configKeys.add("component.live-pusher");
+    if (WEB_VIEW_TAG_RE.test(code)) configKeys.add("component.web-view");
     // 只取键名（m[1]）与相对路径，永不读取/记录密钥值本身。
     const rel = relative(dir, file).replace(/\\/g, "/");
     for (const m of code.matchAll(SECRET_RE)) secretHints.add(`${rel}::${m[1].toLowerCase()}`);
