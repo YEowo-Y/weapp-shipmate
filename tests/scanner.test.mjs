@@ -170,6 +170,7 @@ test("模板级隐私入口：chooseAvatar 按钮 + camera/live-pusher 组件 �
   assert.ok(r.configKeys.includes("button.open-type=chooseAvatar"), "应识别 chooseAvatar 头像按钮");
   assert.ok(r.configKeys.includes("component.camera"), "应识别 <camera> 组件");
   assert.ok(r.configKeys.includes("component.live-pusher"), "应识别 <live-pusher> 组件");
+  assert.ok(r.configKeys.includes("component.web-view"), "应识别 <web-view> 组件");
 });
 
 // ── wepy（.wpy 单文件 + wepy.* 命名空间）盲区 ──
