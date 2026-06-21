@@ -9,6 +9,7 @@ const FIX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "sam
 const LEAK = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "leaky-app");
 const UNI = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "uni-app");
 const TARO = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "taro-app");
+const MPX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "mpx-app");
 
 test("check 默认即命中已核验的隐私与域名规则", () => {
   const r = runCheck(FIX, { subjectType: "personal" });
@@ -64,6 +65,18 @@ test("Taro: check 让 Taro.* 命中 wx.* 规则，app.config 声明免误报", (
   assert.ok(
     !ids.includes("consistency.requiredPrivateInfos"),
     "getLocation 已在 app.config.ts 声明，交叉核验不应误报",
+  );
+});
+
+test("mpx: check 在 .mpx 上命中隐私/域名规则，内嵌 json 声明免误报", () => {
+  const r = runCheck(MPX, { subjectType: "personal" });
+  const ids = r.items.map((i) => i.ruleId);
+  assert.ok(ids.includes("privacy.choosePhotoVideo"), "wx.chooseImage 应命中相册/图片隐私规则");
+  assert.ok(ids.includes("privacy.getLocation"), "wx.getLocation 应命中位置隐私规则");
+  assert.ok(ids.includes("domain.request-whitelist"), "wx.request 应命中域名白名单规则");
+  assert.ok(
+    !ids.includes("consistency.requiredPrivateInfos"),
+    "getLocation 已在 app.mpx json 块声明，交叉核验不应误报",
   );
 });
 
