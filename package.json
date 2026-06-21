@@ -2,7 +2,7 @@
   "name": "weapp-shipmate",
   "version": "0.0.0",
   "private": true,
-  "description": "你写代码，我陪你上线 —— 微信小程序合规上线导航与代码感知预检（规则即数据）。当前为文档先行阶段，仅含规则数据与校验基建。",
+  "description": "你写代码，我陪你上线 —— 微信小程序合规上线导航与代码感知预检（规则即数据）。CLI 内核 + MCP 适配层；预检支持原生 wx / uni-app / Taro / mpvue / mpx / wepy。",
   "type": "module",
   "license": "MIT",
   "bin": {
