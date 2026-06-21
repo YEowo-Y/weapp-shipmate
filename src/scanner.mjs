@@ -25,8 +25,11 @@ const IGNORE_FILE = [
   /-lock\.json$/, /^pnpm-lock\.yaml$/, /^yarn\.lock$/, // lock 文件：纯依赖元数据，含大量募捐/registry 域名
   /\.d\.ts$/,                                          // 类型声明：只有类型、无运行时调用
 ];
-// 参与扫描的文本扩展名（.jsx/.tsx：Taro/React 小程序的页面与组件源码）
-const SCAN_EXT = new Set([".js", ".ts", ".jsx", ".tsx", ".mjs", ".wxml", ".wxs", ".json", ".vue", ".uvue"]);
+// 参与扫描的文本扩展名。各跨端框架的单文件源码：.jsx/.tsx（Taro/React）、.mpx（mpx）、
+// .wpy（wepy）、.vue/.uvue/.nvue（uni-app）——这些文件里同样有 wx.*/uni.*/Taro.* 调用。
+const SCAN_EXT = new Set([
+  ".js", ".ts", ".jsx", ".tsx", ".mjs", ".wxml", ".wxs", ".json", ".vue", ".uvue", ".nvue", ".mpx", ".wpy",
+]);
 
 const ignored = (name) => IGNORE_FILE.some((re) => re.test(name));
 
@@ -57,6 +60,8 @@ const SECRET_RE = /\b(appsecret|app_secret|mch_?key|partner_?key|apiclient_key)\
 // Taro 的 app.config.ts/js 是 TS/JS 模块（非 JSON），requiredPrivateInfos 以数组字面量声明。
 const REQUIRED_PRIVATE_RE = /requiredPrivateInfos\s*:\s*\[([^\]]*)\]/;
 const QUOTED_NAME_RE = /["'`]([a-zA-Z][a-zA-Z0-9]*)["'`]/g;
+// mpx 的 app.mpx 把应用配置放在内嵌的 <script type="application/json"> 块里（非独立 app.json）。
+const MPX_JSON_BLOCK_RE = /<script[^>]*application\/json[^>]*>([\s\S]*?)<\/script>/i;
 
 /**
  * 字符串感知地剥离 // 行注释与 / * * / 块注释，但完整保留字符串字面量内容
@@ -170,6 +175,20 @@ export function scanProject(dir) {
       // Taro：app.config.ts/js 是模块而非 JSON，正则抽取 requiredPrivateInfos 数组里的接口名。
       const m = code.match(REQUIRED_PRIVATE_RE);
       if (m) for (const q of m[1].matchAll(QUOTED_NAME_RE)) configKeys.add(`app.json:requiredPrivateInfos:${q[1]}`);
+    } else if (base === "app.mpx") {
+      // mpx：应用配置在 app.mpx 内嵌的 <script type="application/json"> 块里，提取后按 JSON 解析。
+      const block = code.match(MPX_JSON_BLOCK_RE);
+      if (block) {
+        try {
+          const conf = JSON.parse(block[1]);
+          if (conf.requiredPrivateInfos) {
+            for (const k of conf.requiredPrivateInfos) configKeys.add(`app.json:requiredPrivateInfos:${k}`);
+          }
+          if (conf.permission) {
+            for (const k of Object.keys(conf.permission)) configKeys.add(`app.json:permission:${k}`);
+          }
+        } catch { /* 内嵌配置块非标准 JSON，跳过 */ }
+      }
     }
   }
 
