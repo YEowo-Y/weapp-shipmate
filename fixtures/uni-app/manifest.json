@@ -1,0 +1,12 @@
+{
+  "name": "uni-fixture",
+  "appid": "__UNI__FIXTURE",
+  /* uni-app 的微信小程序平台配置：隐私接口声明与权限在 mp-weixin 块，不在 app.json */
+  "mp-weixin": {
+    "appid": "wx0000000000000000",
+    "requiredPrivateInfos": ["getLocation"],
+    "permission": {
+      "scope.userLocation": { "desc": "用于展示附近内容" }
+    }
+  }
+}
