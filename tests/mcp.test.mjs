@@ -20,10 +20,10 @@ test("通知不产生应答", async () => {
   assert.equal(await dispatch({ jsonrpc: "2.0", method: "notifications/initialized" }), null);
 });
 
-test("tools/list 暴露 check 与 guide", async () => {
+test("tools/list 暴露 check / guide / explain", async () => {
   const res = await dispatch({ jsonrpc: "2.0", id: 2, method: "tools/list" });
   const names = res.result.tools.map((t) => t.name);
-  assert.deepEqual(names.sort(), ["weapp_shipmate_check", "weapp_shipmate_guide"]);
+  assert.deepEqual(names.sort(), ["weapp_shipmate_check", "weapp_shipmate_explain", "weapp_shipmate_guide"]);
   for (const t of TOOLS) assert.equal(t.inputSchema.type, "object");
 });
 
@@ -44,6 +44,16 @@ test("tools/call check 在夹具上命中（含 draft）", async () => {
   });
   assert.equal(res.result.structuredContent.command, "check");
   assert.ok(res.result.structuredContent.items.length >= 4);
+});
+
+test("tools/call explain 拒因反查返回 content 文本", async () => {
+  const res = await dispatch({
+    jsonrpc: "2.0", id: 6, method: "tools/call",
+    params: { name: "weapp_shipmate_explain", arguments: { query: "诱导分享" } },
+  });
+  assert.equal(res.result.isError, false);
+  assert.match(res.result.content[0].text, /拒因解读/);
+  assert.equal(res.result.structuredContent.command, "explain");
 });
 
 test("未知方法返回 -32601", async () => {
@@ -67,5 +77,5 @@ test("stdio 传输端到端：initialize → tools/list 往返", async () => {
   const init = lines.find((m) => m.id === 1);
   const list = lines.find((m) => m.id === 2);
   assert.ok(init.result.serverInfo, "initialize 应有 serverInfo");
-  assert.equal(list.result.tools.length, 2, "tools/list 应返回 2 个工具");
+  assert.equal(list.result.tools.length, 3, "tools/list 应返回 3 个工具");
 });
