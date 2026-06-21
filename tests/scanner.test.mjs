@@ -10,6 +10,7 @@ const UNI = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "uni
 const TARO = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "taro-app");
 const MPX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "mpx-app");
 const WEPY = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "wepy-app");
+const TPL = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "template-signals");
 
 test("scanner 提取 wx API", () => {
   const r = scanProject(FIX);
@@ -148,6 +149,13 @@ test("mpx: 从 app.mpx 的 <script type=application/json> 块提取 requiredPriv
     r.configKeys.includes("app.json:requiredPrivateInfos:getLocation"),
     `应从 app.mpx 内嵌 json 块读到 requiredPrivateInfos：${JSON.stringify(r.configKeys)}`,
   );
+});
+
+test("模板级隐私入口：chooseAvatar 按钮 + camera/live-pusher 组件 → 配置信号", () => {
+  const r = scanProject(TPL);
+  assert.ok(r.configKeys.includes("button.open-type=chooseAvatar"), "应识别 chooseAvatar 头像按钮");
+  assert.ok(r.configKeys.includes("component.camera"), "应识别 <camera> 组件");
+  assert.ok(r.configKeys.includes("component.live-pusher"), "应识别 <live-pusher> 组件");
 });
 
 // ── wepy（.wpy 单文件 + wepy.* 命名空间）盲区 ──
