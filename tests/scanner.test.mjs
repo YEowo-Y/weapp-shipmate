@@ -92,6 +92,20 @@ test("SVG/XML 命名空间 host（www.w3.org）不被当成请求域名", () => 
   assert.ok(!r.insecureHosts.includes("www.w3.org"), "xmlns 不应触发明文请求告警");
 });
 
+test("明文请求只在 url: 语境判定：媒体 src 的 http 不算明文请求", () => {
+  const r = scanProject(EDGE);
+  assert.ok(r.insecureHosts.includes("plain.req.test"), "请求 url: 里的 http 应判明文请求");
+  assert.ok(
+    !r.insecureHosts.includes("img.media.test"),
+    `<image src> 等媒体资源的 http 不应判明文请求：${JSON.stringify(r.insecureHosts)}`,
+  );
+});
+
+test("忽略构建/脚本目录（scripts/）：其域名不进扫描结果", () => {
+  const r = scanProject(EDGE);
+  assert.ok(!r.domains.includes("build-only.test"), "scripts/ 里的构建期域名不应进结果");
+});
+
 test("uni-app: 解析 manifest.json 的 mp-weixin 隐私/权限声明（JSONC 带注释）", () => {
   const r = scanProject(UNI);
   assert.ok(
