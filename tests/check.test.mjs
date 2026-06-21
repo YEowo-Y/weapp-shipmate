@@ -59,6 +59,11 @@ test("uni-app: check 让 uni.* 调用命中 wx.* 规则（BS6），且 manifest 
   assert.ok(ids.includes("privacy.choosePhotoVideo"), "uni.chooseImage 应命中相册/图片隐私规则");
   assert.ok(ids.includes("privacy.getLocation"), "uni.getLocation 应命中位置隐私规则");
   assert.ok(ids.includes("domain.request-whitelist"), "uni.request 应命中域名白名单规则");
+  assert.equal(
+    ids.filter((id) => id.startsWith("domain.")).length,
+    1,
+    "域名规则只应命中一条（apiMatches 让 wx 规则覆盖 uni，不得与已删除的 uni 变体重复）",
+  );
   assert.ok(
     !ids.includes("consistency.requiredPrivateInfos"),
     "getLocation 已在 manifest mp-weixin 声明，交叉核验不应误报",
