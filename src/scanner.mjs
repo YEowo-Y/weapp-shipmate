@@ -46,7 +46,7 @@ function* walk(dir) {
   }
 }
 
-const API_RE = /\b(wx|uni|Taro)\.([a-zA-Z][a-zA-Z0-9]*)/g; // Taro：React 系小程序的 API 命名空间
+const API_RE = /\b(wx|uni|Taro|wepy)\.([a-zA-Z][a-zA-Z0-9]*)/g; // 跨端框架的 API 命名空间（Taro/wepy 等）
 const URL_RE = /(["'`])(https?:\/\/|wss?:\/\/)([^"'`\s/?#]+)/g;
 const REQUEST_DYNAMIC_RE =
   /\b(?:wx|uni)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{[^}]*\burl\s*:\s*(?!["'`])/;
