@@ -13,6 +13,15 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 - **扫描器剥离注释后再提取事实**：被注释掉的 `// wx.getLocation()` / 块注释里的调用不再触发隐私/域名预检命中。注释剥离为**字符串感知**（保留 `"https://x"` 内的 `//`，避免朴素剥离破坏域名提取而引入新错误）；`app.json` 仍按原文 JSON 解析。
 - **请求域名归一化**：URL host 去掉 `user[:pass]@` 前缀与 `:port` 后缀并小写，使 `api.weixin.qq.com:8443`、`user@host` 等不再绕过 IP / 微信服务端 API 直连等**精确匹配的安全交叉核验**。
 
+### Added — uni-app 真实项目支持（dogfood 真实小程序暴露并修复）
+
+> 首轮真实 dogfood（一个真实可上线的 uni-app 小程序 + 官方 `miniprogram-demo`/`hello-uniapp`）暴露：工具原本只对**原生 wx 小程序**有效，对中国独立开发者主流的 **uni-app**（`uni.*` API、`manifest.json` 配置、`.vue` 源码、`unpackage/` 编译产物）几乎全盘失效——真实项目上唯一的命中是假阳性、且漏掉真实隐私调用。已修：
+
+- **`uni.X` 与 `wx.X` 等价匹配**（`apiMatches`）：uni-app 源码写 `uni.getLocation`，编译到微信即 `wx.getLocation`；预检/交叉核验统一归一，否则对 uni-app 全盘漏报。据此删除冗余的 `domain.uni-request`（由等价匹配覆盖，避免对每个请求双重命中）。
+- **解析 `manifest.json` 的 `mp-weixin` 块**（uni-app 的隐私接口声明/权限所在，且常为 JSONC 带注释，复用 `stripComments` 解析）；与原生 `app.json` 统一为同一逻辑配置键。在官方 `hello-uniapp` 上据此正确报出"调用 `uni.getLocation` 但未声明 `requiredPrivateInfos`"的真实 61040 类阻断。
+- **扫描忽略扩展**：构建/服务端/工具目录（uni-app `unpackage`、HBuilderX `_mp_devtools`、`cloudfunctions`、`output`/`tmp`/`releases`/`.omx` 等）、lock 文件（`*-lock.json`）、`*.d.ts` 类型声明——否则框架运行时 API、依赖募捐域名、类型定义会污染结果。
+- **请求 host 校验**：拒模板字面量 `${host}` 等非法 host；排除 `www.w3.org` 等 XML/SVG 命名空间（内联 SVG 的 `xmlns` 不是请求域名，曾假报明文请求）。
+
 ### Added — 规则数据（"规则即数据"脊柱）
 
 - 规则 schema（`schemas/rules.schema.json`、`schemas/flow.schema.json`）与 `flow.yaml` 上线流程决策树骨架。
@@ -42,7 +51,7 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 ### Added — 质量基建
 
 - 规则腐烂监控（`npm run rot`）：`last_verified` 时效检查 + `official_url` 链接体检；每月定时 GitHub workflow 告警。
-- 测试套件（`node:test`，61 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck）+ 样例夹具（含 `edge-cases` 边界夹具：注释里的 API、带端口/userinfo 的域名）；GitHub CI（含 `.mcpb` 打包冒烟）。
+- 测试套件（`node:test`，68 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck）+ 样例夹具（`edge-cases`：注释里的 API、带端口/userinfo 的域名；`uni-app`：JSONC manifest、`uni.*` 调用、需忽略的 `unpackage`/lock/`.d.ts`）；GitHub CI（含 `.mcpb` 打包冒烟）。
 
 ### Added — 治理与文档
 
