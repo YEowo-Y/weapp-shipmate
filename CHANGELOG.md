@@ -12,6 +12,8 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 - **`guide` 不再把"内容相关"规则当成确定阻断**：带 `signal` 的规则（医疗类目、UGC 内容过滤、虚拟支付、未成年人保护、诱导下载 App、电商类目等）其适用与否取决于小程序具体功能；导航看不到源码，故改为列入新增的「可能适用 · 请按业务自查」区（`runGuide` 返回 `selfCheck`），并**不计入概览的阻断/警告计数**。修复前一个无业务信号的 `guide` 会输出 12 项阻断（含医疗等假阳性），修复后仅保留 8 项普遍适用的提审/备案基线阻断，内容相关项完整保留在自查区、不静默丢弃。
 - **扫描器剥离注释后再提取事实**：被注释掉的 `// wx.getLocation()` / 块注释里的调用不再触发隐私/域名预检命中。注释剥离为**字符串感知**（保留 `"https://x"` 内的 `//`，避免朴素剥离破坏域名提取而引入新错误）；`app.json` 仍按原文 JSON 解析。
 - **请求域名归一化**：URL host 去掉 `user[:pass]@` 前缀与 `:port` 后缀并小写，使 `api.weixin.qq.com:8443`、`user@host` 等不再绕过 IP / 微信服务端 API 直连等**精确匹配的安全交叉核验**。
+- **明文请求改为请求语境感知**（6 个真实 app 正确性 triage 暴露的首位假阳性）：`security.insecure-request` 原本对**任意** `http://`/`ws://` 字符串字面量都告警（`<image src>`、`<video>`、`coverImgUrl`、`plus.openURL`、mock 数据里的 `url` 字段都被误报"须改 https"）。微信只对 `request`/`connectSocket`/`uploadFile`/`downloadFile` 四个网络 API 强制 https/wss；故改为**仅匹配请求 API 调用里的 `url:` 参数**。修后全语料仅剩 1 条真命中（官方 demo 的一个 http `downloadFile`），其余假阳性全部消除，真命中无一丢失。
+- **忽略非上线面目录**：`platforms`/`windows`（uni-app 的 App/H5 端代码，编译到微信不参与）、`scripts`/`test`/`tests`/`__tests__`/`__mocks__`/`e2e`（构建脚本与测试，不随包上传）——消除 App/H5 域名与构建脚本里的 kroki/iconify 等噪声。
 
 ### Added — uni-app / Taro 真实项目支持（dogfood 真实小程序暴露并修复）
 
@@ -52,7 +54,7 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 ### Added — 质量基建
 
 - 规则腐烂监控（`npm run rot`）：`last_verified` 时效检查 + `official_url` 链接体检；每月定时 GitHub workflow 告警。
-- 测试套件（`node:test`，71 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck）+ 样例夹具（`edge-cases`：注释里的 API、带端口/userinfo 的域名；`uni-app`：JSONC manifest、`uni.*` 调用、需忽略的 `unpackage`/lock/`.d.ts`；`taro-app`：`.tsx`、`Taro.*` 调用、`app.config.ts` 声明）；GitHub CI（含 `.mcpb` 打包冒烟）。
+- 测试套件（`node:test`，73 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck）+ 样例夹具（`edge-cases`：注释里的 API、带端口/userinfo 的域名、媒体 src 的 http、构建脚本噪声；`uni-app`：JSONC manifest、`uni.*` 调用、需忽略的 `unpackage`/lock/`.d.ts`；`taro-app`：`.tsx`、`Taro.*` 调用、`app.config.ts` 声明）；GitHub CI（含 `.mcpb` 打包冒烟）。
 
 ### Added — 治理与文档
 
