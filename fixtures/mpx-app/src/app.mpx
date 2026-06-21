@@ -1,0 +1,18 @@
+<script>
+  import mpx from "@mpxjs/core";
+  // mpx 是「增强原生」：API 仍是 wx.*，但页面/逻辑写在 .mpx 单文件里。
+  mpx.createApp({
+    onLaunch() {
+      wx.getLocation({ type: "gcj02" }); // 已在下方 json 块声明 → 不应误报缺声明
+      wx.chooseImage({ count: 1 });        // 相册/图片 → 应命中 privacy.choosePhotoVideo
+      wx.request({ url: "https://api.example.com/data" });
+    },
+  });
+</script>
+
+<script type="application/json">
+  {
+    "pages": ["pages/index/index"],
+    "requiredPrivateInfos": ["getLocation"]
+  }
+</script>
