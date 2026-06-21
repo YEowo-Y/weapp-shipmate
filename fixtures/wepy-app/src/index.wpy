@@ -1,0 +1,13 @@
+<script>
+  import wepy from "wepy";
+  // wepy 把 wx API 包成 promise 化的 wepy.*（网络/隐私调用常走这个命名空间，而非 wx.*）。
+  export default class Index extends wepy.page {
+    methods = {
+      onTap() {
+        wepy.getUserInfo({}); // 用户信息 → privacy.getUserProfile（wepy ≡ wx）
+        wepy.request({ url: "https://api.example.com/data" }); // → domain.request-whitelist
+        wx.requestPayment({}); // 支付：目前无预检规则（留作已知 FN）
+      },
+    };
+  }
+</script>
