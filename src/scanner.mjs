@@ -7,9 +7,20 @@ import { join, basename, extname, relative } from "node:path";
 // 目录忽略
 const IGNORE_DIRS = new Set([
   "node_modules", ".git", ".github", "miniprogram_npm", "dist", "build", ".omc", ".claude",
+  // 构建/编译产物、发布与临时目录（含 uni-app 的 unpackage、HBuilderX 的 _mp_devtools）——
+  // 扫了会把框架运行时（wx.createSubpackageApp 等）与占位 host 当成真实事实。
+  "unpackage", "_mp_devtools", "output", "tmp", "releases", "coverage",
+  // 工具/缓存目录
+  ".omx", ".npm-cache", ".wxci", ".vscode", ".idea",
+  // 云函数：服务端代码，不随小程序包上传；后端持有密钥、直调服务端 API 属正常，扫了只会误报。
+  "cloudfunctions",
 ]);
 // 文件忽略（与 SECURITY.md 一致）
-const IGNORE_FILE = [/^\.env/, /\.pem$/, /\.p12$/, /^private\..*\.key$/, /^project\.private\.config\.json$/, /^secret/];
+const IGNORE_FILE = [
+  /^\.env/, /\.pem$/, /\.p12$/, /^private\..*\.key$/, /^project\.private\.config\.json$/, /^secret/,
+  /-lock\.json$/, /^pnpm-lock\.yaml$/, /^yarn\.lock$/, // lock 文件：纯依赖元数据，含大量募捐/registry 域名
+  /\.d\.ts$/,                                          // 类型声明：只有类型、无运行时调用
+];
 // 参与扫描的文本扩展名
 const SCAN_EXT = new Set([".js", ".ts", ".mjs", ".wxml", ".wxs", ".json", ".vue", ".uvue"]);
 
@@ -81,6 +92,17 @@ export function normalizeHost(raw) {
   return h.replace(/:\d+$/, "");      // 去端口
 }
 
+// XML/SVG 命名空间标识符——是规范里的 namespace URI，绝不是网络请求目标。
+// 内联 SVG 的 xmlns="http://www.w3.org/2000/svg" 在 Vue 组件里极常见，扫了会假报明文请求。
+const NAMESPACE_HOSTS = new Set(["www.w3.org", "schemas.openxmlformats.org", "ns.adobe.com"]);
+
+/** host 是否像真实域名/IP：归一后只含 [a-z0-9._-] 且含点（localhost 单独放行）。
+ *  排除模板字面量 `${host}`、通配符等噪声，以及 XML/SVG 命名空间——它们不是可配进白名单的真实域名。 */
+function isPlausibleHost(h) {
+  if (NAMESPACE_HOSTS.has(h)) return false;
+  return h === "localhost" || (/^[a-z0-9._-]+$/.test(h) && h.includes("."));
+}
+
 /**
  * 扫描一个小程序项目目录。
  * @returns {{ filesScanned:number, apis:string[], domains:string[], dynamicRequest:boolean, configKeys:string[] }}
@@ -104,6 +126,7 @@ export function scanProject(dir) {
     for (const m of code.matchAll(API_RE)) apis.add(`${m[1]}.${m[2]}`);
     for (const m of code.matchAll(URL_RE)) {
       const host = normalizeHost(m[3]); // 去端口/userinfo，防止绕过精确匹配的安全核验
+      if (!isPlausibleHost(host)) continue; // 跳过 `${host}` 等模板占位/非法 host 噪声
       domains.add(host);
       if (m[2] === "http://" || m[2] === "ws://") insecureHosts.add(host); // 明文协议（须 https/wss）
     }
@@ -113,16 +136,20 @@ export function scanProject(dir) {
     const rel = relative(dir, file).replace(/\\/g, "/");
     for (const m of code.matchAll(SECRET_RE)) secretHints.add(`${rel}::${m[1].toLowerCase()}`);
 
-    if (basename(file) === "app.json") {
+    // 隐私接口声明 / 权限：原生小程序在 app.json 根级；uni-app 在 manifest.json 的 mp-weixin 块
+    // （且常为 JSONC 带注释，故用已剥离注释的 code 解析）。两者统一为同一逻辑配置键。
+    const base = basename(file);
+    if (base === "app.json" || base === "manifest.json") {
       try {
-        const app = JSON.parse(text);
-        if (app.requiredPrivateInfos) {
-          for (const k of app.requiredPrivateInfos) configKeys.add(`app.json:requiredPrivateInfos:${k}`);
+        const conf = JSON.parse(code);
+        const mp = base === "manifest.json" ? conf["mp-weixin"] || {} : conf;
+        if (mp.requiredPrivateInfos) {
+          for (const k of mp.requiredPrivateInfos) configKeys.add(`app.json:requiredPrivateInfos:${k}`);
         }
-        if (app.permission) {
-          for (const k of Object.keys(app.permission)) configKeys.add(`app.json:permission:${k}`);
+        if (mp.permission) {
+          for (const k of Object.keys(mp.permission)) configKeys.add(`app.json:permission:${k}`);
         }
-      } catch { /* 非标准 app.json，跳过 */ }
+      } catch { /* 非标准/含尾逗号的配置，跳过（降级为无配置信号，不崩） */ }
     }
   }
 
