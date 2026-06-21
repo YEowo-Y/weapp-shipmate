@@ -38,17 +38,19 @@ export function rulesForStage(rules, stage, subjectType, kinds) {
   );
 }
 
-/** 规则的 API 名是否命中扫描到的 API 集合；`uni.X` 与 `wx.X` 视为等价
- *  （uni-app 编译到微信小程序即 `wx.X`，源码里却写 `uni.X`——不归一则对 uni-app 全盘漏报）。 */
+// 跨框架 API 命名空间：源码里写 uni./Taro.，编译到微信小程序都等价 wx.*。
+const API_ALIASES = ["wx", "uni", "Taro"];
+
+/** 规则的 API 名是否命中扫描到的 API 集合；`wx.X`/`uni.X`/`Taro.X` 三者视为等价
+ *  （不归一则对 uni-app、Taro 全盘漏报隐私/域名预检）。 */
 export function apiMatches(apiSet, ruleApi) {
   if (apiSet.has(ruleApi)) return true;
   const dot = ruleApi.indexOf(".");
   if (dot < 0) return false;
   const ns = ruleApi.slice(0, dot);
   const name = ruleApi.slice(dot + 1);
-  if (ns === "wx") return apiSet.has(`uni.${name}`);
-  if (ns === "uni") return apiSet.has(`wx.${name}`);
-  return false;
+  if (!API_ALIASES.includes(ns)) return false;
+  return API_ALIASES.some((alias) => alias !== ns && apiSet.has(`${alias}.${name}`));
 }
 
 /** 把一条规则映射为报告清单项（check 与 guide 共用，确保两个渲染器输出一致）。 */
