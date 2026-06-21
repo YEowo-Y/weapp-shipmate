@@ -49,11 +49,12 @@ weapp-shipmate 不先做"平台"，先做一个可验证的最小闭环：
 
 ## 形态与架构（一句话）
 
-**CLI 内核 + MCP 适配层**，底座是一份**"规则即数据"的知识库**（`rules/*.yaml`），外加一份薄流程骨架（`flow.yaml`）承载上线阶段的顺序与分支。导航与预检是同一份规则库上的两个渲染器——社区 PR 一条规则，两者同时更新、不改代码。详见 `docs/03-decisions-and-architecture.md`。
+**CLI 内核 + MCP 适配层**，底座是一份**"规则即数据"的知识库**（`rules/*.yaml`），外加一份薄流程骨架（`flow.yaml`）承载上线阶段的顺序与分支。导航、预检、拒因反查是同一份规则库上的**多个渲染器**——社区 PR 一条规则，全部同时更新、不改代码。详见 `docs/03-decisions-and-architecture.md`。
 
 ```
-weapp-shipmate check ./my-app      # 代码感知预检：出个性化上线清单
-weapp-shipmate guide               # 上线流程导航：你在哪一步、下一步做什么
+weapp-shipmate check ./my-app        # 代码感知预检：出个性化上线清单
+weapp-shipmate guide                 # 上线流程导航：你在哪一步、下一步做什么
+weapp-shipmate explain "<审核反馈>"  # 拒因反查：把拒审信号映射到已核验规则与修复步骤
 ```
 
 **本地运行**（尚未发布到 npm，先从源码跑）：
@@ -65,7 +66,9 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 # 默认只输出来源已核验的规则；加 --include-drafts 可含未核验的种子规则
 ```
 
-> ⚠️ 当前 45 条种子规则**全部已核验官方来源、默认输出**（备案 1、域名 2、隐私 21、提审 6、登录 5、内容 2、支付 1、资质 1、未成年 1、数据 1、导流 2、类目 2），暂无 `draft` 规则。`draft` 门禁机制保留：未来无法核验逐字来源的规则只进 `--include-drafts`、不进默认集——这是"宁可少说、不做担保"的有意约束。
+> ⚠️ 当前 45 条种子规则**全部已核验官方来源、默认输出**（备案 1、域名 1、隐私 21、提审 6、登录 5、内容 2、支付 2、资质 1、未成年 1、数据 1、导流 2、类目 2），暂无 `draft` 规则。`draft` 门禁机制保留：未来无法核验逐字来源的规则只进 `--include-drafts`、不进默认集——这是"宁可少说、不做担保"的有意约束。
+>
+> 🧩 **跨框架支持**：预检不只认原生 `wx.*`——`uni.*`（uni-app）、`Taro.*`（Taro）、`wepy.*`（wepy）经等价匹配归一到同一套规则；`.vue`/`.tsx`/`.mpx`/`.wpy`/`.nvue` 等单文件源码、以及 `app.json`/`manifest.json`(mp-weixin)/`app.config.ts`/`app.mpx` 内嵌等多种配置位置都能识别；uni-app `#ifdef` 条件编译、构建产物目录与媒体 `<image src>` 噪声均已剔除。已在真实开源小程序上 dogfood 验证（见下）。
 
 **给 Agent 用（MCP）**：内置零依赖 MCP server（stdio），把上述能力暴露为两个工具 `weapp_shipmate_check`、`weapp_shipmate_guide`。在 Claude Code / Codex 的 MCP 配置中加入：
 
@@ -88,7 +91,9 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 
 ## 当前状态
 
-🟢 **v0 骨架已打通（2026-06-13）** —— 调研/定位/命名定稿；规则 schema、`flow.yaml`、种子规则、数据校验门禁与 CI 已落地；**CLI 内核 `check`/`guide` 与零依赖 MCP server 均可从源码运行**（见下「本地运行」「给 Agent 用」）；8 条种子规则中 6 条已核验官方来源、默认输出。下一步：扩充规则覆盖、规则腐烂监控（官方链接体检 + `last_verified` 时效）。
+🟢 **v0 已在真实小程序上验证、多框架可用（2026-06-21）** —— 调研/定位/命名定稿；规则 schema、`flow.yaml`、**45 条已核验种子规则**、数据校验门禁与 CI 已落地。**四个渲染器**（`check` 代码预检 / `guide` 流程导航 / `explain` 拒因反查 / report 清单导出）共用同一份规则库、均可从源码运行；零依赖 MCP server（`check`/`guide`）与 `.mcpb` 一键安装包已落地。
+
+**真实 dogfood 验证**：在多个真实开源小程序上逐条核验命中——覆盖**原生 wx / uni-app / Taro / mpvue / mpx / wepy 六大主流框架**，经 6-app 正确性核验把误报压到接近零、并补上支付/模板级隐私（头像/相机/麦克风）等真实漏报。当前 **82 例测试全绿**。下一步：发 **v0.1.0 公开预览**；规则覆盖增量保鲜。
 
 文档导航：
 
@@ -100,6 +105,7 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 | [`docs/04-roadmap.md`](docs/04-roadmap.md) | 二期建仓路线、冷启动待决问题 |
 | [`docs/05-feasibility.md`](docs/05-feasibility.md) | 完整可行性评审、Go/No-Go 条件、风险与验证实验 |
 | [`docs/06-quality-and-acceptance.md`](docs/06-quality-and-acceptance.md) | 质量与验收规则：分阶段 DOD、质量门禁、测试策略、修复分级、Dogfood |
+| [`docs/07-desktop-agent-tech-research.md`](docs/07-desktop-agent-tech-research.md) | 产品终态（自建桌面 agent）技术方案与稳定性调研 |
 
 ---
 
@@ -113,7 +119,7 @@ AI has largely solved *writing the code*; what still blocks zero-to-one creators
 2. **Code-aware preflight** — scans your source locally to produce a *personalized* go-live checklist (request domains to allowlist, privacy APIs that mandate guideline fields, category hints & common rejection warnings).
 3. **AI glue** — a zero-dependency **CLI core + MCP adapter** so the agent that just wrote your code can run the preflight and explain results, without bypassing the official console.
 
-**Not** a code framework/UI lib · **not** one-click launch · **not** another DevTools-driving MCP · **no** compliance guarantees · **never** uploads source or secrets. Status: **inception (2026-06-13)** — docs-first, code skeleton in phase two.
+**Not** a code framework/UI lib · **not** one-click launch · **not** another DevTools-driving MCP · **no** compliance guarantees · **never** uploads source or secrets. Status: **v0 validated (2026-06-21)** — four renderers (check / guide / explain / report) run from source; dogfooded on real open-source mini-programs across **6 frameworks** (native wx · uni-app · Taro · mpvue · mpx · wepy); 82 tests green; not yet published to npm.
 
 ---
 
