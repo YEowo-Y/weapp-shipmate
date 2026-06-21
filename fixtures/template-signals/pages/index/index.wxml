@@ -1,0 +1,6 @@
+<!-- 模板级隐私入口：JS 调用扫不到，须从模板属性/组件标签识别。 -->
+<view class="page">
+  <button open-type="chooseAvatar" bindchooseavatar="onAvatar">选择头像</button>
+  <camera device-position="back" flash="off"></camera>
+  <live-pusher url="" mode="RTC" enable-camera="{{true}}"></live-pusher>
+</view>
