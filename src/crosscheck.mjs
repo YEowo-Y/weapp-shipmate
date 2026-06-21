@@ -1,6 +1,7 @@
 // src/crosscheck.mjs —— 声明↔调用一致性核验（超越单向规则匹配的代码感知）
 // 复用 scanner 已抓取的 apis（调用）与 configKeys（app.json 声明），交叉比对出"调了但没声明"。
 // 已核验官方来源（2026-06-15，全局配置文档 requiredPrivateInfos）：纯逻辑 + 官方逐字 source_quote。
+import { apiMatches } from "./data.mjs";
 
 // 官方：使用以下 8 个地理位置接口须在 app.json 的 requiredPrivateInfos 声明，否则无法正常使用。
 const LOCATION_DECL_APIS = [
@@ -26,9 +27,8 @@ export function checkRequiredPrivateInfos(scan = {}) {
   const declared = new Set(
     (scan.configKeys || []).filter((k) => k.startsWith(DECL_PREFIX)).map((k) => k.slice(DECL_PREFIX.length)),
   );
-  // uni.X ≡ wx.X：uni-app 源码写 uni.getLocation，编译到微信即 wx.getLocation。
-  const called = (name) => apis.has(`wx.${name}`) || apis.has(`uni.${name}`);
-  const missing = LOCATION_DECL_APIS.filter((name) => called(name) && !declared.has(name));
+  // wx/uni/Taro 等价：源码写 uni./Taro.getLocation，编译到微信即 wx.getLocation。
+  const missing = LOCATION_DECL_APIS.filter((name) => apiMatches(apis, `wx.${name}`) && !declared.has(name));
   if (!missing.length) return null;
   return {
     ruleId: "consistency.requiredPrivateInfos",
