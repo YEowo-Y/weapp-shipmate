@@ -78,6 +78,7 @@ test("模板级隐私：chooseAvatar/相机/直播组件命中对应隐私规则
   assert.ok(ids.includes("privacy.getUserProfile"), "chooseAvatar（头像）应命中用户信息隐私规则");
   assert.ok(ids.includes("privacy.camera"), "<camera>/<live-pusher> 应命中摄像头隐私规则");
   assert.ok(ids.includes("privacy.record"), "<live-pusher> 应命中麦克风隐私规则");
+  assert.ok(ids.includes("domain.web-view-business"), "<web-view> 应命中业务域名预检规则");
 });
 
 test("Taro: check 让 Taro.* 命中 wx.* 规则，app.config 声明免误报", () => {
