@@ -11,6 +11,7 @@ const TARO = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "ta
 const MPX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "mpx-app");
 const WEPY = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "wepy-app");
 const TPL = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "template-signals");
+const UNICOND = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "uni-cond");
 
 test("scanner 提取 wx API", () => {
   const r = scanProject(FIX);
@@ -149,6 +150,19 @@ test("mpx: 从 app.mpx 的 <script type=application/json> 块提取 requiredPriv
     r.configKeys.includes("app.json:requiredPrivateInfos:getLocation"),
     `应从 app.mpx 内嵌 json 块读到 requiredPrivateInfos：${JSON.stringify(r.configKeys)}`,
   );
+});
+
+test("uni-app 条件编译：剔除非微信分支，保留微信/非平台分支", () => {
+  const r = scanProject(UNICOND);
+  // 保留：#ifdef MP-WEIXIN、#ifndef APP-NVUE（含微信）、#ifdef VUE3（非平台标记）
+  assert.ok(r.apis.includes("uni.getClipboardData"), "#ifdef MP-WEIXIN 分支应保留");
+  assert.ok(r.apis.includes("uni.getSystemInfoSync"), "#ifndef APP-NVUE 分支（含微信）应保留");
+  assert.ok(r.apis.includes("uni.getStorageSync"), "#ifdef VUE3 非平台标记不应按平台剔除");
+  assert.ok(r.configKeys.includes("button.open-type=chooseAvatar"), "#ifdef MP-WEIXIN 模板分支应保留");
+  // 剔除：#ifdef APP-PLUS、#ifndef MP-WEIXIN、#ifdef H5（模板）
+  assert.ok(!r.apis.includes("uni.scanCode"), "#ifdef APP-PLUS 分支应剔除");
+  assert.ok(!r.apis.includes("uni.getRecorderManager"), "#ifndef MP-WEIXIN 分支应剔除");
+  assert.ok(!r.domains.includes("h5-only.example"), "#ifdef H5 模板分支的域名应剔除");
 });
 
 test("模板级隐私入口：chooseAvatar 按钮 + camera/live-pusher 组件 → 配置信号", () => {
