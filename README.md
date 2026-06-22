@@ -106,6 +106,7 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 | [`docs/05-feasibility.md`](docs/05-feasibility.md) | 完整可行性评审、Go/No-Go 条件、风险与验证实验 |
 | [`docs/06-quality-and-acceptance.md`](docs/06-quality-and-acceptance.md) | 质量与验收规则：分阶段 DOD、质量门禁、测试策略、修复分级、Dogfood |
 | [`docs/07-desktop-agent-tech-research.md`](docs/07-desktop-agent-tech-research.md) | 产品终态（自建桌面 agent）技术方案与稳定性调研 |
+| [`docs/08-product-vision.md`](docs/08-product-vision.md) | 终态产品愿景：领域聚焦上线 copilot、分层、架构、准确性地基、路线 |
 
 ---
 
