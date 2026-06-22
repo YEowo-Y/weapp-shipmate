@@ -1,7 +1,7 @@
 # Changelog
 
 本项目变更记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
-版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。当前为 v0 开发阶段（`0.0.0`，未发布、未推送公共远程）。
+版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。当前 `0.1.0`（已托管于 GitHub `YEowo-Y/weapp-shipmate`，尚未 npm publish）。
 
 ## [Unreleased]
 
@@ -54,7 +54,7 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 
 ### Added — 集成与分发
 
-- 零依赖 MCP server（stdio JSON-RPC 2.0），暴露 `weapp_shipmate_check`、`weapp_shipmate_guide`、`weapp_shipmate_explain`（拒因反查），可挂入 Claude Code / Claude Desktop / Codex。
+- 极简依赖 MCP server（stdio JSON-RPC 2.0；仅 1 个纯解析依赖 js-yaml），暴露 `weapp_shipmate_check`、`weapp_shipmate_guide`、`weapp_shipmate_explain`（拒因反查），可挂入 Claude Code / Claude Desktop / Codex。
 - `.mcpb` Desktop 扩展打包（`npm run build:mcpb`）：暂存纯生产副本 + 冒烟自检 + 官方 `mcpb pack`，manifest 通过官方 v0.4 schema 校验；可选签名（受信证书 / 自签名 TOFU）。
 
 ### Added — 质量基建
