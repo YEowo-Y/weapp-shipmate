@@ -1,0 +1,26 @@
+{
+  "_comment": "准确性 ground-truth 标注。每条 = (project, ruleId, expect)。expect=hit 标真阳锚点(防漏报 FN)；expect=no_hit 标真阴锚点(FP-guard，防误报，最值钱)。scripts/accuracy.mjs 据此对 check 输出算 precision/recall。新增夹具/规则时在此追加，并人工对照源码核验 expect。",
+  "_authority": "本文件是人工核验的真值，不是自动生成。改动须复看夹具源码。",
+  "subject_default": "personal",
+  "labels": [
+    { "project": "fixtures/sample-app", "ruleId": "privacy.getUserProfile",        "expect": "hit",    "note": "index.js 调 wx.getUserProfile" },
+    { "project": "fixtures/sample-app", "ruleId": "privacy.getLocation",           "expect": "hit",    "note": "index.js 调 wx.getLocation" },
+    { "project": "fixtures/sample-app", "ruleId": "privacy.getPhoneNumber",        "expect": "hit",    "note": "index.wxml <button open-type=\"getPhoneNumber\"> 模板信号" },
+    { "project": "fixtures/sample-app", "ruleId": "privacy.clipboard",             "expect": "hit",    "note": "index.js 调 wx.getClipboardData" },
+    { "project": "fixtures/sample-app", "ruleId": "domain.request-whitelist",      "expect": "hit",    "note": "index.js 有 wx.request 出站域名" },
+    { "project": "fixtures/sample-app", "ruleId": "security.hardcoded-secret",     "expect": "no_hit", "note": "FP-guard：sample-app 无硬编码密钥" },
+    { "project": "fixtures/sample-app", "ruleId": "security.backend-api-in-frontend","expect": "no_hit","note": "FP-guard：无 api.weixin.qq.com 直连" },
+    { "project": "fixtures/sample-app", "ruleId": "security.insecure-request",     "expect": "no_hit", "note": "FP-guard：请求全为 https" },
+    { "project": "fixtures/sample-app", "ruleId": "payment.requires-merchant",     "expect": "no_hit", "note": "FP-guard：无 wx.requestPayment" },
+
+    { "project": "fixtures/leaky-app",  "ruleId": "domain.request-whitelist",      "expect": "hit",    "note": "index.js 有 wx.request 出站域名" },
+    { "project": "fixtures/leaky-app",  "ruleId": "security.backend-api-in-frontend","expect": "hit",  "note": "index.js 直连 api.weixin.qq.com" },
+    { "project": "fixtures/leaky-app",  "ruleId": "security.hardcoded-secret",     "expect": "hit",    "note": "index.js 有 appSecret= 硬编码占位串" },
+    { "project": "fixtures/leaky-app",  "ruleId": "security.insecure-request",     "expect": "hit",    "note": "index.js 有 http:// 明文请求" },
+    { "project": "fixtures/leaky-app",  "ruleId": "privacy.getUserProfile",        "expect": "no_hit", "note": "FP-guard：leaky-app 无任何隐私 API" },
+    { "project": "fixtures/leaky-app",  "ruleId": "privacy.getLocation",           "expect": "no_hit", "note": "FP-guard：无 getLocation" },
+    { "project": "fixtures/leaky-app",  "ruleId": "privacy.getPhoneNumber",        "expect": "no_hit", "note": "FP-guard：wxml 无 getPhoneNumber 按钮" },
+    { "project": "fixtures/leaky-app",  "ruleId": "privacy.clipboard",             "expect": "no_hit", "note": "FP-guard：无剪贴板调用" },
+    { "project": "fixtures/leaky-app",  "ruleId": "payment.requires-merchant",     "expect": "no_hit", "note": "FP-guard：无 wx.requestPayment" }
+  ]
+}
