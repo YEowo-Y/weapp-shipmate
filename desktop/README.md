@@ -2,7 +2,7 @@
 
 决策 #8 的产品终态是一个自建桌面 agent（BYO-key、内置终端可开 Claude Code / Codex）。
 本目录是它的**第一步薄外壳**：用最小代价验证「外壳 / 大脑解耦」这条主链路——
-桌面窗口把仓库根目录的**零依赖 Node 规则大脑**（`../bin/weapp-shipmate.mjs`）当 sidecar 进程调起，
+桌面窗口把仓库根目录的**极简依赖 Node 规则大脑**（`../bin/weapp-shipmate.mjs`）当 sidecar 进程调起，
 渲染上线预检（`check`）与流程导航（`guide`）报告。
 
 **P2.0 范围**：选文件夹 → 跑 check/guide → 看报告。**不含**终端 / BYO-key / agent 子进程——
