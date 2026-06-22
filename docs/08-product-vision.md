@@ -169,7 +169,7 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 ```
 
 ### 7.2 大脑当内置 MCP ✅(关键决定)
-把 `bin/weapp-shipmate-mcp.mjs`(已是合规零依赖 stdio JSON-RPC server)当 Node sidecar,`mcp_servers` 表种一行 `builtin=true` 不可删,McpClient 启动自动拉起。check/guide/explain 成为 AgentRuntime 看到的同一工具注册表里的 3 个工具,经与任何用户 MCP server **完全相同**的调用路径派发。大脑字节级不变(决策 #8 零返工),同文件同时服务独立 `.mcpb`。**这保证规则永远是事实源**:LLM 拿到的是结构化工具结果,必须引用、不能编。
+把 `bin/weapp-shipmate-mcp.mjs`(已是合规·极简依赖 stdio JSON-RPC server,仅 js-yaml)当 Node sidecar,`mcp_servers` 表种一行 `builtin=true` 不可删,McpClient 启动自动拉起。check/guide/explain 成为 AgentRuntime 看到的同一工具注册表里的 3 个工具,经与任何用户 MCP server **完全相同**的调用路径派发。大脑字节级不变(决策 #8 零返工),同文件同时服务独立 `.mcpb`。**这保证规则永远是事实源**:LLM 拿到的是结构化工具结果,必须引用、不能编。
 
 ### 7.3 BYO-key ✅(broker 模式 = 行业最强姿态)
 设置 → 模型与密钥:provider(OpenAI/Anthropic/Gemini/Ollama/**OpenAI 兼容自定义**)→ key → 可改 Base URL → 选模型 → 测试连接 → 启用。
@@ -264,7 +264,7 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 - **MCP 插件管理页**:**✅ 后置**(§10.6 / §13)。P2 只内置可信大脑。
 
 ### 11.4 新手引导首启 ✅范式定(P2.2 无 key / P2.3 key)
-**确定性先行 = Semgrep 模型**(R1):无 key 先跑 46 条规则,首启即出结构化报告(我们零依赖确定性大脑天生适配,全行业没人做透"能力预览态")。**Chatbox 式双卡分流**:Q1"你的小程序上线了吗?"(引导 vs 健康检查)+ Q2"你有 API key 吗?"(无 key 确定性模式 / 有 key AI 模式),都可"跳过、先看规则库"。**别学 Cherry Studio** 把零基础用户直接丢进需配 provider 的全界面。
+**确定性先行 = Semgrep 模型**(R1):无 key 先跑 46 条规则,首启即出结构化报告(我们极简依赖确定性大脑天生适配,我们调研的同类桌面客户端尚未见做透"能力预览态"的先例)。**Chatbox 式双卡分流**:Q1"你的小程序上线了吗?"(引导 vs 健康检查)+ Q2"你有 API key 吗?"(无 key 确定性模式 / 有 key AI 模式),都可"跳过、先看规则库"。**别学 Cherry Studio** 把零基础用户直接丢进需配 provider 的全界面。
 
 ### 11.5 健康检查模式 · 合规漂移引擎 ✅官方背书已找到(P2.4)
 官方逐字依据见 §2.2(运营规范"动态更新、请定期复查" + 类目"随政策变化、仅供参考")。四类漂移均有 verbatim 背书:类目漂移 / 规范自更新 / 隐私指引复审(每次提审比对"隐私接口调用 vs 隐私协议",不一致即拦)/ 备案变更(不及时更新→警告/封禁/强制注销)。复用 `rot` 引擎,上线后变成用户可见价值。
@@ -292,7 +292,7 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 | Fix·自动修 | jsdiff/`similar` + `diffy` + per-file 批准 + Aider 式 git 回滚 | 复用范式 | 中 |
 | Fix·修复 prompt | SARIF 2.1.0 + 结构化模板(带框架/wx 上下文) | 自建轻 | 轻 |
 | git 工程化 | git2-rs + vendored-libgit2(无需系统 git);push 永远人肉 | 复用 | 轻 |
-| 回归测试 | `node:test` 内置快照 / Vitest `toMatchFileSnapshot`(零依赖优先) | 复用 | 轻 |
+| 回归测试 | `node:test` 内置快照 / Vitest `toMatchFileSnapshot`(零额外依赖优先) | 复用 | 轻 |
 | 能力即开关 | MCP 工具 + 本地 capability registry + 确定性管线 | 复用范式 | 轻 |
 | 记忆 | markdown 真源 + SQLite FTS5(不上向量)+ mem0 回灌 | 复用范式 | 中 |
 | 旅程项目经理 | flow.yaml 现有 DAG + 40 行 Kahn 批次 + `blocking_type` 注解 | 自建极轻 | 极轻 |
