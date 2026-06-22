@@ -62,20 +62,38 @@ test("未知方法返回 -32601", async () => {
 });
 
 test("stdio 传输端到端：initialize → tools/list 往返", async () => {
+  // 事件驱动收尾：收齐 id=1、id=2 两条应答即 resolve（典型 ~毫秒级），不再用固定 400ms+kill 的竞态等待。
   const child = spawn(process.execPath, [BIN], { stdio: ["pipe", "pipe", "pipe"] });
-  let out = "";
-  child.stdout.setEncoding("utf-8");
-  child.stdout.on("data", (d) => (out += d));
-  child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) + "\n");
-  child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }) + "\n");
-
-  await new Promise((r) => setTimeout(r, 400));
-  child.stdin.end();
-  child.kill();
-
-  const lines = out.trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
-  const init = lines.find((m) => m.id === 1);
-  const list = lines.find((m) => m.id === 2);
-  assert.ok(init.result.serverInfo, "initialize 应有 serverInfo");
-  assert.equal(list.result.tools.length, 3, "tools/list 应返回 3 个工具");
+  try {
+    const seen = await new Promise((resolve, reject) => {
+      const acc = new Map();
+      let buf = "";
+      const timer = setTimeout(
+        () => reject(new Error(`stdio 往返超时（仅收到应答 id=[${[...acc.keys()].join(",")}]）`)),
+        5000,
+      );
+      child.stdout.setEncoding("utf-8");
+      child.stdout.on("data", (d) => {
+        buf += d;
+        let nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line) continue;
+          let msg;
+          try { msg = JSON.parse(line); } catch { continue; }
+          if (msg.id != null) acc.set(msg.id, msg);
+          if (acc.has(1) && acc.has(2)) { clearTimeout(timer); resolve(acc); }
+        }
+      });
+      child.on("error", (e) => { clearTimeout(timer); reject(e); });
+      child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) + "\n");
+      child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }) + "\n");
+    });
+    assert.ok(seen.get(1).result.serverInfo, "initialize 应有 serverInfo");
+    assert.equal(seen.get(2).result.tools.length, 3, "tools/list 应返回 3 个工具");
+  } finally {
+    child.stdin.end();
+    child.kill();
+  }
 });
