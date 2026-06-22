@@ -1,5 +1,5 @@
 // 上线船友 · 桌面外壳（P2.0 薄外壳）。
-// 验证「外壳 / 大脑解耦」这条主链路：把零依赖的 Node 规则大脑当 sidecar 进程调起，
+// 验证「外壳 / 大脑解耦」这条主链路：把极简依赖的 Node 规则大脑当 sidecar 进程调起，
 // 渲染上线预检（check）/ 流程导航（guide）报告。无终端 / 无 BYO-key / 无 agent——那些是 P2.1+。
 use std::path::{Path, PathBuf};
 use std::process::Command;
