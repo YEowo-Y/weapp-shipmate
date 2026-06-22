@@ -10,7 +10,7 @@
 1. **外壳选 Tauri 2**——在"内嵌终端 + 跑 CLI 子进程"这一精确场景里，社区共识强烈倾向 Tauri：包体 ~10–30MB（Electron 150–300MB）、内存约 1/5、能力制安全模型默认 default-deny，且**无 native 模块 ABI 重编译之痛**（Electron 的 `node-pty`/`better-sqlite3` 需 `electron-rebuild`，是公认的 CI 痛点）。代价是 Rust 学习曲线 + WebView 跨平台差异需自测。
 2. **内嵌终端用 `xterm.js`（前端）+ `portable-pty`（Rust 后端）**——这是 Tauri 阵营的标准组合。**最高风险点是 PTY 生命周期**：resize-after-exit 崩溃、Windows ConPTY 不发 EOF 导致读挂死、`portable-pty` 在 Windows `tauri build` 后弹 cmd 黑窗——三者都有现成解法，必须设计期就处理。
 3. **BYO key 必须进 OS keychain，绝不进 localStorage / .env / 进程 env**——Tauri 用 `keyring` crate 直连系统钥匙串。要专门防"**AI agent 自我读取/外泄 key**"这一新威胁（内置终端里跑的 agent 本身可能读环境变量），社区最佳实践是 keychain + 本地代理注入 + TTY 守卫。
-4. **`.mcpb` 旁路分发已是 Anthropic 官方机制**——`manifest.json` + `mcpb pack/sign`，`user_config` 里 `sensitive:true` 字段自动进 OS keychain，Node 运行时随 Claude Desktop 分发（零额外安装）。船友现有零依赖 MCP server 几乎可直接打包。
+4. **`.mcpb` 旁路分发已是 Anthropic 官方机制**——`manifest.json` + `mcpb pack/sign`，`user_config` 里 `sensitive:true` 字段自动进 OS keychain，Node 运行时随 Claude Desktop 分发（零额外安装）。船友现有极简依赖 MCP server 几乎可直接打包。
 
 ---
 
@@ -34,7 +34,7 @@
 - WebView 差异：Windows 需 WebView2（Win10 1803+，Win11 预装），旧系统要运行时下载；macOS WKWebView 部分 CSS/JS 与 Chromium 有别（[AionUi RFC](https://github.com/iOfficeAI/AionUi/issues/2762)）。
 - Rust 编译期更长、团队需吃 Rust。
 
-> **推断**：船友前期若想极致轻量，可先不自造外壳（见 §5 的 `.mcpb` 旁路）；P2 自建时选 Tauri 2。此判断与项目"零依赖偏好 + 低运营成本公益"一致——Tauri 的小包体/低占用本身就是对零基础用户最友好的形态。
+> **推断**：船友前期若想极致轻量，可先不自造外壳（见 §5 的 `.mcpb` 旁路）；P2 自建时选 Tauri 2。此判断与项目"极简依赖偏好 + 低运营成本公益"一致——Tauri 的小包体/低占用本身就是对零基础用户最友好的形态。
 
 ---
 
@@ -100,7 +100,7 @@
 - `.mcpb` = zip（含本地 MCP server + `manifest.json`），stdio 传输，用户在 Claude Desktop **一键安装**。`.dxt` 已更名 `.mcpb`（旧的仍兼容）。
 - **唯一必需文件是 `manifest.json`**；`server.mcp_config` 写 `command`/`args`/`env`，`${__dirname}` 指包内路径，`${user_config.X}` 注入安装期配置。
 - **`user_config` 里 `sensitive:true` 的字段自动存进 OS keychain**——天然适合 BYO key。`type:"directory"` 渲染原生目录选择器（适合船友"被检项目路径"）。
-- **Node 是推荐运行时**——随 Claude Desktop 分发，用户无需另装；船友现有零依赖 Node MCP server 几乎直接可打。避免 native 依赖（跨平台编译难）。
+- **Node 是推荐运行时**——随 Claude Desktop 分发，用户无需另装；船友现有极简依赖 Node MCP server 几乎直接可打。避免 native 依赖（跨平台编译难）。
 - `mcpb pack` 打包并校验 manifest、自动排除 `.git`/`node_modules/.cache`/`.env.*` 等；`.mcpbignore` 加自定义排除；`mcpb sign`/`verify` 用 PKCS#7 签名。
 - 跨客户端：任何支持 .mcpb 的 AI 桌面应用都能装，不止 Claude Desktop（[himalaya-mcp 参考](https://data-wise.github.io/himalaya-mcp/reference/mcpb-format-reference/)）。
 
@@ -151,12 +151,12 @@
 - [ ] 首次启动 key-not-found 当引导态；SECURITY 文档诚实划界（不防同用户代码执行）。
 
 **分发**
-- [ ] `.mcpb` 旁路：复用现有零依赖 Node MCP server；BYO key 走 `user_config` 的 `sensitive:true` 字段；`mcpb pack`+`sign`；以官方当前 manifest 版为准。
+- [ ] `.mcpb` 旁路：复用现有极简依赖 Node MCP server；BYO key 走 `user_config` 的 `sensitive:true` 字段；`mcpb pack`+`sign`；以官方当前 manifest 版为准。
 
 **守住灶台（贯穿所有层）**
 - [ ] 规则预检默认 local-only，源码不出本机。
 - [ ] 不输出"保证过审/已合规"；官方提交仍 `manual_required`。
-- [ ] 零依赖偏好：外壳的每个新依赖都需论证；优先 Tauri 官方插件与标准 crate。
+- [ ] 极简依赖偏好：外壳的每个新依赖都需论证；优先 Tauri 官方插件与标准 crate。
 
 ---
 
