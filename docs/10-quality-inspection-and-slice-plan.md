@@ -32,6 +32,8 @@
 > 热修 7 · 延期 11 · 不予(误报)1。每条带回归点;执行随 §4 切片推进,合并前过 docs/06 6 闸。
 >
 > **✅ S2 已执行(2026-06-22)**:FX-01(改口径·全仓 23 处/11 文件,"零依赖"→"极简依赖·仅 js-yaml";FX-01 决策=改口径、保留 js-yaml、技术债登记 docs/06 §2.1,非去依赖)、FX-03(docs/04 权威计数声明)、FX-07(CHANGELOG 0.1.0)、FX-08(docs/08 去禁词变体)、FX-09(README mpvue 澄清——核实后保留:mpvue/mpx 用 `wx.*` 无需别名、且 mpvue 确做过 dogfood,非删除)完成。`npm test` 83/0 回归通过,11 个单文件提交(2081bdb…8dc6408)。
+>
+> **✅ S1 已执行(2026-06-22)**:FX-11 完成——建 `corpus/labels.json`(18 条人工核验三态标注:9 hit + 9 no_hit FP-guard,逐条对照夹具源码,含确认 `privacy.getPhoneNumber` 是 wxml 模板信号真阳而非误报)+ `scripts/accuracy.mjs`(复用 runCheck 算 per-rule/全局 precision/recall;未知 ruleId 告警;precision<0.95 或有 FP 即退出 1)+ `tests/accuracy.test.mjs`(门禁 precision≥0.95 + 零 FP + 黄金基线 9 TP/0 FP/0 FN)+ `package.json` `accuracy` script。**实测 precision=1.000 recall=1.000**。**顺带闭合 FX-WONTFIX-01**:S1 新增测试负载触发了 `mcp.test.mjs` 潜伏竞态(固定 400ms+kill),改为事件驱动收尾——5× `npm test` 稳定 **85/0**(此前 ~1/4 偶发翻车)。5 个单文件提交(34d9dcd…17acbb9)。
 
 | ID | 处理 | 严 | 标题 | 位置 | 回归点 |
 |---|---|---|---|---|---|
