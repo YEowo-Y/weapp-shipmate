@@ -108,6 +108,7 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 | [`docs/07-desktop-agent-tech-research.md`](docs/07-desktop-agent-tech-research.md) | 产品终态（自建桌面 agent）技术方案与稳定性调研 |
 | [`docs/08-product-vision.md`](docs/08-product-vision.md) | 终态产品愿景：领域聚焦上线 copilot、分层、架构、准确性地基、路线 |
 | [`docs/09-memory-context-architecture.md`](docs/09-memory-context-architecture.md) | 上下文与记忆架构规范（工程级）：注入提示词 / 记忆生命周期 / 存储引擎 / 数据模型 |
+| [`docs/10-quality-inspection-and-slice-plan.md`](docs/10-quality-inspection-and-slice-plan.md) | 研发质量管控：P2 首跑验收 + 分级修复台账 + 四维优化 + 功能切片开发计划 |
 
 ---
 
