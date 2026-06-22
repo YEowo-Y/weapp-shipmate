@@ -152,6 +152,8 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 
 ## 7. 架构
 
+> 📐 本节是组件级骨架;**记忆/提示词/持久化的工程级规范(注入分层 + 生命周期 + 存储引擎 + 完整 SQL DDL)见 [`docs/09`](09-memory-context-architecture.md)**,它把 §5/§7.1/§11.3 的草图回填成可单测工件与确定性 schema。
+
 ### 7.1 组件图(Rust 核拥逻辑,webview 拥 UI)
 ```
 [Webview: React+Vite+Zustand+shadcn] 对话 / 项目+阶段侧栏 / 设置 / xterm.js 终端 / diff 面板
@@ -258,7 +260,7 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 成熟技术见 §3.2 + §12。**交互闭环**:开关(`capabilities.toml` 单一事实源,Rust `notify` 监听,关闭=对应 MCP 工具从 `tools/list` 移除=LLM 看不到调不了,**比塞 prompt 强**)→ agent 任务 → 左色条 step 卡进度 → 修复清单(per-file diff)→ 回归(跑 `accuracy.mjs` + 黄金快照)。能力做成新增 typed MCP 工具(`scan_quality`/`scan_security`/`propose_fix`/`run_regression`/`git_commit_help`),与 check/guide/explain 同注册表;done-state 归管线代码、永不归 LLM。
 
 ### 11.3 记忆模型 + MCP 插件管理页
-- **记忆(R1+R2)**:markdown 真源(`memory/MEMORY.md` 索引 + topic 文件,人可编辑、git 可追)+ **SQLite FTS5** 关键词索引(**v1 不上向量**;单机单用户 sqlite-vec 留 v2)+ mem0 式"回灌抽取"(把已有记忆喂回抽取 prompt 决定 ADD/UPDATE/NOOP)+ Open WebUI 式可编辑条目 + ChatGPT 式"已记住"轻提示。状态:P3。
+- **记忆(R1+R2)**:markdown 真源(`memory/MEMORY.md` 索引 + topic 文件,人可编辑、git 可追)+ **SQLite FTS5** 关键词索引(**v1 不上向量**;单机单用户 sqlite-vec 留 v2)+ mem0 式"回灌抽取"(把已有记忆喂回抽取 prompt 决定 ADD/UPDATE/NOOP)+ Open WebUI 式可编辑条目 + ChatGPT 式"已记住"轻提示。**工程级规格(2 态生命周期 / 三类 TTL / 写路径硬拦合规判断 / SQL DDL)见 [`docs/09`](09-memory-context-architecture.md) §2/§4。** 状态:P3。
 - **MCP 插件管理页**:**✅ 后置**(§10.6 / §13)。P2 只内置可信大脑。
 
 ### 11.4 新手引导首启 ✅范式定(P2.2 无 key / P2.3 key)
