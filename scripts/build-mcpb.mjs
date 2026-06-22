@@ -1,4 +1,4 @@
-// scripts/build-mcpb.mjs —— 把零依赖 MCP server 打成 .mcpb Desktop 扩展（P1 轻量分发）。
+// scripts/build-mcpb.mjs —— 把极简依赖 MCP server 打成 .mcpb Desktop 扩展（P1 轻量分发）。
 // 零运行时依赖；只用 node 内置模块。流程：版本校验 → 暂存纯生产副本 → 冒烟自检 → mcpb pack。
 // 设计要点：暂存目录是独立副本，绝不触碰开发用 node_modules（保留 ajv 等 devDeps 供 npm test）。
 import { readFileSync, rmSync, mkdirSync, cpSync, existsSync } from "node:fs";
