@@ -1,4 +1,4 @@
-// scripts/rule-rot.mjs —— 规则腐烂监控 CLI（零依赖）。
+// scripts/rule-rot.mjs —— 规则腐烂监控 CLI（极简依赖，仅 js-yaml）。
 // 时效检查始终离线运行；链接体检需 --links（联网）。用法：
 //   node scripts/rule-rot.mjs              # 仅 last_verified 时效
 //   node scripts/rule-rot.mjs --links      # 额外体检 official_url
