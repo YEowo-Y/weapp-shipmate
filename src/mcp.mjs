@@ -1,4 +1,4 @@
-// src/mcp.mjs —— 零依赖 MCP 适配层（stdio 传输，把 CLI 能力暴露给 Claude Code / Codex）
+// src/mcp.mjs —— 极简依赖 MCP 适配层（仅 js-yaml；stdio 传输，把 CLI 能力暴露给 Claude Code / Codex）
 // 协议：换行分隔的 JSON-RPC 2.0；仅实现 initialize / tools/list / tools/call / ping。
 // 安全：复用 CLI 的本地预检；不新增远程上传能力（见 SECURITY.md）。stdout 只输出 JSON-RPC，日志走 stderr。
 import { readFileSync } from "node:fs";
