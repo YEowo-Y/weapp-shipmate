@@ -157,6 +157,16 @@ export function checkIpOrLocalhost(scan = {}) {
   };
 }
 
+// 所有交叉核验可能产出的 ruleId（合成 id，不在 rules/*.yaml）。供 accuracy 等把它们识别为
+// 合法规则而非拼写错误——尤其当某条交叉核验在语料里只作 no_hit 反例、从不命中时。新增交叉核验须同步登记。
+export const CROSSCHECK_RULE_IDS = [
+  "consistency.requiredPrivateInfos",
+  "security.backend-api-in-frontend",
+  "security.hardcoded-secret",
+  "security.insecure-request",
+  "domain.ip-or-localhost",
+];
+
 /** 所有交叉核验的入口；后续可在此追加更多一致性核验。 */
 export function crossChecks(scan) {
   return [
