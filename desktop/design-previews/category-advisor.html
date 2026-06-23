@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>上线船友 · 类目顾问(docs/08 §11.1)</title>
+<link rel="stylesheet" href="app.css" />
+<style>
+  /* ============================================================
+     屏专属：类目顾问 (category-advisor)
+     复用 app.css 的 .work / .sec / .badge / .banner / .srccard / .foot-note token+原子类。
+     仅新增本屏判定卡 .cav-* 组件，全部走 var(--*)。
+     ============================================================ */
+
+  /* 判定结果卡：左色条按 confidence 着色，深度靠表面阶梯 */
+  .cav-card { display: flex; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; background: var(--surface); margin-bottom: 10px; }
+  .cav-card__bar { width: 3px; flex-shrink: 0; }
+  .cav-card--high .cav-card__bar { background: var(--ok); }
+  .cav-card--medium .cav-card__bar { background: var(--warn); }
+  .cav-card--low .cav-card__bar { background: var(--text-3); }
+  .cav-card__b { flex: 1; min-width: 0; padding: 13px 15px; }
+
+  /* 卡头：signal(mono) → 箭头 → 候选类目 + 右侧 confidence 徽标 */
+  .cav-card__top { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .cav-sig { font-family: var(--font-mono); font-size: 12px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 3px 8px; letter-spacing: -.02em; }
+  .cav-arrow { color: var(--text-3); flex-shrink: 0; display: inline-flex; }
+  .cav-arrow svg { width: 14px; height: 14px; }
+  .cav-cat { font-size: 13px; font-weight: 500; color: var(--text); letter-spacing: -.01em; }
+  .cav-cat .or { color: var(--text-3); font-weight: 400; margin: 0 2px; }
+  .cav-conf { margin-left: auto; flex-shrink: 0; }
+
+  /* confidence 徽标：绿=可断言 / 黄=需问你 / 灰=需问你 */
+  .cav-conf .badge--warn { color: var(--warn); background: var(--warn-soft); }
+  .cav-conf .badge--low { color: var(--text-2); background: var(--surface-2); }
+  .cav-conf .lv { font-family: var(--font-mono); font-size: 9.5px; opacity: .8; letter-spacing: -.02em; }
+
+  /* manual / 已落地 标记行 */
+  .cav-flags { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 10px; }
+  .cav-flag { font-size: 11px; padding: 2px 9px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; }
+  .cav-flag svg { width: 12px; height: 12px; }
+  .cav-flag--manual { color: var(--warn); background: var(--warn-soft); }
+  .cav-flag--block { color: var(--block); background: var(--block-soft); }
+  .cav-flag--land { color: var(--ok); background: var(--ok-soft); }
+  .cav-flag--land .id { font-family: var(--font-mono); letter-spacing: -.02em; }
+
+  /* 诚实表达 / 失败模式：可展开行 */
+  .cav-honest { margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--border); }
+  .cav-honest__row { font: inherit; width: 100%; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); }
+  .cav-honest__row svg { width: 14px; height: 14px; margin-left: auto; transition: transform .14s var(--ease); }
+  .cav-card[aria-expanded="true"] .cav-honest__row svg { transform: rotate(180deg); }
+  .cav-honest__body { display: none; margin-top: 9px; font-size: 12.5px; color: var(--text-2); line-height: 1.6; }
+  .cav-card[aria-expanded="true"] .cav-honest__body { display: block; animation: fade .16s var(--ease); }
+  .cav-honest__body b { font-weight: 500; color: var(--text); }
+  .cav-honest__body .doc { font-family: var(--font-mono); font-size: 11.5px; color: var(--text); background: var(--surface-2); border-radius: var(--r-xs); padding: 1px 6px; letter-spacing: -.02em; }
+
+  /* 双分叉（电商：自营 vs 平台，不替选） */
+  .cav-fork { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 10px; }
+  .cav-fork__c { border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 12px; background: var(--bg); }
+  .cav-fork__c h5 { font-size: 12px; font-weight: 500; color: var(--text); margin: 0 0 5px; }
+  .cav-fork__c p { font-size: 11.5px; color: var(--text-2); line-height: 1.5; margin: 0; }
+
+  /* 个人主体白名单 9 类 */
+  .cav-wl { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .cav-wl__item { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 9px 11px; }
+  .cav-wl__item svg { width: 14px; height: 14px; color: var(--ok); flex-shrink: 0; }
+  .cav-wl__item .note { color: var(--text-3); font-size: 11px; }
+  .cav-wl-warn { display: flex; gap: 9px; font-size: 12px; color: var(--text-2); background: var(--surface-2); border-radius: var(--r); padding: 11px 14px; margin-top: 12px; line-height: 1.55; }
+  .cav-wl-warn svg { width: 15px; height: 15px; color: var(--warn); flex-shrink: 0; margin-top: 1px; }
+
+  /* 置信度图例 */
+  .cav-legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 16px; font-size: 11.5px; color: var(--text-3); }
+  .cav-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .cav-legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+  .cav-legend .i-high { background: var(--ok); }
+  .cav-legend .i-medium { background: var(--warn); }
+  .cav-legend .i-low { background: var(--text-3); }
+</style>
+</head>
+<body data-theme="light">
+  <h2 class="sr-only">上线船友类目顾问设计稿：基于本项目代码信号给出候选类目与置信度（绿可断言/黄灰需问你），区分硬拦截与必问业务实质，附个人主体白名单 9 类、官方来源与不做担保脚注。</h2>
+
+  <div class="chrome">
+    <b>上线船友 · 类目顾问</b>
+    <span class="sub">代码给信号、业务问你 · docs/08 §11.1</span>
+    <button class="ctl" id="themeBtn">深色</button>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="tt">上线船友 — my-miniprogram</span></div>
+
+      <div class="work scroll" style="max-height:720px">
+        <div class="work__inner">
+          <p class="crumb"><a href="main-four-region.html">上线脊柱</a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>选择服务类目<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>类目顾问</p>
+          <div class="work__head"><h1>类目顾问</h1><span class="statepill statepill--cur">个人主体</span></div>
+          <div class="work__meta">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 7v6c0 5 3.5 7.5 8 9 4.5-1.5 8-4 8-9V7Z"/><path d="m9 12 2 2 4-4"/></svg>基于本项目代码信号</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>预检 local-only · 源码不出网</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>类目来源核验 2026-06-13</span>
+          </div>
+
+          <!-- 铁律横幅 -->
+          <div class="banner">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 7l10-5 10 5M2 7v10l10 5 10-5V7"/></svg>
+            <span><b style="font-weight:500;color:var(--text)">铁律：</b>「代码里有没有 X」可以断言；「X 用来做什么业务」永远问你。high 置信只给三类硬信号；凡涉及业务实质，一律 <b style="font-weight:500;color:var(--text)">需问你 + manual</b>，进自查区，绝不替你选类目。</span>
+          </div>
+
+          <!-- 判定结果 -->
+          <div class="sec">
+            <p class="sec__h">判定结果</p>
+            <div class="cav-legend">
+              <span><i class="i-high"></i>high · 可断言（代码确凿）</span>
+              <span><i class="i-medium"></i>medium · 需问你（疑似业务）</span>
+              <span><i class="i-low"></i>low · 需问你（仅词命中）</span>
+            </div>
+
+            <!-- web-view -->
+            <div class="cav-card cav-card--high" aria-expanded="false">
+              <span class="cav-card__bar"></span>
+              <div class="cav-card__b">
+                <div class="cav-card__top">
+                  <span class="cav-sig">&lt;web-view&gt;</span>
+                  <span class="cav-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+                  <span class="cav-cat">个人主体 · 不限类目</span>
+                  <span class="cav-conf"><span class="badge badge--ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>high · 可断言</span></span>
+                </div>
+                <div class="cav-flags">
+                  <span class="cav-flag cav-flag--block"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m5 5 14 14"/></svg>硬拦截</span>
+                  <span class="cav-flag cav-flag--land"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>已落地 <span class="id">domain.web-view-business</span></span>
+                </div>
+                <div class="cav-honest">
+                  <button class="cav-honest__row">诚实表达 / 失败模式<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="cav-honest__body">官方逐字明示：个人类型小程序<b>暂不支持</b> <span class="doc">&lt;web-view&gt;</span>。代码里检出该组件即可断言冲突，无需问你，直接硬拦截。</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- requestPayment -->
+            <div class="cav-card cav-card--high" aria-expanded="false">
+              <span class="cav-card__bar"></span>
+              <div class="cav-card__b">
+                <div class="cav-card__top">
+                  <span class="cav-sig">wx.requestPayment</span>
+                  <span class="cav-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+                  <span class="cav-cat">个人主体 · 不限类目</span>
+                  <span class="cav-conf"><span class="badge badge--ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>high · 可断言</span></span>
+                </div>
+                <div class="cav-flags">
+                  <span class="cav-flag cav-flag--block"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m5 5 14 14"/></svg>个人主体不支持支付</span>
+                  <span class="cav-flag cav-flag--land"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>已落地 <span class="id">payment.requires-merchant</span></span>
+                </div>
+                <div class="cav-honest">
+                  <button class="cav-honest__row">诚实表达 / 失败模式<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="cav-honest__body">个人主体不支持微信支付。检出 <span class="doc">wx.requestPayment</span> 即可断言需企业/个体户主体（待官方逐字复核 ⚠️），无需问你。</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 出站域名 -->
+            <div class="cav-card cav-card--high" aria-expanded="false">
+              <span class="cav-card__bar"></span>
+              <div class="cav-card__b">
+                <div class="cav-card__top">
+                  <span class="cav-sig">出站域名（wx.request 等）</span>
+                  <span class="cav-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+                  <span class="cav-cat">不限类目 · 需配服务器域名</span>
+                  <span class="cav-conf"><span class="badge badge--ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>high · 可断言</span></span>
+                </div>
+                <div class="cav-flags">
+                  <span class="cav-flag cav-flag--manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>动态拼接 → manual_only</span>
+                  <span class="cav-flag cav-flag--land"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>已落地 <span class="id">domain.request-whitelist</span></span>
+                </div>
+                <div class="cav-honest">
+                  <button class="cav-honest__row">诚实表达 / 失败模式<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="cav-honest__body">静态字面量域名可断言「需配置服务器域名白名单」。但若域名是<b>动态拼接</b>（变量 <span class="doc">baseURL</span>）则代码分析无法确定，降级 <b>manual_only</b>，绝不 LLM 猜。</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 下单/购物车/商城 -->
+            <div class="cav-card cav-card--low" aria-expanded="false">
+              <span class="cav-card__bar"></span>
+              <div class="cav-card__b">
+                <div class="cav-card__top">
+                  <span class="cav-sig">下单 / 购物车 / 商城</span>
+                  <span class="cav-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+                  <span class="cav-cat">自营电商<span class="or">或</span>平台电商</span>
+                  <span class="cav-conf"><span class="badge badge--low"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>low · 需问你</span></span>
+                </div>
+                <div class="cav-flags">
+                  <span class="cav-flag cav-flag--manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>需你本人确认经营模式</span>
+                </div>
+                <div class="cav-honest">
+                  <button class="cav-honest__row">诚实表达 / 失败模式<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="cav-honest__body">
+                    代码分不清你卖<b>自己的货</b>还是<b>撮合别人的货</b>——这决定要不要专项资质。给你双分叉，不替你选：
+                    <div class="cav-fork">
+                      <div class="cav-fork__c"><h5>自营电商</h5><p>卖自己的商品，通常<b>不需</b> EDI 许可证。</p></div>
+                      <div class="cav-fork__c"><h5>平台电商</h5><p>撮合第三方交易，需《增值电信业务经营许可证》。</p></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 问诊/挂号 医疗 -->
+            <div class="cav-card cav-card--medium" aria-expanded="false">
+              <span class="cav-card__bar"></span>
+              <div class="cav-card__b">
+                <div class="cav-card__top">
+                  <span class="cav-sig">问诊 / 挂号 / 处方 / 医生 / 买药</span>
+                  <span class="cav-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+                  <span class="cav-cat">医疗服务</span>
+                  <span class="cav-conf"><span class="badge badge--warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>medium · 需问你</span></span>
+                </div>
+                <div class="cav-flags">
+                  <span class="cav-flag cav-flag--manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>需你本人确认</span>
+                  <span class="cav-flag cav-flag--land"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>已落地 <span class="id">category.medical-hint</span></span>
+                </div>
+                <div class="cav-honest">
+                  <button class="cav-honest__row">诚实表达 / 失败模式<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="cav-honest__body">若确为医疗服务：<b>个人主体不可</b>，且需《医疗机构执业许可证》。但词命中不等于真在做医疗——必须由你确认业务性质。</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 预约/表单 无医疗词 -->
+            <div class="cav-card cav-card--medium" aria-expanded="false">
+              <span class="cav-card__bar"></span>
+              <div class="cav-card__b">
+                <div class="cav-card__top">
+                  <span class="cav-sig">预约 / 表单（无医疗词）</span>
+                  <span class="cav-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+                  <span class="cav-cat">工具-预约 / 报名（个人可）</span>
+                  <span class="cav-conf"><span class="badge badge--warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>medium · 需问你</span></span>
+                </div>
+                <div class="cav-flags">
+                  <span class="cav-flag cav-flag--manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>需你本人确认</span>
+                </div>
+                <div class="cav-honest">
+                  <button class="cav-honest__row">诚实表达 / 失败模式<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="cav-honest__body"><b>同码反向</b>：一段预约表单代码，既可能是医疗挂号（<b>个人不可</b>），也可能是普通预约 / 报名（<b>个人可</b>）。代码无从区分，必问业务性质。</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 资讯/文章/新闻 -->
+            <div class="cav-card cav-card--low" aria-expanded="false">
+              <span class="cav-card__bar"></span>
+              <div class="cav-card__b">
+                <div class="cav-card__top">
+                  <span class="cav-sig">资讯 / 文章 / 新闻</span>
+                  <span class="cav-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+                  <span class="cav-cat">普通展示<span class="or">/</span>新闻资讯<span class="or">/</span>教育</span>
+                  <span class="cav-conf"><span class="badge badge--low"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>low · 需问你</span></span>
+                </div>
+                <div class="cav-flags">
+                  <span class="cav-flag cav-flag--manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>需你本人确认</span>
+                </div>
+                <div class="cav-honest">
+                  <button class="cav-honest__row">诚实表达 / 失败模式<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="cav-honest__body">展示文章本身个人可做；但若含<b>时政新闻采编</b>，需《互联网新闻信息服务许可证》。问你：是否含时政新闻采编？</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 金融/理财/借贷 -->
+            <div class="cav-card cav-card--low" aria-expanded="false">
+              <span class="cav-card__bar"></span>
+              <div class="cav-card__b">
+                <div class="cav-card__top">
+                  <span class="cav-sig">金融 / 理财 / 借贷</span>
+                  <span class="cav-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+                  <span class="cav-cat">金融业</span>
+                  <span class="cav-conf"><span class="badge badge--low"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>low · 需问你</span></span>
+                </div>
+                <div class="cav-flags">
+                  <span class="cav-flag cav-flag--manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>永远 manual</span>
+                </div>
+                <div class="cav-honest">
+                  <button class="cav-honest__row">诚实表达 / 失败模式<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="cav-honest__body">若确为金融业务：<b>个人不可</b>，且需《金融许可证》。但<b>词命中 ≠ 金融业务</b>（理财科普文章也命中"理财"），故此类永远 manual、绝不断言。</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 个人主体白名单 -->
+          <div class="sec">
+            <p class="sec__h">个人主体白名单 · 9 类</p>
+            <div class="cav-wl">
+              <div class="cav-wl__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>快递查件</div>
+              <div class="cav-wl__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>教育信息展示</div>
+              <div class="cav-wl__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>代驾</div>
+              <div class="cav-wl__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>丽人婚庆家政环保回收</div>
+              <div class="cav-wl__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>餐厅排队点评</div>
+              <div class="cav-wl__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>出境 WiFi 旅游攻略</div>
+              <div class="cav-wl__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>工具 <span class="note">含预约报名、健康管理</span></div>
+              <div class="cav-wl__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>商业服务 <span class="note">律师需执业资格证</span></div>
+              <div class="cav-wl__item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>体育</div>
+            </div>
+            <div class="cav-wl-warn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+              <span>共性：信息展示 / 工具 / 轻服务。一旦涉及<b style="font-weight:500;color:var(--text)">交易撮合（平台电商）、医疗、金融、新闻、直播</b>，基本需企业主体 + 专项资质。二级类目仍待官方逐字复核 ⚠️。</span>
+            </div>
+          </div>
+
+          <!-- 官方来源 -->
+          <div class="sec">
+            <p class="sec__h">官方来源</p>
+            <a class="srccard" href="https://developers.weixin.qq.com/miniprogram/product/material/" target="_blank" rel="noopener">
+              <span class="srccard__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+              <span><span class="srccard__t">小程序类目 / 资质材料</span><br><span class="srccard__u">developers.weixin.qq.com/miniprogram/product/material/</span></span>
+              <span class="srccard__v"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>已核验 2026-06-13</span>
+            </a>
+          </div>
+
+          <div class="foot-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
+            <span>类目与资质会随政策、法律法规及平台要求变化，官方明示"仅供参考"。以上为依据官方来源的导航整理，<b style="font-weight:500;color:var(--text)">不构成合规担保</b>，不代表"已合规 / 保证过审"。low / medium 一律 <b style="font-weight:500;color:var(--text)">manual_required</b> 并进自查区；类目选择、资质提交、后台核验均需你本人完成。</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // 诚实表达 / 失败模式：点击展开对应判定卡
+  document.querySelectorAll('.cav-honest__row').forEach((row) => {
+    row.addEventListener('click', () => {
+      const card = row.closest('.cav-card');
+      card.setAttribute('aria-expanded', card.getAttribute('aria-expanded') === 'true' ? 'false' : 'true');
+    });
+  });
+
+  // 深浅模式切换（照范例逻辑）
+  const themeBtn = document.getElementById('themeBtn');
+  themeBtn.addEventListener('click', () => {
+    const dark = document.body.getAttribute('data-theme') === 'dark';
+    document.body.setAttribute('data-theme', dark ? 'light' : 'dark');
+    themeBtn.textContent = dark ? '深色' : '浅色';
+  });
+</script>
+</body>
+</html>
