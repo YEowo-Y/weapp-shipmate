@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>上线船友 · 手把手指导（傻瓜式手动步骤）· docs/08 §5/§11.6</title>
+<link rel="stylesheet" href="app.css" />
+<style>
+  /* ===== 屏专属：手把手指导（manual 步骤的逐步陪跑 + 后台陪练 + 不代点护栏）===== */
+  .gs { overflow: auto; background: var(--bg); }
+  .gs__inner { max-width: 720px; padding: 24px 30px 44px; }
+  .gs__modes { display: inline-flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: var(--r); }
+  .gs__modes a { font: inherit; font-size: 12.5px; padding: 7px 14px; border-radius: var(--r-sm); color: var(--text-2); text-decoration: none; cursor: pointer; }
+  .gs__modes a.on { background: var(--surface); color: var(--text); font-weight: 500; }
+  .gs__head { display: flex; align-items: center; gap: 12px; margin: 14px 0 6px; }
+  .gs__head h1 { font-size: 22px; font-weight: 500; margin: 0; letter-spacing: -.02em; }
+  .gs__manual { font-size: 11.5px; font-weight: 500; color: var(--warn); background: var(--warn-soft); padding: 3px 10px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; }
+  .gs__manual svg { width: 12px; height: 12px; }
+  .gsprog { display: flex; align-items: center; gap: 12px; margin: 16px 0 24px; }
+  .gsprog__bar { flex: 1; height: 6px; border-radius: 20px; background: var(--surface-3); overflow: hidden; }
+  .gsprog__bar i { display: block; height: 100%; width: 40%; background: var(--accent); border-radius: 20px; transition: width .25s var(--ease); }
+  .gsprog__t { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .gsteps { list-style: none; margin: 0; padding: 0; position: relative; }
+  .gsteps::before { content: ""; position: absolute; left: 14px; top: 14px; bottom: 14px; width: 1.5px; background: var(--border-2); }
+  .gstep { position: relative; padding: 0 0 22px 46px; }
+  .gstep:last-child { padding-bottom: 0; }
+  .gstep__num { position: absolute; left: 0; top: 0; width: 29px; height: 29px; border-radius: 50%; background: var(--surface); border: 1.5px solid var(--border-2); color: var(--text-2); font-size: 12.5px; font-weight: 500; display: flex; align-items: center; justify-content: center; z-index: 1; font-variant-numeric: tabular-nums; }
+  .gstep__num svg { width: 15px; height: 15px; }
+  .gstep.done .gstep__num { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .gstep.cur .gstep__num { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .gstep__t { font-size: 14.5px; font-weight: 500; color: var(--text); margin: 4px 0 5px; letter-spacing: -.01em; }
+  .gstep__d { font-size: 12.5px; color: var(--text-2); line-height: 1.6; margin: 0 0 10px; }
+  .gstep__d b { font-weight: 500; color: var(--text); }
+
+  /* 复制即用的确切值（船友从代码扫出来的）*/
+  .copyval { display: flex; align-items: center; gap: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r); padding: 10px 12px; margin: 0 0 10px; }
+  .copyval code { font-family: var(--font-mono); font-size: 12px; color: var(--text); flex: 1; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .copyval .cp { font: inherit; font-size: 11.5px; color: var(--accent); background: var(--accent-soft); border: 0; border-radius: var(--r-sm); padding: 6px 11px; cursor: pointer; display: inline-flex; gap: 5px; align-items: center; white-space: nowrap; }
+  .copyval .cp svg { width: 13px; height: 13px; }
+  .detected { font-size: 11px; color: var(--ok); display: inline-flex; align-items: center; gap: 5px; margin: 0 0 10px; }
+  .detected svg { width: 12px; height: 12px; }
+
+  /* 标注后台截图（mock）：高亮该点/该填的地方 */
+  .gshot { border: 1px solid var(--border-2); border-radius: var(--r); overflow: hidden; margin: 4px 0 12px; background: var(--surface); }
+  .gshot__bar { display: flex; align-items: center; gap: 7px; padding: 8px 11px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+  .gshot__bar .d { width: 9px; height: 9px; border-radius: 50%; background: var(--surface-3); }
+  .gshot__url { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); background: var(--bg); border-radius: 20px; padding: 3px 10px; margin-left: 4px; flex: 1; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gshot__body { padding: 15px 16px; }
+  .gshot__crumb { font-size: 10.5px; color: var(--text-3); margin: 0 0 12px; }
+  .gshot__lbl { font-size: 11px; color: var(--text-2); margin: 0 0 6px; }
+  .gshot__line { display: flex; align-items: center; gap: 10px; }
+  .gshot__field { flex: 1; border: 1.5px solid var(--border-2); border-radius: var(--r-sm); padding: 9px 11px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-3); background: var(--bg); min-width: 0; }
+  .gshot__field.hi { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); color: var(--text); }
+  .gshot__btn { border: 1px solid var(--border-2); border-radius: var(--r-sm); padding: 8px 12px; font-size: 11.5px; color: var(--text-2); background: var(--surface-2); white-space: nowrap; }
+  .gshot__btn.hi { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 500; }
+  .gshot__call { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; color: var(--accent); white-space: nowrap; }
+  .gshot__call svg { width: 14px; height: 14px; }
+
+  .deeplink { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--accent); background: var(--accent-soft); border: 0; border-radius: var(--r); padding: 9px 14px; cursor: pointer; text-decoration: none; margin: 0 0 4px; }
+  .deeplink svg { width: 14px; height: 14px; }
+
+  .gdone { display: inline-flex; align-items: center; gap: 9px; margin-top: 12px; font: inherit; font-size: 12.5px; color: var(--text-2); cursor: pointer; background: none; border: 0; padding: 0; }
+  .gdone__box { width: 19px; height: 19px; border-radius: var(--r-xs); border: 1.5px solid var(--border-2); display: flex; align-items: center; justify-content: center; color: transparent; transition: all .12s var(--ease); }
+  .gdone__box svg { width: 12px; height: 12px; }
+  .gstep.done .gdone__box { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .gstep.done .gdone { color: var(--ok); }
+
+  /* 后台陪练 dropzone */
+  .coach { border: 1.5px dashed var(--border-2); border-radius: var(--r); padding: 20px 18px; text-align: center; margin-top: 26px; background: var(--surface-2); }
+  .coach__ico { width: 38px; height: 38px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--border); color: var(--accent); display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; }
+  .coach__ico svg { width: 19px; height: 19px; }
+  .coach__t { font-size: 13px; font-weight: 500; color: var(--text); margin: 0 0 4px; }
+  .coach__d { font-size: 12px; color: var(--text-2); line-height: 1.55; margin: 0; }
+  .coach__d b { font-weight: 500; color: var(--warn); }
+</style>
+</head>
+<body data-theme="light">
+  <h2 class="sr-only">上线船友手把手指导：把"配置服务器域名白名单"这类需用户本人完成的官方后台步骤，拆成逐步陪跑——复制即用的确切值、标注截图、深链、勾完成，但工具绝不替你点提交。</h2>
+
+  <div class="chrome">
+    <b>上线船友 · 手把手指导</b>
+    <span class="sub">manual 步骤傻瓜式陪跑 · docs/08 §5 后台陪练 · 护栏「读就绪度+给深链，永不代点」</span>
+    <button class="ctl" id="themeBtn">深色</button>
+  </div>
+
+  <div class="stage-wrap"><div class="win">
+    <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="tt">上线船友 — 配置服务器域名白名单</span></div>
+
+    <section class="gs scroll"><div class="gs__inner">
+      <p class="crumb"><a href="stage-workspace.html">上线脊柱</a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;vertical-align:-2px"><path d="m9 18 6-6-6-6"/></svg>服务器域名白名单</p>
+
+      <div class="gs__modes">
+        <a href="stage-workspace.html">概览</a>
+        <a href="#" class="on">手把手指导</a>
+      </div>
+
+      <div class="gs__head">
+        <h1>配置服务器域名白名单</h1>
+        <span class="gs__manual"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>需你本人 · 工具不代点</span>
+      </div>
+      <p class="gstep__d" style="margin-bottom:16px">小程序请求的后端域名必须先在后台登记，否则真机请求会被拦截。<b>好消息：你代码里用到的域名我已经扫出来了，照着复制粘贴就行。</b></p>
+
+      <div class="gsprog">
+        <span class="gsprog__bar"><i id="pbar"></i></span>
+        <span class="gsprog__t" id="ptext">已完成 2 / 5 步</span>
+      </div>
+
+      <ol class="gsteps" id="steps">
+        <li class="gstep done">
+          <span class="gstep__num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+          <p class="gstep__t">登录微信公众平台</p>
+          <p class="gstep__d">用注册时的邮箱 + 密码登录 mp.weixin.qq.com。</p>
+          <button class="gdone"><span class="gdone__box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>我做完了</button>
+        </li>
+
+        <li class="gstep done">
+          <span class="gstep__num"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+          <p class="gstep__t">进入「开发设置」</p>
+          <p class="gstep__d">左侧菜单：<b>开发管理 → 开发设置</b>。下面这个按钮直接带你去：</p>
+          <a class="deeplink" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/></svg>打开开发设置页</a>
+          <button class="gdone"><span class="gdone__box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>我做完了</button>
+        </li>
+
+        <li class="gstep cur">
+          <span class="gstep__num">3</span>
+          <p class="gstep__t">把这个域名粘到「request 合法域名」</p>
+          <p class="detected"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>船友已从你代码的 wx.request 里扫出这个域名</p>
+          <div class="copyval">
+            <code>https://api.shipmate.example</code>
+            <button class="cp" id="copyBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>复制</button>
+          </div>
+          <p class="gstep__d">找到「服务器域名」区块，在 <b>request 合法域名</b> 这一栏粘贴上面的值（必须 HTTPS + 已备案）：</p>
+          <div class="gshot">
+            <div class="gshot__bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="gshot__url">mp.weixin.qq.com · 开发管理 · 开发设置</span></div>
+            <div class="gshot__body">
+              <p class="gshot__crumb">开发设置 › 服务器域名</p>
+              <p class="gshot__lbl">request 合法域名</p>
+              <div class="gshot__line">
+                <span class="gshot__field hi">https://api.shipmate.example</span>
+                <span class="gshot__call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>粘到这里</span>
+              </div>
+            </div>
+          </div>
+          <button class="gdone"><span class="gdone__box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>我粘好了</button>
+        </li>
+
+        <li class="gstep">
+          <span class="gstep__num">4</span>
+          <p class="gstep__t">点「保存」提交</p>
+          <p class="gstep__d">填好后点右下角<b>保存</b>。<b style="color:var(--warn)">这一步由你来点——船友不替你按保存。</b></p>
+          <div class="gshot">
+            <div class="gshot__bar"><span class="d"></span><span class="d"></span><span class="d"></span><span class="gshot__url">mp.weixin.qq.com · 开发设置</span></div>
+            <div class="gshot__body">
+              <div class="gshot__line" style="justify-content:flex-end">
+                <span class="gshot__call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>点这个</span>
+                <span class="gshot__btn hi">保存</span>
+              </div>
+            </div>
+          </div>
+          <button class="gdone"><span class="gdone__box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>我保存了</button>
+        </li>
+
+        <li class="gstep">
+          <span class="gstep__num">5</span>
+          <p class="gstep__t">回来勾「已完成」，船友帮你复检</p>
+          <p class="gstep__d">配置生效后回到这里勾完成，船友会重新扫一遍、确认这条阻断已清除。</p>
+          <button class="gdone"><span class="gdone__box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>全部完成，帮我复检</button>
+        </li>
+      </ol>
+
+      <div class="coach">
+        <div class="coach__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg></div>
+        <p class="coach__t">卡住了？把后台截图拖进来</p>
+        <p class="coach__d">船友会在你的截图上标出"下一步点哪里"，<b>但绝不替你点</b>——提交永远是你按。</p>
+      </div>
+
+      <div class="foot-note" style="margin-top:22px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
+        <span>船友只读就绪度、给确切值与深链、标注截图陪你点；备案、认证、提交审核、发布等官方动作恒为你本人完成，工具不代提交、不代付、不担保过审。</span>
+      </div>
+    </div></section>
+  </div></div>
+
+<script>
+  const steps = [...document.querySelectorAll('.gstep')];
+  function refresh() {
+    const done = steps.filter(s => s.classList.contains('done')).length;
+    document.getElementById('pbar').style.width = Math.round(done / steps.length * 100) + '%';
+    document.getElementById('ptext').textContent = `已完成 ${done} / ${steps.length} 步`;
+    // first not-done becomes current
+    let setCur = false;
+    steps.forEach(s => {
+      s.classList.remove('cur');
+      if (!s.classList.contains('done') && !setCur) { s.classList.add('cur'); setCur = true; }
+    });
+  }
+  document.getElementById('steps').addEventListener('click', (e) => {
+    const btn = e.target.closest('.gdone'); if (!btn) return;
+    btn.closest('.gstep').classList.toggle('done');
+    refresh();
+  });
+  refresh();
+
+  const cb = document.getElementById('copyBtn');
+  cb.addEventListener('click', () => {
+    const t = cb.innerHTML;
+    cb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M20 6 9 17l-5-5"/></svg>已复制';
+    setTimeout(() => { cb.innerHTML = t; }, 1400);
+  });
+
+  const themeBtn = document.getElementById('themeBtn');
+  themeBtn.addEventListener('click', () => {
+    const dark = document.body.getAttribute('data-theme') === 'dark';
+    document.body.setAttribute('data-theme', dark ? 'light' : 'dark');
+    themeBtn.textContent = dark ? '深色' : '浅色';
+  });
+</script>
+</body>
+</html>
