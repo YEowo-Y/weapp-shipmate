@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>上线船友 · 桌面 agent 设计预览索引</title>
+<link rel="stylesheet" href="app.css" />
+</head>
+<body data-theme="light">
+  <h2 class="sr-only">上线船友桌面 agent 设计预览索引：十四个已决形态屏，点击进入。</h2>
+  <div class="idx">
+    <div class="idx__head">
+      <h1>上线船友 · 桌面 agent 设计预览</h1>
+      <p>已决形态 · docs/08 §8（engineered calm · 赭橙单强调 · Cline step 卡 · 绿/灰双标）· 共享 app.css 设计系统。点卡进入。</p>
+    </div>
+    <div class="idxgrid" id="grid"></div>
+  </div>
+
+<script>
+  const S = (p) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const CARDS = [
+    ['main-four-region.html', '主界面四区', '四区 IA · 8 阶段脊柱可展开 · Cline step 卡 · 绿/灰双标', '§8.3 / 8.4',
+      '<rect x="3" y="3" width="7" height="18" rx="1"/><rect x="10" y="3" width="11" height="13" rx="1"/><rect x="10" y="16" width="11" height="5" rx="1"/>'],
+    ['stage-workspace.html', '阶段工作区 · ICP 备案', '小白详情：五环节时间线 · 谁做什么 · 官方来源 · FAQ', '§8.5',
+      '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'],
+    ['settings.html', '设置（全 7 类）', 'BYO-key broker · 工程开关 · 规则库官方+自定义 · 隐私安全', '§7.3 / §4',
+      '<path d="M20 7h-9M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>'],
+    ['health-dashboard.html', '健康检查仪表盘', '上线后合规漂移 · 5 项监控 · 需关注优先 · 数据新鲜度', '§11.5',
+      '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'],
+    ['sync-loop.html', '实时同步闭环 · 机制说明', '后台自动重扫 → 改完即更新但不打扰 · 非日常导航页，仅机制图', '§6 · 机制',
+      '<path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/><path d="M21 12a9 9 0 1 1-3 6.7L21 16M21 21v-5h-5"/>'],
+    ['chat-full.html', '对话工作区', '项目独立空间 · 会话历史 · 计划/代码块/文件引用/双标', '§8.5 / §7.1',
+      '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'],
+    ['command-palette.html', '⌘K 命令面板', '全局直达：命令 · 跳转阶段 · 最近会话 · 项目 · ↑↓ 选择', '§8.3',
+      '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'],
+    ['first-run.html', '首启引导', '确定性先行 · 双卡分流（是否上线 / 有无 key）· 可跳过', '§11.4',
+      '<path d="M5 12h14M13 6l6 6-6 6"/><circle cx="4" cy="12" r="1"/>'],
+    ['explain.html', '拒因反查 explain', '贴审核拒绝 → 已核验修复步骤 + 官方原文 · 第四渲染器', 'rejections',
+      '<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>'],
+    ['diff-review.html', '全屏 diff 审阅', '逐文件批准 + 回滚 · 官方后台动作仍 manual', '§8',
+      '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6"/>'],
+    ['memory.html', '项目记忆', 'markdown 真源 + SQLite FTS5 · 按项目隔离 · 可编辑条目 · 写路径硬拦', '§11.3 · P3',
+      '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 11h16M11 4v16"/>'],
+    ['category-advisor.html', '类目顾问', '信号→候选类目 · 可断言 vs 必问你 · 个人白名单 9 类 · 逐字资质', '§11.1',
+      '<path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-6l-2-2H5a2 2 0 0 0-2 2z"/>'],
+    ['guided-step.html', '手把手指导', 'manual 步骤傻瓜式陪跑：确切值复制 · 标注截图 · 深链 · 勾完成 · 不代点', '§5 · 后台陪练',
+      '<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/>'],
+    ['audit.html', '可核查 / 审计面', '每条结论摊开核对：逐字官方原文 · 打开实时官方页 · 核验日期 · 绿灰双标 · 反馈', '§4/§5 · 以官方为准',
+      '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>']
+  ];
+  document.getElementById('grid').innerHTML = CARDS.map(([href, t, d, tag, ico]) =>
+    `<a class="idxcard" href="${href}">
+      <div class="idxcard__shot">${S(ico)}</div>
+      <div class="idxcard__b"><p class="idxcard__t">${t}</p><p class="idxcard__d">${d}</p><span class="idxcard__tag">${tag}</span></div>
+    </a>`
+  ).join('');
+</script>
+</body>
+</html>
