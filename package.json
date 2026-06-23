@@ -45,7 +45,8 @@
     "guide": "node bin/weapp-shipmate.mjs guide",
     "build:mcpb": "node scripts/build-mcpb.mjs",
     "rot": "node scripts/rule-rot.mjs",
-    "accuracy": "node scripts/accuracy.mjs"
+    "accuracy": "node scripts/accuracy.mjs",
+    "coverage": "node scripts/coverage.mjs"
   },
   "engines": {
     "node": ">=20"
