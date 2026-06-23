@@ -39,3 +39,36 @@ rules:
     source_quote: "其它网页需登录小程序管理后台配置业务域名。"
     last_verified: "2026-06-21"
     manual_required: true
+
+  - id: domain.web-view-personal
+    title: "个人类型小程序不支持 web-view 组件"
+    kind: both
+    stage: domain
+    subject_type: ["personal"]
+    severity: blocker
+    confidence: high
+    match:
+      config_key: ["component.web-view"]
+      scanner: static_config
+    requires:
+      - "个人主体不支持 web-view：改用非 web-view 方案，或将主体升级为企业 / 个体工商户后再使用"
+    why: "代码使用了 <web-view> 组件，但个人类型小程序不支持该组件，提审会被驳回、真机无法加载"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/component/web-view.html"
+    source_quote: "承载网页的容器。会自动铺满整个小程序页面，个人类型的小程序暂不支持使用。"
+    last_verified: "2026-06-23"
+    manual_required: true
+
+  - id: domain.must-icp-filed
+    title: "服务器域名须经 ICP 备案"
+    kind: navigation
+    stage: domain
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    requires:
+      - "确认代码中所有出站域名均已完成 ICP 备案（未备案域名无法配置为服务器域名、真机请求会被拦截）"
+    why: "服务器域名必须经过 ICP 备案；未备案的域名无法加入服务器域名白名单，上线后请求会被拦截"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html"
+    source_quote: "域名必须经过 ICP 备案；"
+    last_verified: "2026-06-23"
+    manual_required: true
