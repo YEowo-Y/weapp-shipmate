@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { runCheck } from "../src/check.mjs";
 import { loadData } from "../src/data.mjs";
+import { CROSSCHECK_RULE_IDS } from "../src/crosscheck.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const PRECISION_MIN = 0.95;
@@ -28,8 +29,8 @@ export function computeAccuracy(labels, { rootDir = ROOT, subjectDefault = "pers
     firedByKey.set(k, new Set(res.items.map((i) => i.ruleId)));
   }
 
-  // 已知 ruleId = 规则库里的 + 实际命中过的(含 crosscheck 合成 id)。不在其中 = 疑似拼写错误。
-  const known = new Set(loadData({ includeDrafts: true }).rules.map((r) => r.id));
+  // 已知 id = 规则库里的 + 交叉核验合成 id（即使只作 no_hit 反例从不命中也算合法）+ 实际命中过的；不在其中 = 疑似拼写错误。
+  const known = new Set([...loadData({ includeDrafts: true }).rules.map((r) => r.id), ...CROSSCHECK_RULE_IDS]);
   for (const set of firedByKey.values()) for (const id of set) known.add(id);
 
   const perRule = new Map(); // ruleId -> {tp,fp,fn,tn}
@@ -62,6 +63,8 @@ function main() {
   const { global, perRule, warnings } = computeAccuracy(labels, { subjectDefault });
   console.log(`准确性度量 · corpus/labels.json（${labels.length} 条标注）`);
   console.log(`全局：TP=${global.tp} FP=${global.fp} FN=${global.fn} | precision=${f3(global.precision)} recall=${f3(global.recall)} F1=${f3(global.f1)}`);
+  const lv = loadData({}).rules.map((r) => r.last_verified).filter(Boolean).sort();
+  if (lv.length) console.log(`新鲜度：${lv.length} 条规则带 last_verified，最早 ${lv[0]} / 最近 ${lv[lv.length - 1]}（以官方实时文档为准 · rot 监控保鲜）`);
   const fpRules = [...perRule.entries()].filter(([, o]) => o.fp > 0);
   const fnRules = [...perRule.entries()].filter(([, o]) => o.fn > 0);
   if (fpRules.length) { console.log("误报 FP（违准确性红线）："); for (const [id, o] of fpRules) console.log(`  - ${id}: FP=${o.fp}`); }
