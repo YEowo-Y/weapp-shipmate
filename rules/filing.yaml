@@ -34,3 +34,33 @@ rules:
     source_quote: "小程序名称变更、小程序负责人变更、小程序主体名称变更、小程序主体负责人变更、小程序或主体负责人联系方式变更时，都需要及时变更备案信息。"
     last_verified: "2026-06-23"
     manual_required: true
+
+  - id: filing.individual-id-materials
+    title: "个人备案需有效身份证件（清晰、有效期 > 1 月）"
+    kind: navigation
+    stage: filing
+    subject_type: ["personal"]
+    severity: warning
+    confidence: high
+    requires:
+      - "准备个人有效身份证件，上传彩色扫描件 / 拍照件：图片清晰完整、不遮挡关键信息、边角齐全、证件有效期大于 1 个月"
+    why: "证件不清晰 / 被遮挡 / 有效期不足 1 个月会导致备案初审被驳回"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/record_guidelines.html"
+    source_quote: "上传有效证件原件的彩色扫描件或拍照件，请保持图片清晰完整、不遮挡关键信息/图像、边角齐全，证件有效期大于1个月。"
+    last_verified: "2026-06-23"
+    manual_required: true
+
+  - id: filing.face-verification
+    title: "备案负责人人脸核身环境 / 着装要求"
+    kind: navigation
+    stage: filing
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    requires:
+      - "人脸核身：选白色 / 浅色干净背景、无杂物或他人入镜；不裸露上半身、不戴帽子 / 耳机 / 口罩等遮挡面部物品、表情自然不闭眼"
+    why: "人脸核身环境 / 着装不符会导致核验失败、备案受阻"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/record_guidelines.html"
+    source_quote: "进行核验时需选择白色或浅色的干净背景，不要有杂物或他人入镜；核验人不能裸露上半身，不能戴帽子、耳机、口罩等遮挡面部的物品，保持表情自然、无闭眼。"
+    last_verified: "2026-06-23"
+    manual_required: true
