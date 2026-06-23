@@ -39,6 +39,23 @@ rules:
     last_verified: "2026-06-23"
     manual_required: true
 
+  - id: privacy.auth-mechanism-enabled
+    title: "隐私授权机制自 2023-10-17 起强制启用"
+    kind: navigation
+    stage: privacy
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    signal: ["隐私", "授权", "用户信息", "个人信息"]
+    warn: "自 2023 年 10 月 17 日起，无论 app.json 是否配置 __usePrivacyCheck__，隐私相关功能都会启用——涉及隐私接口须先配好《用户隐私保护指引》并处理用户授权弹窗，否则接口调用受限。"
+    requires:
+      - "配置《用户隐私保护指引》并适配隐私授权流程；隐私机制已默认启用，不可依赖关闭 __usePrivacyCheck__ 规避"
+    why: "隐私机制已默认强制启用，未配置隐私指引 / 未处理授权会导致隐私接口调用失败、提审受阻"
+    official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/PrivacyAuthorize.html"
+    source_quote: "在 2023年10月17日之后，不论 app.json 中是否有配置 __usePrivacyCheck__ ，隐私相关功能都会启用。"
+    last_verified: "2026-06-23"
+    manual_required: true
+
   - id: privacy.getLocation
     title: "地理位置隐私声明"
     kind: both
