@@ -93,3 +93,18 @@ rules:
     source_quote: "若小程序中存在账号体系，需提供测试号，包含账号和密码（可以体验所有功能）"
     last_verified: "2026-06-14"
     manual_required: true
+
+  - id: review.category-matches-service
+    title: "服务类目须与实际提供的服务一致"
+    kind: navigation
+    stage: review
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    requires:
+      - "确保所选服务类目与小程序实际提供的服务一致，且类目对应页面的核心内容须与该类目相符（区别于『功能须与简介一致』：此条针对类目↔服务）"
+    why: "类目与实际服务不符是高频拒审原因；个人主体尤其需避免选了未实际提供的类目"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
+    source_quote: "小程序的类目要和自身所提供的服务一致。"
+    last_verified: "2026-06-23"
+    manual_required: true
