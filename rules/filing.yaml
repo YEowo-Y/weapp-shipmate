@@ -17,3 +17,20 @@ rules:
     source_quote: "备案整体流程总共分为五个环节：备案信息填写、平台初审、工信部短信核验、通管局审核和备案成功。"
     last_verified: "2026-06-13"
     manual_required: true
+
+  - id: filing.keep-updated
+    title: "备案信息变更须及时更新 / 主体异常须注销重备"
+    kind: navigation
+    stage: filing
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    signal: ["变更", "改名", "更换负责人", "注销", "迁移", "主体变更"]
+    warn: "小程序名称 / 负责人 / 主体名称 / 联系方式变更时须及时变更备案；主体经营状态异常（注销 / 吊销 / 撤销）或与备案主体不一致时，须及时注销备案再重新备案。"
+    requires:
+      - "信息变更后及时在 mp 后台变更备案；主体异常或与备案主体不符时，注销备案并重新发起"
+    why: "未及时变更或注销备案违反运营规范，可能导致警告、限制甚至强制注销"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/"
+    source_quote: "小程序名称变更、小程序负责人变更、小程序主体名称变更、小程序主体负责人变更、小程序或主体负责人联系方式变更时，都需要及时变更备案信息。"
+    last_verified: "2026-06-23"
+    manual_required: true
