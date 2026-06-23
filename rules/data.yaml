@@ -20,3 +20,20 @@ rules:
     source_quote: "明确告知用户该数据的用途，确保经过用户明确同意和授权"
     last_verified: "2026-06-14"
     manual_required: true
+
+  - id: data.delete-on-request
+    title: "须提供用户数据删除方式"
+    kind: navigation
+    stage: review
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    signal: ["注销", "删除账号", "删除数据", "账号注销", "清除数据"]
+    warn: "若收集了用户数据，须向用户提供修改 / 删除其数据的方式，用户要求删除时能自行操作完成，且数据被不可恢复地完全删除。"
+    requires:
+      - "提供可由用户自行操作的『修改 / 删除用户数据』入口，确保删除后数据不可恢复、不可撤销地被完全删除"
+    why: "未向用户提供数据删除方式不符合运营规范，涉个人信息保护合规风险并可能被处理"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/"
+    source_quote: "微信小程序应当向用户提供修改、删除用户数据的方式，确保用户要求删除其用户数据时可通过该方式自行操作完成，并确保相关数据不可恢复、不可撤销地被完全删除。"
+    last_verified: "2026-06-23"
+    manual_required: true
