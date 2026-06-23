@@ -1,6 +1,6 @@
 {
   "_comment": "准确性 ground-truth 标注。每条 = (project, ruleId, expect)。expect=hit 标真阳锚点(防漏报 FN)；expect=no_hit 标真阴锚点(FP-guard，防误报，最值钱)。scripts/accuracy.mjs 据此对 check 输出算 precision/recall。新增夹具/规则时在此追加，并人工对照源码核验 expect。",
-  "_authority": "本文件是人工核验的真值，不是自动生成。改动须复看夹具源码。",
+  "_authority": "以官方实时文档为准：rules/*.yaml 是官方文档的带日期快照；本文件是人工核验夹具源码后的真值(ground truth)，独立于扫描器当前行为——实现与此不符是实现要改，不是改标注迁就实现。改动须复看夹具源码。",
   "subject_default": "personal",
   "labels": [
     { "project": "fixtures/sample-app", "ruleId": "privacy.getUserProfile",        "expect": "hit",    "note": "index.js 调 wx.getUserProfile" },
@@ -12,6 +12,8 @@
     { "project": "fixtures/sample-app", "ruleId": "security.backend-api-in-frontend","expect": "no_hit","note": "FP-guard：无 api.weixin.qq.com 直连" },
     { "project": "fixtures/sample-app", "ruleId": "security.insecure-request",     "expect": "no_hit", "note": "FP-guard：请求全为 https" },
     { "project": "fixtures/sample-app", "ruleId": "payment.requires-merchant",     "expect": "no_hit", "note": "FP-guard：无 wx.requestPayment" },
+    { "project": "fixtures/sample-app", "ruleId": "consistency.requiredPrivateInfos","expect": "no_hit","note": "反例：getLocation 已在 app.json 声明 requiredPrivateInfos → 一致性核验须静默" },
+    { "project": "fixtures/sample-app", "ruleId": "domain.web-view-personal",        "expect": "no_hit", "note": "FP-guard：sample-app 无 <web-view> 组件" },
 
     { "project": "fixtures/leaky-app",  "ruleId": "domain.request-whitelist",      "expect": "hit",    "note": "index.js 有 wx.request 出站域名" },
     { "project": "fixtures/leaky-app",  "ruleId": "security.backend-api-in-frontend","expect": "hit",  "note": "index.js 直连 api.weixin.qq.com" },
@@ -21,6 +23,55 @@
     { "project": "fixtures/leaky-app",  "ruleId": "privacy.getLocation",           "expect": "no_hit", "note": "FP-guard：无 getLocation" },
     { "project": "fixtures/leaky-app",  "ruleId": "privacy.getPhoneNumber",        "expect": "no_hit", "note": "FP-guard：wxml 无 getPhoneNumber 按钮" },
     { "project": "fixtures/leaky-app",  "ruleId": "privacy.clipboard",             "expect": "no_hit", "note": "FP-guard：无剪贴板调用" },
-    { "project": "fixtures/leaky-app",  "ruleId": "payment.requires-merchant",     "expect": "no_hit", "note": "FP-guard：无 wx.requestPayment" }
+    { "project": "fixtures/leaky-app",  "ruleId": "payment.requires-merchant",     "expect": "no_hit", "note": "FP-guard：无 wx.requestPayment" },
+
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.getUserProfile",        "expect": "hit",    "note": "index.js 真实调 wx.getUserProfile" },
+    { "project": "fixtures/edge-cases", "ruleId": "domain.request-whitelist",      "expect": "hit",    "note": "多个 wx.request（含带端口/userinfo 的 host）" },
+    { "project": "fixtures/edge-cases", "ruleId": "security.insecure-request",     "expect": "hit",    "note": "http:// 在请求 url: 参数里 → 明文请求" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.getLocation",           "expect": "no_hit", "note": "反例(可信度核心)：getLocation/getFuzzyLocation 在注释/块注释里，剥注释后不得命中" },
+    { "project": "fixtures/edge-cases", "ruleId": "security.hardcoded-secret",     "expect": "no_hit", "note": "FP-guard：无硬编码密钥" },
+    { "project": "fixtures/edge-cases", "ruleId": "security.backend-api-in-frontend","expect": "no_hit","note": "FP-guard：无微信服务端域名直连" },
+    { "project": "fixtures/edge-cases", "ruleId": "domain.ip-or-localhost",        "expect": "no_hit", "note": "反例：host 归一后为正常域名，非 IP/localhost" },
+
+    { "project": "fixtures/uni-app",    "ruleId": "domain.request-whitelist",      "expect": "hit",    "note": "uni.request/uni.connectSocket ≡ wx.* 出站域名" },
+    { "project": "fixtures/uni-app",    "ruleId": "privacy.getLocation",           "expect": "hit",    "note": "uni.getLocation ≡ wx.getLocation" },
+    { "project": "fixtures/uni-app",    "ruleId": "privacy.choosePhotoVideo",      "expect": "hit",    "note": "uni.chooseImage ≡ wx.chooseImage" },
+    { "project": "fixtures/uni-app",    "ruleId": "consistency.requiredPrivateInfos","expect": "no_hit","note": "反例：manifest.json mp-weixin 已声明 getLocation → 一致性核验静默" },
+    { "project": "fixtures/uni-app",    "ruleId": "privacy.getUserProfile",        "expect": "no_hit", "note": "FP-guard：无 getUserProfile/getUserInfo" },
+
+    { "project": "fixtures/taro-app",   "ruleId": "domain.request-whitelist",      "expect": "hit",    "note": "Taro.request ≡ wx.request 出站域名" },
+    { "project": "fixtures/taro-app",   "ruleId": "privacy.getLocation",           "expect": "hit",    "note": "Taro.getLocation ≡ wx.getLocation" },
+    { "project": "fixtures/taro-app",   "ruleId": "privacy.choosePhotoVideo",      "expect": "hit",    "note": "Taro.chooseImage ≡ wx.chooseImage" },
+    { "project": "fixtures/taro-app",   "ruleId": "consistency.requiredPrivateInfos","expect": "no_hit","note": "反例：app.config.ts 已声明 getLocation → 一致性核验静默" },
+    { "project": "fixtures/taro-app",   "ruleId": "privacy.getUserProfile",        "expect": "no_hit", "note": "FP-guard：无用户信息接口" },
+
+    { "project": "fixtures/mpx-app",    "ruleId": "domain.request-whitelist",      "expect": "hit",    "note": "mpx 仍用 wx.request 出站域名" },
+    { "project": "fixtures/mpx-app",    "ruleId": "privacy.getLocation",           "expect": "hit",    "note": "wx.getLocation" },
+    { "project": "fixtures/mpx-app",    "ruleId": "privacy.choosePhotoVideo",      "expect": "hit",    "note": "wx.chooseImage" },
+    { "project": "fixtures/mpx-app",    "ruleId": "consistency.requiredPrivateInfos","expect": "no_hit","note": "反例：app.mpx 内嵌 json 块已声明 getLocation → 静默" },
+    { "project": "fixtures/mpx-app",    "ruleId": "privacy.getUserProfile",        "expect": "no_hit", "note": "FP-guard：无用户信息接口" },
+
+    { "project": "fixtures/wepy-app",   "ruleId": "domain.request-whitelist",      "expect": "hit",    "note": "wepy.request ≡ wx.request 出站域名" },
+    { "project": "fixtures/wepy-app",   "ruleId": "payment.requires-merchant",     "expect": "hit",    "note": "wx.requestPayment → 支付准入预检" },
+    { "project": "fixtures/wepy-app",   "ruleId": "privacy.getUserProfile",        "expect": "hit",    "note": "wepy.getUserInfo ≡ wx.getUserInfo" },
+    { "project": "fixtures/wepy-app",   "ruleId": "privacy.getLocation",           "expect": "no_hit", "note": "FP-guard：无位置接口" },
+    { "project": "fixtures/wepy-app",   "ruleId": "security.insecure-request",     "expect": "no_hit", "note": "FP-guard：无明文 http 请求" },
+
+    { "project": "fixtures/template-signals", "ruleId": "domain.web-view-business", "expect": "hit",   "note": "<web-view> 组件 → 业务域名预检" },
+    { "project": "fixtures/template-signals", "ruleId": "domain.web-view-personal", "expect": "hit",   "note": "<web-view> + 个人主体 → 硬阻断(个人类型不支持 web-view，curl 逐字 2026-06-23)" },
+    { "project": "fixtures/template-signals", "ruleId": "privacy.getUserProfile",   "expect": "hit",   "note": "<button open-type=\"chooseAvatar\"> → 用户信息" },
+    { "project": "fixtures/template-signals", "ruleId": "privacy.record",           "expect": "hit",   "note": "<live-pusher> → 麦克风/录音" },
+    { "project": "fixtures/template-signals", "ruleId": "privacy.camera",           "expect": "hit",   "note": "<camera>/<live-pusher> → 摄像头" },
+    { "project": "fixtures/template-signals", "ruleId": "domain.request-whitelist", "expect": "no_hit","note": "反例：纯模板信号、无 JS 请求 API → 域名白名单不得命中" },
+    { "project": "fixtures/template-signals", "ruleId": "privacy.getLocation",      "expect": "no_hit","note": "FP-guard：无位置接口" },
+
+    { "project": "fixtures/uni-cond",   "ruleId": "privacy.getUserProfile",        "expect": "hit",    "note": "open-type=\"chooseAvatar\" → 用户信息" },
+    { "project": "fixtures/uni-cond",   "ruleId": "privacy.clipboard",             "expect": "hit",    "note": "uni.getClipboardData ≡ wx.getClipboardData" },
+    { "project": "fixtures/uni-cond",   "ruleId": "domain.request-whitelist",      "expect": "no_hit", "note": "反例：#ifdef 条件编译剔除非微信分支后无 request → 域名白名单不得命中" },
+    { "project": "fixtures/uni-cond",   "ruleId": "privacy.getLocation",           "expect": "no_hit", "note": "FP-guard：getStorageSync/getSystemInfoSync 非隐私接口" },
+
+    { "project": "fixtures/recall-apis", "ruleId": "privacy.getLocation",            "expect": "hit",    "note": "召回补齐：wx.getFuzzyLocation(模糊位置，8 位置接口之一) → 位置隐私" },
+    { "project": "fixtures/recall-apis", "ruleId": "privacy.getPhoneNumber",         "expect": "hit",    "note": "召回补齐：wx.getRealtimePhoneNumber(实时手机号) → 手机号隐私" },
+    { "project": "fixtures/recall-apis", "ruleId": "consistency.requiredPrivateInfos","expect": "no_hit","note": "反例：getFuzzyLocation 已在 requiredPrivateInfos 声明 → 一致性核验须静默" }
   ]
 }
