@@ -34,3 +34,18 @@ rules:
     source_quote: "小程序代替用户发表、发送、转交任何内容前，必须征得用户明确同意和授权"
     last_verified: "2026-06-14"
     manual_required: true
+
+  - id: content.no-illegal
+    title: "内容不得违反国家法律法规"
+    kind: navigation
+    stage: review
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: blocker
+    confidence: high
+    requires:
+      - "确保小程序发布 / 传送 / 传播 / 储存的所有内容不含国家法律法规禁止的信息（政治敏感、色情低俗、暴力恐怖、违法犯罪等）"
+    why: "发布国家法律法规禁止的内容会被直接拒审 / 封禁，并涉法律责任"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/"
+    source_quote: "微信小程序不得发布、传送、传播、储存国家法律法规禁止的以下信息内容，否则视为违规。"
+    last_verified: "2026-06-23"
+    manual_required: true
