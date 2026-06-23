@@ -37,3 +37,20 @@ rules:
     source_quote: "微信小程序应当向用户提供修改、删除用户数据的方式，确保用户要求删除其用户数据时可通过该方式自行操作完成，并确保相关数据不可恢复、不可撤销地被完全删除。"
     last_verified: "2026-06-23"
     manual_required: true
+
+  - id: data.security-measures
+    title: "收集用户数据须采取安全保护措施"
+    kind: navigation
+    stage: review
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    signal: ["收集", "存储", "数据库", "用户数据", "个人信息", "上传"]
+    warn: "收集用户数据后，须采取必要、合理、有效的安全保护措施，防止数据被盗 / 泄漏 / 披露；勿明文存储敏感数据、勿前端持有密钥。"
+    requires:
+      - "对收集的用户数据采取安全保护措施（加密传输与存储、访问控制等），防止被盗 / 泄漏 / 披露"
+    why: "未采取数据安全保护措施违反运营规范，涉个人信息保护合规风险"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/"
+    source_quote: "微信小程序收集用户的数据后，应当采取必要、合理、有效的安全保护措施，防止任何形式的用户数据被盗、泄漏、披露等事件。"
+    last_verified: "2026-06-23"
+    manual_required: true
