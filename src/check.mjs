@@ -16,7 +16,13 @@ export function runCheck(dir, { subjectType, includeDrafts = false } = {}) {
 
   for (const r of rules) {
     if (r.kind !== "preflight" && r.kind !== "both") continue;
-    if (subjectType && !r.subject_type.includes(subjectType)) continue;
+    // 主体过滤：指定主体 → 按 subject_type 命中；未指定主体 → 只发"全主体通用"规则。
+    // 主体专属规则（如个人主体专属的 web-view 阻断）须确认主体后才发，否则会对非该主体用户误报（dogfood 实证）。
+    if (subjectType) {
+      if (!r.subject_type.includes(subjectType)) continue;
+    } else if (r.subject_type.length < 3) {
+      continue;
+    }
     const m = r.match || {};
     const apiHit = m.api && m.api.some((a) => apiMatches(apiSet, a)); // uni.X ≡ wx.X
     const cfgHit = m.config_key && m.config_key.some((k) => cfgSet.has(k));
