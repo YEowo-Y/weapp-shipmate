@@ -395,7 +395,7 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 2. **批2 — 须 Playwright + 人工逐字闸**:运营规范主页 `product/` 与 `reject.html` 的 SPA 条款(service-exceeds-scope、logout、no-test-fortune、注销删数据、未成年有害、内容禁止总则…)。
 3. **批3**:T2 企业类目证名,批量入库为 navigation 预警("不对个人主体开放、需升级主体")。
 4. **批4 — 宁缺毋造暂缓**:iOS 虚拟支付新政、个人备案数量上限、逾期备案后果、运营规范隐私子项——仅社区/媒体线索,先以 agent/知识承载,取得官方稳定逐字前不入规则库。
-- **⚠️ 关键阻塞**:本机 Playwright MCP 桥接不可用(Extension connection timeout),需渲染复核项本轮均未实际渲染。**批1 可现在动手;批2/批4 须先恢复 Playwright(或改 browser MCP/curl 路径)才能取得可信逐字**(§14)。
+- **⚠️ 关键阻塞(2026-06-23 复核:已大幅缓解)**:本机 Playwright MCP 桥接仍不可用——错误为 "Extension connection timeout",需用户在本机安装并连接 `Playwright MCP Bridge` Chrome 扩展(agent 无法自装扩展)。**但 curl 复测发现运营规范主页 `product/` 与 `reject.html` 现均为服务端渲染、curl 可取完整正文**(strip 后 reject.html ~16k 字、product/ ~107k 字,5.x 条款逐字可见)——故批2 改走 curl + 人工逐字复核闸即可推进,不再被 Playwright 阻塞;仅个别真交互页才需扩展。
 
 ### 15.4 有纪律的摄取流水线(6 环节)
 
