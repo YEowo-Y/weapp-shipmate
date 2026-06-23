@@ -106,3 +106,37 @@ rules:
     source_quote: "《信息网络传播视听节目许可证》"
     last_verified: "2026-06-23"
     manual_required: true
+
+  - id: category.law-hint
+    title: "法律 / 律师类目资质预警"
+    kind: navigation
+    stage: category
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: medium
+    signal: ["律师", "法律咨询", "法律服务", "在线法律", "诉讼"]
+    warn: "提供在线法律 / 律师服务需《律师执业资格证》；个人主体在『商业服务-律师』类目下可申请，但须具备律师执业资质——请对照官方『服务类目』确认。"
+    requires:
+      - "对照官方『服务类目』确认法律 / 律师类所需《律师执业资格证》等资质"
+    why: "律师类目要求《律师执业资格证》，无相应资质会被拒审"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
+    source_quote: "《律师执业资格证》"
+    last_verified: "2026-06-23"
+    manual_required: true
+
+  - id: category.education-hint
+    title: "教育类目：信息展示个人可，课程销售 / 培训需企业资质"
+    kind: navigation
+    stage: category
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: medium
+    signal: ["课程", "卖课", "网课", "培训", "在线教育", "付费课程", "讲座"]
+    warn: "教育信息展示个人主体可做；但课程销售 / 付费培训通常需《增值电信业务经营许可证》、在线视频课程 / 直播需相应类目与资质——个人主体多未开放，请对照官方『服务类目』确认。"
+    requires:
+      - "对照官方『服务类目』确认教育类（课程销售 / 在线视频课程等）所需资质与主体；个人主体仅『教育信息展示』开放"
+    why: "课程销售 / 在线培训需《增值电信业务经营许可证》等资质，个人主体多未开放此类需企业资质的教育类目"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
+    source_quote: "适用于教育机构提供如课程销售、付费课程培训等服务"
+    last_verified: "2026-06-23"
+    manual_required: true
