@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>上线船友 · 对话工作区(docs/08 §7.1/§8.5/§11.3)</title>
+<link rel="stylesheet" href="app.css" />
+<style>
+  /* ===== 屏专属组件：对话页精修(@提及补全 / 附件菜单 / 编辑分支 / 右侧工件 diff 面板) ===== */
+
+  /* 三区布局：会话历史 | 对话 | 右侧工件面板（加宽 .win 容纳三列） */
+  .win { max-width: 1200px; }
+  .main--chat3 { grid-template-columns: 248px minmax(0,1fr) 332px; }
+
+  /* ① @提及自动补全下拉(在 composer 上方) */
+  .mentionpop { border: 1px solid var(--border-2); border-radius: var(--r); background: var(--surface); margin: 0 16px 0; overflow: hidden; box-shadow: var(--shadow); }
+  .mentionpop__h { display: flex; align-items: center; gap: 7px; font-size: 10.5px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); padding: 9px 13px 5px; }
+  .mentionpop__h code { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: -.02em; text-transform: none; font-weight: 400; }
+  .mentionitem { display: flex; align-items: center; gap: 10px; padding: 7px 13px; cursor: pointer; border-left: 2px solid transparent; transition: background .12s var(--ease); }
+  .mentionitem:hover { background: var(--surface-2); }
+  .mentionitem.on { background: var(--accent-soft); border-left-color: var(--accent); }
+  .mentionitem__ico { color: var(--text-3); flex-shrink: 0; display: flex; }
+  .mentionitem__ico svg { width: 15px; height: 15px; }
+  .mentionitem.on .mentionitem__ico { color: var(--accent); }
+  .mentionitem__path { font-family: var(--font-mono); font-size: 12px; color: var(--text); letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .mentionitem.on .mentionitem__path { color: var(--accent); }
+  .mentionitem__tag { font-size: 10px; color: var(--text-3); background: var(--surface-2); border-radius: 20px; padding: 2px 8px; flex-shrink: 0; }
+  .mentionitem.on .mentionitem__tag { background: var(--surface); }
+
+  /* ② 附件 popover 菜单(锚定回形针按钮) */
+  .crow { position: relative; }
+  .attachpop { position: absolute; left: 14px; bottom: 52px; z-index: 20; min-width: 196px; border: 1px solid var(--border-2); border-radius: var(--r); background: var(--surface); box-shadow: var(--shadow); overflow: hidden; padding: 5px; animation: fade .14s var(--ease); }
+  .attachpop[hidden] { display: none; }
+  .attachitem { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; font: inherit; font-size: 12.5px; color: var(--text); background: none; border: 0; padding: 9px 11px; border-radius: var(--r-sm); cursor: pointer; transition: background .12s var(--ease); }
+  .attachitem:hover { background: var(--surface-2); }
+  .attachitem svg { width: 16px; height: 16px; color: var(--text-3); flex-shrink: 0; }
+  .attachitem:hover svg { color: var(--text-2); }
+
+  /* 附件缩略图(ctxchip 内的截图占位) */
+  .ctxthumb { width: 28px; height: 28px; border-radius: var(--r-sm); flex-shrink: 0; background: linear-gradient(135deg, var(--surface-3), var(--accent-soft)); border: 1px solid var(--border); }
+  .ctxchip.hasthumb { padding: 3px 6px 3px 3px; gap: 7px; }
+
+  /* ③ 编辑→分支 版本切换(Claude 式 ‹ 2 / 3 ›) */
+  .verswitch { display: inline-flex; align-items: center; gap: 2px; margin-left: 8px; }
+  .verswitch button { width: 18px; height: 18px; border: 0; background: none; color: var(--text-3); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-xs); transition: background .12s var(--ease), color .12s var(--ease); }
+  .verswitch button:hover { background: var(--surface-2); color: var(--text-2); }
+  .verswitch svg { width: 13px; height: 13px; }
+  .verswitch .count { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); letter-spacing: -.02em; padding: 0 2px; min-width: 30px; text-align: center; }
+
+  /* ④ 右侧工件 / diff 面板 */
+  .artifact { background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; min-width: 0; }
+  .artifact__head { display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+  .artifact__ico { width: 26px; height: 26px; border-radius: var(--r-sm); background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .artifact__ico svg { width: 15px; height: 15px; }
+  .artifact__l { min-width: 0; }
+  .artifact__t { font-size: 12.5px; font-weight: 500; color: var(--text); letter-spacing: -.01em; }
+  .artifact__sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+  .artifact__close { margin-left: auto; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); color: var(--text-3); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; transition: border-color .14s var(--ease), color .14s var(--ease); }
+  .artifact__close:hover { border-color: var(--border-2); color: var(--text-2); }
+  .artifact__close svg { width: 14px; height: 14px; }
+  .artifact__body { flex: 1; overflow: auto; }
+
+  .artifact__file { display: flex; align-items: center; gap: 9px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .artifact__file svg { width: 14px; height: 14px; color: var(--text-3); flex-shrink: 0; }
+  .artifact__file .fn { font-family: var(--font-mono); font-size: 12px; color: var(--text); letter-spacing: -.02em; }
+  .artifact__file .pm { margin-left: auto; font-family: var(--font-mono); font-size: 11.5px; letter-spacing: -.02em; flex-shrink: 0; }
+  .artifact__file .pm .a { color: var(--ok); } .artifact__file .pm .r { color: var(--block); }
+
+  .artifact .diffhunk { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); letter-spacing: -.02em; padding: 9px 14px 6px; }
+  .artifact .drow { display: flex; font-family: var(--font-mono); font-size: 12px; line-height: 1.85; letter-spacing: -.02em; padding: 0 14px; white-space: pre-wrap; word-break: break-word; }
+  .artifact .drow .gut { display: inline-block; width: 15px; flex-shrink: 0; color: var(--text-3); user-select: none; }
+  .artifact .drow--ctx { color: var(--text-2); }
+  .artifact .drow--add { background: var(--ok-soft); color: var(--ok); }
+  .artifact .drow--add .gut { color: var(--ok); }
+
+  .artifact__ckpt { display: flex; align-items: center; gap: 9px; margin: 9px 14px 0; padding: 9px 12px; background: var(--surface-2); border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 11px; color: var(--text-3); letter-spacing: -.02em; }
+  .artifact__ckpt svg { width: 13px; height: 13px; flex-shrink: 0; color: var(--text-3); }
+  .artifact__ckpt .roll { margin-left: auto; font-family: var(--font-ui); color: var(--accent); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+
+  .artifact__act { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--border); margin-top: 4px; }
+  .abtn { font: inherit; font-size: 12px; padding: 8px 13px; border-radius: var(--r-sm); cursor: pointer; border: 1px solid var(--border-2); background: var(--surface); color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; transition: border-color .14s var(--ease), color .14s var(--ease); }
+  .abtn:hover { border-color: var(--text-3); }
+  .abtn svg { width: 13px; height: 13px; }
+  .abtn.approve { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 500; }
+  .abtn.approve:hover { background: var(--accent-2); border-color: var(--accent-2); }
+  .abtn.reject:hover { border-color: var(--block); color: var(--block); }
+
+  .artifact__note { display: flex; gap: 9px; font-size: 11.5px; color: var(--text-2); line-height: 1.6; padding: 12px 14px; background: var(--surface-2); border-top: 1px solid var(--border); }
+  .artifact__note svg { width: 15px; height: 15px; color: var(--accent); flex-shrink: 0; margin-top: 1px; }
+  .artifact__note b { font-weight: 500; color: var(--text); }
+</style>
+</head>
+<body data-theme="light">
+  <h2 class="sr-only">上线船友对话工作区：左侧项目独立空间与会话历史，右侧含计划、工具调用、代码块、文件引用与绿灰双标的富对话。</h2>
+
+  <div class="chrome">
+    <b>上线船友 · 对话工作区</b>
+    <span class="sub">项目独立空间 + 会话历史 · docs/08 §7.1 SQLite sessions · §11.3 按项目记忆</span>
+    <button class="ctl active" id="annotBtn">标注区域</button>
+    <button class="ctl" id="themeBtn">深色</button>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="tt">上线船友 — my-miniprogram · 对话</span></div>
+
+      <div class="main main--3 main--chat3">
+        <!-- 区① 项目空间 + 会话历史 -->
+        <aside class="region chside">
+          <span class="rtag">① 项目独立空间 · 会话历史</span>
+          <div class="proj"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.6-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>my-miniprogram<svg class="chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+          <p class="chside__sub">独立空间 · 会话、记忆与上下文按项目隔离</p>
+          <button class="chnew"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>新建对话</button>
+          <div id="hist"></div>
+          <div class="chside__foot"><span class="keydot"></span>Claude · key 已存钥匙串</div>
+        </aside>
+
+        <!-- 区② 富对话 -->
+        <section class="region center">
+          <span class="rtag">② 对话（计划 / 工具 / 代码块 / 双标）</span>
+          <div class="chat-head">
+            <span class="chat-head__t">上线预检与修复</span>
+            <span class="ctxpill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/></svg>上下文 · my-miniprogram · 18 文件 · 46 规则</span>
+            <span class="chat-head__sp">
+              <button class="ihbtn" aria-label="分享"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5 8.6 10.5"/></svg></button>
+              <button class="ihbtn" aria-label="更多"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+            </span>
+          </div>
+
+          <div class="conv scroll"><div class="conv__inner">
+            <div class="msg">
+              <div class="msg__who"><span class="av you"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>你<span class="time">09:12</span></div>
+              <div class="bubble you">帮我把上线预检的阻断项修掉，再告诉我备案大概要多久。</div>
+              <div class="msg__actions">
+                <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>编辑</button>
+                <span class="verswitch" aria-label="编辑生成的分支：第 2 / 共 3 版" title="编辑生成了分支">
+                  <button aria-label="上一版"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+                  <span class="count tnum">2 / 3</span>
+                  <button aria-label="下一版"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+                </span>
+              </div>
+            </div>
+
+            <div class="msg">
+              <div class="msg__who"><span class="av ai"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 5L19 9.6 13.6 11 12 16l-1.6-5L5 9.6 10.4 8z"/></svg></span>船友 agent<span class="time">09:12</span></div>
+              <div class="bubble ai">
+                <div class="think" aria-expanded="false">
+                  <button class="think__row"><span class="think__dot"></span>思考 8 秒<svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="think__body">先理依赖：备案与提审是两道独立闸门，隐私声明缺失会在提审被直接驳回，但它和备案没有先后依赖、可并行。所以最优顺序是先改 app.json 清掉隐私阻断（成本最低、即时），同时让你发起备案（路径上最长的人肉等待）。备案时长以官方 record_guidelines 的五环节为准，不臆测。</div>
+                </div>
+                <div class="plan">
+                  <p class="plan__h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>计划</p>
+                  <ul>
+                    <li class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>跑一次本地预检</li>
+                    <li class="cur"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5"/></svg>修掉隐私阻断（改 app.json）</li>
+                    <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>说明备案时长</li>
+                  </ul>
+                </div>
+
+                <div class="step step--ok"><div class="step__bar"></div><div class="step__b"><div class="step__head"><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>读取项目文件 · 18 个<span class="st">过</span></div></div></div>
+                <div class="step step--ok"><div class="step__bar"></div><div class="step__b"><div class="step__head"><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>weapp_shipmate_check<span class="st">过</span></div><div class="step__sub">命中 3 条：<b class="bk">1 阻断</b> · <b class="wn">1 警告</b> · 1 提示</div></div></div>
+
+                <p style="margin:12px 0 0">命中 3 条，阻断是<b style="font-weight:500">位置接口未声明</b>。我改了 app.json，提交前你确认：</p>
+                <div class="codeblock">
+                  <div class="codeblock__h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>app.json<span class="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>复制</span></div>
+                  <pre>  <span class="key">"requiredPrivateInfos"</span>: [],
+<span class="add">+ <span class="key">"requiredPrivateInfos"</span>: ["getLocation"],</span>
+<span class="add">+ <span class="com">// 位置用途：附近门店定位</span></span></pre>
+                </div>
+                <div class="filerow"><span class="fileref"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>app.json</span><span class="fileref"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>pages/index/index.js</span></div>
+
+                <div class="claim claim--ok"><p>已加好 <span style="font-family:var(--font-mono);font-size:12px">requiredPrivateInfos</span>，隐私阻断清除。备案时长：平台初审 1–2 工作日 + 通管局审核 1–20 工作日。</p><div class="meta"><span class="badge badge--ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>已核验</span><a class="src" href="#">user-privacy · record_guidelines · 2026-06-20</a></div></div>
+                <div class="claim claim--ai"><p>建议今天就发起备案——它是路径上最长的人肉等待，和你继续改代码可以并行。</p><div class="meta"><span class="badge badge--ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 5L19 9.6 13.6 11 12 16l-1.6-5L5 9.6 10.4 8z"/></svg>AI 生成 · 待你判断</span></div></div>
+
+                <div class="chips"><span class="chip chip--accent">批准改动 →</span><span class="chip">打开备案后台</span><span class="chip">进入 ICP 备案阶段</span></div>
+              </div>
+              <div class="msg__actions">
+                <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>复制</button>
+                <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg>重试</button>
+                <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12M15 5.9 14 10h5.8a2 2 0 0 1 2 2.3l-1.4 9A2 2 0 0 1 18.4 23H7"/></svg>有用</button>
+              </div>
+            </div>
+
+            <div class="msg">
+              <div class="msg__who"><span class="av you"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>你<span class="time">09:14</span></div>
+              <div class="bubble you">批准了，继续——顺便看下类目要不要紧。</div>
+            </div>
+            <div class="msg">
+              <div class="msg__who"><span class="av ai"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 5L19 9.6 13.6 11 12 16l-1.6-5L5 9.6 10.4 8z"/></svg></span>船友 agent<span class="time">09:14</span></div>
+              <div class="bubble ai">
+                <div class="think" aria-expanded="true">
+                  <button class="think__row"><span class="think__dot"></span>思考中…<svg class="chev" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+                  <div class="think__body">类目要看业务实质，代码只能给信号。先扫页面文案与组件：有没有 web-view、wx.requestPayment、医疗/金融等关键词，再决定哪些能断言、哪些必须问你……</div>
+                </div>
+                <p style="margin:8px 0 0">已批准，正在写入 <span style="font-family:var(--font-mono);font-size:12px">app.json</span> 并重扫类目信号<span class="cursor"></span></p>
+                <div class="stopbar"><button class="stopbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>停止生成</button></div>
+              </div>
+            </div>
+          </div></div>
+
+          <div class="mentionpop">
+            <p class="mentionpop__h">引用文件 · 输入 <code>@</code> 触发 · 项目内本地文件</p>
+            <div class="mentionitem on">
+              <span class="mentionitem__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+              <span class="mentionitem__path">app.json</span>
+              <span class="mentionitem__tag">文件</span>
+            </div>
+            <div class="mentionitem">
+              <span class="mentionitem__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+              <span class="mentionitem__path">pages/index/index.js</span>
+              <span class="mentionitem__tag">文件</span>
+            </div>
+            <div class="mentionitem">
+              <span class="mentionitem__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+              <span class="mentionitem__path">app.config.ts</span>
+              <span class="mentionitem__tag">文件</span>
+            </div>
+            <div class="mentionitem">
+              <span class="mentionitem__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+              <span class="mentionitem__path">project.config.json</span>
+              <span class="mentionitem__tag">文件</span>
+            </div>
+            <div class="mentionitem">
+              <span class="mentionitem__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+              <span class="mentionitem__path">sitemap.json</span>
+              <span class="mentionitem__tag">文件</span>
+            </div>
+          </div>
+          <div class="slashpop">
+            <p class="slashpop__h">命令 · 输入 / 触发</p>
+            <div class="slashitem on"><code>/check</code><span>代码预检</span><span class="d">本地扫描 → 上线清单</span></div>
+            <div class="slashitem"><code>/guide</code><span>流程导航</span><span class="d">8 阶段脊柱</span></div>
+            <div class="slashitem"><code>/explain</code><span>拒因反查</span><span class="d">贴拒绝原因 → 修复</span></div>
+            <div class="slashitem"><code>/fix</code><span>修复阻断</span><span class="d">改代码 + diff 批准</span></div>
+          </div>
+          <div class="composer composer--rich">
+            <div class="ctxbar">
+              <span class="ctxchip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>app.json<button class="x">×</button></span>
+              <span class="ctxchip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.6-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>my-miniprogram<button class="x">×</button></span>
+              <span class="ctxchip hasthumb"><span class="ctxthumb" aria-hidden="true"></span>后台截图.png<button class="x">×</button></span>
+              <span class="ctxchip at">@pages/index/index.js<button class="x">×</button></span>
+            </div>
+            <div class="crow">
+              <div class="attachpop" id="attachPop" hidden>
+                <button class="attachitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 9l5-5 5 5"/><path d="M12 4v12"/></svg>上传文件</button>
+                <button class="attachitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>添加图片</button>
+                <button class="attachitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>选择截图</button>
+                <button class="attachitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.6-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>引用整个目录</button>
+              </div>
+              <button class="cbtn" id="attachBtn" aria-label="附件" aria-haspopup="true" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11 12.2 20.2a5 5 0 0 1-7.1-7.1l9.2-9.1a3 3 0 0 1 4.2 4.2l-9.2 9.2a1 1 0 0 1-1.4-1.4l8.5-8.5"/></svg></button>
+              <button class="cbtn" aria-label="提及文件" style="font-size:15px;font-weight:500">@</button>
+              <div class="box">/ 调命令，@ 引用文件，或拖入截图…</div>
+              <button class="modelpick">claude-opus-4-8 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+              <button class="send"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>
+            </div>
+            <div class="cmeta">
+              <span class="ctxmeter">上下文 38%<span class="bar"><i style="width:38%"></i></span></span>
+              <span class="slashhint">/ 命令 · @ 文件 · ⌘K 面板</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 区③ 右侧工件 / diff 面板（agent 动手才现） -->
+        <aside class="region artifact">
+          <span class="rtag">③ 右侧工件 · diff / 预览（agent 动手才现）</span>
+          <div class="artifact__head">
+            <span class="artifact__ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg></span>
+            <div class="artifact__l">
+              <div class="artifact__t">改动预览 · 1 个文件</div>
+              <div class="artifact__sub">本地改动 · 等待你批准</div>
+            </div>
+            <button class="artifact__close" aria-label="收起工件面板"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+          </div>
+          <div class="artifact__body scroll">
+            <div class="artifact__file">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+              <span class="fn">app.json</span>
+              <span class="pm"><span class="a">+2</span> <span class="r">−0</span></span>
+            </div>
+            <div class="diffhunk">@@ 小程序配置 · 新增隐私声明 @@</div>
+            <div class="drow drow--ctx"><span class="gut"> </span>  "pages": ["pages/index/index"],</div>
+            <div class="drow drow--ctx"><span class="gut"> </span>  "window": { ... },</div>
+            <div class="drow drow--add"><span class="gut">+</span>  "requiredPrivateInfos": ["getLocation"],</div>
+            <div class="drow drow--add"><span class="gut">+</span>  "__note": "位置用途：附近门店定位",</div>
+            <div class="drow drow--ctx"><span class="gut"> </span>  "sitemapLocation": "sitemap.json"</div>
+
+            <div class="artifact__ckpt">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+              checkpoint · 批准后可一键回滚
+              <span class="roll"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg>回滚</span>
+            </div>
+
+            <div class="artifact__act">
+              <button class="abtn reject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>拒绝</button>
+              <button class="abtn">看完整文件</button>
+              <button class="abtn approve"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>批准写入</button>
+            </div>
+          </div>
+          <div class="artifact__note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+            <span><b>工具改代码需你批准</b>；备案 / 提审 / 发布等官方后台动作仍需你本人完成，船友不代提交。</span>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const S = (p, s=14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const CHAT = '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>';
+  const HIST = [
+    ['今天', [['上线预检与修复', true], ['修隐私阻断与域名', false]]],
+    ['本周', [['服务类目咨询', false], ['备案信息字段核对', false]]],
+    ['更早', [['服务器域名白名单配置', false], ['首次上线流程梳理', false]]]
+  ];
+  document.getElementById('hist').innerHTML = HIST.map(([g, items]) =>
+    `<div class="chgroup">${g}</div>` + items.map(([t, on]) =>
+      `<button class="chitem ${on?'on':''}">${S(CHAT)}<span>${t}</span></button>`).join('')
+  ).join('');
+
+  const annotBtn = document.getElementById('annotBtn');
+  document.body.classList.add('annot');
+  annotBtn.addEventListener('click', () => annotBtn.classList.toggle('active', document.body.classList.toggle('annot')));
+  document.getElementById('hist').addEventListener('click', (e) => {
+    const b = e.target.closest('.chitem'); if (!b) return;
+    document.querySelectorAll('.chitem').forEach(x => x.classList.remove('on')); b.classList.add('on');
+  });
+  document.querySelector('.center').addEventListener('click', (e) => {
+    const tr = e.target.closest('.think__row');
+    if (tr) { const t = tr.parentElement; t.setAttribute('aria-expanded', t.getAttribute('aria-expanded') === 'true' ? 'false' : 'true'); return; }
+    const x = e.target.closest('.ctxchip .x');
+    if (x) { x.closest('.ctxchip').remove(); }
+  });
+  const themeBtn = document.getElementById('themeBtn');
+  themeBtn.addEventListener('click', () => {
+    const dark = document.body.getAttribute('data-theme') === 'dark';
+    document.body.setAttribute('data-theme', dark ? 'light' : 'dark');
+    themeBtn.textContent = dark ? '深色' : '浅色';
+  });
+
+  // 附件 popover：点回形针切换，点外部或选项关闭
+  const attachBtn = document.getElementById('attachBtn');
+  const attachPop = document.getElementById('attachPop');
+  const setAttach = (open) => { attachPop.hidden = !open; attachBtn.setAttribute('aria-expanded', String(open)); };
+  attachBtn.addEventListener('click', (e) => { e.stopPropagation(); setAttach(attachPop.hidden); });
+  attachPop.addEventListener('click', () => setAttach(false));
+  document.addEventListener('click', (e) => { if (!attachPop.hidden && !attachPop.contains(e.target) && e.target !== attachBtn) setAttach(false); });
+</script>
+</body>
+</html>
