@@ -59,6 +59,8 @@
 
     { "project": "fixtures/template-signals", "ruleId": "domain.web-view-business", "expect": "hit",   "note": "<web-view> 组件 → 业务域名预检" },
     { "project": "fixtures/template-signals", "ruleId": "domain.web-view-personal", "expect": "hit",   "note": "<web-view> + 个人主体 → 硬阻断(个人类型不支持 web-view，curl 逐字 2026-06-23)" },
+    { "project": "fixtures/template-signals", "ruleId": "domain.web-view-business", "subject": "enterprise", "expect": "hit",   "note": "全主体通用规则在企业主体下仍命中" },
+    { "project": "fixtures/template-signals", "ruleId": "domain.web-view-personal", "subject": "enterprise", "expect": "no_hit", "note": "FP-guard(dogfood): 个人专属阻断不得对企业主体命中——dogfood 在官方/商城 demo 上抓到的真实误报" },
     { "project": "fixtures/template-signals", "ruleId": "privacy.getUserProfile",   "expect": "hit",   "note": "<button open-type=\"chooseAvatar\"> → 用户信息" },
     { "project": "fixtures/template-signals", "ruleId": "privacy.record",           "expect": "hit",   "note": "<live-pusher> → 麦克风/录音" },
     { "project": "fixtures/template-signals", "ruleId": "privacy.camera",           "expect": "hit",   "note": "<camera>/<live-pusher> → 摄像头" },
