@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>上线船友 · 首启引导(docs/08 §11.4)</title>
+<link rel="stylesheet" href="app.css"/>
+<style>
+/* ============================================================
+   首启引导 First-run — 屏专属组件 (engineered calm · docs/08 §11.4)
+   双卡分流(Chatbox 式) + 确定性先行(Semgrep 式)。仅用 app.css 变量。
+   ============================================================ */
+.fr { overflow: auto; background: var(--bg); min-height: 600px; display: flex; justify-content: center; }
+.fr__inner { width: 100%; max-width: 560px; padding: 44px 34px 40px; }
+
+/* 顶部：赭橙圆角 logo + 标题 */
+.fr__brand { text-align: center; margin-bottom: 34px; }
+.fr__logo { width: 56px; height: 56px; border-radius: var(--r-lg); background: var(--accent); color: var(--accent-ink); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+.fr__logo svg { width: 30px; height: 30px; }
+.fr__brand h1 { font-size: 25px; font-weight: 500; margin: 0 0 9px; letter-spacing: -.02em; color: var(--text); }
+.fr__brand p { font-size: 13.5px; color: var(--text-2); margin: 0 auto; line-height: 1.65; max-width: 430px; }
+
+/* 一个问题块 */
+.frq { margin-bottom: 26px; }
+.frq__h { display: flex; align-items: baseline; gap: 9px; margin: 0 0 13px; }
+.frq__step { font-family: var(--font-mono); font-size: 11px; color: var(--accent); background: var(--accent-soft); border-radius: 20px; padding: 2px 9px; letter-spacing: -.02em; flex-shrink: 0; }
+.frq__q { font-size: 15px; font-weight: 500; color: var(--text); letter-spacing: -.01em; }
+
+/* 双卡选择 */
+.frcards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.frcard { position: relative; text-align: left; font: inherit; cursor: pointer; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--r-lg); padding: 14px 15px 15px; transition: border-color .15s var(--ease), background .15s var(--ease); }
+.frcard:hover { border-color: var(--border-2); }
+.frcard__top { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
+.frcard__ico { width: 30px; height: 30px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--text-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .15s var(--ease), color .15s var(--ease); }
+.frcard__ico svg { width: 16px; height: 16px; }
+.frcard__t { font-size: 13.5px; font-weight: 500; color: var(--text); letter-spacing: -.01em; }
+.frcard__d { font-size: 12px; color: var(--text-2); line-height: 1.55; margin: 0; }
+/* 单选指示点(右上) */
+.frcard__radio { position: absolute; top: 13px; right: 13px; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--border-2); background: var(--surface); display: flex; align-items: center; justify-content: center; transition: border-color .15s var(--ease), background .15s var(--ease); }
+.frcard__radio svg { width: 11px; height: 11px; color: var(--accent-ink); opacity: 0; transform: scale(.6); transition: opacity .15s var(--ease), transform .15s var(--ease); }
+/* 选中态：赭橙描边 + accent-soft 底 */
+.frcard.on { border-color: var(--accent); background: var(--accent-soft); }
+.frcard.on .frcard__ico { background: var(--accent); color: var(--accent-ink); }
+.frcard.on .frcard__radio { border-color: var(--accent); background: var(--accent); }
+.frcard.on .frcard__radio svg { opacity: 1; transform: scale(1); }
+
+/* 强调:确定性先行不是降级残废 */
+.frcard__pin { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 500; color: var(--ok); background: var(--ok-soft); border-radius: 20px; padding: 2px 8px; margin-top: 9px; }
+.frcard__pin svg { width: 11px; height: 11px; }
+
+/* 每问下方:可跳过浅字 */
+.frskip { font-size: 11.5px; color: var(--text-3); margin: 11px 2px 0; display: inline-flex; align-items: center; gap: 6px; }
+.frskip svg { width: 13px; height: 13px; }
+.frskip a { color: var(--text-3); text-decoration: none; border-bottom: 1px solid var(--border-2); }
+.frskip a:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 确定性先行横幅(信息架构强调) */
+.frbanner { display: flex; gap: 11px; background: var(--surface-2); border-left: 2px solid var(--ok); border-radius: 0 var(--r) var(--r) 0; padding: 13px 15px; margin: 4px 0 30px; }
+.frbanner__ico { color: var(--ok); flex-shrink: 0; margin-top: 1px; }
+.frbanner__ico svg { width: 17px; height: 17px; }
+.frbanner__t { font-size: 12.5px; font-weight: 500; color: var(--text); margin: 0 0 3px; }
+.frbanner__d { font-size: 12px; color: var(--text-2); line-height: 1.6; margin: 0; }
+.frbanner__d code { font-family: var(--font-mono); font-size: 11.5px; color: var(--accent); letter-spacing: -.02em; }
+
+/* 底部主操作 + 安全脚注 */
+.frgo { display: flex; flex-direction: column; gap: 14px; }
+.btn-primary { font: inherit; font-size: 14px; font-weight: 500; padding: 13px 20px; border: 0; border-radius: var(--r); background: var(--accent); color: var(--accent-ink); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 9px; width: 100%; transition: background .14s var(--ease); }
+.btn-primary:hover { background: var(--accent-2); }
+.btn-primary svg { width: 17px; height: 17px; }
+.frsafe { display: flex; gap: 9px; font-size: 11.5px; color: var(--text-3); line-height: 1.6; }
+.frsafe svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; color: var(--ok); }
+.frsafe b { font-weight: 500; color: var(--text-2); }
+
+@media (max-width: 460px) {
+  .frcards { grid-template-columns: 1fr; }
+}
+</style></head>
+<body data-theme="light">
+  <h2 class="sr-only">上线船友首启引导：两组双卡分流(是否已上线 / 是否有 LLM key)+ 确定性先行强调——没有 key 也能立刻跑 46 条本地规则,生成结构化预检报告;BYO-key 存系统钥匙串永不上传,本工具不做担保,官方提交均需本人完成。</h2>
+
+  <div class="chrome">
+    <b>上线船友 · 首启引导</b>
+    <span class="sub">首启引导 · docs/08 §11.4 · Semgrep 确定性先行 + Chatbox 双卡分流</span>
+    <button class="ctl" id="themeBtn">深色</button>
+  </div>
+
+  <div class="stage-wrap"><div class="win">
+    <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="tt">上线船友 — 欢迎</span></div>
+
+    <div class="fr scroll">
+      <div class="fr__inner">
+
+        <!-- 顶部品牌区 -->
+        <div class="fr__brand">
+          <div class="fr__logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18a3.5 3.5 0 0 0 3 1.8h12a3.5 3.5 0 0 0 3-1.8"/><path d="M4 14h16l-2.5 4H6.5L4 14Z"/><path d="M12 14V3l7 6"/><path d="M12 7H7"/></svg>
+          </div>
+          <h1>欢迎使用上线船友</h1>
+          <p>你写代码,我陪你上线。微信小程序上线合规导航 + 本地代码预检</p>
+        </div>
+
+        <!-- 步骤 1/2 -->
+        <div class="frq">
+          <div class="frq__h"><span class="frq__step">步骤 1/2</span><span class="frq__q">你的小程序上线了吗?</span></div>
+          <div class="frcards" data-group="status">
+            <button class="frcard on" type="button" data-val="new">
+              <span class="frcard__radio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg></span>
+              <div class="frcard__top">
+                <span class="frcard__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></span>
+                <span class="frcard__t">还没上线</span>
+              </div>
+              <p class="frcard__d">带我走 8 阶段上线流程,从注册到提审一步步陪跑。</p>
+            </button>
+            <button class="frcard" type="button" data-val="live">
+              <span class="frcard__radio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg></span>
+              <div class="frcard__top">
+                <span class="frcard__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+                <span class="frcard__t">已上线</span>
+              </div>
+              <p class="frcard__d">进入健康检查模式,盯住合规漂移与新规变动。</p>
+            </button>
+          </div>
+          <p class="frskip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>
+            都可跳过,<a href="#">先看规则库</a>
+          </p>
+        </div>
+
+        <!-- 步骤 2/2 -->
+        <div class="frq">
+          <div class="frq__h"><span class="frq__step">步骤 2/2</span><span class="frq__q">你有 LLM API key 吗?</span></div>
+          <div class="frcards" data-group="key">
+            <button class="frcard on" type="button" data-val="haskey">
+              <span class="frcard__radio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg></span>
+              <div class="frcard__top">
+                <span class="frcard__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m15.5 7.5 3.5 3.5L11 19l-4 1 1-4 7.5-7.5Z"/><circle cx="7.5" cy="15.5" r="1"/><path d="M3 21v-3l2-2"/></svg></span>
+                <span class="frcard__t">有 key</span>
+              </div>
+              <p class="frcard__d">解锁 AI 辅助:问诊 / 改代码 / 拒因编排,边走边问。</p>
+            </button>
+            <button class="frcard" type="button" data-val="nokey">
+              <span class="frcard__radio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg></span>
+              <div class="frcard__top">
+                <span class="frcard__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V7a3 3 0 0 1 6 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M12 15v2"/></svg></span>
+                <span class="frcard__t">没有 key</span>
+              </div>
+              <p class="frcard__d">先用确定性预检:46 条规则本地就能跑,无需联网。</p>
+              <span class="frcard__pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg>完全可用 · 不是降级</span>
+            </button>
+          </div>
+          <p class="frskip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>
+            都可跳过,<a href="#">先看规则库</a>
+          </p>
+        </div>
+
+        <!-- 确定性先行横幅 -->
+        <div class="frbanner">
+          <span class="frbanner__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg></span>
+          <div>
+            <p class="frbanner__t">确定性先行 —— 没有 key 也立刻能出报告</p>
+            <p class="frbanner__d">这是与同类客户端的差异:<code>46</code> 条官方核验规则在本地直接跑,生成结构化预检报告;AI 只是叠加在确定性结果之上的辅助。</p>
+          </div>
+        </div>
+
+        <!-- 底部主操作 + 安全脚注 -->
+        <div class="frgo">
+          <button class="btn-primary" id="startBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+            开始(个人主体)
+          </button>
+          <p class="frsafe">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
+            <span><b>BYO-key 存系统钥匙串、永不上传;</b>本工具不做担保,官方提交均需你本人完成。</span>
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+  </div></div>
+  <script>
+    const tb=document.getElementById('themeBtn');
+    tb.addEventListener('click',()=>{const d=document.body.getAttribute('data-theme')==='dark';document.body.setAttribute('data-theme',d?'light':'dark');tb.textContent=d?'深色':'浅色';});
+    /* 双卡单选:每组内点击切换高亮(同组互斥) */
+    document.querySelectorAll('.frcards').forEach(group=>{
+      const cards=group.querySelectorAll('.frcard');
+      cards.forEach(card=>card.addEventListener('click',()=>{
+        cards.forEach(c=>c.classList.remove('on'));
+        card.classList.add('on');
+      }));
+    });
+  </script>
+</body></html>
