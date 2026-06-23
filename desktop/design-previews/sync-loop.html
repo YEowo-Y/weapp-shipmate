@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>上线船友 · 实时同步闭环图(docs/08 §6)</title>
+<link rel="stylesheet" href="app.css" />
+</head>
+<body data-theme="light">
+  <h2 class="sr-only">上线船友实时同步闭环图：源码变更经文件监听、全量重扫、IPC 广播、状态写入到 UI，LLM 在这条实时流上巡航。</h2>
+
+  <div class="chrome">
+    <b>上线船友 · 实时同步闭环</b>
+    <span class="sub">docs/08 §6 — 确定性底座提供"真相的实时流"，LLM 在流上巡航</span>
+    <button class="ctl" id="themeBtn">深色</button>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="win">
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="tt">上线船友 — 架构 · 实时同步闭环</span></div>
+
+      <section class="diagram scroll">
+        <div class="diagram__inner">
+          <p class="diagram__cap">确定性底座提供<b>"真相的实时流"</b>，LLM 在这条流上巡航。<b>底座有多实时，AI 辅助就能扩多少。</b>下面是这条闭环——源码一变，毫秒级重扫，结果回流到 UI 与 AI。</p>
+
+          <p class="dlabel">确定性实时流（自动）</p>
+          <div class="dflow">
+            <div class="dnode dnode--src"><div class="dnode__t">你改代码</div><div class="dnode__sub">项目文件夹</div></div>
+            <div class="darrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+            <div class="dnode"><div class="dnode__t">文件监听</div><div class="dnode__sub">notify + 300ms 去抖</div><span class="dnode__tag tag-rust">Rust 核</span></div>
+            <div class="darrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+            <div class="dnode"><div class="dnode__t">全量重扫</div><div class="dnode__sub">scanProject · 毫秒级</div><span class="dnode__tag tag-node">Node 大脑</span></div>
+            <div class="darrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+            <div class="dnode"><div class="dnode__t">结果广播</div><div class="dnode__sub">emit · preflight-result</div><span class="dnode__tag tag-ipc">Tauri IPC</span></div>
+            <div class="darrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+            <div class="dnode"><div class="dnode__t">写入状态</div><div class="dnode__sub">listen → Zustand</div><span class="dnode__tag tag-react">React</span></div>
+            <div class="darrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+            <div class="dnode"><div class="dnode__t">UI 实时更新</div><div class="dnode__sub">脊柱 / 报告 / step 卡</div><span class="dnode__tag tag-react">React</span></div>
+          </div>
+          <div class="dloop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg>实时闭环 · 你看到结果 → 继续改 → 毫秒级回流。不做增量、不手动重扫。</div>
+
+          <div class="dband">
+            <p class="dband__h">LLM 在这条流上巡航（BYO-key 解锁）</p>
+            <p class="dband__sub">同一条实时流喂给 AI 辅助；无 key 时下面这些关闭，确定性预检照常跑。</p>
+            <div class="dband__chips">
+              <span class="chip">变更影响分析</span><span class="chip">主动巡航</span><span class="chip">回归守护</span>
+              <span class="chip">旅程规划</span><span class="chip">外部 agent 编排</span><span class="chip">进度叙述</span>
+            </div>
+          </div>
+
+          <div class="dnote"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg><span><b style="font-weight:500">触发边界（R3 铁律）</b>：preflight 在上传 / 上线边界跑、开发期静默——官方"每次预览都弹、还不能关"被开发者集体开骂；要懂"WIP 未用文件 ≠ 缺陷"。</span></div>
+
+          <div class="dlegend">
+            <span><i style="background:var(--block)"></i>Rust 核 · 监听 / IPC</span>
+            <span><i style="background:var(--ok)"></i>Node 大脑 · 扫描 / 规则</span>
+            <span><i style="background:var(--purple)"></i>Tauri IPC · 通道</span>
+            <span><i style="background:var(--accent)"></i>React · 状态 / UI</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script>
+  const themeBtn = document.getElementById('themeBtn');
+  themeBtn.addEventListener('click', () => {
+    const dark = document.body.getAttribute('data-theme') === 'dark';
+    document.body.setAttribute('data-theme', dark ? 'light' : 'dark');
+    themeBtn.textContent = dark ? '深色' : '浅色';
+  });
+</script>
+</body>
+</html>
