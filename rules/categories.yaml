@@ -38,3 +38,71 @@ rules:
     source_quote: "《增值电信业务经营许可证》（核准服务项目包含“在线数据处理与交易处理业务”）"
     last_verified: "2026-06-14"
     manual_required: true
+
+  - id: category.personal-subject-scope
+    title: "个人主体只开放有限服务类目（白名单外不开放）"
+    kind: navigation
+    stage: category
+    subject_type: ["personal"]
+    severity: warning
+    confidence: medium
+    signal: ["医美", "医疗美容", "隆鼻", "激光", "推拿", "洗浴", "金融", "直播", "新闻", "电商平台"]
+    warn: "个人主体小程序只开放官方『个人主体小程序开放的服务类目』白名单内的类目；白名单外的（如医疗美容、推拿、洗浴，及医疗/金融/电商平台/新闻直播等需企业资质的类目）个人主体未开放，需升级为企业 / 个体工商户主体。"
+    requires:
+      - "对照官方『个人主体小程序开放的服务类目』确认你的业务在白名单内；不在则需升级主体类型再申请该类目"
+    why: "个人主体类目范围受限，选了未开放类目无法通过审核；官方明确部分类目个人小程序未开放"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
+    source_quote: "不包含医疗美容服务（如：隆鼻、激光等）、推拿、洗浴等个人小程序中未开放类目经营范围。"
+    last_verified: "2026-06-23"
+    manual_required: true
+
+  - id: category.news-hint
+    title: "新闻 / 资讯类目资质预警"
+    kind: navigation
+    stage: category
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: medium
+    signal: ["新闻", "资讯", "时政", "头条", "采编", "快讯"]
+    warn: "提供新闻 / 多行业资讯类内容通常需《互联网新闻信息服务许可证》；此类需企业资质的类目个人主体未开放——请对照官方『服务类目』确认主体与资质。"
+    requires:
+      - "对照官方『服务类目』确认新闻 / 资讯类所需许可证；个人主体未开放此类需企业资质的类目"
+    why: "新闻 / 资讯类目要求《互联网新闻信息服务许可证》，主体或资质不符会被拒；个人主体未开放"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
+    source_quote: "《互联网新闻信息服务许可证》"
+    last_verified: "2026-06-23"
+    manual_required: true
+
+  - id: category.finance-hint
+    title: "金融类目资质预警"
+    kind: navigation
+    stage: category
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: medium
+    signal: ["金融", "理财", "借贷", "贷款", "证券", "期货", "基金", "股票", "保险", "银行", "征信"]
+    warn: "金融类（银行 / 证券 / 保险 / 贷款 / 征信等）通常需《金融许可证》《经营证券期货业务许可证》等专项持牌资质；此类个人主体未开放——请对照官方『服务类目』确认。"
+    requires:
+      - "对照官方『服务类目』确认金融类所需许可证与主体要求；个人主体未开放此类持牌类目"
+    why: "金融类目要求金融牌照（如《金融许可证》《经营证券期货业务许可证》），个人主体未开放"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
+    source_quote: "（2选1）：1、《金融许可证》 2、《金融机构许可证》"
+    last_verified: "2026-06-23"
+    manual_required: true
+
+  - id: category.live-hint
+    title: "直播类目资质预警"
+    kind: navigation
+    stage: category
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: warning
+    confidence: medium
+    signal: ["直播", "直播带货", "在线直播", "直播答题", "视频直播"]
+    warn: "提供在线直播服务通常需《信息网络传播视听节目许可证》等资质；此类需企业资质的类目个人主体未开放——请对照官方『服务类目』确认主体与资质。"
+    requires:
+      - "对照官方『服务类目』确认直播类所需许可证与主体要求；个人主体未开放此类需企业资质的类目"
+    why: "直播类目要求《信息网络传播视听节目许可证》等资质，个人主体未开放"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
+    source_quote: "《信息网络传播视听节目许可证》"
+    last_verified: "2026-06-23"
+    manual_required: true
