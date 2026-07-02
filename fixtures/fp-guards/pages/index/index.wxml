@@ -1,0 +1,6 @@
+<view>hello</view>
+<!-- 调试遗留：注释掉的组件、按钮与域名都不应再触发信号
+<camera device-position="back" />
+<web-view src="https://commented.fpguard.test/x" />
+<button open-type="getPhoneNumber">获取手机号</button>
+-->
