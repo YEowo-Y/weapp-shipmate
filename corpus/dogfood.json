@@ -1,0 +1,149 @@
+{
+  "_comment": "真实语料回归钉板（scripts/dogfood.mjs）。samples[].dir 是开发机本地路径（样本仓不入库）；rules 是该样本 check（不带 subject）命中的 ruleId 集合，2026-07-02 经 11 样本快检逐条源码裁决为基线。漂移即门禁红——新增读源码裁决 TP/FP，消失区分有意修复与召回回归；确认有意改进后用 --update 重钉并提交。",
+  "samples": [
+    {
+      "name": "day",
+      "dir": "C:\\Dev\\Projects\\day-private-sample",
+      "rules": [
+        "privacy.choosePhotoVideo",
+        "privacy.getUserProfile"
+      ]
+    },
+    {
+      "name": "native-demo",
+      "dir": "C:\\Dev\\_dogfood\\native-demo",
+      "rules": [
+        "domain.request-whitelist",
+        "domain.web-view-business",
+        "payment.requires-merchant",
+        "privacy.accelerometer",
+        "privacy.addPhoneContact",
+        "privacy.bluetooth",
+        "privacy.camera",
+        "privacy.chooseAddress",
+        "privacy.chooseInvoice",
+        "privacy.chooseLocation",
+        "privacy.choosePhotoVideo",
+        "privacy.clipboard",
+        "privacy.compass",
+        "privacy.getLocation",
+        "privacy.getPhoneNumber",
+        "privacy.getUserProfile",
+        "privacy.record",
+        "security.insecure-request"
+      ]
+    },
+    {
+      "name": "miniprogram-demo",
+      "dir": "C:\\Dev\\_dogfood\\miniprogram-demo",
+      "rules": [
+        "domain.request-whitelist",
+        "domain.web-view-business",
+        "payment.requires-merchant",
+        "privacy.accelerometer",
+        "privacy.addPhoneContact",
+        "privacy.bluetooth",
+        "privacy.camera",
+        "privacy.chooseAddress",
+        "privacy.chooseInvoice",
+        "privacy.chooseLocation",
+        "privacy.choosePhotoVideo",
+        "privacy.clipboard",
+        "privacy.compass",
+        "privacy.getLocation",
+        "privacy.getPhoneNumber",
+        "privacy.getUserProfile",
+        "privacy.record",
+        "security.insecure-request"
+      ]
+    },
+    {
+      "name": "uni-demo",
+      "dir": "C:\\Dev\\_dogfood\\uni-demo",
+      "rules": [
+        "consistency.requiredPrivateInfos",
+        "domain.request-whitelist",
+        "domain.web-view-business",
+        "payment.requires-merchant",
+        "privacy.addPhoneContact",
+        "privacy.bluetooth",
+        "privacy.chooseFile",
+        "privacy.chooseLocation",
+        "privacy.choosePhotoVideo",
+        "privacy.clipboard",
+        "privacy.getLocation",
+        "privacy.getUserProfile",
+        "privacy.record",
+        "privacy.writePhotosAlbum"
+      ]
+    },
+    {
+      "name": "mall-demo",
+      "dir": "C:\\Dev\\_dogfood\\mall-demo",
+      "rules": [
+        "domain.request-whitelist",
+        "domain.web-view-business",
+        "payment.requires-merchant",
+        "privacy.camera",
+        "privacy.chooseAddress",
+        "privacy.chooseInvoice",
+        "privacy.chooseLocation",
+        "privacy.clipboard",
+        "privacy.getLocation",
+        "privacy.getPhoneNumber",
+        "privacy.getUserProfile",
+        "privacy.record",
+        "privacy.writePhotosAlbum"
+      ]
+    },
+    {
+      "name": "mpvue-demo",
+      "dir": "C:\\Dev\\_dogfood\\mpvue-demo",
+      "rules": [
+        "consistency.requiredPrivateInfos",
+        "domain.request-whitelist",
+        "domain.web-view-business",
+        "privacy.chooseLocation",
+        "privacy.choosePhotoVideo",
+        "privacy.getLocation",
+        "privacy.getUserProfile",
+        "privacy.writePhotosAlbum"
+      ]
+    },
+    {
+      "name": "taro-demo",
+      "dir": "C:\\Dev\\_dogfood\\taro-demo",
+      "rules": [
+        "domain.request-whitelist"
+      ]
+    },
+    {
+      "name": "wepy-mall",
+      "dir": "C:\\Dev\\_dogfood\\wepy-mall",
+      "rules": [
+        "domain.request-whitelist",
+        "payment.requires-merchant",
+        "privacy.getUserProfile"
+      ]
+    },
+    {
+      "name": "mpx-examples",
+      "dir": "C:\\Dev\\_dogfood\\mpx-src\\examples",
+      "rules": [
+        "domain.ip-or-localhost",
+        "domain.web-view-business",
+        "privacy.choosePhotoVideo"
+      ]
+    },
+    {
+      "name": "wepy-src",
+      "dir": "C:\\Dev\\_dogfood\\wepy-src",
+      "rules": []
+    },
+    {
+      "name": "cml-src",
+      "dir": "C:\\Dev\\_dogfood\\cml-src",
+      "rules": []
+    }
+  ]
+}
