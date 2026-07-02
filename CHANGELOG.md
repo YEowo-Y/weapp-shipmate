@@ -9,6 +9,9 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 
 ### Fixed — 预检可信度（真实使用前的信任修复）
 
+- **五个扫描器 FP/FN 缺陷修复（2026-07-01 多智能体审计逐条端到端复现后确认）**：① 静态 `url: "..."`（冒号后带空格的主流写法）不再被正则回溯误判为动态拼接请求；② 明文 http / 动态 URL 判定可越过 `url` 前置的 `header:{...}` 嵌套对象（封装 request 工具的普遍写法，此前整体漏报）；③ 模板文件的 `<!-- -->` 注释先剥离——注释掉的 `<camera>`/`<web-view>`/手机号按钮/域名不再触发信号；④ 字符串文案里的 API 名（如日志中的 `"wx.getLocation"`）不再当真实调用（曾级联出 blocker 级误报）；⑤ `app.json`/`manifest.json` 尾逗号（JSONC 常态）容错解析——此前声明静默丢失、反向产出「未声明」blocker 误报。配 `fp-guards` 回归夹具锁定。
+- **FX-06：非法 `--subject` 报错退出**（退出码 1 + 枚举提示），不再静默跳过主体专属规则产出伪清白报告；`SUBJECT_ENUM` 提取至 `data.mjs` 作 CLI/MCP 共享唯一事实源。
+- **分发完整性**：npm 包 `files` 与 `.mcpb` INCLUDE 补 `rejections.yaml`（此前发布安装后 `explain` 必 ENOENT 崩溃）；`manifest.json` 版本同步 0.1.0 并补 `weapp_shipmate_explain` 工具条目。
 - **`guide` 不再把"内容相关"规则当成确定阻断**：带 `signal` 的规则（医疗类目、UGC 内容过滤、虚拟支付、未成年人保护、诱导下载 App、电商类目等）其适用与否取决于小程序具体功能；导航看不到源码，故改为列入新增的「可能适用 · 请按业务自查」区（`runGuide` 返回 `selfCheck`），并**不计入概览的阻断/警告计数**。修复前一个无业务信号的 `guide` 会输出 12 项阻断（含医疗等假阳性），修复后仅保留 8 项普遍适用的提审/备案基线阻断，内容相关项完整保留在自查区、不静默丢弃。
 - **扫描器剥离注释后再提取事实**：被注释掉的 `// wx.getLocation()` / 块注释里的调用不再触发隐私/域名预检命中。注释剥离为**字符串感知**（保留 `"https://x"` 内的 `//`，避免朴素剥离破坏域名提取而引入新错误）；`app.json` 仍按原文 JSON 解析。
 - **请求域名归一化**：URL host 去掉 `user[:pass]@` 前缀与 `:port` 后缀并小写，使 `api.weixin.qq.com:8443`、`user@host` 等不再绕过 IP / 微信服务端 API 直连等**精确匹配的安全交叉核验**。
@@ -34,7 +37,7 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 ### Added — 规则数据（"规则即数据"脊柱）
 
 - 规则 schema（`schemas/rules.schema.json`、`schemas/flow.schema.json`）与 `flow.yaml` 上线流程决策树骨架。
-- **45 条种子规则全部已核验官方来源、默认输出**（备案 1 / 域名 2 / 隐私 21 / 提审 6 / 登录 5 / 内容安全 2 / 支付 1 / 资质 1 / 未成年 1 / 数据 1 / 导流 2 / 类目 2），暂无 `draft`；`draft` 门禁机制保留，供未来无法核验逐字来源的规则使用。
+- **63 条种子规则全部已核验官方来源、默认输出**（隐私 23 / 类目 8 / 提审 7 / 登录 5 / 域名 4 / 备案 4 / 内容安全 3 / 数据 3 / 支付 2 / 导流 2 / 未成年 1 / 资质 1），暂无 `draft`；`draft` 门禁机制保留，供未来无法核验逐字来源的规则使用。
 - 隐私预检**完整覆盖**官方《用户隐私保护指引内容介绍》信息类型表 **21 个接口族**，源码扫到对应 `wx.*` 即命中（剪贴板/麦克风/摄像头/相册/照片视频/位置/地址/发票/蓝牙/通讯录/日历/文件/车牌/运动步数/四类传感器等）。
 - 数据校验门禁（`scripts/validate.mjs`：ajv schema 校验 + `flow.yaml` 图 linter + 跨文件 stage 一致性）。
 - **声明↔调用一致性核验**（`src/crosscheck.mjs`）：复用扫描结果做代码↔配置交叉核验，纯规则匹配做不到。当前四项：① 调用 8 个地理位置接口但 `app.json` 的 `requiredPrivateInfos` 未声明 → blocker（精确命中官方 61040 拒因），列出缺声明的具体接口；② 前端直连 `api.weixin.qq.com` 等微信服务端 API → blocker（AppSecret/access_token 泄露风险，该域名亦无法配进白名单）；③ 源码硬编码 AppSecret/商户密钥 → blocker（只报"文件 + 键名"，绝不回显密钥值，符合 SECURITY.md）；④ 明文 `http`/`ws` 请求 → warning（小程序只支持 `https`/`wss`，列出需改协议的域名）；⑤ 请求域名为 IP/localhost → warning（服务器域名白名单不支持，官方"局域网 IP 除外"已豁免私有网段）。`crossChecks()` 留有扩展点。
@@ -60,7 +63,8 @@ v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码�
 ### Added — 质量基建
 
 - 规则腐烂监控（`npm run rot`）：`last_verified` 时效检查 + `official_url` 链接体检；每月定时 GitHub workflow 告警。
-- 测试套件（`node:test`，83 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck）+ 样例夹具（`edge-cases`、`uni-app`、`taro-app`、`mpx-app`、`wepy-app`、`template-signals`：chooseAvatar/相机/直播/web-view、`uni-cond`：#ifdef 条件编译）；GitHub CI（含 `.mcpb` 打包冒烟）。
+- **准确性工程地基**（docs/08 §4.2 / FX-11）：`corpus/labels.json` 人工核验三态标注（81 条，12 夹具）+ `scripts/accuracy.mjs`（per-rule/全局 precision·recall，precision<0.95 或任一误报即退出 1）+ `tests/accuracy.test.mjs` 黄金快照（51 TP / 0 FP / 0 FN，漂移即 RED）+ `scripts/coverage.mjs` 覆盖红线三数与标注锚定显性化（30/68 规则有锚点）。
+- 测试套件（`node:test`，111 例：check / guide / explain / scanner / cli / mcp / rot / report / crosscheck / accuracy / e2e / smoke）+ 样例夹具（`edge-cases`、`uni-app`、`taro-app`、`mpx-app`、`wepy-app`、`template-signals`：chooseAvatar/相机/直播/web-view、`uni-cond`：#ifdef 条件编译、`recall-apis`、`web-view-personal`、`missing-privacy-decl`：缺声明 blocker、`sensor-apis`：14 传感器/设备隐私 API、`fp-guards`：常见写法误报卫兵）；GitHub CI（含 `.mcpb` 打包冒烟）。
 
 ### Added — 治理与文档
 
