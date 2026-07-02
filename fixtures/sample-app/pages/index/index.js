@@ -8,8 +8,9 @@ Page({
     // 静态字面量域名
     wx.request({ url: "https://api.example.com/data" });
 
-    // 动态拼接 URL（应触发 dynamicRequest 标记，静态扫描可能漏报域名）
+    // 动态拼接 URL（应触发 dynamicRequest 标记，静态扫描可能漏报域名）；
+    // header 前置：动态判定须能越过嵌套对象。
     const base = "https://dyn.example.org";
-    wx.request({ url: base + "/dynamic" });
+    wx.request({ header: { "x-trace": "1" }, url: base + "/dynamic" });
   },
 });
