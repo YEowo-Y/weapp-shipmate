@@ -4,6 +4,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { SUBJECT_ENUM } from "./data.mjs";
 import { runCheck } from "./check.mjs";
 import { runGuide } from "./guide.mjs";
 import { runExplain } from "./explain.mjs";
@@ -13,8 +14,6 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8")).version;
 const PROTOCOL_DEFAULT = "2025-06-18";
 const SERVER_INFO = { name: "weapp-shipmate", version: VERSION };
-
-const SUBJECT_ENUM = ["personal", "individual_business", "enterprise"];
 
 export const TOOLS = [
   {
