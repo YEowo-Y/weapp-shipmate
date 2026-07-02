@@ -11,6 +11,9 @@ build/
 .claude/
 .serena/
 
+# dogfood 样本的机器本地目录映射（私人路径不入库）
+corpus/dogfood.local.json
+
 # 安全：绝不入库的敏感文件（与 SECURITY.md 忽略清单一致）
 .env*
 *.pem
