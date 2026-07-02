@@ -37,7 +37,9 @@
 >
 > **✅ S3 已执行(2026-06-22)**:FX-04 完成——`tests/e2e.test.mjs`(spawnSync 二进制级 9 例:check/guide/explain/checklist 全链路 + **退出码契约** check leaky-app→exit 2、sample-app→exit 0、explain 无参/未知命令→exit 1)+ `tests/smoke.test.mjs`(全 9 夹具 + guide/explain/dispatch ping 最小存活)。补齐 docs/06 关键路径 E2E 门禁(此前 0 覆盖)。**3× `npm test` 稳定 97/0**。2 个单文件提交。
 >
-> **✅ S5 部分执行(2026-07-01)**:FX-06 完成——`SUBJECT_ENUM` 提取至 `data.mjs`(CLI/MCP 共享唯一事实源),`cli.mjs` 对 `--subject` 出现即校验(`"subject" in flags`,含缺值/吞 flag 边界),非法主体→退出 1 + 枚举提示 + 零报告输出;cli 单测 ×2。FX-13/14/16 仍延期(见 §4 S5)。4 个单文件提交。
+> **✅ S5 部分执行(2026-07-01)**:FX-06 完成——`SUBJECT_ENUM` 提取至 `data.mjs`(CLI/MCP 共享唯一事实源),`cli.mjs` 对 `--subject` 出现即校验(`"subject" in flags`,含缺值/吞 flag 边界),非法主体→退出 1 + 枚举提示 + 零报告输出;cli 单测 ×2。4 个单文件提交。
+>
+> **✅ S5 续(2026-07-02,公开前体检把 FX-14/16 升级为必修)**:FX-16——parseFlags 加已知选项白名单,未知/拼错选项与布尔开关误带 =值 一律报错退出 1;新支持 `--key=value` 语法(此前 `--subject=personal` 被静默丢弃产出主体错误的报告);`--subject` 缺值报「缺少取值」不再泄漏 undefined;`check --help` 生效。FX-14——runCheck 对 filesScanned==0 注入显式警告 note「未在该目录发现可识别的小程序源码…本报告不构成任何已通过检查的结论」。cli 单测 ×5 + e2e 空目录 ×1。S5 仅剩 FX-13(blockers-only 空态文案)延期。
 
 | ID | 处理 | 严 | 标题 | 位置 | 回归点 |
 |---|---|---|---|---|---|
@@ -54,9 +56,9 @@
 | FX-11 | 🟡延期 | med | **准确性工程地基缺失**(corpus/labels.json + scripts/accuracy.mjs + 黄金快照) | corpus/ scripts/(无) | 按 docs/08 §4.2/§9 P2.0.5:precision≥0.95 且单规则 FP=0,快照 diff 即 fail(=切片1) |
 | FX-12 | 🟡延期 | low | scanner walk 跟随符号链接可读所选目录外文件 | scanner.mjs:36-47 | `readdirSync({withFileTypes})` + `isSymbolicLink()` 跳过;软链越界单测 |
 | FX-13 | 🟡延期 | low | `--blockers-only` 无阻断时表头计数与正文矛盾 | cli.mjs / report.mjs:82 | 空态文案区分"无阻断(但 M 条非阻断)" |
-| FX-14 | 🟡延期 | low | 扫 0 文件给虚假安心 | check.mjs:42 / report.mjs:82 | notes 含"未扫描到源码,请确认项目根" |
+| FX-14 | ✅已修(2026-07-02) | low | 扫 0 文件给虚假安心 | check.mjs:42 / report.mjs:82 | notes 含"未扫描到源码,请确认项目根" |
 | FX-15 | 🟡延期 | low | 桌面薄壳 markdown 原样塞 `<pre>` 用户看字面量 | desktop lib.rs / main.ts | P2.1:`--json` + DOM 结构化渲染(=切片7) |
-| FX-16 | 🟡延期 | low | 未知/拼错 flag 静默忽略 | cli.mjs:45-56 | flag 白名单,未知→提示 + return 1 |
+| FX-16 | ✅已修(2026-07-02,公开前体检升级为必修) | low | 未知/拼错 flag 静默忽略 | cli.mjs:45-56 | flag 白名单,未知→提示 + return 1 |
 | FX-17 | 🟡延期 | low | 已导出纯函数缺直接单测(stripUniConditional / parseISODate / _LOCATION_DECL_APIS) | scanner/rot/crosscheck + tests/ | 补参数化直接单测 |
 | FX-18 | 🟡延期 | low | 多处 `catch{}` 静默降级缺 stderr 诊断 | scanner.mjs / mcp.mjs:142 | catch 补 stderr 诊断(stdout 保纯 JSON-RPC) |
 | FX-WONTFIX-01 | ⚪不予(误报) | — | "83 测试全绿为假/mcp E2E 失败"——本机 18 次复跑零复现,实测 83/0 | mcp.test.mjs:64 | 对抗复核判 false_positive;`setTimeout(400)+kill` 异味降级为 FX-18 类延期硬化(改事件驱动收齐 id===1/2 再 resolve) |
