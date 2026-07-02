@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { SUBJECT_ENUM } from "./data.mjs";
 import { runCheck } from "./check.mjs";
 import { runGuide } from "./guide.mjs";
 import { runExplain } from "./explain.mjs";
@@ -64,6 +65,12 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
   if (cmd === "--version" || cmd === "-v") { out.write(VERSION + "\n"); return 0; }
 
   const flags = parseFlags(args.slice(1));
+  // FX-06：非法主体必须报错退出。静默接受会让主体专属规则全部跳过（check.mjs 按 subject 过滤），
+  // 产出"已合规"假象——与 mcp.mjs 的 inputSchema enum 行为对齐。
+  if ("subject" in flags && !SUBJECT_ENUM.includes(flags.subject)) {
+    err.write(`非法 --subject：${flags.subject}\n可选值：${SUBJECT_ENUM.join(" | ")}\n`);
+    return 1;
+  }
   const format = flags.json ? "json" : flags.checklist ? "checklist" : "markdown";
   const includeDrafts = !!flags["include-drafts"];
   const blockersOnly = !!flags["blockers-only"];
