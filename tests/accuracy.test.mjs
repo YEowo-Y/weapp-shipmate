@@ -20,14 +20,14 @@ test("准确性门禁：全局 precision ≥ 0.95、零误报 FP、无未知 rul
   assert.ok(guards >= 8, `no_hit FP-guard 锚点过少（${guards}）`);
 });
 
-test("准确性黄金快照：命中基线 34 TP / 0 FP / 0 FN（10 夹具，含主体维度，漂移须人工确认后更新）", () => {
+test("准确性黄金快照：命中基线 36 TP / 0 FP / 0 FN（11 夹具，含主体维度，漂移须人工确认后更新）", () => {
   const { labels, subjectDefault } = loadLabels();
   const { global } = computeAccuracy(labels, { subjectDefault });
-  // 改了规则/扫描器导致真实夹具(原生/uni/Taro/mpx/wepy/edge/template/#ifdef/recall + 企业主体 web-view)的命中变化 → 此断言 RED。
+  // 改了规则/扫描器导致真实夹具(原生/uni/Taro/mpx/wepy/edge/template/#ifdef/recall/missing-decl + 企业主体 web-view)的命中变化 → 此断言 RED。
   // 确认是有意改进(非回归)后，再同步更新此基线 + corpus/labels.json。
   assert.deepEqual(
     { tp: global.tp, fp: global.fp, fn: global.fn },
-    { tp: 34, fp: 0, fn: 0 },
+    { tp: 36, fp: 0, fn: 0 },
     "命中基线漂移：核对是否引入回归，确认无误后更新基线与 labels"
   );
 });
