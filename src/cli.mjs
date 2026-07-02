@@ -42,16 +42,25 @@ guide 额外输入（布尔开关，出现即为 true）：
 注意：本工具只给"待你确认"的导航建议，不代办、不做合规担保。`;
 
 const VALUE_FLAGS = new Set(["subject", "business"]);
+const BOOL_FLAGS = new Set(["json", "checklist", "include-drafts", "blockers-only", "help", "version", "payment", "sensitive", "domain"]);
 
+// FX-16：未知/拼错选项必须报错——静默忽略会让 `--subjcet personal` 这类笔误
+// 产出主体维度错误却看起来正常的报告，比报错更糟。同时支持 --key=value 写法（CLI 常见习惯）。
 export function parseFlags(args) {
   const f = { _: [] };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a.startsWith("--")) {
-      const key = a.slice(2);
-      if (VALUE_FLAGS.has(key)) f[key] = args[++i];
-      else f[key] = true;
-    } else f._.push(a);
+    if (!a.startsWith("--")) { f._.push(a); continue; }
+    const eq = a.indexOf("=");
+    const key = eq === -1 ? a.slice(2) : a.slice(2, eq);
+    if (VALUE_FLAGS.has(key)) {
+      if (eq !== -1) f[key] = a.slice(eq + 1);
+      else if (args[i + 1] !== undefined && !args[i + 1].startsWith("--")) f[key] = args[++i];
+      else f[key] = undefined; // 缺值：留给 main 报「缺少取值」，不吞下一个 flag
+      continue;
+    }
+    if (BOOL_FLAGS.has(key) && eq === -1) { f[key] = true; continue; }
+    (f._unknown ??= []).push(a); // 含布尔开关误带 =值 的写法
   }
   return f;
 }
@@ -65,10 +74,17 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
   if (cmd === "--version" || cmd === "-v") { out.write(VERSION + "\n"); return 0; }
 
   const flags = parseFlags(args.slice(1));
+  if (flags._unknown?.length) {
+    err.write(`无法识别的选项：${flags._unknown.join("、")}\n用 \`weapp-shipmate --help\` 查看可用选项。\n`);
+    return 1;
+  }
+  if (flags.help) { out.write(HELP + "\n"); return 0; }
+  if (flags.version) { out.write(VERSION + "\n"); return 0; }
   // FX-06：非法主体必须报错退出。静默接受会让主体专属规则全部跳过（check.mjs 按 subject 过滤），
-  // 产出"已合规"假象——与 mcp.mjs 的 inputSchema enum 行为对齐。
+  // 产出"已合规"假象——与 mcp.mjs 的 inputSchema enum 行为对齐。缺值与非法值分开报，不泄漏 undefined。
   if ("subject" in flags && !SUBJECT_ENUM.includes(flags.subject)) {
-    err.write(`非法 --subject：${flags.subject}\n可选值：${SUBJECT_ENUM.join(" | ")}\n`);
+    const what = flags.subject === undefined ? "--subject 缺少取值" : `非法 --subject：${flags.subject}`;
+    err.write(`${what}\n可选值：${SUBJECT_ENUM.join(" | ")}\n`);
     return 1;
   }
   const format = flags.json ? "json" : flags.checklist ? "checklist" : "markdown";
