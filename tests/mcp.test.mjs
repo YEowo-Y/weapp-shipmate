@@ -61,6 +61,28 @@ test("未知方法返回 -32601", async () => {
   assert.equal(res.error.code, -32601);
 });
 
+// 工具错误 ≠ 协议错误：tools/call 内部异常须包成 isError:true 的正常应答（MCP 契约），
+// 不得升级成 JSON-RPC error——否则客户端会把业务失败当协议故障处理。
+test("tools/call 未知工具名 → isError:true 且非协议错误", async () => {
+  const res = await dispatch({
+    jsonrpc: "2.0", id: 7, method: "tools/call",
+    params: { name: "no_such_tool", arguments: {} },
+  });
+  assert.equal(res.error, undefined, "不应是 JSON-RPC 协议错误");
+  assert.equal(res.result.isError, true);
+  assert.match(res.result.content[0].text, /未知工具/);
+});
+
+test("tools/call check 目录不存在 → isError:true 文本含'错误：'", async () => {
+  const res = await dispatch({
+    jsonrpc: "2.0", id: 8, method: "tools/call",
+    params: { name: "weapp_shipmate_check", arguments: { dir: "no/such/dir" } },
+  });
+  assert.equal(res.error, undefined, "不应是 JSON-RPC 协议错误");
+  assert.equal(res.result.isError, true);
+  assert.match(res.result.content[0].text, /错误：/);
+});
+
 test("stdio 传输端到端：initialize → tools/list 往返", async () => {
   // 事件驱动收尾：收齐 id=1、id=2 两条应答即 resolve（典型 ~毫秒级），不再用固定 400ms+kill 的竞态等待。
   const child = spawn(process.execPath, [BIN], { stdio: ["pipe", "pipe", "pipe"] });
@@ -87,6 +109,11 @@ test("stdio 传输端到端：initialize → tools/list 往返", async () => {
         }
       });
       child.on("error", (e) => { clearTimeout(timer); reject(e); });
+      // 脏行容错契约：客户端发半截 JSON/空行时服务须跳过不崩，后续合法请求仍应答
+      //（MCP stdio 服务最常见的真实故障模式；若崩溃则下面两条合法消息收不到应答而超时 fail）。
+      child.stdin.write("{not json}\n");
+      child.stdin.write("\n");
+      child.stdin.write('{"jsonrpc": "2.0", "id"\n');
       child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) + "\n");
       child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }) + "\n");
     });
