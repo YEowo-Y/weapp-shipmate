@@ -48,12 +48,14 @@ function* walk(dir) {
 
 const API_RE = /\b(wx|uni|Taro|wepy)\.([a-zA-Z][a-zA-Z0-9]*)/g; // 跨端框架的 API 命名空间（Taro/wepy 等）
 const URL_RE = /(["'`])(https?:\/\/|wss?:\/\/)([^"'`\s/?#]+)/g;
+// 选项对象扫描片段容忍一层嵌套（header:{...} 前置是封装 request 工具的普遍写法，否则漏报）；
+// 空白必须并入否定 lookahead（写成 :\s*(?!["'`]) 时 \s* 可回溯为零宽，静态 `url: "..."` 会被误判为动态）。
 const REQUEST_DYNAMIC_RE =
-  /\b(?:wx|uni)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{[^}]*\burl\s*:\s*(?!["'`])/;
+  /\b(?:wx|uni)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\burl\s*:(?!\s*["'`])/;
 // 明文请求：http/ws 作为 *请求 API 调用* 的 url: 参数（不是任意 url 字段、不是 <image src>/媒体数据）。
 // 微信只对 request/connectSocket/uploadFile/downloadFile 强制 https/wss；据此精确定位，避免对图片数据误报。
 const INSECURE_REQUEST_RE =
-  /\b(?:wx|uni|Taro)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{[^{}]*?\burl["'`]?\s*:\s*["'`](http|ws):\/\/([^"'`\s/?#]+)/g;
+  /\b(?:wx|uni|Taro)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\burl["'`]?\s*:\s*["'`](http|ws):\/\/([^"'`\s/?#]+)/g;
 const PHONE_BTN_RE = /open-?type\s*=\s*["']getPhoneNumber["']/;
 // 模板级隐私入口（JS 调用扫不到，须从模板属性/组件标签识别）：
 const AVATAR_BTN_RE = /open-?type\s*=\s*["']chooseAvatar["']/; // 头像填写能力（收集头像 PII）
@@ -67,12 +69,18 @@ const REQUIRED_PRIVATE_RE = /requiredPrivateInfos\s*:\s*\[([^\]]*)\]/;
 const QUOTED_NAME_RE = /["'`]([a-zA-Z][a-zA-Z0-9]*)["'`]/g;
 // mpx 的 app.mpx 把应用配置放在内嵌的 <script type="application/json"> 块里（非独立 app.json）。
 const MPX_JSON_BLOCK_RE = /<script[^>]*application\/json[^>]*>([\s\S]*?)<\/script>/i;
+// 模板类单文件的 HTML/WXML 注释须在提取信号前剥离：注释掉的 <camera>/<web-view> 是调试遗留常态，
+// 扫了会误报组件信号，注释里的域名也会污染白名单清单。顺序约束：须在 stripUniConditional 之后
+// （uni 条件编译标记本身写在 <!-- #ifdef --> 里），在 stripComments 之前（注释里的撇号会破坏字符串跟踪）。
+const TEMPLATE_EXT = new Set([".wxml", ".vue", ".uvue", ".nvue", ".mpx", ".wpy"]);
+const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g;
 
 /**
  * 字符串感知地剥离 // 行注释与 / * * / 块注释，但完整保留字符串字面量内容
  * （含其中的 https:// 与 //）。这是可信度的关键：被注释掉的 wx.getLocation() 不应再触发
  * 隐私/域名预检；而朴素的「//→行尾」剥离会破坏 "https://x" 反而引入新错误，故必须感知字符串。
- * 不处理正则字面量与 WXML/HTML 注释（范围之外；保持现状即可，最坏只是少剥一处、不会误删真实代码）。
+ * 不处理正则字面量（范围之外）；WXML/HTML 注释由 scanProject 对模板类文件先行剥离——
+ * 对模板级信号（组件标签/属性）而言，注释掉的组件不剥会直接产生误报，不是"少剥一处"。
  */
 export function stripComments(text) {
   let out = "";
@@ -102,6 +110,35 @@ export function stripComments(text) {
     i += 1;
   }
   return out;
+}
+
+/** 把字符串字面量内容置空但保留定界符——仅供 API 提取（API_RE）使用。
+ *  已知取舍：模板字面量 ${} 插值里的真实调用会被一并置空（罕见写法，接受 FN 换取
+ *  文案/日志引用 API 名这一常见场景不误报）。 */
+export function blankStrings(text) {
+  let out = "";
+  let str = null; // 当前字符串定界符，null 表示不在字符串内
+  for (let i = 0, n = text.length; i < n; ) {
+    const c = text[i];
+    if (str) {
+      if (c === "\\") { i += 2; continue; } // 转义：连转义字符一起置空
+      if (c === str) { out += c; str = null; }
+      i += 1;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") str = c;
+    out += c;
+    i += 1;
+  }
+  return out;
+}
+
+/** JSON 解析容错：微信开发者工具/HBuilderX 都容忍尾逗号，真实项目的 app.json/manifest.json 常见。
+ *  只在标准 parse 失败后重试剥尾逗号——静默丢弃整份配置会让交叉核验反向断言「未声明」，
+ *  产出 blocker 级误报（缺声明信号不是降级，是断言）。 */
+function parseJsonLoose(text) {
+  try { return JSON.parse(text); }
+  catch { return JSON.parse(text.replace(/,\s*([}\]])/g, "$1")); }
 }
 
 // ── uni-app 条件编译（#ifdef/#ifndef/#endif）：编译到微信时只保留微信相关分支 ──
@@ -179,9 +216,13 @@ export function scanProject(dir) {
     try { text = readFileSync(file, "utf-8"); } catch { continue; }
     filesScanned++;
 
-    // 先剔除 uni-app 非微信端的条件编译分支，再剥离注释，最后在结果上提取事实。
-    const code = stripComments(stripUniConditional(text));
-    for (const m of code.matchAll(API_RE)) apis.add(`${m[1]}.${m[2]}`);
+    // 先剔除 uni-app 非微信端的条件编译分支，模板类文件再剥 HTML 注释，之后剥 JS 注释，最后在结果上提取事实。
+    let code = stripUniConditional(text);
+    if (TEMPLATE_EXT.has(extname(file))) code = code.replace(HTML_COMMENT_RE, "");
+    code = stripComments(code);
+    // API 提取用字符串置空副本：日志/文案里引用的 "wx.getLocation" 不是真实调用；
+    // 其余提取（URL/密钥/模板属性/配置解析）都依赖字符串内容，必须继续用原文本。
+    for (const m of blankStrings(code).matchAll(API_RE)) apis.add(`${m[1]}.${m[2]}`);
     for (const m of code.matchAll(URL_RE)) {
       const host = normalizeHost(m[3]); // 去端口/userinfo，防止绕过精确匹配的安全核验
       if (!isPlausibleHost(host)) continue; // 跳过 `${host}` 等模板占位/非法 host 噪声
@@ -207,7 +248,7 @@ export function scanProject(dir) {
     const base = basename(file);
     if (base === "app.json" || base === "manifest.json") {
       try {
-        const conf = JSON.parse(code);
+        const conf = parseJsonLoose(code);
         const mp = base === "manifest.json" ? conf["mp-weixin"] || {} : conf;
         if (mp.requiredPrivateInfos) {
           for (const k of mp.requiredPrivateInfos) configKeys.add(`app.json:requiredPrivateInfos:${k}`);
@@ -215,7 +256,7 @@ export function scanProject(dir) {
         if (mp.permission) {
           for (const k of Object.keys(mp.permission)) configKeys.add(`app.json:permission:${k}`);
         }
-      } catch { /* 非标准/含尾逗号的配置，跳过（降级为无配置信号，不崩） */ }
+      } catch { /* 非标准 JSON（尾逗号已容错仍失败），跳过（降级为无配置信号，不崩） */ }
     } else if (/^app\.config\.[jt]sx?$/.test(base)) {
       // Taro：app.config.ts/js 是模块而非 JSON，正则抽取 requiredPrivateInfos 数组里的接口名。
       const m = code.match(REQUIRED_PRIVATE_RE);
@@ -225,7 +266,7 @@ export function scanProject(dir) {
       const block = code.match(MPX_JSON_BLOCK_RE);
       if (block) {
         try {
-          const conf = JSON.parse(block[1]);
+          const conf = parseJsonLoose(block[1]);
           if (conf.requiredPrivateInfos) {
             for (const k of conf.requiredPrivateInfos) configKeys.add(`app.json:requiredPrivateInfos:${k}`);
           }
