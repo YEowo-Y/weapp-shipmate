@@ -8,6 +8,14 @@
 **P2.0 范围**：选文件夹 → 跑 check/guide → 看报告。**不含**终端 / BYO-key / agent 子进程——
 那些是 P2.1+（技术方案与坑见 `../docs/07-desktop-agent-tech-research.md`）。
 
+**P2.1（下一步）**：前端换骨为 React + shadcn。触发点 = **v0.1.0 预览发出后，与 outreach 并行**
+（仲裁 2026-07-02，见 `../docs/04` / `../docs/08` §9）。视觉方向已定为 engineered-calm（赭橙强调色），
+**勿重选方向**；规范源两处：
+- [`design-previews/`](design-previews/index.html) —— 14 屏 mock 实现稿（共享 `app.css` 设计系统）：
+  主界面四区、阶段工作区、设置、对话工作区、⌘K 命令面板、首启引导、explain、diff 审阅、
+  健康检查仪表盘、同步闭环、项目记忆、类目顾问、手把手指导、审计。
+- 用户在 Claude design 上另有一批 UI 稿，P2.1 启动时并入规范源。
+
 ## 技术栈
 
 - 外壳：**Tauri 2**（Rust 后端 + WebView 前端），见 `docs/07` 的选型论证（包体/内存/安全模型）。
