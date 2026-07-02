@@ -19,10 +19,14 @@ export function computeCoverage() {
   const lv = def.map((r) => r.last_verified).filter(Boolean).sort();
   const { labels, subjectDefault } = loadLabels();
   const { global } = computeAccuracy(labels, { subjectDefault });
+  // 标注锚定：该规则在 labels.json 至少有一条 hit/no_hit。precision/recall 只对已标注
+  // (project,ruleId) 对计分——零锚点规则的误报/漏报对指标完全不可见，缺口必须显性化。
+  const anchoredIds = new Set(labels.map((l) => l.ruleId));
   return {
     rules: def.length,
     drafts: all.length - def.length,
     crosscheck: CROSSCHECK_RULE_IDS.length,
+    anchored: anchoredIds.size,
     verbatim,
     precision: global.precision,
     recall: global.recall,
@@ -39,6 +43,7 @@ function main() {
   console.log(`  覆盖（默认规则）：${c.rules} 条  +  交叉核验合成 ${c.crosscheck} = ${c.rules + c.crosscheck} 条可命中   | draft ${c.drafts}`);
   console.log(`  逐字核验（official_url + source_quote + last_verified）：${c.verbatim} / ${c.rules}`);
   console.log(`  precision：${f3(c.precision)}   （recall ${f3(c.recall)} · TP${c.matrix.tp}/FP${c.matrix.fp}/FN${c.matrix.fn}）`);
+  console.log(`  标注锚定：${c.anchored} / ${c.rules + c.crosscheck} 条可命中规则在 labels.json 有 hit/no_hit 锚点（零锚点规则对 precision 不可见）`);
   console.log(`\n对照 §15.1 官方要求条目 ${BACKLOG_TOTAL}（去重）：默认规则覆盖其一部分，缺口见 docs/08 §15.2 backlog（T0/T1/T2）。`);
   console.log(`新鲜度：last_verified 最早 ${c.freshness.earliest} / 最近 ${c.freshness.latest}（以官方实时文档为准 · rot 监控保鲜）`);
   console.log("\n按阶段分布：");
