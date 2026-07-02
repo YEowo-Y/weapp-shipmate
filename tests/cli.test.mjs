@@ -55,9 +55,43 @@ test("非法 --subject 返回 1 并提示枚举（check 与 guide 一致）", ()
   }
 });
 
-test("--subject 缺值（flag 在末尾）同样报非法并返回 1", () => {
+test("--subject 缺值（flag 在末尾或后跟另一 flag）报「缺少取值」并返回 1", () => {
+  for (const args of [["check", "fixtures/sample-app", "--subject"], ["check", "fixtures/sample-app", "--subject", "--json"]]) {
+    const out = capture(), err = capture();
+    const code = main(["node", "cli", ...args], out, err);
+    assert.equal(code, 1, "缺值的 --subject 不应静默当作未指定");
+    assert.match(err.get(), /--subject 缺少取值/, "缺值应报缺值文案，不泄漏 undefined");
+    assert.ok(!/undefined/.test(err.get()), "不应泄漏 JS 词汇 undefined");
+  }
+});
+
+// FX-16：未知/拼错选项与等号语法不得静默忽略——静默会产出参数错误却看起来正常的报告。
+test("未知选项返回 1 并提示（含拼错的 flag）", () => {
   const out = capture(), err = capture();
-  const code = main(["node", "cli", "check", "fixtures/sample-app", "--subject"], out, err);
-  assert.equal(code, 1, "缺值的 --subject 不应静默当作未指定");
-  assert.match(err.get(), /非法 --subject/);
+  const code = main(["node", "cli", "guide", "--foo", "--subjcet", "personal"], out, err);
+  assert.equal(code, 1);
+  assert.match(err.get(), /无法识别的选项：--foo、--subjcet/);
+  assert.equal(out.get(), "", "不应产出任何报告输出");
+});
+
+test("--subject=personal 等号语法被正确解析（不再静默丢弃）", () => {
+  const out = capture(), err = capture();
+  const code = main(["node", "cli", "guide", "--subject=personal", "--json"], out, err);
+  assert.equal(code, 0);
+  const o = JSON.parse(out.get());
+  assert.equal(o.command, "guide");
+  assert.ok(o.meta.summary.includes("personal") || JSON.stringify(o).includes("personal"), "主体应生效");
+});
+
+test("布尔开关误带 =值 报无法识别", () => {
+  const out = capture(), err = capture();
+  const code = main(["node", "cli", "guide", "--json=true"], out, err);
+  assert.equal(code, 1);
+  assert.match(err.get(), /无法识别的选项：--json=true/);
+});
+
+test("check --help 显示帮助而非执行检查", () => {
+  const out = capture(), err = capture();
+  assert.equal(main(["node", "cli", "check", "--help"], out, err), 0);
+  assert.match(out.get(), /用法：/);
 });
