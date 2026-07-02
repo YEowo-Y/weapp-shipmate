@@ -6,7 +6,23 @@ import {
   checkHardcodedSecrets,
   checkInsecureRequest,
   checkIpOrLocalhost,
+  crossChecks,
+  CROSSCHECK_RULE_IDS,
 } from "../src/crosscheck.mjs";
+
+// 聚合器 ↔ 登记清单一致性锁：单项 check 从聚合器被删/新 check 忘挂载或忘登记时，
+// 单元测试与 accuracy（consistency/ip 两条只有 no_hit 标注）都不会翻红——只有这里会。
+test("crossChecks 聚合器：全命中 scan 产出的 ruleId 集合 ≡ CROSSCHECK_RULE_IDS", () => {
+  const scan = {
+    apis: ["wx.getLocation"],
+    configKeys: [],
+    domains: ["api.weixin.qq.com", "203.0.113.5"],
+    secretHints: [{ file: "a.js", key: "appsecret" }],
+    insecureHosts: ["plain.test"],
+  };
+  const ids = crossChecks(scan).map((i) => i.ruleId).sort();
+  assert.deepEqual(ids, [...CROSSCHECK_RULE_IDS].sort(), "聚合器产出与登记清单漂移");
+});
 
 test("调用位置接口但未声明 requiredPrivateInfos → 命中（blocker）", () => {
   const item = checkRequiredPrivateInfos({ apis: ["wx.getLocation"], configKeys: [] });
