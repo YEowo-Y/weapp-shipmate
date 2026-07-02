@@ -47,7 +47,8 @@
     "build:mcpb": "node scripts/build-mcpb.mjs",
     "rot": "node scripts/rule-rot.mjs",
     "accuracy": "node scripts/accuracy.mjs",
-    "coverage": "node scripts/coverage.mjs"
+    "coverage": "node scripts/coverage.mjs",
+    "dogfood": "node scripts/dogfood.mjs"
   },
   "engines": {
     "node": ">=20"
