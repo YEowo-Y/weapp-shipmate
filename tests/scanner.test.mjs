@@ -12,6 +12,7 @@ const MPX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "mpx
 const WEPY = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "wepy-app");
 const TPL = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "template-signals");
 const UNICOND = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "uni-cond");
+const FPG = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "fp-guards");
 
 test("scanner 提取 wx API", () => {
   const r = scanProject(FIX);
@@ -178,4 +179,40 @@ test("wepy: 扫描 .wpy 并提取 wepy.* 调用", () => {
   const r = scanProject(WEPY);
   for (const a of ["wepy.getUserInfo", "wepy.request"])
     assert.ok(r.apis.includes(a), `应从 .wpy 提取 ${a}（.wpy 须在扫描扩展名内、API_RE 须认 wepy.）`);
+});
+
+// ── FP 卫兵（dogfood 审计确认的五个扫描器可信度缺陷，回归锁）──
+test("静态 URL（冒号后带空格，最常见写法）不误判为动态拼接请求", () => {
+  const r = scanProject(FPG);
+  assert.equal(r.dynamicRequest, false, 'url: "..." 带空格是主流写法，不是动态拼接');
+});
+
+test("header/method 前置的嵌套对象不挡明文请求识别", () => {
+  const r = scanProject(FPG);
+  assert.ok(
+    r.insecureHosts.includes("plain.fpguard.test"),
+    `url 前有 header:{...} 时明文 http 仍应命中：${JSON.stringify(r.insecureHosts)}`,
+  );
+});
+
+test("字符串文案里的 API 名不算真实调用", () => {
+  const r = scanProject(FPG);
+  assert.ok(!r.apis.includes("wx.getLocation"), "console.log 文案里的 wx.getLocation 不应入 apis");
+  assert.ok(r.apis.includes("wx.request"), "真实调用仍应命中");
+});
+
+test("WXML 注释掉的组件/按钮/域名不触发信号", () => {
+  const r = scanProject(FPG);
+  assert.ok(!r.configKeys.includes("component.camera"), "注释里的 <camera> 不应命中");
+  assert.ok(!r.configKeys.includes("component.web-view"), "注释里的 <web-view> 不应命中");
+  assert.ok(!r.configKeys.includes("button.open-type=getPhoneNumber"), "注释里的手机号按钮不应命中");
+  assert.ok(!r.domains.includes("commented.fpguard.test"), "注释里的域名不应进白名单核对清单");
+});
+
+test("app.json 尾逗号（JSONC 常态）不再丢失隐私声明", () => {
+  const r = scanProject(FPG);
+  assert.ok(
+    r.configKeys.includes("app.json:requiredPrivateInfos:getLocation"),
+    `尾逗号 app.json 的声明应被容错解析：${JSON.stringify(r.configKeys)}`,
+  );
 });
