@@ -212,7 +212,7 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 |---|---|---|
 | **P2.0 ✅** | 薄外壳 + 大脑 sidecar(Tauri 2,vanilla TS) | 已发布;证明 sidecar 边界、外壳可丢 |
 | **P2.0.5(可穿插)** | **准确性工程地基**:`corpus/labels.json` + `scripts/accuracy.mjs` + 逐规则反例 + confidence 显性化 + 补 3 条高价值漏检规则(§4.2/4.3) | **纯大脑层、零 UI 风险、直接兑现 make-or-break**;有了准确率数字后续才有靶子;与 P2.1 可并行 |
-| **P2.1** | 前端换骨:React+shadcn,四区 IA + ⌘K(mock 数据、无 LLM);本地字体;收紧 CSP | 纯 UI 零风险、立刻可演示、确立设计标杆 |
+| **P2.1** | 前端换骨:React+shadcn,四区 IA + ⌘K(mock 数据、无 LLM);本地字体;收紧 CSP | 纯 UI 零风险、立刻可演示、确立设计标杆。**启动仲裁(2026-07-02,与 docs/04 对齐)**:触发点 = v0.1.0 预览发出后,与 outreach 并行;视觉规范源 = `desktop/design-previews/` 14 屏 + 用户 Claude design 稿 |
 | **P2.2** | 大脑接成内置 MCP + 确定性流 UI(8 阶段 + 交接闸门 + check 接真实文件夹 + SQLite + 无 key 首启分流),**仍无 LLM** | 这一阶段单独就是个可发布的诚实产品;零 LLM 风险、零担保暴露;最可砍 |
 | **P2.3** | BYO-key 对话 + 接地 agent loop(provider 适配 + keychain broker + 5 问访谈 + 护栏 + 绿/灰双标) | 辅助层叠在已正确的确定性核心上 |
 | **P2.4** | 项目命令器(PTY + 分级 Run Mode + diff 审核)+ 工程体检开关 + 类目顾问 + 旅程 PM + 健康检查模式 + 后台陪练(托盘通知) | "真帮你上线"那一下,价值高风险高,放信任层验证后 |
@@ -364,30 +364,32 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 | 个人开发者必经 | 48 |
 | **个人开发者必经里的缺口** | **19 ← 最高优先靶子** |
 
-### 15.2 分层 backlog(44 项:T0 15 / T1 11 / T2 18)
+### 15.2 分层 backlog(44 项:T0 15 / T1 11 / T2 18)· 状态对账 2026-07-02:**T0 已入库 11/15,待做 3,阻塞 1**
 
-**T0 · 个人开发者必经(最高优先)** — 机检?=能否静态扫出 · 逐字?=官方逐字可抓(✅)/ 需渲染复核(⚠️)
+**T0 · 个人开发者必经(最高优先)** — 机检?=能否静态扫出 · 逐字?=官方逐字可抓(✅)/ 需渲染复核(⚠️) · 状态=✅已入库/🔜下一批/⚠️阻塞
 
-| slug | 主题 | 机检? | 逐字? |
-|---|---|---|---|
-| personal-open-categories-whitelist | 个人主体开放类目白名单(material 整表 curl 可逐字;"服务超主体类目"的正向数据源) | 否 | ✅ |
-| service-exceeds-subject-scope | 服务超出主体类型支持的类目范围(总则) | 否 | ⚠️ |
-| requiredPrivateInfos-location8 | 8 个地理位置接口须在 app.json `requiredPrivateInfos` 声明否则不可用 | **是** | ✅ |
-| privacy-check-auto-enabled | 隐私授权机制 2023-10-17 起强制启用 | 否 | ✅ |
-| upp-must-configure | 处理个人信息须配《隐私保护指引》且审核通过才能提版本 | 部分 | ✅ |
-| filing.miit-sms-24h | 工信部短信核验须 24h 内完成,逾期驳回 | 否 | ✅ |
-| filing.individual-id-materials | 个人备案身份证件(有效期 >1 月、清晰不遮挡) | 否 | ✅ |
-| filing.face-verification | 负责人人脸核身环境/着装要求 | 否 | ✅ |
-| domain.https-wss-only | 服务器域名只支持 https/wss(http/ws 真机被拦) | **是** | ✅ |
-| domain.must-icp-filed | 服务器域名须经 ICP 备案 | 否 | ✅ |
-| domain.web-view-personal | 个人类型小程序不支持 web-view(补硬 blocker 逐字 + 对 personal 升 blocker) | 部分 | ✅ |
-| login-after-experience | 不得未体验即强制授权登录 / 注册墙 | 部分 | ✅ |
-| logout-option-discoverable | 含账户系统须提供易发现的"退出"选项 | 否 | ⚠️ |
-| cat-ai-content-labeling | AI 生成内容须显著标注"AI 生成"(2026 高频,通用义务) | 否 | ✅ |
-| info-match-recall-gaps | 隐私 match 召回补齐(getRealtimePhoneNumber/getFuzzyLocation 等)+ 三条 confidence medium→high | **是** | ✅ |
+| slug | 主题 | 机检? | 逐字? | 状态 |
+|---|---|---|---|---|
+| personal-open-categories-whitelist | 个人主体开放类目白名单(material 整表 curl 可逐字;"服务超主体类目"的正向数据源) | 否 | ✅ | ✅ category.personal-subject-scope(以官方个人开放类目表为源) |
+| service-exceeds-subject-scope | 服务超出主体类型支持的类目范围(总则) | 否 | ⚠️ | ✅ 由 category.personal-subject-scope 覆盖 |
+| requiredPrivateInfos-location8 | 8 个地理位置接口须在 app.json `requiredPrivateInfos` 声明否则不可用 | **是** | ✅ | ✅ crosscheck consistency.requiredPrivateInfos(07-02 起有召回锚点) |
+| privacy-check-auto-enabled | 隐私授权机制 2023-10-17 起强制启用 | 否 | ✅ | ✅ privacy.auth-mechanism-enabled |
+| upp-must-configure | 处理个人信息须配《隐私保护指引》且审核通过才能提版本 | 部分 | ✅ | ✅ privacy.upp-required |
+| filing.miit-sms-24h | 工信部短信核验须 24h 内完成,逾期驳回 | 否 | ✅ | 🔜 下一批(curl 逐字可做) |
+| filing.individual-id-materials | 个人备案身份证件(有效期 >1 月、清晰不遮挡) | 否 | ✅ | ✅ filing.individual-id-materials |
+| filing.face-verification | 负责人人脸核身环境/着装要求 | 否 | ✅ | ✅ filing.face-verification |
+| domain.https-wss-only | 服务器域名只支持 https/wss(http/ws 真机被拦) | **是** | ✅ | 🔜 作规则条目(机检面已由 crosscheck security.insecure-request 覆盖) |
+| domain.must-icp-filed | 服务器域名须经 ICP 备案 | 否 | ✅ | ✅ domain.must-icp-filed |
+| domain.web-view-personal | 个人类型小程序不支持 web-view(补硬 blocker 逐字 + 对 personal 升 blocker) | 部分 | ✅ | ✅ domain.web-view-personal(含企业主体 FP-guard) |
+| login-after-experience | 不得未体验即强制授权登录 / 注册墙 | 部分 | ✅ | ✅ login.after-experience |
+| logout-option-discoverable | 含账户系统须提供易发现的"退出"选项 | 否 | ⚠️ | ⚠️ 阻塞:需渲染复核(Playwright 桥不可用) |
+| cat-ai-content-labeling | AI 生成内容须显著标注"AI 生成"(2026 高频,通用义务) | 否 | ✅ | 🔜 下一批 |
+| info-match-recall-gaps | 隐私 match 召回补齐(getRealtimePhoneNumber/getFuzzyLocation 等)+ 三条 confidence medium→high | **是** | ✅ | ✅ fixtures/recall-apis + match 扩(confidence 显性化仍待做) |
 
-**T1(11)· 通用上线必经** — 隐私同意前置、备案变更/注销(运营期义务)、类目不符正面表述、注销删数据、单类目排除项(个人教育不得卖课/直播)、个人"律师"需《律师执业资格证》、支付须已认证(个人无法企业认证→几乎堵死)、未成年有害内容、内容禁止总则、数据安全保护措施。
-**T2(18)· 企业/进阶/低频** — 金融/外卖/深度合成 AI/时政/直播/医药 类目证名清单(个人未开放→输出"需升级主体"预警而非去办证)、丽人医美边界、类目腐烂 disclaimer、备案时限/额度/前置审批/备案号自动展示/手机号规则、内容安全接口 msgSecCheck(实现手段非门槛)、`api.weixin.qq.com` 不可配域名(可机检)、iOS 虚拟支付新政(证据不足暂缓)。
+> **T0 剩余 4 项裁决(2026-07-02)**:不卡 v0.1.0 预览发布——3 项 🔜 走 curl 逐字流水线入 0.1.1,logout 待 Playwright 恢复;预览版价值在既有 63 条。
+
+**T1(11)· 通用上线必经** — 隐私同意前置、备案变更/注销(运营期义务)、类目不符正面表述、注销删数据、单类目排除项(个人教育不得卖课/直播)、个人"律师"需《律师执业资格证》、支付须已认证(个人无法企业认证→几乎堵死)、未成年有害内容、内容禁止总则、数据安全保护措施。**已入库(07-02 对账)**:data.delete-on-request、category.law-hint、category.education-hint、content.no-illegal、data.security-measures、payment.requires-merchant(支付认证面)、minor.protect(未成年,建库即有);其余走批2。
+**T2(18)· 企业/进阶/低频** — 金融/外卖/深度合成 AI/时政/直播/医药 类目证名清单(个人未开放→输出"需升级主体"预警而非去办证)、丽人医美边界、类目腐烂 disclaimer、备案时限/额度/前置审批/备案号自动展示/手机号规则、内容安全接口 msgSecCheck(实现手段非门槛)、`api.weixin.qq.com` 不可配域名(可机检)、iOS 虚拟支付新政(证据不足暂缓)。**已入库(07-02 对账)**:category.news/finance/live-hint(资质预警三条)、`api.weixin.qq.com` 机检=crosscheck security.backend-api-in-frontend;其余按批3/批4。
 
 ### 15.3 摄取顺序(4 批)+ 关键阻塞
 
