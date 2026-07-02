@@ -1,9 +1,8 @@
 {
-  "_comment": "真实语料回归钉板（scripts/dogfood.mjs）。samples[].dir 是开发机本地路径（样本仓不入库）；rules 是该样本 check（不带 subject）命中的 ruleId 集合，2026-07-02 经 11 样本快检逐条源码裁决为基线。漂移即门禁红——新增读源码裁决 TP/FP，消失区分有意修复与召回回归；确认有意改进后用 --update 重钉并提交。",
+  "_comment": "真实语料回归钉板（scripts/dogfood.mjs）。rules 是该样本 check（不带 subject）命中的 ruleId 集合，2026-07-02 经 11 样本快检逐条源码裁决为基线。样本目录是机器本地映射，存 gitignored 的 corpus/dogfood.local.json（{\"样本名\": \"绝对路径\"}）——样本仓与私人路径不入库。漂移即门禁红——新增读源码裁决 TP/FP，消失区分有意修复与召回回归；确认有意改进后用 --update 重钉并提交。",
   "samples": [
     {
       "name": "day",
-      "dir": "C:\\Dev\\Projects\\day-private-sample",
       "rules": [
         "privacy.choosePhotoVideo",
         "privacy.getUserProfile"
@@ -11,7 +10,6 @@
     },
     {
       "name": "native-demo",
-      "dir": "C:\\Dev\\_dogfood\\native-demo",
       "rules": [
         "domain.request-whitelist",
         "domain.web-view-business",
@@ -35,7 +33,6 @@
     },
     {
       "name": "miniprogram-demo",
-      "dir": "C:\\Dev\\_dogfood\\miniprogram-demo",
       "rules": [
         "domain.request-whitelist",
         "domain.web-view-business",
@@ -59,7 +56,6 @@
     },
     {
       "name": "uni-demo",
-      "dir": "C:\\Dev\\_dogfood\\uni-demo",
       "rules": [
         "consistency.requiredPrivateInfos",
         "domain.request-whitelist",
@@ -79,7 +75,6 @@
     },
     {
       "name": "mall-demo",
-      "dir": "C:\\Dev\\_dogfood\\mall-demo",
       "rules": [
         "domain.request-whitelist",
         "domain.web-view-business",
@@ -98,7 +93,6 @@
     },
     {
       "name": "mpvue-demo",
-      "dir": "C:\\Dev\\_dogfood\\mpvue-demo",
       "rules": [
         "consistency.requiredPrivateInfos",
         "domain.request-whitelist",
@@ -112,14 +106,12 @@
     },
     {
       "name": "taro-demo",
-      "dir": "C:\\Dev\\_dogfood\\taro-demo",
       "rules": [
         "domain.request-whitelist"
       ]
     },
     {
       "name": "wepy-mall",
-      "dir": "C:\\Dev\\_dogfood\\wepy-mall",
       "rules": [
         "domain.request-whitelist",
         "payment.requires-merchant",
@@ -128,7 +120,6 @@
     },
     {
       "name": "mpx-examples",
-      "dir": "C:\\Dev\\_dogfood\\mpx-src\\examples",
       "rules": [
         "domain.ip-or-localhost",
         "domain.web-view-business",
@@ -137,12 +128,10 @@
     },
     {
       "name": "wepy-src",
-      "dir": "C:\\Dev\\_dogfood\\wepy-src",
       "rules": []
     },
     {
       "name": "cml-src",
-      "dir": "C:\\Dev\\_dogfood\\cml-src",
       "rules": []
     }
   ]
