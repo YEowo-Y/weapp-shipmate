@@ -57,12 +57,22 @@ weapp-shipmate guide                 # 上线流程导航：你在哪一步、�
 weapp-shipmate explain "<审核反馈>"  # 拒因反查：把拒审信号映射到已核验规则与修复步骤
 ```
 
-**本地运行**（尚未发布到 npm，先从源码跑）：
+**安装 / 运行**（v0.1.0 经 GitHub 分发，无需 npm registry）：
 
 ```bash
+# 方式一（推荐）：直接从 GitHub 安装
+npm install -g github:YEowo-Y/weapp-shipmate
+weapp-shipmate check ./my-app --subject personal
+
+# 方式二：一次性运行、不落地安装
+npx -p github:YEowo-Y/weapp-shipmate weapp-shipmate check ./my-app --subject personal
+
+# 方式三：从 Release 下载 tarball 安装（固定版本）
+npm install -g https://github.com/YEowo-Y/weapp-shipmate/releases/download/v0.1.0/weapp-shipmate-0.1.0.tgz
+
+# 开发者：从源码跑
 npm install
 node bin/weapp-shipmate.mjs guide --subject personal --sensitive --domain
-node bin/weapp-shipmate.mjs check ./my-app --subject personal
 # 默认只输出来源已核验的规则；加 --include-drafts 可含未核验的种子规则
 ```
 
@@ -70,7 +80,7 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 >
 > 🧩 **跨框架支持**：预检不只认原生 `wx.*`——`uni.*`（uni-app）、`Taro.*`（Taro）、`wepy.*`（wepy）经等价匹配归一到同一套规则（mpvue、mpx 直接产出 `wx.*`，无需别名即被原生识别，故不在此等价列表内）；`.vue`/`.tsx`/`.mpx`/`.wpy`/`.nvue` 等单文件源码、以及 `app.json`/`manifest.json`(mp-weixin)/`app.config.ts`/`app.mpx` 内嵌等多种配置位置都能识别；uni-app `#ifdef` 条件编译、构建产物目录与媒体 `<image src>` 噪声均已剔除。已在真实开源小程序上 dogfood 验证（见下）。
 
-**给 Agent 用（MCP）**：内置极简依赖 MCP server（stdio，仅 1 个纯解析依赖 js-yaml、零网络/零原生依赖），把上述能力暴露为三个工具 `weapp_shipmate_check`、`weapp_shipmate_guide`、`weapp_shipmate_explain`。在 Claude Code / Codex 的 MCP 配置中加入：
+**给 Agent 用（MCP）**：内置极简依赖 MCP server（stdio，仅 1 个纯解析依赖 js-yaml、零网络/零原生依赖），把上述能力暴露为三个工具 `weapp_shipmate_check`、`weapp_shipmate_guide`、`weapp_shipmate_explain`。全局安装后 `command` 直接写 `"weapp-shipmate-mcp"` 即可；从源码跑则在 Claude Code / Codex 的 MCP 配置中加入：
 
 ```json
 {
@@ -83,7 +93,7 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 }
 ```
 
-**Claude Desktop 一键安装（`.mcpb`）**：无需手写上面的 JSON。本地执行 `npm run build:mcpb` 会打出一个 `.mcpb` 安装包（暂存 + 冒烟自检 + 官方 `mcpb pack`，产物在 `build/`，需联网拉取打包 CLI），在 Claude Desktop 中双击或经扩展设置导入即可使用。船友是纯规则引擎、不调用任何 LLM，故安装包不需要任何 API key。
+**Claude Desktop 一键安装（`.mcpb`）**：无需手写上面的 JSON。从 [Releases](https://github.com/YEowo-Y/weapp-shipmate/releases) 直接下载现成的 `weapp-shipmate.mcpb` 双击安装；或本地执行 `npm run build:mcpb` 自行打包（暂存 + 冒烟自检 + 官方 `mcpb pack`，产物在 `build/`，需联网拉取打包 CLI），在 Claude Desktop 中双击或经扩展设置导入即可使用。船友是纯规则引擎、不调用任何 LLM，故安装包不需要任何 API key。
 
 > 签名（分发可信）：默认产出**未签名**包（合法 zip）。正式分发设 `WEAPP_SHIPMATE_SIGN_CERT` + `WEAPP_SHIPMATE_SIGN_KEY`（受信证书）签名并校验；内部/TOFU 分发设 `WEAPP_SHIPMATE_SELF_SIGN=1` 自签名——注意 `mcpb verify` 只信任系统证书链，自签名不会被判为可信。
 
