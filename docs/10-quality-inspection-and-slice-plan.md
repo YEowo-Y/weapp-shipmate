@@ -36,6 +36,8 @@
 > **✅ S1 已执行(2026-06-22)**:FX-11 完成——建 `corpus/labels.json`(18 条人工核验三态标注:9 hit + 9 no_hit FP-guard,逐条对照夹具源码,含确认 `privacy.getPhoneNumber` 是 wxml 模板信号真阳而非误报)+ `scripts/accuracy.mjs`(复用 runCheck 算 per-rule/全局 precision/recall;未知 ruleId 告警;precision<0.95 或有 FP 即退出 1)+ `tests/accuracy.test.mjs`(门禁 precision≥0.95 + 零 FP + 黄金基线 9 TP/0 FP/0 FN)+ `package.json` `accuracy` script。**实测 precision=1.000 recall=1.000**。**顺带闭合 FX-WONTFIX-01**:S1 新增测试负载触发了 `mcp.test.mjs` 潜伏竞态(固定 400ms+kill),改为事件驱动收尾——5× `npm test` 稳定 **85/0**(此前 ~1/4 偶发翻车)。5 个单文件提交(34d9dcd…17acbb9)。
 >
 > **✅ S3 已执行(2026-06-22)**:FX-04 完成——`tests/e2e.test.mjs`(spawnSync 二进制级 9 例:check/guide/explain/checklist 全链路 + **退出码契约** check leaky-app→exit 2、sample-app→exit 0、explain 无参/未知命令→exit 1)+ `tests/smoke.test.mjs`(全 9 夹具 + guide/explain/dispatch ping 最小存活)。补齐 docs/06 关键路径 E2E 门禁(此前 0 覆盖)。**3× `npm test` 稳定 97/0**。2 个单文件提交。
+>
+> **✅ S5 部分执行(2026-07-01)**:FX-06 完成——`SUBJECT_ENUM` 提取至 `data.mjs`(CLI/MCP 共享唯一事实源),`cli.mjs` 对 `--subject` 出现即校验(`"subject" in flags`,含缺值/吞 flag 边界),非法主体→退出 1 + 枚举提示 + 零报告输出;cli 单测 ×2。FX-13/14/16 仍延期(见 §4 S5)。4 个单文件提交。
 
 | ID | 处理 | 严 | 标题 | 位置 | 回归点 |
 |---|---|---|---|---|---|
@@ -43,7 +45,7 @@
 | FX-02 | 🔴热修 | med | docs/06 阶段 P0→P2 并产出 P2 验收报告 | docs/06 §0/§4 | 阶段表=P2、测试状态列对应真实文件、存在本验收报告(=本文 §1) |
 | FX-04 | 🔴热修 | high | **二进制级 E2E 全链路缺失** | tests/e2e.test.mjs(新) | spawn 驱动 bin:check sample-app→privacy.getUserProfile;check leaky-app→hardcoded-secret 且 exit 2;guide/explain/checklist;注入 bin bug 先 RED |
 | FX-05 | 🔴热修 | med | **scanProject 圈复杂度 ~20–24 超阈 2 倍** | scanner.mjs:168-238 | 拆 extractFacts/parseAppConfig 每子函数 <10,scanner.test.mjs 全绿且 fixtures 输出逐项不变;或登记技术债豁免 + 拆分计划 |
-| FX-06 | 🔴热修 | med | **非法 `--subject` 静默产出伪清白报告** | cli.mjs:78 / check.mjs:19 | `--subject foobar`→非 0 退出 + 提示枚举;与 mcp.mjs SUBJECT_ENUM 行为对齐;加 cli 单测 |
+| FX-06 | ✅已修(2026-07-01) | med | **非法 `--subject` 静默产出伪清白报告** | cli.mjs:78 / check.mjs:19 | `--subject foobar`→非 0 退出 + 提示枚举;与 mcp.mjs SUBJECT_ENUM 行为对齐;加 cli 单测 |
 | FX-08 | 🔴热修 | med | docs/08 "全行业没人做透"命中 DOD-P0 禁词变体 | docs/08:267 | 加来源限定或删绝对化从句;grep 全仓无正面绝对化用法 |
 | FX-09 | 🔴热修 | med | **README mpvue 框架枚举无证据**(无夹具/别名/内部清单不含) | README:96,124 / data.mjs:42 / README:71 | 去 mpvue→五大框架,或补夹具+测试;四处枚举一致 |
 | FX-03 | 🟡延期 | med | docs/04 计数过期自相矛盾(45 vs 46 / 支付 1 vs 2 / 0draft vs 2draft) | docs/04:7,10 | 计数=46/payment2/0draft;或顶部加权威计数引用声明 |
