@@ -11,6 +11,8 @@
 
 v0 代码骨架：从"文档先行"走到"可从源码运行的导航 + 代码感知预检"。发布前经 12 夹具准确性门禁（precision = recall = 1.0）与 11 个真实样本 dogfood 快检（0 误报 / 0 回归）验证。
 
+**分发渠道**：本版经 GitHub 分发——`npm install -g github:YEowo-Y/weapp-shipmate`、Release 资产（`weapp-shipmate-0.1.0.tgz` 可直接 `npm i -g <url>` / `weapp-shipmate.mcpb` 供 Claude Desktop 双击安装）。npm registry 发布暂缓（注册受阻），不影响任何安装路径。
+
 ### Fixed — 预检可信度（真实使用前的信任修复）
 
 - **五个扫描器 FP/FN 缺陷修复（2026-07-01 多智能体审计逐条端到端复现后确认）**：① 静态 `url: "..."`（冒号后带空格的主流写法）不再被正则回溯误判为动态拼接请求；② 明文 http / 动态 URL 判定可越过 `url` 前置的 `header:{...}` 嵌套对象（封装 request 工具的普遍写法，此前整体漏报）；③ 模板文件的 `<!-- -->` 注释先剥离——注释掉的 `<camera>`/`<web-view>`/手机号按钮/域名不再触发信号；④ 字符串文案里的 API 名（如日志中的 `"wx.getLocation"`）不再当真实调用（曾级联出 blocker 级误报）；⑤ `app.json`/`manifest.json` 尾逗号（JSONC 常态）容错解析——此前声明静默丢失、反向产出「未声明」blocker 误报。配 `fp-guards` 回归夹具锁定。
