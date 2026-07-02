@@ -77,6 +77,23 @@
     { "project": "fixtures/recall-apis", "ruleId": "consistency.requiredPrivateInfos","expect": "no_hit","note": "反例：getFuzzyLocation 已在 requiredPrivateInfos 声明 → 一致性核验须静默" },
 
     { "project": "fixtures/missing-privacy-decl", "ruleId": "consistency.requiredPrivateInfos", "expect": "hit", "note": "index.js 调 wx.getLocation 而 app.json 无 requiredPrivateInfos → 缺声明 blocker 的召回锚点(此前该规则只有 no_hit 反例)" },
-    { "project": "fixtures/missing-privacy-decl", "ruleId": "privacy.getLocation",              "expect": "hit", "note": "index.js 调 wx.getLocation" }
+    { "project": "fixtures/missing-privacy-decl", "ruleId": "privacy.getLocation",              "expect": "hit", "note": "index.js 调 wx.getLocation" },
+
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.writePhotosAlbum",   "expect": "hit", "note": "锚定补齐：wx.saveImageToPhotosAlbum → 相册写入" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.chooseLocation",     "expect": "hit", "note": "锚定补齐：wx.chooseLocation → 位置选择" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.getLocation",        "expect": "hit", "note": "位置隐私大类：match.api 含 wx.chooseLocation，人工核验语义正确(调位置选择即适用位置隐私提示)" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.chooseAddress",      "expect": "hit", "note": "锚定补齐：wx.chooseAddress → 收货地址" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.chooseInvoice",      "expect": "hit", "note": "锚定补齐：wx.chooseInvoiceTitle → 发票信息" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.bluetooth",          "expect": "hit", "note": "锚定补齐：wx.openBluetoothAdapter → 蓝牙" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.addPhoneContact",    "expect": "hit", "note": "锚定补齐：wx.addPhoneContact → 通讯录写入" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.addPhoneCalendar",   "expect": "hit", "note": "锚定补齐：wx.addPhoneCalendar → 日历写入" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.chooseFile",         "expect": "hit", "note": "锚定补齐：wx.chooseMessageFile → 文件选取" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.chooseLicensePlate", "expect": "hit", "note": "锚定补齐：wx.chooseLicensePlate → 车牌号" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.werun",              "expect": "hit", "note": "锚定补齐：wx.getWeRunData → 微信运动步数" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.accelerometer",      "expect": "hit", "note": "锚定补齐：wx.startAccelerometer → 加速度计" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.compass",            "expect": "hit", "note": "锚定补齐：wx.startCompass → 罗盘" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.deviceMotion",       "expect": "hit", "note": "锚定补齐：wx.startDeviceMotionListening → 设备方向" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.gyroscope",          "expect": "hit", "note": "锚定补齐：wx.startGyroscope → 陀螺仪" },
+    { "project": "fixtures/sensor-apis", "ruleId": "consistency.requiredPrivateInfos", "expect": "no_hit", "note": "反例：chooseLocation/choosePoi/chooseAddress 已在 requiredPrivateInfos 声明 → 一致性核验须静默" }
   ]
 }
