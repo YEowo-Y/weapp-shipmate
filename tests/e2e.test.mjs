@@ -68,3 +68,10 @@ test("E2E explain 无参数 → 用法错误退出码 1", () => {
 test("E2E 未知命令 → 退出码 1", () => {
   assert.equal(run("bogus").code, 1);
 });
+
+test("E2E check 不存在的目录 → stderr 含'错误：'，退出码 1（运行时错误分支的唯一锁）", () => {
+  // 退出码三态契约里，1 的既有用例都走参数校验/未知命令；这里锁 cli.mjs try/catch 的运行时错误出口。
+  const { code, stderr } = run("check", "no/such/dir", "--json");
+  assert.equal(code, 1, "运行时错误（ENOENT）应返回 1，而非崩溃或伪清白 0");
+  assert.match(stderr, /错误：/);
+});
