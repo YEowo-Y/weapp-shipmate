@@ -7,6 +7,10 @@ import yaml from "js-yaml";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
+/** 主体类型枚举——CLI 与 MCP 共用的唯一事实源（FX-06：非法主体必须报错，
+ *  否则主体专属规则全部静默跳过，产出"已合规"假象）。 */
+export const SUBJECT_ENUM = ["personal", "individual_business", "enterprise"];
+
 const readYaml = (p) => yaml.load(readFileSync(p, "utf-8"));
 
 /**
