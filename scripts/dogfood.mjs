@@ -11,21 +11,26 @@ import { runCheck } from "../src/check.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PIN_PATH = join(ROOT, "corpus", "dogfood.json");
+// 样本目录是机器本地映射（{"样本名": "绝对路径"}），存 gitignored 的 dogfood.local.json——
+// 私人路径/应用名不入库；钉板文件只含 样本名 + 命中集合。
+const LOCAL_PATH = join(ROOT, "corpus", "dogfood.local.json");
 
 const pin = JSON.parse(readFileSync(PIN_PATH, "utf-8"));
+const localDirs = existsSync(LOCAL_PATH) ? JSON.parse(readFileSync(LOCAL_PATH, "utf-8")) : {};
 const update = process.argv.includes("--update");
 
 let missing = 0;
 let drifted = 0;
 
 for (const s of pin.samples) {
-  if (!existsSync(s.dir)) {
-    console.warn(`⚠ 样本缺失，跳过：${s.name}（${s.dir}）`);
+  const dir = localDirs[s.name];
+  if (!dir || !existsSync(dir)) {
+    console.warn(`⚠ 样本缺失，跳过：${s.name}（${dir || "corpus/dogfood.local.json 无该样本的目录映射"}）`);
     missing++;
     continue;
   }
   // 与快检口径一致：不带 subject（只发全主体通用规则），排序去重的 ruleId 集合作指纹。
-  const result = runCheck(s.dir, {});
+  const result = runCheck(dir, {});
   const got = [...new Set(result.items.map((i) => i.ruleId))].sort();
 
   if (update) {
