@@ -12,7 +12,8 @@ const OUT = join(ROOT, "build", "weapp-shipmate.mcpb");
 const log = (m) => process.stdout.write(m + "\n");
 
 // 随服务端运行所需、与 package.json `files` 清单一致的内容（manifest + 入口 + 规则数据）。
-const INCLUDE = ["manifest.json", "package.json", "bin", "src", "schemas", "rules", "flow.yaml"];
+// rejections.yaml 是 explain（CLI 第三命令 / MCP 第三工具）的拒因库，漏掉则装包后 ENOENT。
+const INCLUDE = ["manifest.json", "package.json", "bin", "src", "schemas", "rules", "flow.yaml", "rejections.yaml"];
 
 function readJSON(p) {
   return JSON.parse(readFileSync(p, "utf-8"));
@@ -85,7 +86,8 @@ async function smoke() {
   const server = res[1]?.result?.serverInfo?.name;
   const tools = res[2]?.result?.tools?.map((t) => t.name) || [];
   if (server !== "weapp-shipmate") throw new Error(`冒烟失败：serverInfo.name=${server}`);
-  if (tools.length !== 2) throw new Error(`冒烟失败：tools=${tools.join(",")}`);
+  const expected = ["weapp_shipmate_check", "weapp_shipmate_guide", "weapp_shipmate_explain"];
+  if (!expected.every((t) => tools.includes(t))) throw new Error(`冒烟失败：tools=${tools.join(",")}`);
   log(`✓ 冒烟自检通过：server=${server}，tools=${tools.join(", ")}`);
 }
 await smoke();
