@@ -41,6 +41,10 @@ export function runCheck(dir, { subjectType, includeDrafts = false } = {}) {
   for (const finding of crossChecks(scan)) items.push(finding);
 
   const notes = [];
+  // FX-14：扫描 0 个文件时"未命中任何规则"是虚假安心（指错目录是新手最常见的第一步错误），
+  // 必须显式声明本报告不构成任何结论。
+  if (scan.filesScanned === 0)
+    notes.push("⚠️ 未在该目录发现可识别的小程序源码文件（扫描 0 个文件）——请确认路径指向小程序项目根目录。本报告不构成任何「已通过检查」的结论。");
   if (scan.dynamicRequest)
     notes.push("检测到动态拼接的请求 URL（如 baseURL + path），静态扫描可能漏报真实域名，请人工核对全部出站域名。");
   if (includeDrafts) notes.push("已包含 draft 规则（来源未核验，仅供参考）。");
