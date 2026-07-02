@@ -70,7 +70,7 @@ test("scanner 归一带端口/userinfo 的请求域名", () => {
   assert.ok(!r.domains.some((d) => d.includes("@")), "域名不应残留 userinfo");
 });
 
-// ── uni-app 真实结构盲区（dogfood day-private-sample 暴露）──
+// ── uni-app 真实结构盲区（私有真实样本 dogfood 暴露）──
 test("uni-app: 忽略构建/lock/类型声明，框架运行时与募捐域名不污染结果", () => {
   const r = scanProject(UNI);
   assert.ok(!r.apis.includes("wx.createSubpackageApp"), "unpackage 编译产物不应被扫");
