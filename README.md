@@ -66,7 +66,7 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 # 默认只输出来源已核验的规则；加 --include-drafts 可含未核验的种子规则
 ```
 
-> ⚠️ 当前 46 条种子规则**全部已核验官方来源、默认输出**（备案 1、域名 2、隐私 21、提审 6、登录 5、内容 2、支付 2、资质 1、未成年 1、数据 1、导流 2、类目 2），暂无 `draft` 规则。`draft` 门禁机制保留：未来无法核验逐字来源的规则只进 `--include-drafts`、不进默认集——这是"宁可少说、不做担保"的有意约束。
+> ⚠️ 当前 63 条种子规则**全部已核验官方来源、默认输出**（隐私 23、类目 8、提审 7、登录 5、域名 4、备案 4、内容 3、数据 3、支付 2、导流 2、未成年 1、资质 1），暂无 `draft` 规则。`draft` 门禁机制保留：未来无法核验逐字来源的规则只进 `--include-drafts`、不进默认集——这是"宁可少说、不做担保"的有意约束。
 >
 > 🧩 **跨框架支持**：预检不只认原生 `wx.*`——`uni.*`（uni-app）、`Taro.*`（Taro）、`wepy.*`（wepy）经等价匹配归一到同一套规则（mpvue、mpx 直接产出 `wx.*`，无需别名即被原生识别，故不在此等价列表内）；`.vue`/`.tsx`/`.mpx`/`.wpy`/`.nvue` 等单文件源码、以及 `app.json`/`manifest.json`(mp-weixin)/`app.config.ts`/`app.mpx` 内嵌等多种配置位置都能识别；uni-app `#ifdef` 条件编译、构建产物目录与媒体 `<image src>` 噪声均已剔除。已在真实开源小程序上 dogfood 验证（见下）。
 
@@ -91,9 +91,9 @@ node bin/weapp-shipmate.mjs check ./my-app --subject personal
 
 ## 当前状态
 
-🟢 **v0 已在真实小程序上验证、多框架可用（2026-06-21）** —— 调研/定位/命名定稿；规则 schema、`flow.yaml`、**46 条已核验种子规则**、数据校验门禁与 CI 已落地。**四个渲染器**（`check` 代码预检 / `guide` 流程导航 / `explain` 拒因反查 / report 清单导出）共用同一份规则库、均可从源码运行；极简依赖 MCP server（`check`/`guide`/`explain`）与 `.mcpb` 一键安装包已落地。
+🟢 **v0 已在真实小程序上验证、多框架可用（2026-06-21）** —— 调研/定位/命名定稿；规则 schema、`flow.yaml`、**63 条已核验种子规则**、数据校验门禁与 CI 已落地。**四个渲染器**（`check` 代码预检 / `guide` 流程导航 / `explain` 拒因反查 / report 清单导出）共用同一份规则库、均可从源码运行；极简依赖 MCP server（`check`/`guide`/`explain`）与 `.mcpb` 一键安装包已落地。
 
-**真实 dogfood 验证**：在多个真实开源小程序上逐条核验命中——覆盖**原生 wx / uni-app / Taro / mpvue / mpx / wepy 六大主流框架**，经 6-app 正确性核验把误报压到接近零、并补上支付/模板级隐私（头像/相机/麦克风）/web-view 业务域名等真实漏报。当前 **83 例测试全绿**。下一步：发 **v0.1.0 公开预览**；规则覆盖增量保鲜。
+**真实 dogfood 验证**：在多个真实开源小程序上逐条核验命中——覆盖**原生 wx / uni-app / Taro / mpvue / mpx / wepy 六大主流框架**，经 6-app 正确性核验把误报压到接近零、并补上支付/模板级隐私（头像/相机/麦克风）/web-view 业务域名等真实漏报。当前 **111 例测试全绿**，并有**准确性门禁**压阵：`corpus/labels.json` 81 条人工核验标注（12 夹具），precision = recall = 1.0、零误报即 CI 红线（`npm run accuracy`）。下一步：发 **v0.1.0 公开预览**；规则覆盖增量保鲜。
 
 文档导航：
 
@@ -122,7 +122,7 @@ AI has largely solved *writing the code*; what still blocks zero-to-one creators
 2. **Code-aware preflight** — scans your source locally to produce a *personalized* go-live checklist (request domains to allowlist, privacy APIs that mandate guideline fields, category hints & common rejection warnings).
 3. **AI glue** — a minimal-dependency **CLI core + MCP adapter** (a single parse dependency, js-yaml; no network or native deps) so the agent that just wrote your code can run the preflight and explain results, without bypassing the official console.
 
-**Not** a code framework/UI lib · **not** one-click launch · **not** another DevTools-driving MCP · **no** compliance guarantees · **never** uploads source or secrets. Status: **v0 validated (2026-06-21)** — four renderers (check / guide / explain / report) run from source; dogfooded on real open-source mini-programs across **6 frameworks** (native wx · uni-app · Taro · mpvue · mpx · wepy); 83 tests green; not yet published to npm.
+**Not** a code framework/UI lib · **not** one-click launch · **not** another DevTools-driving MCP · **no** compliance guarantees · **never** uploads source or secrets. Status: **v0 validated (2026-06-21)** — four renderers (check / guide / explain / report) run from source; dogfooded on real open-source mini-programs across **6 frameworks** (native wx · uni-app · Taro · mpvue · mpx · wepy); 111 tests green with an accuracy gate (81 hand-verified labels, precision = recall = 1.0, zero false positives as a CI red line); not yet published to npm.
 
 ---
 
