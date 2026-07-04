@@ -17,6 +17,8 @@ jobs:
           node-version: "20"
       - run: npm ci || npm install
       - run: npm test
+      # 覆盖率红线（G3）：逐字核验完整性 + precision——脚本自带退出码 1 语义，此前只在本机跑。
+      - run: npm run coverage
       # .mcpb 打包冒烟：暂存纯生产副本 + 启动 staged server 自检，防分发回归。
       # NO_PACK 跳过需联网的 mcpb pack，只验我们自己拥有的部分，快且不依赖外部 CLI。
       - name: mcpb package smoke
