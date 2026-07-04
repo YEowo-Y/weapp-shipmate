@@ -54,6 +54,22 @@ test("checklist：无 requires 但有 warn 的规则退化用 warn 作待办（�
   assert.match(render(r, "checklist"), /- \[ \] 🟠 警示性动作/);
 });
 
+// V6（STRENGTHENING_PLAN 阶段2）：未知 stage 的条目此前渲染时静默丢弃，但概览计数与
+// CLI 退出码都算了它们——新增 flow 阶段而漏更新 STAGE_TITLE 时，阻断项会隐身。
+test("未知 stage 兜底渲染为'其他'段，概览计数与正文不再自相矛盾", () => {
+  const r = {
+    command: "check", meta: {}, notes: [],
+    items: [{ ruleId: "x.future", title: "FutureStageItem", stage: "future_stage", severity: "blocker", requires: ["做未来阶段项"] }],
+  };
+  const md = render(r, "markdown");
+  assert.match(md, /## 其他（future_stage）/);
+  assert.match(md, /FutureStageItem/);
+  assert.match(md, /🔴 1 阻断/, "概览计数应与正文一致");
+  const cl = render(r, "checklist");
+  assert.match(cl, /- \[ \] 🔴 做未来阶段项/);
+  assert.ok(!/无可执行清单项/.test(cl), "有动作项时不应出现空态文案");
+});
+
 test("selfCheck 段渲染：markdown 含'可能适用'与 signal 自查文案，checklist 含条件前缀", () => {
   const r = {
     command: "guide", meta: {}, items: [], notes: [],
