@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -81,9 +81,13 @@ test("E2E check 不存在的目录 → stderr 含'错误：'，退出码 1（运
 // FX-14：指错目录（扫 0 文件）不得给"干净通过"的虚假安心。
 test("E2E check 空目录 → notes 含显式警告，不伪装已通过", () => {
   const dir = mkdtempSync(join(tmpdir(), "ws-empty-"));
-  const { code, stdout } = run("check", dir, "--json");
-  const o = JSON.parse(stdout);
-  assert.equal(o.meta.scan.filesScanned, 0);
-  assert.ok(o.notes.some((n) => n.includes("未在该目录发现")), `应有 0 文件显式警告：${JSON.stringify(o.notes)}`);
-  assert.equal(code, 0);
+  try {
+    const { code, stdout } = run("check", dir, "--json");
+    const o = JSON.parse(stdout);
+    assert.equal(o.meta.scan.filesScanned, 0);
+    assert.ok(o.notes.some((n) => n.includes("未在该目录发现")), `应有 0 文件显式警告：${JSON.stringify(o.notes)}`);
+    assert.equal(code, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
