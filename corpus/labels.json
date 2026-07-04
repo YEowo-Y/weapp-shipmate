@@ -55,7 +55,6 @@
     { "project": "fixtures/wepy-app",   "ruleId": "payment.requires-merchant",     "expect": "hit",    "note": "wx.requestPayment → 支付准入预检" },
     { "project": "fixtures/wepy-app",   "ruleId": "privacy.getUserProfile",        "expect": "hit",    "note": "wepy.getUserInfo ≡ wx.getUserInfo" },
     { "project": "fixtures/wepy-app",   "ruleId": "privacy.getLocation",           "expect": "no_hit", "note": "FP-guard：无位置接口" },
-    { "project": "fixtures/wepy-app",   "ruleId": "security.insecure-request",     "expect": "no_hit", "note": "FP-guard：无明文 http 请求" },
 
     { "project": "fixtures/template-signals", "ruleId": "domain.web-view-business", "expect": "hit",   "note": "<web-view> 组件 → 业务域名预检" },
     { "project": "fixtures/template-signals", "ruleId": "domain.web-view-personal", "expect": "hit",   "note": "<web-view> + 个人主体 → 硬阻断(个人类型不支持 web-view，curl 逐字 2026-06-23)" },
@@ -94,6 +93,10 @@
     { "project": "fixtures/sensor-apis", "ruleId": "privacy.compass",            "expect": "hit", "note": "锚定补齐：wx.startCompass → 罗盘" },
     { "project": "fixtures/sensor-apis", "ruleId": "privacy.deviceMotion",       "expect": "hit", "note": "锚定补齐：wx.startDeviceMotionListening → 设备方向" },
     { "project": "fixtures/sensor-apis", "ruleId": "privacy.gyroscope",          "expect": "hit", "note": "锚定补齐：wx.startGyroscope → 陀螺仪" },
-    { "project": "fixtures/sensor-apis", "ruleId": "consistency.requiredPrivateInfos", "expect": "no_hit", "note": "反例：chooseLocation/choosePoi/chooseAddress 已在 requiredPrivateInfos 声明 → 一致性核验须静默" }
+    { "project": "fixtures/sensor-apis", "ruleId": "consistency.requiredPrivateInfos", "expect": "no_hit", "note": "反例：chooseLocation/choosePoi/chooseAddress 已在 requiredPrivateInfos 声明 → 一致性核验须静默" },
+
+    { "project": "fixtures/broken-config", "ruleId": "privacy.getLocation",              "expect": "hit",    "note": "index.js 真实调 wx.getLocation（app.json 坏了不影响 API 事实提取）" },
+    { "project": "fixtures/broken-config", "ruleId": "consistency.requiredPrivateInfos", "expect": "no_hit", "note": "FP-guard(V3 核心)：app.json 解析失败(超尾逗号容错)时，一致性核验缺证据须闭嘴并出注记——不得反向断言'未声明'产出 blocker 误报" },
+    { "project": "fixtures/wepy-app",      "ruleId": "security.insecure-request",        "expect": "hit",    "note": "wepy.request 明文 http（V4：INSECURE_REQUEST_RE 此前漏 wepy 命名空间）" }
   ]
 }
