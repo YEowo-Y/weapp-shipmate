@@ -49,6 +49,11 @@ export function runCheck(dir, { subjectType, includeDrafts = false } = {}) {
   // 必须显式声明本报告不构成任何结论。
   if (scan.filesScanned === 0)
     notes.push("⚠️ 未在该目录发现可识别的小程序源码文件（扫描 0 个文件）——请确认路径指向小程序项目根目录。本报告不构成任何「已通过检查」的结论。");
+  // V3：配置载体失败必须显性化——一致性核验已闭嘴（见 crosscheck），报告须说明"为什么没查"。
+  if (scan.configErrors?.length)
+    notes.push(
+      `⚠️ 配置文件读取/解析失败：${scan.configErrors.map((e) => `${e.file}（${e.reason}）`).join("、")}——隐私声明一致性核验已跳过，本报告对声明一致性不构成结论，请修复配置后重跑。`,
+    );
   if (scan.dynamicRequest)
     notes.push("检测到动态拼接的请求 URL（如 baseURL + path），静态扫描可能漏报真实域名，请人工核对全部出站域名。");
   if (includeDrafts) notes.push("已包含 draft 规则（来源未核验，仅供参考）。");
