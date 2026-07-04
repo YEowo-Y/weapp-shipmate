@@ -49,6 +49,14 @@ test("check 在反例夹具上命中三条安全交叉核验", () => {
   assert.ok(ids.includes("security.insecure-request"), "应命中明文 http 请求");
 });
 
+// V1（STRENGTHENING_PLAN 阶段2）：FX-06 校验下沉引擎层。非法主体静默滤掉全部规则
+// 会产出"看似合规"的空报告——CLI 早已拒绝，但直接调用方（MCP/未来嵌入方）此前不设防。
+test("runCheck 非法 subjectType 直接抛错，不得静默产出伪清白报告", () => {
+  assert.throws(() => runCheck(FIX, { subjectType: "Personal" }), /非法 subject/);
+  assert.throws(() => runCheck(FIX, { subjectType: "个人" }), /personal \| individual_business \| enterprise/);
+  assert.throws(() => runCheck(FIX, { subjectType: "" }), /非法 subject/, "空字符串也应拒绝而非静默降级");
+});
+
 // G5（STRENGTHENING_PLAN 阶段1）：不带 subject 的过滤分支（check.mjs subject_type.length<3）
 // 是 dogfood 在真实样本上抓到过 FP 的历史缺陷类（个人专属阻断对通用口径误发），此前无 CI 锁。
 test("check 不带 subject：只发全主体通用规则，主体专属规则不得命中", () => {
