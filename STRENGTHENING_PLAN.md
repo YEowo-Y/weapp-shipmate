@@ -111,3 +111,11 @@ MCP 路径可产出假清白报告(已对抗复核 CONFIRMED)、配置解析失�
 | 2026-07-04 | G5 无 subject 回归锁 | 8b3b321 | TPL 夹具:web-view-business 在、web-view-personal 不在 |
 | 2026-07-04 | G6 e2e 临时目录清理 | 1823a69 | try/finally + rmSync |
 | — | 阶段 1 小结 | — | 测试 116 → 130 全绿;dogfood 11 样本无漂移;发现并修复 linter 自身崩溃缺陷(悬空 next TypeError) |
+| 2026-07-04 | 阶段1复核 | — | 独立复核 PASS-WITH-MINOR:新旧 validate 字节级等价实证、G2 四路径复跑、投毒演练复现;2 个 MINOR 已修(b229d4c, e0ce42c) |
+| 2026-07-04 | V1 subject 校验下沉 | 2c3a330, ed7a7e7, 51174d5(部分) | MCP 传 'Personal' → isError 列合法值;runCheck 对 'Personal'/'个人'/'' 抛错 |
+| 2026-07-04 | V2 MCP 非对象防线 | 38b3be8, 51174d5(部分) | dispatch(null/42/[]/'str')→null;stdio 脏行扩展 null/42/[] 存活断言 |
+| 2026-07-04 | V5 CLI 残余缺口 | 1bcf7fd, db20f84 | -json 报错、-h/-v 保留、check 双目录拒绝、guide 位置参数拒绝 |
+| 2026-07-04 | V6 未知 stage 兜底 | caa25b0, c37a20b | future_stage 条目渲染于'其他'段,概览计数与正文一致 |
+| 2026-07-04 | V3 配置失败信号化 | 9aa0534 等 7 提交 | 坏 app.json:无 blocker 误报+显式注记;broken-config 夹具+labels FP-guard 双锁 |
+| 2026-07-04 | V4 命名空间对齐 | 06739e1 等 6 提交 | Taro 动态注记、wepy 明文告警、fp-guards 防过杀卫兵;金快照 51→53、钉板 26→28(漂移逐条吻合预期) |
+| — | 阶段 2 小结 | — | 测试 130 → 143 全绿;coverage 红线绿;dogfood 11 样本无漂移;踩坑记录:wepy 旧 no_hit 卫兵与新明文请求冲突,被四层门禁同时抓红——标注跟夹具源码走,删陈旧卫兵 |
