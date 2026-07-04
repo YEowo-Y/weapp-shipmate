@@ -47,6 +47,7 @@
     "build:mcpb": "node scripts/build-mcpb.mjs",
     "rot": "node scripts/rule-rot.mjs",
     "accuracy": "node scripts/accuracy.mjs",
+    "pin:fixtures": "node scripts/pin-fixtures.mjs",
     "coverage": "node scripts/coverage.mjs",
     "dogfood": "node scripts/dogfood.mjs"
   },
