@@ -50,12 +50,14 @@ const API_RE = /\b(wx|uni|Taro|wepy)\.([a-zA-Z][a-zA-Z0-9]*)/g; // 跨端框架�
 const URL_RE = /(["'`])(https?:\/\/|wss?:\/\/)([^"'`\s/?#]+)/g;
 // 选项对象扫描片段容忍一层嵌套（header:{...} 前置是封装 request 工具的普遍写法，否则漏报）；
 // 空白必须并入否定 lookahead（写成 :\s*(?!["'`]) 时 \s* 可回溯为零宽，静态 `url: "..."` 会被误判为动态）。
+// V4：四个命名空间一视同仁（wx≡uni≡Taro≡wepy 是 data.mjs 的等价契约），此前漏 Taro/wepy——
+// Taro 项目的动态拼接请求不出"可能漏报域名"注记、wepy 明文请求无警告，框架间口径不一致。
 const REQUEST_DYNAMIC_RE =
-  /\b(?:wx|uni)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\burl\s*:(?!\s*["'`])/;
+  /\b(?:wx|uni|Taro|wepy)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\burl\s*:(?!\s*["'`])/;
 // 明文请求：http/ws 作为 *请求 API 调用* 的 url: 参数（不是任意 url 字段、不是 <image src>/媒体数据）。
 // 微信只对 request/connectSocket/uploadFile/downloadFile 强制 https/wss；据此精确定位，避免对图片数据误报。
 const INSECURE_REQUEST_RE =
-  /\b(?:wx|uni|Taro)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\burl["'`]?\s*:\s*["'`](http|ws):\/\/([^"'`\s/?#]+)/g;
+  /\b(?:wx|uni|Taro|wepy)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\burl["'`]?\s*:\s*["'`](http|ws):\/\/([^"'`\s/?#]+)/g;
 const PHONE_BTN_RE = /open-?type\s*=\s*["']getPhoneNumber["']/;
 // 模板级隐私入口（JS 调用扫不到，须从模板属性/组件标签识别）：
 const AVATAR_BTN_RE = /open-?type\s*=\s*["']chooseAvatar["']/; // 头像填写能力（收集头像 PII）
@@ -208,12 +210,22 @@ export function scanProject(dir) {
   const configKeys = new Set();
   const secretHints = new Set(); // "相对路径::键名"，去重；绝不含密钥值
   const insecureHosts = new Set(); // 用了明文 http/ws 的域名
+  // V3：配置载体（app.json/manifest.json/app.config.*/app.mpx）读取或解析失败必须显性记录——
+  // 静默丢弃会让一致性核验反向断言「未声明」，产出 blocker 级误报（本文件自己的设计注释早已预言）。
+  const configErrors = [];
+  const isConfigCarrier = (base) =>
+    base === "app.json" || base === "manifest.json" || base === "app.mpx" || /^app\.config\.[jt]sx?$/.test(base);
   let dynamicRequest = false;
   let filesScanned = 0;
 
   for (const file of walk(dir)) {
     let text;
-    try { text = readFileSync(file, "utf-8"); } catch { continue; }
+    try { text = readFileSync(file, "utf-8"); }
+    catch {
+      if (isConfigCarrier(basename(file)))
+        configErrors.push({ file: relative(dir, file).replace(/\\/g, "/"), reason: "读取失败" });
+      continue;
+    }
     filesScanned++;
 
     // 先剔除 uni-app 非微信端的条件编译分支，模板类文件再剥 HTML 注释，之后剥 JS 注释，最后在结果上提取事实。
@@ -256,7 +268,7 @@ export function scanProject(dir) {
         if (mp.permission) {
           for (const k of Object.keys(mp.permission)) configKeys.add(`app.json:permission:${k}`);
         }
-      } catch { /* 非标准 JSON（尾逗号已容错仍失败），跳过（降级为无配置信号，不崩） */ }
+      } catch { configErrors.push({ file: rel, reason: "解析失败（尾逗号容错后仍非法）" }); } // V3：记录而非静默
     } else if (/^app\.config\.[jt]sx?$/.test(base)) {
       // Taro：app.config.ts/js 是模块而非 JSON，正则抽取 requiredPrivateInfos 数组里的接口名。
       const m = code.match(REQUIRED_PRIVATE_RE);
@@ -273,7 +285,7 @@ export function scanProject(dir) {
           if (conf.permission) {
             for (const k of Object.keys(conf.permission)) configKeys.add(`app.json:permission:${k}`);
           }
-        } catch { /* 内嵌配置块非标准 JSON，跳过 */ }
+        } catch { configErrors.push({ file: rel, reason: "内嵌配置块解析失败" }); } // V3：记录而非静默
       }
     }
   }
@@ -284,6 +296,7 @@ export function scanProject(dir) {
     domains: [...domains].sort(),
     dynamicRequest,
     configKeys: [...configKeys].sort(),
+    configErrors,
     secretHints: [...secretHints].sort().map((s) => {
       const [file, key] = s.split("::");
       return { file, key };
