@@ -1,0 +1,264 @@
+{
+  "_comment": "夹具命中集合钉板（scripts/pin-fixtures.mjs 生成，tests/fixture-pins.test.mjs 在 CI 强制）。rules 是该夹具在对应口径（personal / none=不带 subject）下 check 命中的完整 ruleId 集合。作用：把 labels.json 未锚定规则的误报也纳入 CI 可见范围。漂移即红——新增读夹具源码裁决 TP/FP，消失区分有意修复与召回回归；确认有意改进后用 --update 重钉并提交。",
+  "pins": [
+    {
+      "fixture": "edge-cases",
+      "subject": "personal",
+      "rules": [
+        "domain.request-whitelist",
+        "privacy.getUserProfile",
+        "security.insecure-request"
+      ]
+    },
+    {
+      "fixture": "edge-cases",
+      "subject": "none",
+      "rules": [
+        "domain.request-whitelist",
+        "privacy.getUserProfile",
+        "security.insecure-request"
+      ]
+    },
+    {
+      "fixture": "fp-guards",
+      "subject": "personal",
+      "rules": [
+        "domain.request-whitelist",
+        "security.insecure-request"
+      ]
+    },
+    {
+      "fixture": "fp-guards",
+      "subject": "none",
+      "rules": [
+        "domain.request-whitelist",
+        "security.insecure-request"
+      ]
+    },
+    {
+      "fixture": "leaky-app",
+      "subject": "personal",
+      "rules": [
+        "domain.request-whitelist",
+        "security.backend-api-in-frontend",
+        "security.hardcoded-secret",
+        "security.insecure-request"
+      ]
+    },
+    {
+      "fixture": "leaky-app",
+      "subject": "none",
+      "rules": [
+        "domain.request-whitelist",
+        "security.backend-api-in-frontend",
+        "security.hardcoded-secret",
+        "security.insecure-request"
+      ]
+    },
+    {
+      "fixture": "missing-privacy-decl",
+      "subject": "personal",
+      "rules": [
+        "consistency.requiredPrivateInfos",
+        "privacy.getLocation"
+      ]
+    },
+    {
+      "fixture": "missing-privacy-decl",
+      "subject": "none",
+      "rules": [
+        "consistency.requiredPrivateInfos",
+        "privacy.getLocation"
+      ]
+    },
+    {
+      "fixture": "mpx-app",
+      "subject": "personal",
+      "rules": [
+        "domain.request-whitelist",
+        "privacy.choosePhotoVideo",
+        "privacy.getLocation"
+      ]
+    },
+    {
+      "fixture": "mpx-app",
+      "subject": "none",
+      "rules": [
+        "domain.request-whitelist",
+        "privacy.choosePhotoVideo",
+        "privacy.getLocation"
+      ]
+    },
+    {
+      "fixture": "recall-apis",
+      "subject": "personal",
+      "rules": [
+        "privacy.getLocation",
+        "privacy.getPhoneNumber"
+      ]
+    },
+    {
+      "fixture": "recall-apis",
+      "subject": "none",
+      "rules": [
+        "privacy.getLocation",
+        "privacy.getPhoneNumber"
+      ]
+    },
+    {
+      "fixture": "sample-app",
+      "subject": "personal",
+      "rules": [
+        "domain.request-whitelist",
+        "privacy.clipboard",
+        "privacy.getLocation",
+        "privacy.getPhoneNumber",
+        "privacy.getUserProfile"
+      ]
+    },
+    {
+      "fixture": "sample-app",
+      "subject": "none",
+      "rules": [
+        "domain.request-whitelist",
+        "privacy.clipboard",
+        "privacy.getLocation",
+        "privacy.getPhoneNumber",
+        "privacy.getUserProfile"
+      ]
+    },
+    {
+      "fixture": "sensor-apis",
+      "subject": "personal",
+      "rules": [
+        "privacy.accelerometer",
+        "privacy.addPhoneCalendar",
+        "privacy.addPhoneContact",
+        "privacy.bluetooth",
+        "privacy.chooseAddress",
+        "privacy.chooseFile",
+        "privacy.chooseInvoice",
+        "privacy.chooseLicensePlate",
+        "privacy.chooseLocation",
+        "privacy.compass",
+        "privacy.deviceMotion",
+        "privacy.getLocation",
+        "privacy.gyroscope",
+        "privacy.werun",
+        "privacy.writePhotosAlbum"
+      ]
+    },
+    {
+      "fixture": "sensor-apis",
+      "subject": "none",
+      "rules": [
+        "privacy.accelerometer",
+        "privacy.addPhoneCalendar",
+        "privacy.addPhoneContact",
+        "privacy.bluetooth",
+        "privacy.chooseAddress",
+        "privacy.chooseFile",
+        "privacy.chooseInvoice",
+        "privacy.chooseLicensePlate",
+        "privacy.chooseLocation",
+        "privacy.compass",
+        "privacy.deviceMotion",
+        "privacy.getLocation",
+        "privacy.gyroscope",
+        "privacy.werun",
+        "privacy.writePhotosAlbum"
+      ]
+    },
+    {
+      "fixture": "taro-app",
+      "subject": "personal",
+      "rules": [
+        "domain.request-whitelist",
+        "privacy.choosePhotoVideo",
+        "privacy.getLocation"
+      ]
+    },
+    {
+      "fixture": "taro-app",
+      "subject": "none",
+      "rules": [
+        "domain.request-whitelist",
+        "privacy.choosePhotoVideo",
+        "privacy.getLocation"
+      ]
+    },
+    {
+      "fixture": "template-signals",
+      "subject": "personal",
+      "rules": [
+        "domain.web-view-business",
+        "domain.web-view-personal",
+        "privacy.camera",
+        "privacy.getUserProfile",
+        "privacy.record"
+      ]
+    },
+    {
+      "fixture": "template-signals",
+      "subject": "none",
+      "rules": [
+        "domain.web-view-business",
+        "privacy.camera",
+        "privacy.getUserProfile",
+        "privacy.record"
+      ]
+    },
+    {
+      "fixture": "uni-app",
+      "subject": "personal",
+      "rules": [
+        "domain.request-whitelist",
+        "privacy.choosePhotoVideo",
+        "privacy.getLocation"
+      ]
+    },
+    {
+      "fixture": "uni-app",
+      "subject": "none",
+      "rules": [
+        "domain.request-whitelist",
+        "privacy.choosePhotoVideo",
+        "privacy.getLocation"
+      ]
+    },
+    {
+      "fixture": "uni-cond",
+      "subject": "personal",
+      "rules": [
+        "privacy.clipboard",
+        "privacy.getUserProfile"
+      ]
+    },
+    {
+      "fixture": "uni-cond",
+      "subject": "none",
+      "rules": [
+        "privacy.clipboard",
+        "privacy.getUserProfile"
+      ]
+    },
+    {
+      "fixture": "wepy-app",
+      "subject": "personal",
+      "rules": [
+        "domain.request-whitelist",
+        "payment.requires-merchant",
+        "privacy.getUserProfile"
+      ]
+    },
+    {
+      "fixture": "wepy-app",
+      "subject": "none",
+      "rules": [
+        "domain.request-whitelist",
+        "payment.requires-merchant",
+        "privacy.getUserProfile"
+      ]
+    }
+  ]
+}
