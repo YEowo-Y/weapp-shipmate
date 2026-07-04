@@ -54,6 +54,11 @@ for (const s of pin.samples) {
 }
 
 if (update) {
+  // 空转防线同样适用于 --update（阶段1复核 MINOR-2）：0 个样本可解析时重写只会原样覆盖钉板并谎报成功。
+  if (pin.samples.length - missing === 0) {
+    console.error(`\n❌ --update 拒绝执行：0 个样本可解析，无新命中集合可钉（检查 corpus/dogfood.local.json 的目录映射）。`);
+    process.exit(1);
+  }
   writeFileSync(PIN_PATH, JSON.stringify(pin, null, 2) + "\n");
   console.log(`\n钉板已重写：${PIN_PATH}\n⚠ 提交前须逐条人工核验漂移是有意改进（读样本源码），不是迁就回归。`);
 } else {
