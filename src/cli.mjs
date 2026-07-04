@@ -50,7 +50,18 @@ export function parseFlags(args) {
   const f = { _: [] };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (!a.startsWith("--")) { f._.push(a); continue; }
+    if (!a.startsWith("--")) {
+      // V5（FX-16 残余）：单横杠 token 是选项笔误（-json / -subject），静默当位置参数
+      // 会对错误口径产出看起来正常的报告。例外：-h / -v 是通用缩写，按全称处理；裸 "-" 保持位置参数。
+      if (a.startsWith("-") && a.length > 1) {
+        if (a === "-h") { f.help = true; continue; }
+        if (a === "-v") { f.version = true; continue; }
+        (f._unknown ??= []).push(a);
+        continue;
+      }
+      f._.push(a);
+      continue;
+    }
     const eq = a.indexOf("=");
     const key = eq === -1 ? a.slice(2) : a.slice(2, eq);
     if (VALUE_FLAGS.has(key)) {
@@ -98,12 +109,22 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
 
   try {
     if (cmd === "check") {
+      // V5：多余位置参数是笔误（漏写 -- 或多贴了路径），静默只取第一个会对错误目标产出正常报告。
+      if (flags._.length > 1) {
+        err.write(`多余的位置参数：${flags._.slice(1).join("、")}\ncheck 只接受一个目录参数。\n`);
+        return 1;
+      }
       const dir = flags._[0] || ".";
       const result = focus(runCheck(dir, { subjectType: flags.subject, includeDrafts }));
       out.write(render(result, format) + "\n");
       return result.items.some((i) => i.severity === "blocker") ? 2 : 0;
     }
     if (cmd === "guide") {
+      // V5：guide 无位置参数语义；静默忽略会让 `guide personal`（漏写 --subject）看似生效。
+      if (flags._.length > 0) {
+        err.write(`guide 不接受位置参数：${flags._.join("、")}\n请用 --subject / --business 等选项传入。\n`);
+        return 1;
+      }
       const inputs = {
         subject_type: flags.subject,
         business_type: flags.business,
