@@ -56,6 +56,28 @@ test("tools/call explain 拒因反查返回 content 文本", async () => {
   assert.equal(res.result.structuredContent.command, "explain");
 });
 
+// V1（STRENGTHENING_PLAN 阶段2）：FX-06 的 MCP 面。inputSchema enum 只是客户端建议，
+// 主机把 LLM 生成的参数直接透传时，非法 subject 此前会静默滤掉全部规则 → 伪清白空报告。
+test("tools/call check 非法 subject → isError 且列出合法值，不产出伪清白报告", async () => {
+  const res = await dispatch({
+    jsonrpc: "2.0", id: 9, method: "tools/call",
+    params: { name: "weapp_shipmate_check", arguments: { dir: FIX, subject: "Personal" } },
+  });
+  assert.equal(res.error, undefined, "业务校验失败不应是 JSON-RPC 协议错误");
+  assert.equal(res.result.isError, true);
+  assert.match(res.result.content[0].text, /非法 subject/);
+  assert.match(res.result.content[0].text, /personal \| individual_business \| enterprise/);
+});
+
+// V2（STRENGTHENING_PLAN 阶段2）：JSON.parse 合法但非对象的消息此前在解构处崩溃——
+// 一行 `null` 打死整个服务进程（parse-error 守卫抓不到它）。
+test("dispatch 对非对象消息返回 null 而非崩溃", async () => {
+  assert.equal(await dispatch(null), null);
+  assert.equal(await dispatch(42), null);
+  assert.equal(await dispatch([]), null);
+  assert.equal(await dispatch("str"), null);
+});
+
 test("未知方法返回 -32601", async () => {
   const res = await dispatch({ jsonrpc: "2.0", id: 5, method: "no/such" });
   assert.equal(res.error.code, -32601);
@@ -111,9 +133,13 @@ test("stdio 传输端到端：initialize → tools/list 往返", async () => {
       child.on("error", (e) => { clearTimeout(timer); reject(e); });
       // 脏行容错契约：客户端发半截 JSON/空行时服务须跳过不崩，后续合法请求仍应答
       //（MCP stdio 服务最常见的真实故障模式；若崩溃则下面两条合法消息收不到应答而超时 fail）。
+      // V2 扩展：null/42/[] 是 JSON.parse 合法的非对象——此前恰好绕过 parse 守卫在解构处杀进程。
       child.stdin.write("{not json}\n");
       child.stdin.write("\n");
       child.stdin.write('{"jsonrpc": "2.0", "id"\n');
+      child.stdin.write("null\n");
+      child.stdin.write("42\n");
+      child.stdin.write("[]\n");
       child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) + "\n");
       child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }) + "\n");
     });
