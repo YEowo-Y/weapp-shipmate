@@ -6,6 +6,7 @@
       onTap() {
         wepy.getUserInfo({}); // 用户信息 → privacy.getUserProfile（wepy ≡ wx）
         wepy.request({ url: "https://api.example.com/data" }); // → domain.request-whitelist
+        wepy.request({ url: "http://insecure.example.com/api" }); // 明文 http（V4）：此前 INSECURE_REQUEST_RE 漏 wepy → security.insecure-request
         wx.requestPayment({}); // 支付：目前无预检规则（留作已知 FN）
       },
     };
