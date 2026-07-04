@@ -49,6 +49,18 @@ test("check 在反例夹具上命中三条安全交叉核验", () => {
   assert.ok(ids.includes("security.insecure-request"), "应命中明文 http 请求");
 });
 
+// G5（STRENGTHENING_PLAN 阶段1）：不带 subject 的过滤分支（check.mjs subject_type.length<3）
+// 是 dogfood 在真实样本上抓到过 FP 的历史缺陷类（个人专属阻断对通用口径误发），此前无 CI 锁。
+test("check 不带 subject：只发全主体通用规则，主体专属规则不得命中", () => {
+  const r = runCheck(TPL, {});
+  const ids = r.items.map((i) => i.ruleId);
+  assert.ok(ids.includes("domain.web-view-business"), "全主体通用规则（web-view 业务域名）应命中");
+  assert.ok(
+    !ids.includes("domain.web-view-personal"),
+    "个人主体专属阻断在不带 subject 时不得命中（dogfood 实抓的 FP 类）",
+  );
+});
+
 test("apiMatches: wx / uni / Taro / wepy 等价匹配", () => {
   const set = new Set(["uni.chooseImage", "wx.getUserProfile", "Taro.getLocation", "wepy.request"]);
   assert.ok(apiMatches(set, "wx.chooseImage"), "规则 wx.chooseImage 应命中扫到的 uni.chooseImage");
