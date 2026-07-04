@@ -1,5 +1,5 @@
 // src/check.mjs —— 代码感知预检引擎：扫描结果 × preflight 规则 → 个性化清单
-import { loadData, ruleToItem, apiMatches } from "./data.mjs";
+import { loadData, ruleToItem, apiMatches, SUBJECT_ENUM } from "./data.mjs";
 import { scanProject } from "./scanner.mjs";
 import { crossChecks } from "./crosscheck.mjs";
 
@@ -8,6 +8,10 @@ import { crossChecks } from "./crosscheck.mjs";
  * @param {{subjectType?:string, includeDrafts?:boolean}} opts
  */
 export function runCheck(dir, { subjectType, includeDrafts = false } = {}) {
+  // FX-06 校验下沉到引擎层（V1）：非法主体直接拒绝。此前只有 CLI 校验，MCP 客户端传入
+  // "Personal"/"个人" 会静默滤掉全部规则，产出看似合规的空报告——与 CLI 修过的缺陷同类。
+  if (subjectType != null && !SUBJECT_ENUM.includes(subjectType))
+    throw new Error(`非法 subject：${subjectType}（可选值：${SUBJECT_ENUM.join(" | ")}）`);
   const scan = scanProject(dir);
   const { rules } = loadData({ includeDrafts });
   const apiSet = new Set(scan.apis);
