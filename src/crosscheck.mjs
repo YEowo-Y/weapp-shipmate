@@ -23,6 +23,9 @@ const DECL_PREFIX = "app.json:requiredPrivateInfos:";
  * @returns {object|null} 命中（有缺声明）则返回报告项，否则 null
  */
 export function checkRequiredPrivateInfos(scan = {}) {
+  // V3：声明载体读取/解析失败时，「未声明」不再可断言——缺证据时闭嘴（check 层给显式注记），
+  // 否则一个坏 app.json 就产出 blocker 级误报，打在工具的可信度红线上。
+  if (scan.configErrors?.length) return null;
   const apis = new Set(scan.apis || []);
   const declared = new Set(
     (scan.configKeys || []).filter((k) => k.startsWith(DECL_PREFIX)).map((k) => k.slice(DECL_PREFIX.length)),
