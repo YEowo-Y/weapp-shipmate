@@ -2,6 +2,20 @@
   "_comment": "夹具命中集合钉板（scripts/pin-fixtures.mjs 生成，tests/fixture-pins.test.mjs 在 CI 强制）。rules 是该夹具在对应口径（personal / none=不带 subject）下 check 命中的完整 ruleId 集合。作用：把 labels.json 未锚定规则的误报也纳入 CI 可见范围。漂移即红——新增读夹具源码裁决 TP/FP，消失区分有意修复与召回回归；确认有意改进后用 --update 重钉并提交。",
   "pins": [
     {
+      "fixture": "broken-config",
+      "subject": "personal",
+      "rules": [
+        "privacy.getLocation"
+      ]
+    },
+    {
+      "fixture": "broken-config",
+      "subject": "none",
+      "rules": [
+        "privacy.getLocation"
+      ]
+    },
+    {
       "fixture": "edge-cases",
       "subject": "personal",
       "rules": [
@@ -248,7 +262,8 @@
       "rules": [
         "domain.request-whitelist",
         "payment.requires-merchant",
-        "privacy.getUserProfile"
+        "privacy.getUserProfile",
+        "security.insecure-request"
       ]
     },
     {
@@ -257,7 +272,8 @@
       "rules": [
         "domain.request-whitelist",
         "payment.requires-merchant",
-        "privacy.getUserProfile"
+        "privacy.getUserProfile",
+        "security.insecure-request"
       ]
     }
   ]
