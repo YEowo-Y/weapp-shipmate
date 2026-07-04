@@ -13,6 +13,30 @@ const WEPY = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "we
 const TPL = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "template-signals");
 const UNICOND = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "uni-cond");
 const FPG = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "fp-guards");
+const BROKEN = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "broken-config");
+
+// ── V3/V4（STRENGTHENING_PLAN 阶段2）──
+test("V3: 坏 app.json 记录 configErrors 而非静默丢弃（静默会让一致性核验反向误报）", () => {
+  const r = scanProject(BROKEN);
+  assert.equal(r.configErrors.length, 1);
+  assert.equal(r.configErrors[0].file, "app.json");
+  assert.match(r.configErrors[0].reason, /解析失败/);
+  assert.ok(r.apis.includes("wx.getLocation"), "配置坏了不影响 API 事实提取");
+});
+
+test("V4: Taro 动态拼接请求触发 dynamicRequest（此前漏 Taro 命名空间，注记不出）", () => {
+  assert.equal(scanProject(TARO).dynamicRequest, true);
+});
+
+test("V4: wepy 明文 http 请求进入 insecureHosts（此前漏 wepy 命名空间，无警告）", () => {
+  assert.ok(scanProject(WEPY).insecureHosts.includes("insecure.example.com"));
+});
+
+test("V4 防过杀: Taro/wepy 静态 URL 不误判为动态拼接（fp-guards 卫兵文件确实被扫到）", () => {
+  const r = scanProject(FPG);
+  assert.equal(r.dynamicRequest, false);
+  assert.ok(r.apis.includes("Taro.request") && r.apis.includes("wepy.request"), "卫兵文件应在扫描范围内");
+});
 
 test("scanner 提取 wx API", () => {
   const r = scanProject(FIX);
