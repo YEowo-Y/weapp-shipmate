@@ -12,6 +12,17 @@ const TARO = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "ta
 const MPX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "mpx-app");
 const WEPY = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "wepy-app");
 const TPL = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "template-signals");
+const BROKEN = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "broken-config");
+
+// V3（STRENGTHENING_PLAN 阶段2）：配置载体解析失败时，一致性核验缺证据须闭嘴并出显式注记——
+// 此前静默丢配置 → configKeys 为空 → 反向断言"未声明" → blocker 级误报（锁屏级可信度缺陷）。
+test("V3: 坏 app.json → 一致性核验闭嘴 + 显式注记，不产出 blocker 误报", () => {
+  const r = runCheck(BROKEN, { subjectType: "personal" });
+  const ids = r.items.map((i) => i.ruleId);
+  assert.ok(ids.includes("privacy.getLocation"), "API 事实提取不受配置故障影响");
+  assert.ok(!ids.includes("consistency.requiredPrivateInfos"), "缺证据不得断言'未声明'");
+  assert.ok(r.notes.some((n) => n.includes("配置文件读取/解析失败")), "须显式说明为什么没查");
+});
 
 test("check 默认即命中已核验的隐私与域名规则", () => {
   const r = runCheck(FIX, { subjectType: "personal" });
