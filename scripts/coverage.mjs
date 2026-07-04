@@ -2,6 +2,8 @@
 // 红线：覆盖率与 precision 必须同速增长。每批新增规则报「覆盖数 / 逐字核验数 / precision」三数。
 // 逐字核验跟不上覆盖、或 precision 下滑，即视为红线告警（退出码 1）——防"规则即数据"退化成 AI slop。
 // 以官方实时文档为准：每条默认规则必带 official_url + source_quote + last_verified（schema 强制，本脚本显式盯）。
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { loadData } from "../src/data.mjs";
 import { CROSSCHECK_RULE_IDS } from "../src/crosscheck.mjs";
 import { loadLabels, computeAccuracy, PRECISION_MIN } from "./accuracy.mjs";
@@ -57,4 +59,6 @@ function main() {
   process.exit(verbatimOk && precisionOk ? 0 : 1);
 }
 
-if (process.argv[1]) main();
+// 仅在直接运行时执行 main（被测试 import 时不执行）——原 `if (process.argv[1])` 恒真，
+// import 即跑 main() 并 process.exit，会杀死导入方（G3，STRENGTHENING_PLAN 阶段1）。
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
