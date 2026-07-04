@@ -55,6 +55,12 @@ function diffPins(want, got) {
       for (const r of lost) lines.push(`   - 消失 ${r}（有意修复请 --update 钉板，否则是召回回归）`);
     }
   }
+  // 反向：实际存在但钉板没有的记录（新增夹具后忘记 --update）——只查正向会让 CLI 空转绿灯（阶段1复核 MINOR-1）。
+  const wantKeys = new Set(want.map((p) => `${p.fixture}::${p.subject}`));
+  for (const g of got) {
+    if (!wantKeys.has(`${g.fixture}::${g.subject}`))
+      lines.push(`❌ 钉板缺少记录：${g.fixture}（${g.subject}）——新增夹具后须 --update 重钉并人工核验命中集合`);
+  }
   return lines;
 }
 
