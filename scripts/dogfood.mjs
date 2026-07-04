@@ -58,10 +58,21 @@ if (update) {
   console.log(`\n钉板已重写：${PIN_PATH}\n⚠ 提交前须逐条人工核验漂移是有意改进（读样本源码），不是迁就回归。`);
 } else {
   const ran = pin.samples.length - missing;
+  const allowMissing = process.argv.includes("--allow-missing");
   if (missing) console.warn(`\n⚠ ${missing} 个样本缺失（本门禁依赖开发机本地样本目录）。`);
   if (drifted) {
     console.error(`\n❌ 门禁失败：${drifted}/${ran} 个样本命中漂移。`);
     process.exit(1);
   }
-  console.log(`\n✅ 真实语料门禁通过：${ran} 个样本命中集合与钉板一致。`);
+  // 空转防线（G2，STRENGTHENING_PLAN 阶段1）：0 个样本可解析时门禁什么都没验，
+  // 绝不能打 ✅ 绿灯（--allow-missing 也不放行）；部分缺失默认也算失败，须显式放行。
+  if (ran === 0) {
+    console.error(`\n❌ 门禁失败：0 个样本可解析，本次未做任何核验（检查 corpus/dogfood.local.json 的目录映射）。`);
+    process.exit(1);
+  }
+  if (missing && !allowMissing) {
+    console.error(`\n❌ 门禁失败：${missing}/${pin.samples.length} 个样本缺失——部分覆盖不算通过；确认样本确实不可用时用 --allow-missing 显式放行。`);
+    process.exit(1);
+  }
+  console.log(`\n✅ 真实语料门禁通过：${ran} 个样本命中集合与钉板一致${missing ? `（--allow-missing：跳过 ${missing} 个缺失样本）` : ""}。`);
 }
