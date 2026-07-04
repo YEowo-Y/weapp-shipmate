@@ -39,11 +39,9 @@ export function toMarkdown(result) {
     if (!byStage.has(it.stage)) byStage.set(it.stage, []);
     byStage.get(it.stage).push(it);
   }
-  for (const stage of order) {
-    const items = byStage.get(stage);
-    if (!items || !items.length) continue;
-    lines.push(`## ${STAGE_TITLE[stage]}（${stage}）`, "");
-    // 同一阶段内按严重度排序：阻断 → 警告 → 提示（稳定排序，平级保持原序）
+  // 同一阶段内按严重度排序：阻断 → 警告 → 提示（稳定排序，平级保持原序）
+  const pushStageMd = (title, items) => {
+    lines.push(`## ${title}`, "");
     const sorted = [...items].sort((a, b) => (SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9));
     for (const it of sorted) {
       lines.push(`### ${SEV_ICON[it.severity] || "•"} ${it.title}  \`${it.ruleId}\``);
@@ -54,6 +52,17 @@ export function toMarkdown(result) {
       if (it.official_url) lines.push(`- 来源：${it.official_url}（最后核验 ${it.last_verified}）`);
       lines.push("");
     }
+  };
+  for (const stage of order) {
+    const items = byStage.get(stage);
+    if (!items || !items.length) continue;
+    pushStageMd(`${STAGE_TITLE[stage]}（${stage}）`, items);
+  }
+  // V6：未知 stage 的条目此前被静默丢弃，而概览计数与 CLI 退出码都包含它们——
+  // 报告自相矛盾，阻断项甚至可能不可见。兜底渲染成"其他"段，绝不吞条目。
+  for (const [stage, items] of byStage) {
+    if (Object.hasOwn(STAGE_TITLE, stage) || !items.length) continue;
+    pushStageMd(`其他（${stage}）`, items);
   }
 
   // 可能适用 · 自查区：内容相关规则（取决于业务），不计入上面的确定阻断概览。
@@ -95,20 +104,32 @@ export function toChecklist(result) {
     if (!byStage.has(it.stage)) byStage.set(it.stage, []);
     byStage.get(it.stage).push(it);
   }
-  let total = 0;
-  for (const stage of Object.keys(STAGE_TITLE)) {
-    const items = byStage.get(stage);
-    if (!items || !items.length) continue;
+  // 优先用 requires（动作项）；无 requires 但有 warn 的导航规则，退而用 warn。
+  const stageActions = (items) => {
     const sorted = [...items].sort((a, b) => (SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9));
     const actions = [];
     for (const it of sorted) {
       const icon = SEV_ICON[it.severity] || "•";
-      // 优先用 requires（动作项）；无 requires 但有 warn 的导航规则，退而用 warn。
       const todos = it.requires?.length ? it.requires : it.warn ? [it.warn] : [];
       for (const t of todos) actions.push(`- [ ] ${icon} ${t}  （${it.ruleId}）`);
     }
+    return actions;
+  };
+  let total = 0;
+  for (const stage of Object.keys(STAGE_TITLE)) {
+    const items = byStage.get(stage);
+    if (!items || !items.length) continue;
+    const actions = stageActions(items);
     if (!actions.length) continue;
     lines.push(`## ${STAGE_TITLE[stage]}（${stage}）`, ...actions, "");
+    total += actions.length;
+  }
+  // V6：未知 stage 兜底（与 toMarkdown 同理）——清单是行动入口，动作项静默蒸发比叙事丢失更糟。
+  for (const [stage, items] of byStage) {
+    if (Object.hasOwn(STAGE_TITLE, stage) || !items.length) continue;
+    const actions = stageActions(items);
+    if (!actions.length) continue;
+    lines.push(`## 其他（${stage}）`, ...actions, "");
     total += actions.length;
   }
 
