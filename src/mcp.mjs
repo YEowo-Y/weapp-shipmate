@@ -92,6 +92,9 @@ function callTool(name, args = {}) {
 
 /** 处理单条 JSON-RPC 消息。通知（无 id）返回 null（不应答）。纯函数，便于测试。 */
 export async function dispatch(msg) {
+  // V2：JSON.parse 合法但非对象的行（null / 42 / [] / "str"）此前在解构处 TypeError——
+  // 一行输入打死整个 MCP 服务进程。非对象消息按脏行容错契约跳过。
+  if (typeof msg !== "object" || msg === null || Array.isArray(msg)) return null;
   const { id, method, params } = msg;
   const isNotification = id === undefined || id === null;
   const ok = (result) => (isNotification ? null : { jsonrpc: "2.0", id, result });
@@ -141,7 +144,14 @@ export function runStdio() {
       } catch {
         continue;
       }
-      const res = await dispatch(msg);
+      // V2：dispatch 的意外异常不得击穿事件循环杀死服务——诊断走 stderr，stdout 保持纯 JSON-RPC。
+      let res;
+      try {
+        res = await dispatch(msg);
+      } catch (e) {
+        process.stderr.write(`weapp-shipmate MCP: dispatch 异常（已跳过该消息）：${e.message}\n`);
+        continue;
+      }
       if (res) process.stdout.write(JSON.stringify(res) + "\n");
     }
   });
