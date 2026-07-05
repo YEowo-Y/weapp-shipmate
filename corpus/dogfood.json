@@ -128,7 +128,10 @@
     },
     {
       "name": "wepy-src",
-      "rules": []
+      "rules": [
+        "domain.request-whitelist",
+        "security.insecure-request"
+      ]
     },
     {
       "name": "cml-src",
