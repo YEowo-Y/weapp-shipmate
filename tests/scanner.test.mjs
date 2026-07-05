@@ -2,7 +2,58 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { scanProject, _stripComments, _normalizeHost } from "../src/scanner.mjs";
+import { scanProject, stripUniConditional, blankStrings, _stripComments, _normalizeHost } from "../src/scanner.mjs";
+
+// ── R2/FX-17（阶段4）：已导出纯函数直测——R1 重构 scanProject 期间防静默回归 ──
+test("stripUniConditional: 非微信平台分支剔除，微信/未知标记分支保守保留", () => {
+  const src = [
+    "// #ifdef H5", "wx.h5only()", "// #endif",
+    "// #ifdef MP-WEIXIN", "wx.weixinOnly()", "// #endif",
+    "// #ifdef VUE3", "wx.unknownToken()", "// #endif",
+    "wx.always()",
+  ].join("\n");
+  const out = stripUniConditional(src);
+  assert.ok(!out.includes("h5only"), "H5 分支应剔除");
+  assert.ok(out.includes("weixinOnly"), "MP-WEIXIN 分支应保留");
+  assert.ok(out.includes("unknownToken"), "未知标记（VUE3）无法判定，按保守保留");
+  assert.ok(out.includes("always"));
+});
+
+test("stripUniConditional: #ifndef 指向微信剔除该分支；|| 表达式须全为非微信平台才剔除", () => {
+  const a = stripUniConditional("// #ifndef MP-WEIXIN\nwx.notWeixin()\n// #endif\nwx.keep()");
+  assert.ok(!a.includes("notWeixin"));
+  assert.ok(a.includes("keep"));
+  const b = stripUniConditional("// #ifdef H5 || MP-WEIXIN\nwx.mixed()\n// #endif");
+  assert.ok(b.includes("mixed"), "含微信的 || 表达式不得剔除");
+  const c = stripUniConditional("// #ifdef H5 || APP-PLUS\nwx.allNon()\n// #endif");
+  assert.ok(!c.includes("allNon"), "全为非微信平台才剔除");
+});
+
+test("stripUniConditional: 嵌套条件 + HTML 注释形式标记（模板文件写法）", () => {
+  const src = [
+    "<!-- #ifdef MP-WEIXIN -->", "<view>wx-part</view>",
+    "<!-- #ifdef H5 -->", "<view>h5-inner</view>", "<!-- #endif -->",
+    "<!-- #endif -->",
+  ].join("\n");
+  const out = stripUniConditional(src);
+  assert.ok(out.includes("wx-part"));
+  assert.ok(!out.includes("h5-inner"), "嵌套内层 H5 应剔除");
+});
+
+test("stripUniConditional: 不平衡 #ifdef（缺 #endif）截断其后全部内容——已知限制的行为锁", () => {
+  // 这是文档化的当前行为而非期望行为：若有意修复未闭合分支的容错，请连同本锁一起显性更新。
+  const out = stripUniConditional("// #ifdef H5\nwx.h5()\nwx.after()");
+  assert.ok(!out.includes("wx.after"));
+});
+
+test("blankStrings: 字符串内容置空保留定界符；转义安全；模板字面量插值取舍锁", () => {
+  assert.equal(blankStrings('a("wx.getLocation")'), 'a("")');
+  assert.equal(blankStrings("a('x\\'y')"), "a('')", "字符串内转义引号不得提前终结置空");
+  // 文档化取舍（scanner.mjs blankStrings 注释）：${} 插值里的真实调用一并置空，换取文案引用 API 名不误报。
+  const out = blankStrings("const s = `pre ${wx.getLocation()} post`; wx.real()");
+  assert.ok(!out.includes("getLocation"), "模板字面量整体置空（含插值）");
+  assert.ok(out.includes("wx.real"), "字面量外的真实调用保留");
+});
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "sample-app");
 const EDGE = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "edge-cases");
