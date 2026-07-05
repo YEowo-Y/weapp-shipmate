@@ -5,7 +5,32 @@
 
 ## [Unreleased]
 
-（暂无——下一批：真实语料钉板 `scripts/dogfood.mjs`、docs/08 §15.2 backlog 状态列、剩余 4 条 T0 规则。）
+### Fixed
+
+- MCP 面非法 `subject` 曾在个别路径伪装成清白报告；校验下沉到引擎层（`SUBJECT_ENUM` 唯一事实源），CLI/MCP 两侧行为对齐。
+- 坏 `app.json`（解析失败/字段缺失）此前会反向触发误报 blocker；改为把配置解析错误信号化（`configErrors`），与真实规则命中区分，不再污染阻断计数。
+- MCP 处理 `null`/畸形请求行崩溃问题修复；坏行按 JSON-RPC 2.0 回 `-32700`（`id:null`）+ stderr 诊断，不再击穿事件循环。
+- 两类静默漏报：正则字面量与除号误判（一行式 JSX `<Icon type="a"/>` 曾被误判为正则导致后续解析错乱）、Taro 具名导入（`import { getLocation } from "@tarojs/taro"`）未归一到 `wx.*` 等价事实。
+- 一行式 JSX 吞调用问题：紧凑写法的组件/调用在同一行时曾被扫描器漏检。
+- symlink/junction 越界：`scanner.mjs` 的目录遍历此前会跟随符号链接读到所选目录之外的文件，现遇 `isSymbolicLink()` 即跳过（FX-12）。
+- CLI 单横杠选项与多余位置参数静默：未知/拼写错误的选项与错误挂载的布尔开关值现报错退出而非静默忽略（FX-16 残余部分）。
+
+### Added
+
+- 夹具命中集钉板门禁（`corpus/fixture-pins.json` + `scripts/pin-fixtures.mjs` + `tests/fixture-pins.test.mjs`）：把标注未锚定规则的误报也纳入 CI 可见范围。
+- 边界与性能测试（`tests/perf.test.mjs`，FX-10）：1000 文件 <3s 本机 / <8s CI、heap 增量 <200MB。
+- MCP 单行 1MB 上限 + `-32700` 错误响应（FX-18）：超限行丢弃并 stderr 告警，避免无界内存增长。
+- rot 监控扩至 97 个载体（63 规则 + 5 crosscheck + 8 flow + 21 rejections）。
+- schema 死规则拦截：`scanner` 类型与所需字段绑定校验，防止声明了 scanner 类型但缺对应匹配字段的规则通过 CI。
+- `release.yml` 发布流水线。
+- CI 矩阵扩至 Windows + Node 多版本（`ci.yml` `matrix: os: [ubuntu-latest, windows-latest]`）。
+- ESLint 门禁（`npm run lint`，`recommended` 级）纳入 CI 独立步骤。
+
+### Changed
+
+- `scanProject` 拆分为 `extractFacts` + `parseAppConfig`，圈复杂度从 ~20–24 降至各子函数 <10（FX-05）。
+- `chooseLocation` 相关的双触发信号收敛，减少重复命中。
+- 预览服务器（`desktop/design-previews/_serve.mjs`）仅绑定回环地址（`127.0.0.1`）并加路径遏制，拒绝越出项目根目录的请求。
 
 ## [0.1.0] - 2026-07-02
 
