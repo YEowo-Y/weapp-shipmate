@@ -46,6 +46,27 @@ test("stripUniConditional: 不平衡 #ifdef（缺 #endif）截断其后全部内
   assert.ok(!out.includes("wx.after"));
 });
 
+// ── R3（阶段4，D2 拍板）：正则字面量感知——此前两类静默漏报的直接回归锁 ──
+test("R3: 正则字面量不再毒化注释/字符串跟踪（JS 文件启用 regexAware）", () => {
+  const t1 = _stripComments('const parts = s.split(/"/); wx.getLocation({});', true);
+  assert.ok(t1.includes("wx.getLocation"), '/"/  不得把后续代码吞进字符串');
+  const t2 = _stripComments("const re = /\\//; wx.getLocation({});", true);
+  assert.ok(t2.includes("wx.getLocation"), "/\\//  不得把行尾吞进 // 注释");
+  const t3 = _stripComments("a = b / c; // note\nwx.q()", true);
+  assert.ok(t3.includes("wx.q") && !t3.includes("note"), "除号不误判、注释照剥");
+  const t4 = _stripComments("const f = () => /x/.test(s); wx.k()", true);
+  assert.ok(t4.includes("wx.k"), "箭头函数 => 后的 / 是正则位置");
+});
+
+test("R3: 正则文本里的 API 名不是真实调用；模板文件默认不启用（闭合标签防误伤）", () => {
+  const code = _stripComments("const NAME = /wx.chooseAddress/; wx.getUserProfile()", true);
+  const blanked = blankStrings(code, true);
+  assert.ok(!blanked.includes("chooseAddress"), "正则体应整体置为中性 token");
+  assert.ok(blanked.includes("wx.getUserProfile"), "字面量外的真实调用保留");
+  const tpl = _stripComments("<view>a</view><camera/>", false);
+  assert.ok(tpl.includes("</view>") && tpl.includes("<camera/>"), "模板闭合标签不受启发式影响");
+});
+
 test("blankStrings: 字符串内容置空保留定界符；转义安全；模板字面量插值取舍锁", () => {
   assert.equal(blankStrings('a("wx.getLocation")'), 'a("")');
   assert.equal(blankStrings("a('x\\'y')"), "a('')", "字符串内转义引号不得提前终结置空");
