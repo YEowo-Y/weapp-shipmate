@@ -191,7 +191,8 @@
       "rules": [
         "domain.request-whitelist",
         "privacy.choosePhotoVideo",
-        "privacy.getLocation"
+        "privacy.getLocation",
+        "privacy.werun"
       ]
     },
     {
@@ -200,7 +201,8 @@
       "rules": [
         "domain.request-whitelist",
         "privacy.choosePhotoVideo",
-        "privacy.getLocation"
+        "privacy.getLocation",
+        "privacy.werun"
       ]
     },
     {
