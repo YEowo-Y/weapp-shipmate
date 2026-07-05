@@ -8,6 +8,7 @@ import {
   checkIpOrLocalhost,
   crossChecks,
   CROSSCHECK_RULE_IDS,
+  CROSSCHECK_ALL_HIT_SCAN,
   _LOCATION_DECL_APIS,
 } from "../src/crosscheck.mjs";
 
@@ -24,14 +25,9 @@ test("_LOCATION_DECL_APIS: 非空、无重复、含核心项、均为裸声明�
 // 聚合器 ↔ 登记清单一致性锁：单项 check 从聚合器被删/新 check 忘挂载或忘登记时，
 // 单元测试与 accuracy（consistency/ip 两条只有 no_hit 标注）都不会翻红——只有这里会。
 test("crossChecks 聚合器：全命中 scan 产出的 ruleId 集合 ≡ CROSSCHECK_RULE_IDS", () => {
-  const scan = {
-    apis: ["wx.getLocation"],
-    configKeys: [],
-    domains: ["api.weixin.qq.com", "203.0.113.5"],
-    secretHints: [{ file: "a.js", key: "appsecret" }],
-    insecureHosts: ["plain.test"],
-  };
-  const ids = crossChecks(scan).map((i) => i.ruleId).sort();
+  // 合成 scan 用 crosscheck.mjs 导出的共享常量（阶段4复核 MINOR-2）——rule-rot 的元数据收割
+  // 依赖同一常量并对账,本测试锁住"每个交叉核验都被它触发",两个消费方不再各自漂移。
+  const ids = crossChecks(CROSSCHECK_ALL_HIT_SCAN).map((i) => i.ruleId).sort();
   assert.deepEqual(ids, [...CROSSCHECK_RULE_IDS].sort(), "聚合器产出与登记清单漂移");
 });
 
