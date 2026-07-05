@@ -3,9 +3,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scanProject, MAX_FILE_BYTES } from "../src/scanner.mjs";
+import { runCheck } from "../src/check.mjs";
 
 const mktmp = () => mkdtempSync(join(tmpdir(), "ws-boundary-"));
 
@@ -82,4 +84,32 @@ test("B5: 文件名里的反引号在 secretHints 路径中被净化（防 markd
 
 test("B3 边界: 顶层目录不存在仍显性抛错——e2e 的 exit-1 契约不被子目录容错破坏", () => {
   assert.throws(() => scanProject(join(tmpdir(), "ws-no-such-dir-xyz")), /ENOENT/);
+});
+
+// 阶段3复核 MINOR：拒权子目录只跳不崩是 B3 本意，但"跳过"必须计数并出注记——
+// 静默跳过会让"没扫到"伪装成"没问题"（与 B2 超大文件/截断同一原则）。
+test("B3: 拒权子目录跳过但显性计数 + 报告注记，不再全静默", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ws-boundary-"));
+  const denied = join(dir, "denied");
+  const who = process.env.USERNAME || process.env.USER;
+  try {
+    mkdirSync(denied);
+    writeFileSync(join(denied, "hidden.js"), "wx.chooseAddress()");
+    writeFileSync(join(dir, "a.js"), "wx.getLocation()");
+    // Windows：icacls 拒绝当前用户列目录（无需管理员）。失败（非 Windows / 权限模型不同）则跳过用例。
+    const deny = spawnSync("icacls", [denied, "/deny", `${who}:(RD)`], { encoding: "utf-8" });
+    if (deny.status !== 0) return;
+    try {
+      const r = scanProject(dir);
+      assert.ok(r.apis.includes("wx.getLocation"), "可读部分照常扫描");
+      assert.ok(!r.apis.includes("wx.chooseAddress"), "拒权目录内容不可见");
+      assert.equal(r.skippedDirs, 1, "跳过的子目录必须计数");
+      const rc = runCheck(dir, {});
+      assert.ok(rc.notes.some((n) => n.includes("子目录无法读取")), "报告须有未覆盖面注记");
+    } finally {
+      spawnSync("icacls", [denied, "/remove:d", who], { encoding: "utf-8" });
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
