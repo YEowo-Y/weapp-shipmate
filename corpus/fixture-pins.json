@@ -38,6 +38,7 @@
       "subject": "personal",
       "rules": [
         "domain.request-whitelist",
+        "privacy.werun",
         "security.insecure-request"
       ]
     },
@@ -46,6 +47,7 @@
       "subject": "none",
       "rules": [
         "domain.request-whitelist",
+        "privacy.werun",
         "security.insecure-request"
       ]
     },
