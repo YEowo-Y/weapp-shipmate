@@ -100,8 +100,11 @@ if (process.env.WEAPP_SHIPMATE_NO_PACK === "1") {
 
 // 5) 用官方 mcpb CLI 打包（需要网络拉取 npx 包）。失败则保留暂存目录并给出手动指令。
 // 经 shell 调 npx：兼容 Windows 的 .cmd 解析；参数加引号以容纳含空格的路径。
+// E4：锁定精确版本——`--yes` 不锁版会让最终分发物由"打包当刻 npm 恰好返回的版本"决定，
+// 供应链上游破坏/破坏性变更会静默进入用户双击安装的 .mcpb。升级须显式改这里并走一次完整发布演练。
+const MCPB_VERSION = "2.1.2";
 const mcpb = (args) =>
-  spawnSync(`npx --yes @anthropic-ai/mcpb ${args.map((a) => `"${a}"`).join(" ")}`, {
+  spawnSync(`npx --yes @anthropic-ai/mcpb@${MCPB_VERSION} ${args.map((a) => `"${a}"`).join(" ")}`, {
     stdio: "inherit",
     cwd: ROOT,
     shell: true,
@@ -109,7 +112,7 @@ const mcpb = (args) =>
 const packed = mcpb(["pack", STAGE, OUT]);
 if (packed.status !== 0) {
   log(`\n⚠ mcpb 打包未成功（可能离线或未装）。暂存目录已就绪：${STAGE}`);
-  log(`  请联网后手动执行：npx --yes @anthropic-ai/mcpb pack "${STAGE}" "${OUT}"`);
+  log(`  请联网后手动执行：npx --yes @anthropic-ai/mcpb@${MCPB_VERSION} pack "${STAGE}" "${OUT}"`);
   process.exitCode = 0; // 暂存与自检已完成，不视为致命失败。
 } else {
   log(`\n✓ 打包完成：${OUT}`);
