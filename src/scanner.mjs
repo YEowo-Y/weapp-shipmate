@@ -410,6 +410,7 @@ export function scanProject(dir) {
   let truncated = false;
   const walkStats = { skippedDirs: 0 }; // B3：拒权跳过的子目录数——未覆盖面必须可见
   // B5：相对路径统一净化——控制字符/反引号可借恶意文件名注入 markdown/提示词到报告与 MCP 文本。
+  // eslint-disable-next-line no-control-regex -- 本正则的净化目标就是控制字符本身
   const relSafe = (f) => relative(dir, f).replace(/\\/g, "/").replace(/[\u0000-\u001f\u007f`]/g, "?");
 
   for (const { file, size } of walk(dir, 0, walkStats)) {
