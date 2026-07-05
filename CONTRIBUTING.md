@@ -61,7 +61,7 @@ npm install        # 安装 devDeps：ajv / ajv-formats / js-yaml
 npm test           # 等价 npm run lint:rules / npm run validate
 ```
 
-`npm test` 即数据门禁，会校验：`schemas/*.json` 自身合法 → `flow.yaml` 与 `rules/*.yaml` 符合 schema → flow 图完整性（指向存在/唯一入口/唯一终点/无环）→ 跨文件 `stage` 一致性。CI（`.github/workflows/ci.yml`）在每次 push / PR 跑同一脚本。
+`npm test` = `scripts/validate.mjs` 数据门禁（`schemas/*.json` 自身合法 → `flow.yaml` 与 `rules/*.yaml` 符合 schema → flow 图完整性（指向存在/唯一入口/唯一终点/无环）→ 跨文件 `stage` 一致性）+ 全量 `node --test`（含准确性金快照 `tests/accuracy.test.mjs`、夹具钉板 `corpus/fixture-pins.json`、覆盖率红线 `tests/coverage.test.mjs` 等 169 项）。CI（`.github/workflows/ci.yml`）在每次 push / PR 跑同一脚本，另跑 `npm run lint`（ESLint，`recommended` 级）作为独立门禁。
 
 目录约定：
 
@@ -75,10 +75,20 @@ npm test           # 等价 npm run lint:rules / npm run validate
 
 ## 本地自检（提 PR 前）
 
-1. 用 `schemas/rules.schema.json` / `schemas/flow.schema.json` 校验你的 YAML（二期会提供 `npm run lint:rules` 脚本）。
-   - 注意：JSON Schema 只校验**单条规则/单个阶段的字段**；改 `flow.yaml` 时，`next` / `requires_stage` 指向是否存在、是否有环、是否唯一入口与唯一终点，须由二期一个**独立图 linter** 检查——schema 通过 ≠ 图合法。
+1. 用 `npm run lint:rules`（等价 `schemas/rules.schema.json` / `schemas/flow.schema.json` 校验，脚本已存在）自检你的 YAML。
+   - 注意：JSON Schema 只校验**单条规则/单个阶段的字段**；改 `flow.yaml` 时，`next` / `requires_stage` 指向是否存在、是否有环、是否唯一入口与唯一终点，由同一脚本内的**独立图 linter** 检查——schema 通过 ≠ 图合法。
 2. 确认每条新规则的 `official_url` 当前可访问，`source_quote` 与原文一致。
 3. 确认没有把密钥、AppID、个人信息写进示例（见 `SECURITY.md`）。
+
+## 改规则的验收协议
+
+改 `rules/*.yaml` 可能让**准确性金快照**（`tests/accuracy.test.mjs`）与**夹具命中集钉板**（`corpus/fixture-pins.json`）变红——这不是误报，是系统在提醒你"命中集合变了，需要人裁决"：
+
+1. 跑 `npm test`，若金快照或钉板测试失败，逐条对照夹具源码判定该条变化是 **TP（真实新增/修复的命中）** 还是 **FP（误报回归）**。
+2. 判为 TP：更新 `corpus/labels.json` 补上新的三态标注（`hit`/`no_hit`/`unknown`），再跑 `node scripts/pin-fixtures.mjs --update` 重生成钉板。
+3. 判为 FP：修规则或扫描器逻辑，不得为了让测试变绿而反向调整标注掩盖误报。
+4. 提交说明里写明每条变化的裁决理由（为何是 TP/FP），便于审查者复核而非重新裁决一遍。
+5. 新增规则须满足 `schemas/rules.schema.json` 硬性字段：`official_url` + `source_quote` + `last_verified`；预检规则（`match.scanner`）的类型与所需字段须绑定匹配（如 `static_api_call` 需 `api` 字段），schema 会拒绝"声明了 scanner 类型但缺对应字段"的死规则。
 
 ## 写作口径（防止边界跑偏）
 
