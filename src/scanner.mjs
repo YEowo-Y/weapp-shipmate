@@ -9,15 +9,19 @@ const IGNORE_DIRS = new Set([
   "node_modules", ".git", ".github", "miniprogram_npm", "dist", "build", ".omc", ".claude",
   // 构建/编译产物、发布与临时目录（含 uni-app 的 unpackage、HBuilderX 的 _mp_devtools）——
   // 扫了会把框架运行时（wx.createSubpackageApp 等）与占位 host 当成真实事实。
-  "unpackage", "_mp_devtools", "output", "tmp", "releases", "coverage",
+  "unpackage", "_mp_devtools", "releases", "coverage",
   // 工具/缓存目录
   ".omx", ".npm-cache", ".wxci", ".vscode", ".idea",
   // 云函数：服务端代码，不随小程序包上传；后端持有密钥、直调服务端 API 属正常，扫了只会误报。
   "cloudfunctions",
   // uni-app 的非微信端代码（5+App / H5），编译到微信时不参与，扫了会把 plus.*、App/H5 域名误当微信代码。
-  "platforms", "windows",
-  // 构建脚本与测试目录：不随小程序包上传，其域名/调用不是上线面（如 scripts 里的 kroki/iconify、测试夹具数据）。
-  "scripts", "test", "tests", "__tests__", "__mocks__", "e2e",
+  "platforms",
+]);
+// B4：歧义目录名只在项目根层忽略——小程序包内 pages/test/、组件目录 windows/ 是会随包上传的
+// 业务代码，任意深度裸名匹配会把它们整个静默漏扫（假阴性）。根层的 test/ scripts/ windows/（uni-app
+// 非微信端）等才是工具/脚手架惯例位置。
+const ROOT_ONLY_IGNORE = new Set([
+  "scripts", "test", "tests", "__tests__", "__mocks__", "e2e", "output", "tmp", "windows",
 ]);
 // 文件忽略（与 SECURITY.md 一致）
 const IGNORE_FILE = [
@@ -33,15 +37,33 @@ const SCAN_EXT = new Set([
 
 const ignored = (name) => IGNORE_FILE.some((re) => re.test(name));
 
-function* walk(dir) {
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    let st;
-    try { st = statSync(full); } catch { continue; }
-    if (st.isDirectory()) {
-      if (!IGNORE_DIRS.has(entry)) yield* walk(full);
-    } else if (SCAN_EXT.has(extname(entry)) && !ignored(entry)) {
-      yield full;
+// B2：资源上限——单文件超限视为构建产物/数据文件跳过并计数，文件总数超限截断；两者都在报告注记显性化。
+export const MAX_FILE_BYTES = 5 * 1024 * 1024;
+export const MAX_FILES = 20000;
+
+function* walk(dir, depth = 0) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch (e) {
+    // 顶层失败（目录不存在/不可读）必须显性抛出——静默返回 0 文件是伪清白（e2e 锁定 exit 1 契约）；
+    // B3：嵌套子目录拒权（EPERM 等）只跳过该目录，不再让整个扫描崩掉。
+    if (depth === 0) throw e;
+    return;
+  }
+  for (const e of entries) {
+    const full = join(dir, e.name);
+    // B1（FX-12）：不跟符号链接/junction（Windows junction 的 dirent 同样报 isSymbolicLink，已实测）——
+    // 链接指向项目外会把外部代码的 API/域名带进合规报告；自环会让 filesScanned 无限膨胀直至路径长度崩溃。
+    if (e.isSymbolicLink()) continue;
+    if (e.isDirectory()) {
+      if (IGNORE_DIRS.has(e.name)) continue;
+      if (depth === 0 && ROOT_ONLY_IGNORE.has(e.name)) continue; // B4：歧义名仅根层忽略
+      yield* walk(full, depth + 1);
+    } else if (e.isFile() && SCAN_EXT.has(extname(e.name)) && !ignored(e.name)) {
+      let st;
+      try { st = statSync(full); } catch { continue; }
+      yield { file: full, size: st.size };
     }
   }
 }
@@ -217,13 +239,19 @@ export function scanProject(dir) {
     base === "app.json" || base === "manifest.json" || base === "app.mpx" || /^app\.config\.[jt]sx?$/.test(base);
   let dynamicRequest = false;
   let filesScanned = 0;
+  let skippedLargeFiles = 0;
+  let truncated = false;
+  // B5：相对路径统一净化——控制字符/反引号可借恶意文件名注入 markdown/提示词到报告与 MCP 文本。
+  const relSafe = (f) => relative(dir, f).replace(/\\/g, "/").replace(/[\u0000-\u001f\u007f`]/g, "?");
 
-  for (const file of walk(dir)) {
+  for (const { file, size } of walk(dir)) {
+    if (filesScanned >= MAX_FILES) { truncated = true; break; } // B2：截断而非无限吃内存/时间
+    if (size > MAX_FILE_BYTES) { skippedLargeFiles++; continue; } // B2：超大文件跳过并计数
     let text;
     try { text = readFileSync(file, "utf-8"); }
     catch {
       if (isConfigCarrier(basename(file)))
-        configErrors.push({ file: relative(dir, file).replace(/\\/g, "/"), reason: "读取失败" });
+        configErrors.push({ file: relSafe(file), reason: "读取失败" });
       continue;
     }
     filesScanned++;
@@ -252,7 +280,7 @@ export function scanProject(dir) {
     if (LIVE_PUSHER_TAG_RE.test(code)) configKeys.add("component.live-pusher");
     if (WEB_VIEW_TAG_RE.test(code)) configKeys.add("component.web-view");
     // 只取键名（m[1]）与相对路径，永不读取/记录密钥值本身。
-    const rel = relative(dir, file).replace(/\\/g, "/");
+    const rel = relSafe(file);
     for (const m of code.matchAll(SECRET_RE)) secretHints.add(`${rel}::${m[1].toLowerCase()}`);
 
     // 隐私接口声明 / 权限：原生小程序在 app.json 根级；uni-app 在 manifest.json 的 mp-weixin 块
@@ -292,6 +320,8 @@ export function scanProject(dir) {
 
   return {
     filesScanned,
+    skippedLargeFiles,
+    truncated,
     apis: [...apis].sort(),
     domains: [...domains].sort(),
     dynamicRequest,
