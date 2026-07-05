@@ -80,7 +80,7 @@
 
     { "project": "fixtures/sensor-apis", "ruleId": "privacy.writePhotosAlbum",   "expect": "hit", "note": "锚定补齐：wx.saveImageToPhotosAlbum → 相册写入" },
     { "project": "fixtures/sensor-apis", "ruleId": "privacy.chooseLocation",     "expect": "hit", "note": "锚定补齐：wx.chooseLocation → 位置选择" },
-    { "project": "fixtures/sensor-apis", "ruleId": "privacy.getLocation",        "expect": "hit", "note": "位置隐私大类：match.api 含 wx.chooseLocation，人工核验语义正确(调位置选择即适用位置隐私提示)" },
+    { "project": "fixtures/sensor-apis", "ruleId": "privacy.getLocation",        "expect": "no_hit", "note": "R5 反转旧裁决：chooseLocation 由 privacy.chooseLocation(high,官方逐字)精确覆盖，大类不得再双触发——一次调用两条不同声明要求是噪声(FP 卫兵)" },
     { "project": "fixtures/sensor-apis", "ruleId": "privacy.chooseAddress",      "expect": "hit", "note": "锚定补齐：wx.chooseAddress → 收货地址" },
     { "project": "fixtures/sensor-apis", "ruleId": "privacy.chooseInvoice",      "expect": "hit", "note": "锚定补齐：wx.chooseInvoiceTitle → 发票信息" },
     { "project": "fixtures/sensor-apis", "ruleId": "privacy.bluetooth",          "expect": "hit", "note": "锚定补齐：wx.openBluetoothAdapter → 蓝牙" },
