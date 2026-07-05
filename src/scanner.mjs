@@ -93,6 +93,10 @@ const SECRET_RE = /\b(appsecret|app_secret|mch_?key|partner_?key|apiclient_key)\
 // Taro 的 app.config.ts/js 是 TS/JS 模块（非 JSON），requiredPrivateInfos 以数组字面量声明。
 const REQUIRED_PRIVATE_RE = /requiredPrivateInfos\s*:\s*\[([^\]]*)\]/;
 const QUOTED_NAME_RE = /["'`]([a-zA-Z][a-zA-Z0-9]*)["'`]/g;
+// R4（D2 拍板）：Taro 具名导入是摇树惯用法——import { getLocation } from "@tarojs/taro" 后直接
+// getLocation() 调用，API_RE 的命名空间形式对其完全不可见（整类静默漏报）。把具名导入映射为 wx.* 事实；
+// 导入未调用属罕见且报告本就是"待确认清单"，可接受的过近似。default-only 导入走 API_RE 原路径。
+const TARO_IMPORT_RE = /import\s+(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*["']@tarojs\/taro["']/g;
 // mpx 的 app.mpx 把应用配置放在内嵌的 <script type="application/json"> 块里（非独立 app.json）。
 const MPX_JSON_BLOCK_RE = /<script[^>]*application\/json[^>]*>([\s\S]*?)<\/script>/i;
 // 模板类单文件的 HTML/WXML 注释须在提取信号前剥离：注释掉的 <camera>/<web-view> 是调试遗留常态，
@@ -300,6 +304,15 @@ function extractFacts(file, text, rel, facts) {
   // API 提取用字符串置空副本：日志/文案里引用的 "wx.getLocation" 不是真实调用；
   // 其余提取（URL/密钥/模板属性/配置解析）都依赖字符串内容，必须继续用原文本。
   for (const m of blankStrings(code, regexAware).matchAll(API_RE)) facts.apis.add(`${m[1]}.${m[2]}`);
+  // R4：Taro 具名导入 → wx.* 等价事实（在字符串未置空的 code 上匹配，模块名是字符串字面量）。
+  if (regexAware) {
+    for (const m of code.matchAll(TARO_IMPORT_RE)) {
+      for (const entry of m[1].split(",")) {
+        const name = entry.split(/\s+as\s+/)[0].trim();
+        if (/^[a-zA-Z][a-zA-Z0-9]*$/.test(name)) facts.apis.add(`wx.${name}`);
+      }
+    }
+  }
   for (const m of code.matchAll(URL_RE)) {
     const host = normalizeHost(m[3]); // 去端口/userinfo，防止绕过精确匹配的安全核验
     if (!isPlausibleHost(host)) continue; // 跳过 `${host}` 等模板占位/非法 host 噪声
@@ -341,10 +354,20 @@ function parseAppConfig(base, code, rel, facts) {
   } else if (/^app\.config\.[jt]sx?$/.test(base)) {
     // Taro：app.config.ts/js 是模块而非 JSON，正则抽取 requiredPrivateInfos 数组里的接口名。
     const m = code.match(REQUIRED_PRIVATE_RE);
-    if (m) for (const q of m[1].matchAll(QUOTED_NAME_RE)) facts.configKeys.add(`app.json:requiredPrivateInfos:${q[1]}`);
+    if (m) {
+      for (const q of m[1].matchAll(QUOTED_NAME_RE)) facts.configKeys.add(`app.json:requiredPrivateInfos:${q[1]}`);
+    } else if (code.includes("requiredPrivateInfos")) {
+      // R4（阶段2复核 NOTE）：声明存在但非数组字面量（变量/展开）——提取不到 ≠ 未声明，
+      // 静默降级会让一致性核验反向产出 blocker 误报（与 V3 同一原则）。
+      facts.configErrors.push({ file: rel, reason: "requiredPrivateInfos 非数组字面量，无法静态提取" });
+    }
   } else if (base === "app.mpx") {
     // mpx：应用配置在 app.mpx 内嵌的 <script type="application/json"> 块里，提取后按 JSON 解析。
     const block = code.match(MPX_JSON_BLOCK_RE);
+    if (!block && /application\/json/i.test(code)) {
+      // R4（阶段2复核 NOTE）：存在 application/json 迹象但块无法定位（标签畸形）——同上，记录而非静默。
+      facts.configErrors.push({ file: rel, reason: "内嵌 application/json 配置块无法定位" });
+    }
     if (block) {
       try {
         const conf = parseJsonLoose(block[1]);
