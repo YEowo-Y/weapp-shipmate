@@ -96,6 +96,8 @@ const QUOTED_NAME_RE = /["'`]([a-zA-Z][a-zA-Z0-9]*)["'`]/g;
 // R4（D2 拍板）：Taro 具名导入是摇树惯用法——import { getLocation } from "@tarojs/taro" 后直接
 // getLocation() 调用，API_RE 的命名空间形式对其完全不可见（整类静默漏报）。把具名导入映射为 wx.* 事实；
 // 导入未调用属罕见且报告本就是"待确认清单"，可接受的过近似。default-only 导入走 API_RE 原路径。
+// 同类过近似（阶段4复核 NOTE-3）：字符串字面量里的 import 文案（文档/代码生成场景）也会被匹配——
+// 本正则有意跑在未置空字符串的 code 上（模块名本身是字符串），接受此噪声换取零解析成本。
 const TARO_IMPORT_RE = /import\s+(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s*from\s*["']@tarojs\/taro["']/g;
 // mpx 的 app.mpx 把应用配置放在内嵌的 <script type="application/json"> 块里（非独立 app.json）。
 const MPX_JSON_BLOCK_RE = /<script[^>]*application\/json[^>]*>([\s\S]*?)<\/script>/i;
@@ -110,6 +112,8 @@ const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g;
 // // 注释吞掉——同段真实隐私 API 调用静默消失，是合规工具最坏的失效模式（勘察实证）。
 // 仅对纯 JS 扩展名启用（JS_EXT）：模板文件里 </view> 的 `/` 同样处于"表达式位置"，
 // 启用会把闭合标签误判为正则、吞掉标签间内容；模板内嵌 script 保持旧行为（已知限制）。
+// 另一已知限制（阶段4复核 NOTE-4，非回归）：语句位置的正则（如 `if (a) /x/.test(s)`）
+// 因 prev-token 启发式把 `)` 后判为除号而漏识别——与 R3 之前行为一致。
 const JS_EXT = new Set([".js", ".ts", ".jsx", ".tsx", ".mjs", ".wxs"]);
 const REGEX_POS_KEYWORDS = new Set([
   "return", "typeof", "case", "in", "of", "new", "delete", "void", "do", "else", "instanceof", "yield", "await",
@@ -121,6 +125,9 @@ function inRegexPosition(prev) {
   while (k >= 0 && /\s/.test(prev[k])) k--;
   if (k < 0) return true; // 文件首
   const c = prev[k];
+  // 字符串字面量之后的 / 必为除号（JS 文法）——一行式 JSX 的 <Icon type="a"/> 曾被误判为
+  // 正则起点，吞掉同行后续内容里的真实调用（阶段4复核 MINOR-1，探针确认的静默 FN 走廊）。
+  if (c === '"' || c === "'" || c === "`") return false;
   if (c === ">") return prev[k - 1] === "="; // 箭头函数 => 后是正则位置；其余 > 按除号处理
   if (c === "<") return false;
   if (/[A-Za-z0-9_$)\]}]/.test(c)) {
