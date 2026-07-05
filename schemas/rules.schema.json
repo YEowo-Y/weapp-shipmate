@@ -98,7 +98,22 @@
               "type": "string",
               "description": "当源码用变量/环境拼接（如 baseURL + path）导致静态扫描可能漏报时，给用户的人工核对提示。"
             }
-          }
+          },
+          "allOf": [
+            {
+              "_comment": "R5：scanner 类型绑定必需字段——此前只 required:[scanner]，带 scanner 但无可匹配字段的死规则（永不可能命中）可过 CI。",
+              "if": { "properties": { "scanner": { "const": "static_api_call" } } },
+              "then": { "required": ["api"], "properties": { "api": { "minItems": 1 } } }
+            },
+            {
+              "if": { "properties": { "scanner": { "const": "static_config" } } },
+              "then": { "required": ["config_key"], "properties": { "config_key": { "minItems": 1 } } }
+            },
+            {
+              "if": { "properties": { "scanner": { "const": "manual_only" } } },
+              "then": { "not": { "anyOf": [{ "required": ["api"] }, { "required": ["config_key"] }] } }
+            }
+          ]
         },
         "signal": {
           "type": "array",
