@@ -1,0 +1,12 @@
+# E4：依赖看护——actions 的可变 tag 与 npm 依赖（运行时仅 js-yaml + 少量 devDeps）月度巡检。
+# 供应链面极小（lockfile 共 8 包），月度足够；PR 须过全量 CI 门禁才可合。
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
