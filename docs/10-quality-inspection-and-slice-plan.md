@@ -46,21 +46,21 @@
 | FX-01 | 🔴热修 | high | **"零依赖"口径与事实矛盾**(js-yaml+argparse 为 prod 依赖、核心渲染器 import) | package.json / data.mjs:6 / explain.mjs:6 / README / 多 docs | 去依赖→`npm ls --omit=dev` 只列本包;或全仓改措辞 + 登记引入理由,均须 `npm test` 全绿 |
 | FX-02 | 🔴热修 | med | docs/06 阶段 P0→P2 并产出 P2 验收报告 | docs/06 §0/§4 | 阶段表=P2、测试状态列对应真实文件、存在本验收报告(=本文 §1) |
 | FX-04 | 🔴热修 | high | **二进制级 E2E 全链路缺失** | tests/e2e.test.mjs(新) | spawn 驱动 bin:check sample-app→privacy.getUserProfile;check leaky-app→hardcoded-secret 且 exit 2;guide/explain/checklist;注入 bin bug 先 RED |
-| FX-05 | 🔴热修 | med | **scanProject 圈复杂度 ~20–24 超阈 2 倍** | scanner.mjs:168-238 | 拆 extractFacts/parseAppConfig 每子函数 <10,scanner.test.mjs 全绿且 fixtures 输出逐项不变;或登记技术债豁免 + 拆分计划 |
+| FX-05 | ✅已修(S4执行,2026-07-05) | med | **scanProject 圈复杂度 ~20–24 超阈 2 倍** | src/scanner.mjs：已拆 `extractFacts`/`parseAppConfig` | 拆分后每子函数 <10;等价性由夹具钉板/准确性金快照/dogfood 三网背书,scanner.test.mjs 全绿 |
 | FX-06 | ✅已修(2026-07-01) | med | **非法 `--subject` 静默产出伪清白报告** | cli.mjs:78 / check.mjs:19 | `--subject foobar`→非 0 退出 + 提示枚举;与 mcp.mjs SUBJECT_ENUM 行为对齐;加 cli 单测 |
 | FX-08 | 🔴热修 | med | docs/08 "全行业没人做透"命中 DOD-P0 禁词变体 | docs/08:267 | 加来源限定或删绝对化从句;grep 全仓无正面绝对化用法 |
 | FX-09 | 🔴热修 | med | **README mpvue 框架枚举无证据**(无夹具/别名/内部清单不含) | README:96,124 / data.mjs:42 / README:71 | 去 mpvue→五大框架,或补夹具+测试;四处枚举一致 |
 | FX-03 | 🟡延期 | med | docs/04 计数过期自相矛盾(45 vs 46 / 支付 1 vs 2 / 0draft vs 2draft) | docs/04:7,10 | 计数=46/payment2/0draft;或顶部加权威计数引用声明 |
 | FX-07 | 🟡延期 | med | CHANGELOG 版本陈述(0.0.0 未推送)与 package.json=0.1.0 冲突 | CHANGELOG:4 | 顶部版本=0.1.0、删"未推送公共远程" |
-| FX-10 | 🟡延期 | med | 性能基线门禁无实现 | docs/06 / tests/perf.test.mjs(无) | perf.test.mjs(1000 文件 <3s / heap 增量 <200MB),或验收报告标 N/A + 解锁 |
+| FX-10 | ✅已修(S6执行,2026-07-05) | med | 性能基线门禁无实现 | tests/perf.test.mjs | 1000 文件 <3s 本机/8s CI、heap 增量 <200MB,已实测通过 |
 | FX-11 | 🟡延期 | med | **准确性工程地基缺失**(corpus/labels.json + scripts/accuracy.mjs + 黄金快照) | corpus/ scripts/(无) | 按 docs/08 §4.2/§9 P2.0.5:precision≥0.95 且单规则 FP=0,快照 diff 即 fail(=切片1) |
-| FX-12 | 🟡延期 | low | scanner walk 跟随符号链接可读所选目录外文件 | scanner.mjs:36-47 | `readdirSync({withFileTypes})` + `isSymbolicLink()` 跳过;软链越界单测 |
+| FX-12 | ✅已修(S4执行,2026-07-05) | low | scanner walk 跟随符号链接可读所选目录外文件 | src/scanner.mjs walk（`isSymbolicLink()` 跳过） | 不跟符号链接/junction,软链越界单测已覆盖 |
 | FX-13 | 🟡延期 | low | `--blockers-only` 无阻断时表头计数与正文矛盾 | cli.mjs / report.mjs:82 | 空态文案区分"无阻断(但 M 条非阻断)" |
 | FX-14 | ✅已修(2026-07-02) | low | 扫 0 文件给虚假安心 | check.mjs:42 / report.mjs:82 | notes 含"未扫描到源码,请确认项目根" |
 | FX-15 | 🟡延期 | low | 桌面薄壳 markdown 原样塞 `<pre>` 用户看字面量 | desktop lib.rs / main.ts | P2.1:`--json` + DOM 结构化渲染(=切片7) |
 | FX-16 | ✅已修(2026-07-02,公开前体检升级为必修) | low | 未知/拼错 flag 静默忽略 | cli.mjs:45-56 | flag 白名单,未知→提示 + return 1 |
-| FX-17 | 🟡延期 | low | 已导出纯函数缺直接单测(stripUniConditional / parseISODate / _LOCATION_DECL_APIS) | scanner/rot/crosscheck + tests/ | 补参数化直接单测 |
-| FX-18 | 🟡延期 | low | 多处 `catch{}` 静默降级缺 stderr 诊断 | scanner.mjs / mcp.mjs:142 | catch 补 stderr 诊断(stdout 保纯 JSON-RPC) |
+| FX-17 | ✅已修(2026-07-05) | low | 已导出纯函数缺直接单测(stripUniConditional / parseISODate / _LOCATION_DECL_APIS) | tests/scanner.test.mjs 等直测已落地 | 参数化直接单测已补齐 |
+| FX-18 | ✅已修(S8执行,2026-07-05) | low | 多处 `catch{}` 静默降级缺 stderr 诊断 | src/mcp.mjs | 坏行回 -32700(id:null)+ stderr 诊断,单行 1MB 上限丢弃并告警,stdout 保纯 JSON-RPC |
 | FX-WONTFIX-01 | ⚪不予(误报) | — | "83 测试全绿为假/mcp E2E 失败"——本机 18 次复跑零复现,实测 83/0 | mcp.test.mjs:64 | 对抗复核判 false_positive;`setTimeout(400)+kill` 异味降级为 FX-18 类延期硬化(改事件驱动收齐 id===1/2 再 resolve) |
 
 ---
