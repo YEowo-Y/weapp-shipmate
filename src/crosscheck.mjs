@@ -170,6 +170,17 @@ export const CROSSCHECK_RULE_IDS = [
   "domain.ip-or-localhost",
 ];
 
+// 全命中合成 scan（阶段4复核 MINOR-2）：每个交叉核验都必须被它触发。rule-rot 用它收割内联规则
+// 元数据并与 CROSSCHECK_RULE_IDS 对账（缺一即抛），tests/crosscheck.test 用同一常量做聚合器锁——
+// 合成 scan 只此一份，不再两处漂移。新增交叉核验时须让它在此 scan 上命中，否则 rot 与测试双双报警。
+export const CROSSCHECK_ALL_HIT_SCAN = {
+  apis: ["wx.getLocation"],
+  configKeys: [],
+  domains: ["api.weixin.qq.com", "203.0.113.7"],
+  secretHints: [{ file: "a.js", key: "appsecret" }],
+  insecureHosts: ["insecure.example.com"],
+};
+
 /** 所有交叉核验的入口；后续可在此追加更多一致性核验。 */
 export function crossChecks(scan) {
   return [
