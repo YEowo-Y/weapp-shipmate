@@ -1,5 +1,5 @@
 // src/guide.mjs —— 上线流程导航引擎：flow 图遍历 × navigation 规则 → 下一步清单
-import { loadData, rulesForStage, ruleToItem } from "./data.mjs";
+import { loadData, rulesForStage, ruleToItem, SUBJECT_ENUM } from "./data.mjs";
 
 /**
  * 极小且安全的 applies_when 求值器（不使用 eval）。
@@ -42,6 +42,10 @@ function isContentDependent(r) {
 export function runGuide(inputs = {}, { includeDrafts = false } = {}) {
   const { flow, rules } = loadData({ includeDrafts });
   const subjectType = inputs.subject_type;
+  // 阶段2复核 MINOR：与 runCheck 同一道 FX-06 防线——非法主体会让 rulesForStage 静默丢弃
+  // 主体专属规则(如个人主体的 web-view 阻断),导航却把它当作已生效回显(主体：Personal)。
+  if (subjectType != null && !SUBJECT_ENUM.includes(subjectType))
+    throw new Error(`非法 subject：${subjectType}（可选值：${SUBJECT_ENUM.join(" | ")}）`);
   const items = [];
   const selfCheck = []; // 内容相关、需用户按业务自查的规则（不计入确定阻断概览）
   const skipped = [];
