@@ -78,6 +78,19 @@ test("dispatch 对非对象消息返回 null 而非崩溃", async () => {
   assert.equal(await dispatch("str"), null);
 });
 
+// 阶段2复核 MINOR：guide 面与 check 面同享 FX-06 防线——此前 guide 静默接受非法主体,
+// 丢弃主体专属规则(个人 web-view 阻断)的同时把该主体当作已生效回显。
+test("tools/call guide 非法 subject → isError 且列出合法值", async () => {
+  const res = await dispatch({
+    jsonrpc: "2.0", id: 9, method: "tools/call",
+    params: { name: "weapp_shipmate_guide", arguments: { subject: "Personal" } },
+  });
+  assert.equal(res.error, undefined, "不应是 JSON-RPC 协议错误");
+  assert.equal(res.result.isError, true);
+  assert.match(res.result.content[0].text, /非法 subject/);
+  assert.match(res.result.content[0].text, /personal \| individual_business \| enterprise/);
+});
+
 test("未知方法返回 -32601", async () => {
   const res = await dispatch({ jsonrpc: "2.0", id: 5, method: "no/such" });
   assert.equal(res.error.code, -32601);
