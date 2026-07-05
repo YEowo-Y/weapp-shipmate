@@ -1,6 +1,6 @@
 // src/check.mjs —— 代码感知预检引擎：扫描结果 × preflight 规则 → 个性化清单
 import { loadData, ruleToItem, apiMatches, SUBJECT_ENUM } from "./data.mjs";
-import { scanProject } from "./scanner.mjs";
+import { scanProject, MAX_FILE_BYTES, MAX_FILES } from "./scanner.mjs";
 import { crossChecks } from "./crosscheck.mjs";
 
 /**
@@ -49,6 +49,15 @@ export function runCheck(dir, { subjectType, includeDrafts = false } = {}) {
   // 必须显式声明本报告不构成任何结论。
   if (scan.filesScanned === 0)
     notes.push("⚠️ 未在该目录发现可识别的小程序源码文件（扫描 0 个文件）——请确认路径指向小程序项目根目录。本报告不构成任何「已通过检查」的结论。");
+  // B2：资源上限的显性化——静默跳过/截断会让"没扫到"伪装成"没问题"。
+  if (scan.skippedLargeFiles)
+    notes.push(
+      `${scan.skippedLargeFiles} 个超过 ${MAX_FILE_BYTES / 1024 / 1024}MB 的文件未扫描（通常为构建产物/数据文件）；若其中含真实源码请人工核对。`,
+    );
+  if (scan.truncated)
+    notes.push(
+      `⚠️ 文件数超过扫描上限（${MAX_FILES}），结果已截断——请确认目录选择正确，或对子目录分别执行 check。`,
+    );
   // V3：配置载体失败必须显性化——一致性核验已闭嘴（见 crosscheck），报告须说明"为什么没查"。
   if (scan.configErrors?.length)
     notes.push(
