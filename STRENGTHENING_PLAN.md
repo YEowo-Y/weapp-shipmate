@@ -126,3 +126,5 @@ MCP 路径可产出假清白报告(已对抗复核 CONFIRMED)、配置解析失�
 | 2026-07-05 | B8 预览服务器 | 0777f30 | 活体验证:200/403/403/400 + netstat 仅回环监听(修复前全网卡+路径穿越) |
 | 2026-07-05 | dogfood 重钉 | a9677ad | wepy-src +2 命中——B4 设计代价,读源码裁决:框架仓库 packages/*/test 属分布外样本;真实小程序嵌套 test 是随包业务代码(FN 修复) |
 | — | 阶段 3 小结 | — | 测试 143 → 153 全绿;钉板 28 条绿;dogfood 11 样本重钉后绿;FX-12/FX-18/FX-10(S6/S8)三笔台账债清偿 |
+| 2026-07-05 | 阶段3复核 | — | 独立复核 PASS-WITH-MINOR:B8 十载荷攻击探针(含 ..%5c、%252e、UNC、%c0%af)全部遏制;B1 junction+symlink 双验证;dirent-unknown 疑虑经 Node 内部实现证据排除;B7 三次计时 767~1450ms(3s 预算 2 倍余量)。补记:ROOT_ONLY_IGNORE 在计划 B4 六名之外多列 __tests__/__mocks__/e2e——方向一致的有意扩围(嵌套目录随包上传),夹具无回归 |
+| 2026-07-05 | B3 补修(复核 MINOR) | 见下三提交 | 拒权子目录跳过改为计数+报告注记;icacls 无特权拒权用例实测(154 全绿)。NOTE 留档:mcp MAX_LINE_BYTES 按 UTF-16 计数(常数级偏差,下次触碰改 byteLength);perf 3s 预算在 windows-latest 共享 runner 落地时复测 |
