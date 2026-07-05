@@ -2,7 +2,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { scanProject, stripUniConditional, blankStrings, _stripComments, _normalizeHost } from "../src/scanner.mjs";
+import {
+  scanProject,
+  stripUniConditional,
+  blankStrings,
+  _stripComments,
+  _normalizeHost,
+  _extractFacts,
+  _parseAppConfig,
+} from "../src/scanner.mjs";
 
 // ── R2/FX-17（阶段4）：已导出纯函数直测——R1 重构 scanProject 期间防静默回归 ──
 test("stripUniConditional: 非微信平台分支剔除，微信/未知标记分支保守保留", () => {
@@ -65,6 +73,41 @@ test("R3: 正则文本里的 API 名不是真实调用；模板文件默认不�
   assert.ok(blanked.includes("wx.getUserProfile"), "字面量外的真实调用保留");
   const tpl = _stripComments("<view>a</view><camera/>", false);
   assert.ok(tpl.includes("</view>") && tpl.includes("<camera/>"), "模板闭合标签不受启发式影响");
+});
+
+// ── R4（阶段4，D2 拍板）：Taro 具名导入映射 + 配置载体"提取不到 ≠ 未声明" ──
+test("R4: Taro 具名导入映射为 wx.* 事实（含 as 别名与 default+具名混合）", () => {
+  const facts = { apis: new Set(), domains: new Set(), configKeys: new Set(), secretHints: new Set(), insecureHosts: new Set(), configErrors: [], dynamicRequest: false };
+  _extractFacts(
+    "page.ts",
+    'import Taro, { getLocation, chooseImage as pick } from "@tarojs/taro";\ngetLocation(); pick();',
+    "page.ts",
+    facts,
+  );
+  assert.ok(facts.apis.has("wx.getLocation"), "具名导入应映射为 wx.getLocation");
+  assert.ok(facts.apis.has("wx.chooseImage"), "as 别名应取导出名而非本地名");
+});
+
+test("R4: 具名导入映射不适用于模板文件与其他包名", () => {
+  const facts = { apis: new Set(), domains: new Set(), configKeys: new Set(), secretHints: new Set(), insecureHosts: new Set(), configErrors: [], dynamicRequest: false };
+  _extractFacts("comp.vue", 'import { getLocation } from "@tarojs/taro";', "comp.vue", facts);
+  assert.ok(!facts.apis.has("wx.getLocation"), "模板扩展名不启用（regexAware 同门）");
+  const facts2 = { apis: new Set(), domains: new Set(), configKeys: new Set(), secretHints: new Set(), insecureHosts: new Set(), configErrors: [], dynamicRequest: false };
+  _extractFacts("page.ts", 'import { getLocation } from "some-lib";', "page.ts", facts2);
+  assert.ok(!facts2.apis.has("wx.getLocation"), "非 @tarojs/taro 包不映射");
+});
+
+test("R4: 配置载体提取失败记 configErrors——Taro 非数组字面量声明 / mpx 配置块无法定位", () => {
+  const facts = { apis: new Set(), domains: new Set(), configKeys: new Set(), secretHints: new Set(), insecureHosts: new Set(), configErrors: [], dynamicRequest: false };
+  _parseAppConfig("app.config.ts", "const P = [...base];\nexport default { requiredPrivateInfos: P };", "src/app.config.ts", facts);
+  assert.equal(facts.configErrors.length, 1, "变量声明提取不到必须记录，不得当'未声明'");
+  assert.match(facts.configErrors[0].reason, /非数组字面量/);
+  const facts2 = { apis: new Set(), domains: new Set(), configKeys: new Set(), secretHints: new Set(), insecureHosts: new Set(), configErrors: [], dynamicRequest: false };
+  _parseAppConfig("app.mpx", '<script type=application/json>{"pages":[]}</script', "app.mpx", facts2);
+  assert.equal(facts2.configErrors.length, 1, "块定位失败必须记录");
+  const facts3 = { apis: new Set(), domains: new Set(), configKeys: new Set(), secretHints: new Set(), insecureHosts: new Set(), configErrors: [], dynamicRequest: false };
+  _parseAppConfig("app.config.ts", "export default { pages: [] };", "src/app.config.ts", facts3);
+  assert.equal(facts3.configErrors.length, 0, "根本没有声明字样时不是错误（项目可不使用隐私接口）");
 });
 
 test("blankStrings: 字符串内容置空保留定界符；转义安全；模板字面量插值取舍锁", () => {
