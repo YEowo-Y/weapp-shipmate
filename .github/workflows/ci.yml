@@ -1,27 +1,42 @@
 name: validate-rules
 
-# 规则数据门禁：每次 push / PR 自动校验 flow.yaml 与 rules/*.yaml
-# 是否符合 schema、flow 图是否完整、跨文件 stage 是否一致。
+# 数据门禁 + 全量测试：每次 push / PR 校验 schema/flow 图/规则一致性，并跑 169+ 测试
+# （含准确性金快照、夹具钉板、覆盖率红线）。
+# E3：矩阵覆盖 Windows（目标用户主平台，扫描器大量路径处理）与 Node 20/22。
 on:
   push:
     branches: [main]
   pull_request:
 
+# E4：最小权限——CI 只读。
+permissions:
+  contents: read
+
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ["20", "22"]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-      - run: npm ci || npm install
+          node-version: ${{ matrix.node }}
+      # E2：去掉 `|| npm install` 兜底——lockfile 漂移应当响亮失败。
+      - run: npm ci
+      # E5：静态错误门禁（eslint:recommended 级，风格不管）。
+      - run: npm run lint
       - run: npm test
-      # 覆盖率红线（G3）：逐字核验完整性 + precision——脚本自带退出码 1 语义，此前只在本机跑。
+      # 覆盖率红线（G3）：逐字核验完整性 + precision——脚本自带退出码 1 语义。
       - run: npm run coverage
       # .mcpb 打包冒烟：暂存纯生产副本 + 启动 staged server 自检，防分发回归。
-      # NO_PACK 跳过需联网的 mcpb pack，只验我们自己拥有的部分，快且不依赖外部 CLI。
+      # 只跑一腿（ubuntu + node20）——它验的是打包清单完整性，与 OS/Node 版本无关。
+      # NO_PACK 跳过需联网的 mcpb pack；真实 pack 由 release.yml 在打 tag 时执行。
       - name: mcpb package smoke
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '20'
         run: npm run build:mcpb
         env:
           WEAPP_SHIPMATE_NO_PACK: "1"
