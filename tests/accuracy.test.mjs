@@ -31,9 +31,11 @@ test("准确性黄金快照：命中基线 53 TP / 0 FP / 0 FN（14 夹具，含
   // 修复前会被静默吞掉(+1 hit)，正则文本里的 chooseAddress 为 no_hit FP 卫兵。
   // 2026-07-05 基线 54→55：R4 Taro 具名导入映射——taro-app 的 getWeRunData() 具名导入调用(+1 hit)，
   // 修复前 API_RE 只认命名空间形式，此类调用整类不可见。
+  // 2026-07-05 基线 55→54：R5 chooseLocation 双触发收敛——sensor-apis 的 privacy.getLocation 命中
+  // 纯来自双映射（该夹具不直调 getLocation 系，已 grep 核验），label 翻转为 no_hit FP 卫兵。
   assert.deepEqual(
     { tp: global.tp, fp: global.fp, fn: global.fn },
-    { tp: 55, fp: 0, fn: 0 },
+    { tp: 54, fp: 0, fn: 0 },
     "命中基线漂移：核对是否引入回归，确认无误后更新基线与 labels"
   );
 });
