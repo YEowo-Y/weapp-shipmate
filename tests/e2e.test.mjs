@@ -59,7 +59,9 @@ test("E2E check --checklist：可勾选清单格式", () => {
 
 test("E2E --version：打印语义化版本，退出码 0", () => {
   const { code, stdout } = run("--version");
-  assert.match(stdout.trim(), /^\d+\.\d+\.\d+$/);
+  // SemVer 含可选预发布段（如 0.2.0-rc.1）与 build 元数据（+xxx），均属合法语义化版本；
+  // 窄化成三段式会在预发布版打 tag 时误红（v0.2.0-rc.1 发布演练首跑实证）。
+  assert.match(stdout.trim(), /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/);
   assert.equal(code, 0);
 });
 
