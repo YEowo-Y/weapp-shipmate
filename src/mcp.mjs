@@ -103,7 +103,10 @@ export async function dispatch(msg) {
   switch (method) {
     case "initialize":
       return ok({
-        protocolVersion: params?.protocolVersion || PROTOCOL_DEFAULT,
+        // B6：只声称我们实现的协议语义（2025-06-18，无 JSON-RPC 批处理）。回显客户端任意版本是
+        // 伪能力声明——旧版客户端会按批处理等我们没有的语义交互。规范允许：不支持所请求版本时，
+        // 返回服务端支持的版本，由客户端决定是否继续。
+        protocolVersion: PROTOCOL_DEFAULT,
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
       });
@@ -129,10 +132,18 @@ export async function dispatch(msg) {
 
 /** 启动 stdio 服务：从 stdin 读换行分隔 JSON-RPC，向 stdout 写应答。 */
 export function runStdio() {
+  const MAX_LINE_BYTES = 1024 * 1024; // B6：单行缓冲上限——无换行的超长输入不再无界吃内存
   let buf = "";
+  // B6（复核 NOTE）：客户端关闭 stdout 后继续写会以 EPIPE 击穿进程——安静退出而非崩溃栈。
+  process.stdout.on("error", () => process.exit(0));
   process.stdin.setEncoding("utf-8");
   process.stdin.on("data", async (chunk) => {
     buf += chunk;
+    if (buf.length > MAX_LINE_BYTES && !buf.includes("\n")) {
+      process.stderr.write(`weapp-shipmate MCP: 单行超过 ${MAX_LINE_BYTES} 字节，已丢弃该行缓冲\n`);
+      buf = "";
+      return;
+    }
     let idx;
     while ((idx = buf.indexOf("\n")) >= 0) {
       const line = buf.slice(0, idx).trim();
@@ -142,6 +153,12 @@ export function runStdio() {
       try {
         msg = JSON.parse(line);
       } catch {
+        // B6（FX-18）：坏行此前静默吞掉，客户端只能干等。按 JSON-RPC 2.0 回 -32700（id:null）+ stderr 诊断；
+        // stdout 仍只写 JSON-RPC。
+        process.stderr.write(`weapp-shipmate MCP: 无法解析的 JSON 行（已回 -32700）\n`);
+        process.stdout.write(
+          JSON.stringify({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }) + "\n",
+        );
         continue;
       }
       // V2：dispatch 的意外异常不得击穿事件循环杀死服务——诊断走 stderr，stdout 保持纯 JSON-RPC。
