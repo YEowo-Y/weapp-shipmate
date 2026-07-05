@@ -31,10 +31,13 @@ test("性能基线：1000 文件冷扫 <3s、heap 增量 <200MB、filesScanned �
     }
     const best = Math.min(...durations);
     const heapDelta = process.memoryUsage().heapUsed - heap0;
+    // 本机严格执行 S6 规格（3s）；共享 CI runner（尤其 windows-latest）算力波动大且非规格环境，
+    // 放宽到 8s——CI 腿只兜"无灾难性算法回归"，规格基线由开发机与复核实测把守（阶段3复核 NOTE-4）。
+    const budget = process.env.CI ? 8000 : 3000;
     assert.equal(r.filesScanned, 1001, "1000 页面 + app.json");
     assert.ok(r.apis.includes("wx.getLocation"));
     assert.equal(r.domains.length, 7);
-    assert.ok(best < 3000, `1000 文件扫描三次最优 ${Math.round(best)}ms ≥ 3000ms（S6 规格；全部计时 ${durations.map((d) => Math.round(d)).join("/")}ms）`);
+    assert.ok(best < budget, `1000 文件扫描三次最优 ${Math.round(best)}ms ≥ ${budget}ms（S6 规格；全部计时 ${durations.map((d) => Math.round(d)).join("/")}ms）`);
     assert.ok(heapDelta < 200 * 1024 * 1024, `heap 增量 ${Math.round(heapDelta / 1048576)}MB ≥ 200MB（FX-10 规格）`);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
