@@ -27,9 +27,11 @@ test("准确性黄金快照：命中基线 53 TP / 0 FP / 0 FN（14 夹具，含
   // 确认是有意改进(非回归)后，再同步更新此基线 + corpus/labels.json。
   // 2026-07-04 基线 51→53：V3 新增 broken-config 夹具(+1 hit：privacy.getLocation)、
   // V4 补 wepy 明文请求检测(+1 hit：wepy-app security.insecure-request)——均为有意改进，逐条核验过夹具源码。
+  // 2026-07-05 基线 53→54：R3 正则字面量感知——fp-guards 新增卫兵文件，同行正则后的 wx.getWeRunData
+  // 修复前会被静默吞掉(+1 hit)，正则文本里的 chooseAddress 为 no_hit FP 卫兵。
   assert.deepEqual(
     { tp: global.tp, fp: global.fp, fn: global.fn },
-    { tp: 53, fp: 0, fn: 0 },
+    { tp: 54, fp: 0, fn: 0 },
     "命中基线漂移：核对是否引入回归，确认无误后更新基线与 labels"
   );
 });
