@@ -16,6 +16,15 @@ test("initialize 回应协议版本与 serverInfo", async () => {
   assert.ok(res.result.capabilities.tools);
 });
 
+// B6：协议版本不回显——我们只实现 2025-06-18 语义（无 JSON-RPC 批处理）。回显旧版本
+// 是伪能力声明，客户端会按批处理等我们没有的语义交互。
+test("initialize 协议版本协商：不支持的版本返回服务端版本而非回显", async () => {
+  const res = await dispatch({
+    jsonrpc: "2.0", id: 10, method: "initialize", params: { protocolVersion: "2024-11-05" },
+  });
+  assert.equal(res.result.protocolVersion, "2025-06-18");
+});
+
 test("通知不产生应答", async () => {
   assert.equal(await dispatch({ jsonrpc: "2.0", method: "notifications/initialized" }), null);
 });
@@ -124,6 +133,7 @@ test("stdio 传输端到端：initialize → tools/list 往返", async () => {
   try {
     const seen = await new Promise((resolve, reject) => {
       const acc = new Map();
+      const parseErrors = []; // B6：坏 JSON 行应各回一条 -32700（id:null，不进 acc）
       let buf = "";
       const timer = setTimeout(
         () => reject(new Error(`stdio 往返超时（仅收到应答 id=[${[...acc.keys()].join(",")}]）`)),
@@ -139,8 +149,9 @@ test("stdio 传输端到端：initialize → tools/list 往返", async () => {
           if (!line) continue;
           let msg;
           try { msg = JSON.parse(line); } catch { continue; }
+          if (msg.error?.code === -32700) parseErrors.push(msg);
           if (msg.id != null) acc.set(msg.id, msg);
-          if (acc.has(1) && acc.has(2)) { clearTimeout(timer); resolve(acc); }
+          if (acc.has(1) && acc.has(2)) { clearTimeout(timer); resolve({ acc, parseErrors }); }
         }
       });
       child.on("error", (e) => { clearTimeout(timer); reject(e); });
@@ -156,8 +167,43 @@ test("stdio 传输端到端：initialize → tools/list 往返", async () => {
       child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) + "\n");
       child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }) + "\n");
     });
-    assert.ok(seen.get(1).result.serverInfo, "initialize 应有 serverInfo");
-    assert.equal(seen.get(2).result.tools.length, 3, "tools/list 应返回 3 个工具");
+    assert.ok(seen.acc.get(1).result.serverInfo, "initialize 应有 serverInfo");
+    assert.equal(seen.acc.get(2).result.tools.length, 3, "tools/list 应返回 3 个工具");
+    // B6（FX-18）：两条坏 JSON 行（{not json} 与截断行）应各回一条 -32700，不再静默；
+    // null/42/[] 是合法 JSON 非对象 → 跳过不应答（V2 契约），故恰为 2 条。
+    assert.equal(seen.parseErrors.length, 2, "坏 JSON 行应回 -32700 而非静默");
+  } finally {
+    child.stdin.end();
+    child.kill();
+  }
+});
+
+// B6：单行缓冲上限——无换行的超长输入此前无界累积吃内存；现在丢弃缓冲、服务存活、后续请求照常应答。
+test("stdio 单行超限：2MB 无换行输入被丢弃，服务存活并继续应答", async () => {
+  const child = spawn(process.execPath, [BIN], { stdio: ["pipe", "pipe", "pipe"] });
+  try {
+    const pong = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("超时：服务未在超限输入后应答 ping")), 8000);
+      let buf = "";
+      child.stdout.setEncoding("utf-8");
+      child.stdout.on("data", (d) => {
+        buf += d;
+        let nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (!line) continue;
+          let m;
+          try { m = JSON.parse(line); } catch { continue; }
+          if (m.id === 99) { clearTimeout(timer); resolve(m); }
+        }
+      });
+      child.on("error", (e) => { clearTimeout(timer); reject(e); });
+      child.stdin.write("x".repeat(2 * 1024 * 1024)); // 超限垃圾，无换行
+      child.stdin.write("\n"); // 残段成为坏行 → -32700，不得影响后续
+      child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 99, method: "ping" }) + "\n");
+    });
+    assert.deepEqual(pong.result, {});
   } finally {
     child.stdin.end();
     child.kill();
