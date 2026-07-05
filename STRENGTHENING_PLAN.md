@@ -128,3 +128,11 @@ MCP 路径可产出假清白报告(已对抗复核 CONFIRMED)、配置解析失�
 | — | 阶段 3 小结 | — | 测试 143 → 153 全绿;钉板 28 条绿;dogfood 11 样本重钉后绿;FX-12/FX-18/FX-10(S6/S8)三笔台账债清偿 |
 | 2026-07-05 | 阶段3复核 | — | 独立复核 PASS-WITH-MINOR:B8 十载荷攻击探针(含 ..%5c、%252e、UNC、%c0%af)全部遏制;B1 junction+symlink 双验证;dirent-unknown 疑虑经 Node 内部实现证据排除;B7 三次计时 767~1450ms(3s 预算 2 倍余量)。补记:ROOT_ONLY_IGNORE 在计划 B4 六名之外多列 __tests__/__mocks__/e2e——方向一致的有意扩围(嵌套目录随包上传),夹具无回归 |
 | 2026-07-05 | B3 补修(复核 MINOR) | 见下三提交 | 拒权子目录跳过改为计数+报告注记;icacls 无特权拒权用例实测(154 全绿)。NOTE 留档:mcp MAX_LINE_BYTES 按 UTF-16 计数(常数级偏差,下次触碰改 byteLength);perf 3s 预算在 windows-latest 共享 runner 落地时复测 |
+| 2026-07-05 | R2/FX-17 纯函数直测 | 9363d8d, 85be083, c8ac288 | stripUniConditional×4/blankStrings/parseISODate/_LOCATION_DECL_APIS 直测;不平衡 #ifdef 已知限制行为锁 |
+| 2026-07-05 | R5(rot) 坏日期显性化 | 6c42d48 | NaN>180===false 的逃逸关闭:invalid 标记+按 stale 处理 |
+| 2026-07-05 | perf 抗争抢加固 | 551258c | 三次取最小(实测同机 767ms↔7711ms 波动);算法回归仍必红 |
+| 2026-07-05 | R1/FX-05 拆分 | 40acace | extractFacts+parseAppConfig;等价性三网全绿(162 测试/28 钉板/11 dogfood/53TP)。🔴热修销账 |
+| 2026-07-05 | R3 正则字面量感知(D2) | 5 提交(regex-literals 卫兵等) | 标准除号/正则启发式,仅纯 JS 扩展启用(模板 </view> 误伤已防);金快照 53→54;踩坑:Edit 工具 \uXXXX 转义两次踩同坑,含转义代码一律脚本落盘 |
+| 2026-07-05 | R4 具名导入+配置信号(D2+复核 NOTE) | 6 提交 | Taro 具名导入(含 as 别名)映射 wx.*;requiredPrivateInfos 非字面量/mpx 块畸形→configErrors;金快照 54→55 |
+| 2026-07-05 | R5 规则层收尾 | 7 提交(14a3000 等) | chooseLocation 双触发收敛(裁决反转+FP 卫兵,55→54);rot 监控载体 63→97(crosscheck/flow/rejections 并入,合成 scan 收割零重复);schema match 收紧(死规则三态负向锁) |
+| — | 阶段 4 小结 | — | 测试 154 → 168 全绿;三次金快照变更均有夹具源码级核验;dogfood 11 样本全程无扰动 |
