@@ -47,6 +47,7 @@
     "build:mcpb": "node scripts/build-mcpb.mjs",
     "rot": "node scripts/rule-rot.mjs",
     "accuracy": "node scripts/accuracy.mjs",
+    "lint": "eslint .",
     "pin:fixtures": "node scripts/pin-fixtures.mjs",
     "coverage": "node scripts/coverage.mjs",
     "dogfood": "node scripts/dogfood.mjs"
@@ -58,7 +59,9 @@
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1"
+    "ajv-formats": "^3.0.1",
+    "eslint": "^10.6.0"
   }
 }
