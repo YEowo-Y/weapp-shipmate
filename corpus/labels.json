@@ -97,6 +97,9 @@
 
     { "project": "fixtures/broken-config", "ruleId": "privacy.getLocation",              "expect": "hit",    "note": "index.js 真实调 wx.getLocation（app.json 坏了不影响 API 事实提取）" },
     { "project": "fixtures/broken-config", "ruleId": "consistency.requiredPrivateInfos", "expect": "no_hit", "note": "FP-guard(V3 核心)：app.json 解析失败(超尾逗号容错)时，一致性核验缺证据须闭嘴并出注记——不得反向断言'未声明'产出 blocker 误报" },
-    { "project": "fixtures/wepy-app",      "ruleId": "security.insecure-request",        "expect": "hit",    "note": "wepy.request 明文 http（V4：INSECURE_REQUEST_RE 此前漏 wepy 命名空间）" }
+    { "project": "fixtures/wepy-app",      "ruleId": "security.insecure-request",        "expect": "hit",    "note": "wepy.request 明文 http（V4：INSECURE_REQUEST_RE 此前漏 wepy 命名空间）" },
+
+    { "project": "fixtures/fp-guards",     "ruleId": "privacy.werun",                    "expect": "hit",    "note": "R3 FN 卫兵：同行正则字面量（/\"/ 与 /\\//）之后的 wx.getWeRunData 必须存活——修复前被毒化的字符串/注释跟踪静默吞掉" },
+    { "project": "fixtures/fp-guards",     "ruleId": "privacy.chooseAddress",            "expect": "no_hit", "note": "R3 FP 卫兵：正则文本 /wx.chooseAddress/ 不是真实调用，不得命中" }
   ]
 }
