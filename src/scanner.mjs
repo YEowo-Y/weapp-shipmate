@@ -41,14 +41,16 @@ const ignored = (name) => IGNORE_FILE.some((re) => re.test(name));
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 export const MAX_FILES = 20000;
 
-function* walk(dir, depth = 0) {
+function* walk(dir, depth = 0, stats = null) {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
   } catch (e) {
     // 顶层失败（目录不存在/不可读）必须显性抛出——静默返回 0 文件是伪清白（e2e 锁定 exit 1 契约）；
-    // B3：嵌套子目录拒权（EPERM 等）只跳过该目录，不再让整个扫描崩掉。
+    // B3：嵌套子目录拒权（EPERM 等）只跳过该目录，不再让整个扫描崩掉；
+    // 跳过必须计数（阶段3复核 MINOR）——静默跳过会让"没扫到"伪装成"没问题"。
     if (depth === 0) throw e;
+    if (stats) stats.skippedDirs++;
     return;
   }
   for (const e of entries) {
@@ -59,7 +61,7 @@ function* walk(dir, depth = 0) {
     if (e.isDirectory()) {
       if (IGNORE_DIRS.has(e.name)) continue;
       if (depth === 0 && ROOT_ONLY_IGNORE.has(e.name)) continue; // B4：歧义名仅根层忽略
-      yield* walk(full, depth + 1);
+      yield* walk(full, depth + 1, stats);
     } else if (e.isFile() && SCAN_EXT.has(extname(e.name)) && !ignored(e.name)) {
       let st;
       try { st = statSync(full); } catch { continue; }
@@ -241,10 +243,11 @@ export function scanProject(dir) {
   let filesScanned = 0;
   let skippedLargeFiles = 0;
   let truncated = false;
+  const walkStats = { skippedDirs: 0 }; // B3：拒权跳过的子目录数——未覆盖面必须可见
   // B5：相对路径统一净化——控制字符/反引号可借恶意文件名注入 markdown/提示词到报告与 MCP 文本。
   const relSafe = (f) => relative(dir, f).replace(/\\/g, "/").replace(/[\u0000-\u001f\u007f`]/g, "?");
 
-  for (const { file, size } of walk(dir)) {
+  for (const { file, size } of walk(dir, 0, walkStats)) {
     if (filesScanned >= MAX_FILES) { truncated = true; break; } // B2：截断而非无限吃内存/时间
     if (size > MAX_FILE_BYTES) { skippedLargeFiles++; continue; } // B2：超大文件跳过并计数
     let text;
@@ -321,6 +324,7 @@ export function scanProject(dir) {
   return {
     filesScanned,
     skippedLargeFiles,
+    skippedDirs: walkStats.skippedDirs,
     truncated,
     apis: [...apis].sort(),
     domains: [...domains].sort(),
