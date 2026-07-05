@@ -138,3 +138,6 @@ MCP 路径可产出假清白报告(已对抗复核 CONFIRMED)、配置解析失�
 | — | 阶段 4 小结 | — | 测试 154 → 168 全绿;三次金快照变更均有夹具源码级核验;dogfood 11 样本全程无扰动 |
 | 2026-07-05 | 阶段4复核 | — | 独立复核 PASS-WITH-MINOR:R1 逐行等价核验、R3 对抗探针 16/18、R4 多行/type-only 导入核验、金快照算术自查(54 hit 自数吻合)。MINOR-1(一行式 JSX 自闭合标签吞同行调用,探针坐实)与 MINOR-2(rot 收割无对账卫兵+合成 scan 两处漂移)均已修 |
 | 2026-07-05 | 复核 MINOR 修复 | 6 提交(7439f59 等) | 引号后必为除号(文法正确)+JSX 回归锁;共享 CROSSCHECK_ALL_HIT_SCAN+收割对账缺一即抛;\$comment 标准化;NOTE-3/4 文档化。测试 168→169 全绿 |
+| 2026-07-05 | E1~E5/E8 发布工程 | 11 提交(f301670 等) | release.yml(草稿闸+gh 原生无三方 action);CI 矩阵 ubuntu/windows×20/22+lint 门禁+最小权限;npm ci 去兜底;mcpb 锁 2.1.2;dependabot;lockfile 修复(0.1.0+双 bin);eslint 全库仅 1 处有意豁免;bin exitCode;perf CI 预算 8s |
+| 2026-07-05 | E6 文档对账(委派执行) | 76a6c5b, a8128d1, 576f5ec, 441aece, dba30d7 | docs/06 门禁表+债台账、docs/08 46→63(含清单外第 4 处)+免责头、CONTRIBUTING 验收协议、docs/10 五笔 FX 销账(FX-13 如实保留延期)、CHANGELOG Unreleased;每处先对源码核验,5 轮 npm test 全绿 |
+| — | 阶段 5 小结 | — | 测试 169 全绿+lint 门禁;分发通道可复现(tag→资产+SHA-256);文档与实测零矛盾;FX-13 为全台账唯一遗留(低危,入路线图) |
