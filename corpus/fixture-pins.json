@@ -158,7 +158,6 @@
         "privacy.chooseLocation",
         "privacy.compass",
         "privacy.deviceMotion",
-        "privacy.getLocation",
         "privacy.gyroscope",
         "privacy.werun",
         "privacy.writePhotosAlbum"
@@ -179,7 +178,6 @@
         "privacy.chooseLocation",
         "privacy.compass",
         "privacy.deviceMotion",
-        "privacy.getLocation",
         "privacy.gyroscope",
         "privacy.werun",
         "privacy.writePhotosAlbum"
