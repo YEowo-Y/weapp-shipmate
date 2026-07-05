@@ -13,9 +13,11 @@
 
 ## 1. 短期(≤1 个月)
 
-### 1.1 强化战役收尾(基本完成,余两项演练)
+### 1.1 强化战役收尾(已完成 2026-07-05)
 - **已完成(2026-07-05)**:scanProject 拆分(FX-05)、正则字面量启发式、Taro 具名导入、规则层收尾(R5);release.yml、CI 矩阵、锁 mcpb、eslint 门禁、文档对账(E6)。
-- **余项**:①tag 一个 v0.2.0-rc 演练 release.yml 全流程(资产+SHA-256+草稿 Release,首次跑通即验收)②CI 矩阵在 GitHub 实际 runner 上首跑(windows-latest 腿的 perf 预算已按 CI 放宽,若仍波动按台账 NOTE 调整)。
+- **①release.yml 全流程演练(已跑通)**:先把 package.json/manifest/lockfile 三处版本同步 bump 至 `0.2.0-rc.1`(保产物自洽)→ tag `v0.2.0-rc.1` 触发 release run 成功;草稿 Release 挂三资产(`weapp-shipmate-0.2.0-rc.1.tgz` + `weapp-shipmate.mcpb` + `SHA256SUMS.txt`),**真实 mcpb pack 首次在 runner 跑通**(此前均开发机手工构建)。首跑因 e2e `--version` 断言窄化成三段式而误红(合法预发布段 `-rc.1` 被拒),已修(正则放宽为完整 SemVer 含预发布/build 段)——本地无法复现的预发布边界被 CI 首跑抓到,正是本项存在的意义。
+- **②CI 矩阵 GitHub runner 首跑(全绿)**:ubuntu/windows × node20/22 四腿全过(windows 腿 43~51s、ubuntu 14~16s);目标用户主平台 Windows 此前零覆盖,现证实绿;perf 腿未在 CI 波动(8s 预算兜住)。
+- **下一步**:草稿 Release 为演练产物,人工核对后可删;正式发布走 §1.2(bump `0.2.0` GA + outreach)。
 
 ### 1.2 发布 v0.2.0 并执行 outreach(关键路径,代码不可替代)
 - **目标**:以强化后的版本重发预览;按 docs/11 协议找 5 个目标用户读导航,≥3/5 能复述"下一步做什么"。
