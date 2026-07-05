@@ -66,10 +66,10 @@
 
 | 债务 | 引入理由 / 现状 | 处置计划 | 状态 |
 |---|---|---|---|
-| `js-yaml`(+argparse) 运行时依赖 | 规则/flow YAML 解析；与"零依赖"对外口径冲突（FX-01） | 去依赖（JSON 化 / 最小解析器）或全仓改措辞 + 本台账登记；**待决** | 🔴 本轮 |
-| `scanProject` 圈复杂度 ~20–24 | 单函数聚合 walk + 提取 + 配置解析（FX-05） | 拆 `extractFacts`/`parseAppConfig` 每子函数 <10 | 🔴 本轮 |
-| 性能门禁无实现 | docs/06 §4 要求数千文件 <5s，无被测对象（FX-10） | 补 `perf.test.mjs` 或标 N/A + 解锁阶段 | 🟡 延期 |
-| `mcp.test.mjs` setTimeout+kill 竞态 | 固定 400ms 等待非确定性收尾（FX-WONTFIX-01 误报底层异味） | 改事件驱动：收齐 id===1/2 再 resolve | 🟡 延期 |
+| `js-yaml` 运行时依赖 | 规则/flow YAML 解析；已改口径为"极简依赖·仅 js-yaml"，不再宣称"零依赖"（FX-01，决策见 [`docs/10`](10-quality-inspection-and-slice-plan.md) §2） | 保留依赖，口径已对齐 `npm ls --omit=dev` 实测 | ✅ 已决(改口径、保留依赖) |
+| `scanProject` 圈复杂度 ~20–24 | 单函数聚合 walk + 提取 + 配置解析（FX-05） | 已拆 `extractFacts`/`parseAppConfig`（`src/scanner.mjs`），每子函数 <10 | ✅ 已拆(S4) |
+| 性能门禁无实现 | docs/06 §4 要求数千文件 <5s，无被测对象（FX-10） | 已补 `tests/perf.test.mjs`（1000 文件 <3s 本机/8s CI、heap<200MB） | ✅ 已修(S6) |
+| `mcp.test.mjs` setTimeout+kill 竞态 | 固定 400ms 等待非确定性收尾（FX-WONTFIX-01 误报底层异味） | 已改事件驱动：收齐 id===1/2 再 resolve（`tests/mcp.test.mjs`） | ✅ 已修 |
 | 桌面 markdown 裸 `<pre>` / 退出码契约 | P2.0 薄壳直出字面量（FX-15） | P2.1：MD→DOM 结构化 + 退出码语义 | 🟡 延期(P2.1) |
 
 ---
@@ -98,9 +98,9 @@
 | 单元测试 | 扫描器从源码提取域名/隐私 API/配置的纯函数 | ✅ P2（2026-06-22；部分纯函数缺直接覆盖 FX-17） |
 | 接口测试 | CLI 子命令入参→输出契约（`check` / `guide` 的 JSON 报告 schema） | ✅ P2（mcp dispatch + cli 主路径） |
 | 集成测试 | 规则库 + 扫描器 + 渲染器串起来，喂真实小程序源码 | ✅ P2（fixtures `runCheck` 端到端） |
-| 冒烟测试 | `check ./fixture` 与 `guide` 在样例项目上不崩、出非空报告 | ⚠️ 散落各文件，待独立 `smoke.test.mjs`（FX-04） |
-| **E2E** | 从"用户答问卷/给源码"到"拿到个性化上线清单"全流程 | ⚠️ 仅协议握手，二进制级全链路待 `e2e.test.mjs`（🔴 FX-04） |
-| 性能 | 预检在中型小程序（数千文件）上耗时/内存基线（如 < 5s、不 OOM） | ❌ 未实现，N/A 待性能夹具（🟡 FX-10） |
+| 冒烟测试 | `check ./fixture` 与 `guide` 在样例项目上不崩、出非空报告 | ✅ `tests/smoke.test.mjs`（全夹具 + guide/explain/dispatch ping 最小存活） |
+| **E2E** | 从"用户答问卷/给源码"到"拿到个性化上线清单"全流程 | ✅ `tests/e2e.test.mjs`（spawn 驱动二进制，覆盖 check/guide/explain/checklist + 退出码契约） |
+| 性能 | 预检在中型小程序（数千文件）上耗时/内存基线（如 < 5s、不 OOM） | ✅ `tests/perf.test.mjs`（1000 文件 <3s 本机/8s CI、heap 增量 <200MB） |
 
 > **E2E 锚点**：用 §0 Go/No-Go 的"3 个真实/模拟小程序跑出有价值报告"作为 P2 的 E2E 验收集。
 > **测试夹具**：二期建 `fixtures/`（脱敏样例小程序）作为集成/E2E/性能的共享输入。
