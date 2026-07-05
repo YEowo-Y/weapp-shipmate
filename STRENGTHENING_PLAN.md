@@ -119,3 +119,4 @@ MCP 路径可产出假清白报告(已对抗复核 CONFIRMED)、配置解析失�
 | 2026-07-04 | V3 配置失败信号化 | 9aa0534 等 7 提交 | 坏 app.json:无 blocker 误报+显式注记;broken-config 夹具+labels FP-guard 双锁 |
 | 2026-07-04 | V4 命名空间对齐 | 06739e1 等 6 提交 | Taro 动态注记、wepy 明文告警、fp-guards 防过杀卫兵;金快照 51→53、钉板 26→28(漂移逐条吻合预期) |
 | — | 阶段 2 小结 | — | 测试 130 → 143 全绿;coverage 红线绿;dogfood 11 样本无漂移;踩坑记录:wepy 旧 no_hit 卫兵与新明文请求冲突,被四层门禁同时抓红——标注跟夹具源码走,删陈旧卫兵 |
+| 2026-07-05 | 阶段2复核 | 83c2a29, 7ddf430 | 独立复核 PASS-WITH-MINOR(反向钉板/dogfood 拒绝探针、12 组正则手跑、6×200KB 对抗计时全过);MINOR(guide 面漏 FX-06 守卫)已修。NOTE 路由:Taro/mpx 配置载体 regex 提取失败无 configErrors→并入 R4;stdout.write 错误处理→并入 B6;report 死条件→下次触碰该文件时顺手清;dogfood --update 部分缺失静默重钉→有意保留(warn 已示,重钉本就限于可解析样本) |
