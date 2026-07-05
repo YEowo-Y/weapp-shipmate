@@ -58,6 +58,11 @@ export function runCheck(dir, { subjectType, includeDrafts = false } = {}) {
     notes.push(
       `⚠️ 文件数超过扫描上限（${MAX_FILES}），结果已截断——请确认目录选择正确，或对子目录分别执行 check。`,
     );
+  // B3（阶段3复核 MINOR）：拒权子目录的未覆盖面必须显性——与超大文件/截断同一原则。
+  if (scan.skippedDirs)
+    notes.push(
+      `⚠️ ${scan.skippedDirs} 个子目录无法读取（权限等原因）被跳过——其中的源码未参与扫描，本报告不覆盖这些目录。`,
+    );
   // V3：配置载体失败必须显性化——一致性核验已闭嘴（见 crosscheck），报告须说明"为什么没查"。
   if (scan.configErrors?.length)
     notes.push(
