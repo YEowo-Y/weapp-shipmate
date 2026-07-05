@@ -7,6 +7,10 @@ on:
     - cron: "0 0 1 * *"   # 每月 1 日 00:00 UTC
   workflow_dispatch: {}    # 也可手动触发
 
+# E4：最小权限——本工作流只读代码跑体检，不需要写权限。
+permissions:
+  contents: read
+
 jobs:
   rot:
     runs-on: ubuntu-latest
@@ -15,7 +19,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: npm ci || npm install
+      # E2：去掉 `|| npm install` 兜底——lockfile 漂移应当响亮失败，静默改装浮动版本会毁掉可复现性。
+      - run: npm ci
       # 含链接体检（联网）；超期规则或确证失效链接会让此 job 失败以示告警。
       # 反爬 403/405 归类为"待人工"不触发失败，避免误报。
       - run: npm run rot -- --links
