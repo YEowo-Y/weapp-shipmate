@@ -26,8 +26,11 @@ jobs:
       # tgz：与 npm registry 发布物同源（registry 发布解锁后两渠道一致性由此保证）。
       - run: npm pack
       # .mcpb：真实 pack（联网拉取锁定版本的打包器），产物 build/weapp-shipmate.mcpb。
+      # REQUIRE_PACK：发布上下文里打包失败即致命，错误指向 pack 步骤本身而非下游 checksum（阶段5复核 NOTE）。
       - name: build mcpb bundle
         run: npm run build:mcpb
+        env:
+          WEAPP_SHIPMATE_REQUIRE_PACK: "1"
       - name: checksums
         run: sha256sum weapp-shipmate-*.tgz build/weapp-shipmate.mcpb > SHA256SUMS.txt && cat SHA256SUMS.txt
       # 用 runner 自带 gh CLI 而非第三方 action——与仓库"最小供应链面"取向一致。
