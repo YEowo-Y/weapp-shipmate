@@ -113,7 +113,11 @@ const packed = mcpb(["pack", STAGE, OUT]);
 if (packed.status !== 0) {
   log(`\n⚠ mcpb 打包未成功（可能离线或未装）。暂存目录已就绪：${STAGE}`);
   log(`  请联网后手动执行：npx --yes @anthropic-ai/mcpb@${MCPB_VERSION} pack "${STAGE}" "${OUT}"`);
-  process.exitCode = 0; // 暂存与自检已完成，不视为致命失败。
+  // 发布上下文（release.yml 设 WEAPP_SHIPMATE_REQUIRE_PACK=1）：打包失败必须在此致命退出，
+  // 让错误指向真正的源头——否则退 0，后续 sha256sum 才因缺文件报错，诊断偏移一步（阶段5复核 NOTE）。
+  // 本地手动/CI 冒烟（默认，且 NO_PACK 已提前 return）保持非致命：暂存与自检已完成即达目的。
+  if (process.env.WEAPP_SHIPMATE_REQUIRE_PACK === "1") process.exit(1);
+  process.exitCode = 0;
 } else {
   log(`\n✓ 打包完成：${OUT}`);
 
