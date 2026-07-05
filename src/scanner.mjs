@@ -101,14 +101,62 @@ const MPX_JSON_BLOCK_RE = /<script[^>]*application\/json[^>]*>([\s\S]*?)<\/scrip
 const TEMPLATE_EXT = new Set([".wxml", ".vue", ".uvue", ".nvue", ".mpx", ".wpy"]);
 const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g;
 
+// ── R3（阶段4，D2 拍板）：正则字面量感知 ──
+// 不识别正则会毒化字符串/注释跟踪：s.split(/"/) 让后续代码被当字符串吞掉、/\// 让行尾被当
+// // 注释吞掉——同段真实隐私 API 调用静默消失，是合规工具最坏的失效模式（勘察实证）。
+// 仅对纯 JS 扩展名启用（JS_EXT）：模板文件里 </view> 的 `/` 同样处于"表达式位置"，
+// 启用会把闭合标签误判为正则、吞掉标签间内容；模板内嵌 script 保持旧行为（已知限制）。
+const JS_EXT = new Set([".js", ".ts", ".jsx", ".tsx", ".mjs", ".wxs"]);
+const REGEX_POS_KEYWORDS = new Set([
+  "return", "typeof", "case", "in", "of", "new", "delete", "void", "do", "else", "instanceof", "yield", "await",
+]);
+
+/** 依据已产出的前文（注释/字符串已处理）判断当前 `/` 是否处于正则字面量位置（标准除号/正则启发式）。 */
+function inRegexPosition(prev) {
+  let k = prev.length - 1;
+  while (k >= 0 && /\s/.test(prev[k])) k--;
+  if (k < 0) return true; // 文件首
+  const c = prev[k];
+  if (c === ">") return prev[k - 1] === "="; // 箭头函数 => 后是正则位置；其余 > 按除号处理
+  if (c === "<") return false;
+  if (/[A-Za-z0-9_$)\]}]/.test(c)) {
+    // 标识符/字面量/闭括号后是除号——但 return/typeof/case 等关键字后仍是正则位置
+    const m = prev.slice(Math.max(0, k - 11), k + 1).match(/([A-Za-z_$][A-Za-z0-9_$]*)$/);
+    if (!m || !REGEX_POS_KEYWORDS.has(m[1])) return false;
+    const before = prev[k - m[1].length];
+    return before === undefined || !/[A-Za-z0-9_$.]/.test(before);
+  }
+  return true; // 运算符/分隔符（= ( , : [ ! & | ? { ; 等）后 → 正则
+}
+
+/** 从 text[i]（`/`）扫过整个正则字面量（含字符类与 flags）。跨行/未闭合视为误判（除号），返回 -1。 */
+function scanRegexLiteral(text, i) {
+  const n = text.length;
+  let k = i + 1;
+  let inClass = false;
+  let closed = false;
+  for (; k < n; k++) {
+    const c = text[k];
+    if (c === "\\") { k++; continue; }
+    if (c === "\n") return -1;
+    if (c === "[") inClass = true;
+    else if (c === "]") inClass = false;
+    else if (c === "/" && !inClass) { closed = true; k++; break; }
+  }
+  if (!closed) return -1;
+  while (k < n && /[a-z]/i.test(text[k])) k++; // flags
+  return k;
+}
+
 /**
  * 字符串感知地剥离 // 行注释与 / * * / 块注释，但完整保留字符串字面量内容
  * （含其中的 https:// 与 //）。这是可信度的关键：被注释掉的 wx.getLocation() 不应再触发
  * 隐私/域名预检；而朴素的「//→行尾」剥离会破坏 "https://x" 反而引入新错误，故必须感知字符串。
- * 不处理正则字面量（范围之外）；WXML/HTML 注释由 scanProject 对模板类文件先行剥离——
+ * regexAware=true（仅 JS_EXT 文件）时额外识别并原样跳过正则字面量（R3）；
+ * WXML/HTML 注释由 scanProject 对模板类文件先行剥离——
  * 对模板级信号（组件标签/属性）而言，注释掉的组件不剥会直接产生误报，不是"少剥一处"。
  */
-export function stripComments(text) {
+export function stripComments(text, regexAware = false) {
   let out = "";
   let str = null; // 当前字符串定界符（' " 或 反引号），null 表示不在字符串内
   for (let i = 0, n = text.length; i < n; ) {
@@ -131,6 +179,10 @@ export function stripComments(text) {
       i += 2;
       continue;
     }
+    if (regexAware && c === "/" && inRegexPosition(out)) { // R3：正则字面量原样保留、整体跳过
+      const end = scanRegexLiteral(text, i);
+      if (end > 0) { out += text.slice(i, end); i = end; continue; }
+    }
     if (c === '"' || c === "'" || c === "`") str = c; // 进入字符串
     out += c;
     i += 1;
@@ -140,8 +192,10 @@ export function stripComments(text) {
 
 /** 把字符串字面量内容置空但保留定界符——仅供 API 提取（API_RE）使用。
  *  已知取舍：模板字面量 ${} 插值里的真实调用会被一并置空（罕见写法，接受 FN 换取
- *  文案/日志引用 API 名这一常见场景不误报）。 */
-export function blankStrings(text) {
+ *  文案/日志引用 API 名这一常见场景不误报）。
+ *  regexAware=true（仅 JS_EXT 文件）时整个正则字面量置为中性 token `0`（R3）——
+ *  正则文本里的 API 名不是真实调用，且 `0` 保持后续 `/` 的除号语义与字面量后一致。 */
+export function blankStrings(text, regexAware = false) {
   let out = "";
   let str = null; // 当前字符串定界符，null 表示不在字符串内
   for (let i = 0, n = text.length; i < n; ) {
@@ -151,6 +205,10 @@ export function blankStrings(text) {
       if (c === str) { out += c; str = null; }
       i += 1;
       continue;
+    }
+    if (regexAware && c === "/" && inRegexPosition(out)) { // R3
+      const end = scanRegexLiteral(text, i);
+      if (end > 0) { out += "0"; i = end; continue; }
     }
     if (c === '"' || c === "'" || c === "`") str = c;
     out += c;
@@ -235,12 +293,13 @@ const isConfigCarrier = (base) =>
  */
 function extractFacts(file, text, rel, facts) {
   // 先剔除 uni-app 非微信端的条件编译分支，模板类文件再剥 HTML 注释，之后剥 JS 注释，最后在结果上提取事实。
+  const regexAware = JS_EXT.has(extname(file)); // R3：正则字面量感知仅对纯 JS 文件启用（模板见 JS_EXT 注释）
   let code = stripUniConditional(text);
   if (TEMPLATE_EXT.has(extname(file))) code = code.replace(HTML_COMMENT_RE, "");
-  code = stripComments(code);
+  code = stripComments(code, regexAware);
   // API 提取用字符串置空副本：日志/文案里引用的 "wx.getLocation" 不是真实调用；
   // 其余提取（URL/密钥/模板属性/配置解析）都依赖字符串内容，必须继续用原文本。
-  for (const m of blankStrings(code).matchAll(API_RE)) facts.apis.add(`${m[1]}.${m[2]}`);
+  for (const m of blankStrings(code, regexAware).matchAll(API_RE)) facts.apis.add(`${m[1]}.${m[2]}`);
   for (const m of code.matchAll(URL_RE)) {
     const host = normalizeHost(m[3]); // 去端口/userinfo，防止绕过精确匹配的安全核验
     if (!isPlausibleHost(host)) continue; // 跳过 `${host}` 等模板占位/非法 host 噪声
