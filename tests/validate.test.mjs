@@ -68,6 +68,31 @@ test("lintRejections: 悬空规则引用被点名", () => {
   assert.ok(errors.some((e) => e.includes("ghost.rule")), `应报悬空引用: ${errors}`);
 });
 
+// R5（阶段4）：schema 的 scanner↔字段绑定——此前 match 只 required:[scanner]，
+// "带 scanner 但无可匹配字段"的死规则（永不可能命中）能过 CI。
+test("rules.schema: scanner 类型绑定必需字段（死规则三态负向）", async () => {
+  const Ajv = (await import("ajv")).default;
+  const addFormats = (await import("ajv-formats")).default;
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  addFormats(ajv);
+  const schema = JSON.parse(readFileSync(join(ROOT, "schemas", "rules.schema.json"), "utf-8"));
+  const validate = ajv.compile(schema);
+  const mkDoc = (match) => ({
+    schema_version: 1,
+    rules: [{
+      id: "privacy.deadRule", title: "t", kind: "preflight", stage: "privacy",
+      subject_type: ["personal"], severity: "warning", confidence: "high",
+      match, requires: ["x"], why: "w",
+      official_url: "https://example.com", source_quote: "q", last_verified: "2026-07-01",
+      manual_required: true, // schema 底部 if/then：带 requires 的规则须人工完成标记
+    }],
+  });
+  assert.equal(validate(mkDoc({ scanner: "static_api_call" })), false, "static_api_call 无 api → 死规则须拒");
+  assert.equal(validate(mkDoc({ scanner: "static_config" })), false, "static_config 无 config_key → 死规则须拒");
+  assert.equal(validate(mkDoc({ scanner: "manual_only", api: ["wx.getLocation"] })), false, "manual_only 带 api 自相矛盾须拒");
+  assert.equal(validate(mkDoc({ scanner: "static_api_call", api: ["wx.getLocation"] })), true, "正常形态仍过");
+});
+
 test("lintRules + lintRejections: 真实仓库数据零错误（重构等价锁）", () => {
   const flow = yaml.load(readFileSync(join(ROOT, "flow.yaml"), "utf-8"));
   const { stageSet } = lintFlowGraph(flow);
