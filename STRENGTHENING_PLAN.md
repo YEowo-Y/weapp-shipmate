@@ -136,3 +136,5 @@ MCP 路径可产出假清白报告(已对抗复核 CONFIRMED)、配置解析失�
 | 2026-07-05 | R4 具名导入+配置信号(D2+复核 NOTE) | 6 提交 | Taro 具名导入(含 as 别名)映射 wx.*;requiredPrivateInfos 非字面量/mpx 块畸形→configErrors;金快照 54→55 |
 | 2026-07-05 | R5 规则层收尾 | 7 提交(14a3000 等) | chooseLocation 双触发收敛(裁决反转+FP 卫兵,55→54);rot 监控载体 63→97(crosscheck/flow/rejections 并入,合成 scan 收割零重复);schema match 收紧(死规则三态负向锁) |
 | — | 阶段 4 小结 | — | 测试 154 → 168 全绿;三次金快照变更均有夹具源码级核验;dogfood 11 样本全程无扰动 |
+| 2026-07-05 | 阶段4复核 | — | 独立复核 PASS-WITH-MINOR:R1 逐行等价核验、R3 对抗探针 16/18、R4 多行/type-only 导入核验、金快照算术自查(54 hit 自数吻合)。MINOR-1(一行式 JSX 自闭合标签吞同行调用,探针坐实)与 MINOR-2(rot 收割无对账卫兵+合成 scan 两处漂移)均已修 |
+| 2026-07-05 | 复核 MINOR 修复 | 6 提交(7439f59 等) | 引号后必为除号(文法正确)+JSX 回归锁;共享 CROSSCHECK_ALL_HIT_SCAN+收割对账缺一即抛;\$comment 标准化;NOTE-3/4 文档化。测试 168→169 全绿 |
