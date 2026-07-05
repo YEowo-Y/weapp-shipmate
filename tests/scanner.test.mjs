@@ -75,6 +75,19 @@ test("R3: 正则文本里的 API 名不是真实调用；模板文件默认不�
   assert.ok(tpl.includes("</view>") && tpl.includes("<camera/>"), "模板闭合标签不受启发式影响");
 });
 
+// R3 补（阶段4复核 MINOR-1）：字符串引号后的 / 必为除号——一行式 JSX 自闭合标签
+// （属性引号 + /）曾被判为正则起点，吞掉同行后续的真实调用（探针确认的回归走廊）。
+test("R3 补: 一行式 JSX 自闭合标签后的同行 API 调用不得丢失", () => {
+  const facts = { apis: new Set(), domains: new Set(), configKeys: new Set(), secretHints: new Set(), insecureHosts: new Set(), configErrors: [], dynamicRequest: false };
+  _extractFacts(
+    "page.tsx",
+    'export const v = () => { return <View><Icon type="a"/>{Taro.scanCode()}</View>; };',
+    "page.tsx",
+    facts,
+  );
+  assert.ok(facts.apis.has("Taro.scanCode"), "自闭合标签（引号+/）后的调用曾被当正则吞掉");
+});
+
 // ── R4（阶段4，D2 拍板）：Taro 具名导入映射 + 配置载体"提取不到 ≠ 未声明" ──
 test("R4: Taro 具名导入映射为 wx.* 事实（含 as 别名与 default+具名混合）", () => {
   const facts = { apis: new Set(), domains: new Set(), configKeys: new Set(), secretHints: new Set(), insecureHosts: new Set(), configErrors: [], dynamicRequest: false };
