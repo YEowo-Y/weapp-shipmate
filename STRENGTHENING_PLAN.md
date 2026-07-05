@@ -141,3 +141,5 @@ MCP 路径可产出假清白报告(已对抗复核 CONFIRMED)、配置解析失�
 | 2026-07-05 | E1~E5/E8 发布工程 | 11 提交(f301670 等) | release.yml(草稿闸+gh 原生无三方 action);CI 矩阵 ubuntu/windows×20/22+lint 门禁+最小权限;npm ci 去兜底;mcpb 锁 2.1.2;dependabot;lockfile 修复(0.1.0+双 bin);eslint 全库仅 1 处有意豁免;bin exitCode;perf CI 预算 8s |
 | 2026-07-05 | E6 文档对账(委派执行) | 76a6c5b, a8128d1, 576f5ec, 441aece, dba30d7 | docs/06 门禁表+债台账、docs/08 46→63(含清单外第 4 处)+免责头、CONTRIBUTING 验收协议、docs/10 五笔 FX 销账(FX-13 如实保留延期)、CHANGELOG Unreleased;每处先对源码核验,5 轮 npm test 全绿 |
 | — | 阶段 5 小结 | — | 测试 169 全绿+lint 门禁;分发通道可复现(tag→资产+SHA-256);文档与实测零矛盾;FX-13 为全台账唯一遗留(低危,入路线图) |
+| 2026-07-05 | 阶段5复核 | 825c49c, 04cfaac | 独立复核 PASS-WITH-MINOR:Windows 机上全门禁复跑、tag 注入探针实证证伪、icacls 测试 Linux 安全跳过验证、无运行时依赖膨胀。NOTE(release 打包失败诊断偏移一步)已修:REQUIRE_PACK 令失败在源头致命,默认/NO_PACK 行为不变。perf MINOR 由台账排期的首次 CI 演练确认(无法本地跑 GitHub runner) |
+| — | **战役收官** | — | 五阶段全部 PASS(逐阶段独立复核,MINOR 均已修);测试 116→169;金快照 51→54 TP/0 FP;main..HEAD 108 提交;唯一代码替代不了的是 outreach(docs/11) |
