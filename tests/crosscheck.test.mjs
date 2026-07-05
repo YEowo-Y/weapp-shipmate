@@ -8,7 +8,18 @@ import {
   checkIpOrLocalhost,
   crossChecks,
   CROSSCHECK_RULE_IDS,
+  _LOCATION_DECL_APIS,
 } from "../src/crosscheck.mjs";
+
+// R2/FX-17（阶段4）：位置声明键集合的直接行为锁——R1 重构期间此集合漂移会静默改变一致性核验范围。
+test("_LOCATION_DECL_APIS: 非空、无重复、含核心项、均为裸声明键名（不带 wx. 前缀）", () => {
+  assert.ok(_LOCATION_DECL_APIS.length >= 8);
+  assert.equal(new Set(_LOCATION_DECL_APIS).size, _LOCATION_DECL_APIS.length, "不得有重复项");
+  for (const core of ["getLocation", "chooseLocation", "chooseAddress"])
+    assert.ok(_LOCATION_DECL_APIS.includes(core), `核心声明键缺失：${core}`);
+  for (const n of _LOCATION_DECL_APIS)
+    assert.ok(!n.startsWith("wx."), `声明键应为裸名（requiredPrivateInfos 语义）：${n}`);
+});
 
 // 聚合器 ↔ 登记清单一致性锁：单项 check 从聚合器被删/新 check 忘挂载或忘登记时，
 // 单元测试与 accuracy（consistency/ip 两条只有 no_hit 标注）都不会翻红——只有这里会。
