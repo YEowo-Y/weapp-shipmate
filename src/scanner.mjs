@@ -224,22 +224,98 @@ function isPlausibleHost(h) {
 }
 
 
+/** 配置载体判定：这些文件承载隐私声明/权限配置，其读取或解析失败必须显性记录（V3）。 */
+const isConfigCarrier = (base) =>
+  base === "app.json" || base === "manifest.json" || base === "app.mpx" || /^app\.config\.[jt]sx?$/.test(base);
+
 /**
- * 扫描一个小程序项目目录。
+ * 单文件事实提取（R1/FX-05 拆分）：按序剥离（uni 条件编译 → 模板 HTML 注释 → JS 注释）后，
+ * 提取 API 调用、域名、明文/动态请求、模板级隐私信号、密钥键名，累加进 facts。
+ * 返回剥离后的 code，供配置载体解析复用（JSONC 注释已剥）。
+ */
+function extractFacts(file, text, rel, facts) {
+  // 先剔除 uni-app 非微信端的条件编译分支，模板类文件再剥 HTML 注释，之后剥 JS 注释，最后在结果上提取事实。
+  let code = stripUniConditional(text);
+  if (TEMPLATE_EXT.has(extname(file))) code = code.replace(HTML_COMMENT_RE, "");
+  code = stripComments(code);
+  // API 提取用字符串置空副本：日志/文案里引用的 "wx.getLocation" 不是真实调用；
+  // 其余提取（URL/密钥/模板属性/配置解析）都依赖字符串内容，必须继续用原文本。
+  for (const m of blankStrings(code).matchAll(API_RE)) facts.apis.add(`${m[1]}.${m[2]}`);
+  for (const m of code.matchAll(URL_RE)) {
+    const host = normalizeHost(m[3]); // 去端口/userinfo，防止绕过精确匹配的安全核验
+    if (!isPlausibleHost(host)) continue; // 跳过 `${host}` 等模板占位/非法 host 噪声
+    facts.domains.add(host);
+  }
+  // 明文请求：仅取请求 API 调用里 url: 的 http/ws（不含媒体 src、navigator/href、mock 数据的 url 字段）
+  for (const m of code.matchAll(INSECURE_REQUEST_RE)) {
+    const host = normalizeHost(m[2]);
+    if (isPlausibleHost(host)) facts.insecureHosts.add(host);
+  }
+  if (REQUEST_DYNAMIC_RE.test(code)) facts.dynamicRequest = true;
+  if (PHONE_BTN_RE.test(code)) facts.configKeys.add("button.open-type=getPhoneNumber");
+  if (AVATAR_BTN_RE.test(code)) facts.configKeys.add("button.open-type=chooseAvatar");
+  if (CAMERA_TAG_RE.test(code)) facts.configKeys.add("component.camera");
+  if (LIVE_PUSHER_TAG_RE.test(code)) facts.configKeys.add("component.live-pusher");
+  if (WEB_VIEW_TAG_RE.test(code)) facts.configKeys.add("component.web-view");
+  // 只取键名（m[1]）与相对路径，永不读取/记录密钥值本身。
+  for (const m of code.matchAll(SECRET_RE)) facts.secretHints.add(`${rel}::${m[1].toLowerCase()}`);
+  return code;
+}
+
+/**
+ * 配置载体解析（R1/FX-05 拆分）：原生 app.json 根级 / uni-app manifest.json 的 mp-weixin 块
+ * （常为 JSONC，入参 code 已剥注释）/ Taro app.config.*（模块非 JSON，正则抽取）/
+ * mpx app.mpx（内嵌 application/json 块），统一为 app.json:* 逻辑配置键；解析失败记入 configErrors（V3）。
+ */
+function parseAppConfig(base, code, rel, facts) {
+  if (base === "app.json" || base === "manifest.json") {
+    try {
+      const conf = parseJsonLoose(code);
+      const mp = base === "manifest.json" ? conf["mp-weixin"] || {} : conf;
+      if (mp.requiredPrivateInfos) {
+        for (const k of mp.requiredPrivateInfos) facts.configKeys.add(`app.json:requiredPrivateInfos:${k}`);
+      }
+      if (mp.permission) {
+        for (const k of Object.keys(mp.permission)) facts.configKeys.add(`app.json:permission:${k}`);
+      }
+    } catch { facts.configErrors.push({ file: rel, reason: "解析失败（尾逗号容错后仍非法）" }); } // V3：记录而非静默
+  } else if (/^app\.config\.[jt]sx?$/.test(base)) {
+    // Taro：app.config.ts/js 是模块而非 JSON，正则抽取 requiredPrivateInfos 数组里的接口名。
+    const m = code.match(REQUIRED_PRIVATE_RE);
+    if (m) for (const q of m[1].matchAll(QUOTED_NAME_RE)) facts.configKeys.add(`app.json:requiredPrivateInfos:${q[1]}`);
+  } else if (base === "app.mpx") {
+    // mpx：应用配置在 app.mpx 内嵌的 <script type="application/json"> 块里，提取后按 JSON 解析。
+    const block = code.match(MPX_JSON_BLOCK_RE);
+    if (block) {
+      try {
+        const conf = parseJsonLoose(block[1]);
+        if (conf.requiredPrivateInfos) {
+          for (const k of conf.requiredPrivateInfos) facts.configKeys.add(`app.json:requiredPrivateInfos:${k}`);
+        }
+        if (conf.permission) {
+          for (const k of Object.keys(conf.permission)) facts.configKeys.add(`app.json:permission:${k}`);
+        }
+      } catch { facts.configErrors.push({ file: rel, reason: "内嵌配置块解析失败" }); } // V3：记录而非静默
+    }
+  }
+}
+
+/**
+ * 扫描一个小程序项目目录（R1/FX-05 后只负责编排：walk 边界 → 逐文件事实提取 → 配置解析 → 汇总）。
  * @returns {{ filesScanned:number, apis:string[], domains:string[], dynamicRequest:boolean, configKeys:string[] }}
  */
 export function scanProject(dir) {
-  const apis = new Set();
-  const domains = new Set();
-  const configKeys = new Set();
-  const secretHints = new Set(); // "相对路径::键名"，去重；绝不含密钥值
-  const insecureHosts = new Set(); // 用了明文 http/ws 的域名
-  // V3：配置载体（app.json/manifest.json/app.config.*/app.mpx）读取或解析失败必须显性记录——
-  // 静默丢弃会让一致性核验反向断言「未声明」，产出 blocker 级误报（本文件自己的设计注释早已预言）。
-  const configErrors = [];
-  const isConfigCarrier = (base) =>
-    base === "app.json" || base === "manifest.json" || base === "app.mpx" || /^app\.config\.[jt]sx?$/.test(base);
-  let dynamicRequest = false;
+  const facts = {
+    apis: new Set(),
+    domains: new Set(),
+    configKeys: new Set(),
+    secretHints: new Set(), // "相对路径::键名"，去重；绝不含密钥值
+    insecureHosts: new Set(), // 用了明文 http/ws 的域名
+    // V3：配置载体读取或解析失败必须显性记录——静默丢弃会让一致性核验反向断言「未声明」，
+    // 产出 blocker 级误报（本文件自己的设计注释早已预言）。
+    configErrors: [],
+    dynamicRequest: false,
+  };
   let filesScanned = 0;
   let skippedLargeFiles = 0;
   let truncated = false;
@@ -254,71 +330,13 @@ export function scanProject(dir) {
     try { text = readFileSync(file, "utf-8"); }
     catch {
       if (isConfigCarrier(basename(file)))
-        configErrors.push({ file: relSafe(file), reason: "读取失败" });
+        facts.configErrors.push({ file: relSafe(file), reason: "读取失败" });
       continue;
     }
     filesScanned++;
-
-    // 先剔除 uni-app 非微信端的条件编译分支，模板类文件再剥 HTML 注释，之后剥 JS 注释，最后在结果上提取事实。
-    let code = stripUniConditional(text);
-    if (TEMPLATE_EXT.has(extname(file))) code = code.replace(HTML_COMMENT_RE, "");
-    code = stripComments(code);
-    // API 提取用字符串置空副本：日志/文案里引用的 "wx.getLocation" 不是真实调用；
-    // 其余提取（URL/密钥/模板属性/配置解析）都依赖字符串内容，必须继续用原文本。
-    for (const m of blankStrings(code).matchAll(API_RE)) apis.add(`${m[1]}.${m[2]}`);
-    for (const m of code.matchAll(URL_RE)) {
-      const host = normalizeHost(m[3]); // 去端口/userinfo，防止绕过精确匹配的安全核验
-      if (!isPlausibleHost(host)) continue; // 跳过 `${host}` 等模板占位/非法 host 噪声
-      domains.add(host);
-    }
-    // 明文请求：仅取请求 API 调用里 url: 的 http/ws（不含媒体 src、navigator/href、mock 数据的 url 字段）
-    for (const m of code.matchAll(INSECURE_REQUEST_RE)) {
-      const host = normalizeHost(m[2]);
-      if (isPlausibleHost(host)) insecureHosts.add(host);
-    }
-    if (REQUEST_DYNAMIC_RE.test(code)) dynamicRequest = true;
-    if (PHONE_BTN_RE.test(code)) configKeys.add("button.open-type=getPhoneNumber");
-    if (AVATAR_BTN_RE.test(code)) configKeys.add("button.open-type=chooseAvatar");
-    if (CAMERA_TAG_RE.test(code)) configKeys.add("component.camera");
-    if (LIVE_PUSHER_TAG_RE.test(code)) configKeys.add("component.live-pusher");
-    if (WEB_VIEW_TAG_RE.test(code)) configKeys.add("component.web-view");
-    // 只取键名（m[1]）与相对路径，永不读取/记录密钥值本身。
     const rel = relSafe(file);
-    for (const m of code.matchAll(SECRET_RE)) secretHints.add(`${rel}::${m[1].toLowerCase()}`);
-
-    // 隐私接口声明 / 权限：原生小程序在 app.json 根级；uni-app 在 manifest.json 的 mp-weixin 块
-    // （且常为 JSONC 带注释，故用已剥离注释的 code 解析）。两者统一为同一逻辑配置键。
-    const base = basename(file);
-    if (base === "app.json" || base === "manifest.json") {
-      try {
-        const conf = parseJsonLoose(code);
-        const mp = base === "manifest.json" ? conf["mp-weixin"] || {} : conf;
-        if (mp.requiredPrivateInfos) {
-          for (const k of mp.requiredPrivateInfos) configKeys.add(`app.json:requiredPrivateInfos:${k}`);
-        }
-        if (mp.permission) {
-          for (const k of Object.keys(mp.permission)) configKeys.add(`app.json:permission:${k}`);
-        }
-      } catch { configErrors.push({ file: rel, reason: "解析失败（尾逗号容错后仍非法）" }); } // V3：记录而非静默
-    } else if (/^app\.config\.[jt]sx?$/.test(base)) {
-      // Taro：app.config.ts/js 是模块而非 JSON，正则抽取 requiredPrivateInfos 数组里的接口名。
-      const m = code.match(REQUIRED_PRIVATE_RE);
-      if (m) for (const q of m[1].matchAll(QUOTED_NAME_RE)) configKeys.add(`app.json:requiredPrivateInfos:${q[1]}`);
-    } else if (base === "app.mpx") {
-      // mpx：应用配置在 app.mpx 内嵌的 <script type="application/json"> 块里，提取后按 JSON 解析。
-      const block = code.match(MPX_JSON_BLOCK_RE);
-      if (block) {
-        try {
-          const conf = parseJsonLoose(block[1]);
-          if (conf.requiredPrivateInfos) {
-            for (const k of conf.requiredPrivateInfos) configKeys.add(`app.json:requiredPrivateInfos:${k}`);
-          }
-          if (conf.permission) {
-            for (const k of Object.keys(conf.permission)) configKeys.add(`app.json:permission:${k}`);
-          }
-        } catch { configErrors.push({ file: rel, reason: "内嵌配置块解析失败" }); } // V3：记录而非静默
-      }
-    }
+    const code = extractFacts(file, text, rel, facts);
+    parseAppConfig(basename(file), code, rel, facts);
   }
 
   return {
@@ -326,17 +344,23 @@ export function scanProject(dir) {
     skippedLargeFiles,
     skippedDirs: walkStats.skippedDirs,
     truncated,
-    apis: [...apis].sort(),
-    domains: [...domains].sort(),
-    dynamicRequest,
-    configKeys: [...configKeys].sort(),
-    configErrors,
-    secretHints: [...secretHints].sort().map((s) => {
+    apis: [...facts.apis].sort(),
+    domains: [...facts.domains].sort(),
+    dynamicRequest: facts.dynamicRequest,
+    configKeys: [...facts.configKeys].sort(),
+    configErrors: facts.configErrors,
+    secretHints: [...facts.secretHints].sort().map((s) => {
       const [file, key] = s.split("::");
       return { file, key };
     }),
-    insecureHosts: [...insecureHosts].sort(),
+    insecureHosts: [...facts.insecureHosts].sort(),
   };
 }
 
-export { stripComments as _stripComments, normalizeHost as _normalizeHost }; // 供测试直接验证纯函数
+// 供测试直接验证纯函数；_extractFacts/_parseAppConfig 供直测（FX-17 同理，防重构静默回归）。
+export {
+  stripComments as _stripComments,
+  normalizeHost as _normalizeHost,
+  extractFacts as _extractFacts,
+  parseAppConfig as _parseAppConfig,
+};
