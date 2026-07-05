@@ -64,7 +64,9 @@ rules:
     severity: warning
     confidence: medium
     match:
-      api: ["wx.getLocation", "wx.getFuzzyLocation", "wx.chooseLocation", "wx.onLocationChange", "wx.startLocationUpdate"]
+      # R5：wx.chooseLocation 移交 privacy.chooseLocation（confidence:high，官方逐字"收集你选择的位置信息"）——
+      # 双规则同触发会对一次调用产出两条不同的声明要求（本大类为 medium 推断），去重以精确规则为准。
+      api: ["wx.getLocation", "wx.getFuzzyLocation", "wx.onLocationChange", "wx.startLocationUpdate"]
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：地理位置信息"
