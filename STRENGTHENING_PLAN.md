@@ -143,3 +143,4 @@ MCP 路径可产出假清白报告(已对抗复核 CONFIRMED)、配置解析失�
 | — | 阶段 5 小结 | — | 测试 169 全绿+lint 门禁;分发通道可复现(tag→资产+SHA-256);文档与实测零矛盾;FX-13 为全台账唯一遗留(低危,入路线图) |
 | 2026-07-05 | 阶段5复核 | 825c49c, 04cfaac | 独立复核 PASS-WITH-MINOR:Windows 机上全门禁复跑、tag 注入探针实证证伪、icacls 测试 Linux 安全跳过验证、无运行时依赖膨胀。NOTE(release 打包失败诊断偏移一步)已修:REQUIRE_PACK 令失败在源头致命,默认/NO_PACK 行为不变。perf MINOR 由台账排期的首次 CI 演练确认(无法本地跑 GitHub runner) |
 | — | **战役收官** | — | 五阶段全部 PASS(逐阶段独立复核,MINOR 均已修);测试 116→169;金快照 51→54 TP/0 FP;main..HEAD 108 提交;唯一代码替代不了的是 outreach(docs/11) |
+| 2026-07-05 | 落 main + v0.2.0-rc.1 发布演练(战役后收尾,§1.1) | 329967b~95eb2a3;tag v0.2.0-rc.1 | main fast-forward 纳入全战役(8d22438→95eb2a3);**E1 真实 mcpb pack 首次在 GitHub runner 跑通**,草稿 Release 挂三资产(tgz+mcpb+SHA256SUMS);CI 矩阵 ubuntu/windows×node20/22 四腿全绿(余项②);首跑抓到 e2e `--version` 断言窄化为三段式(拒合法预发布段 `-rc.1`)→放宽为完整 SemVer 修复。演练前先 bump 三处版本号保产物自洽 |
