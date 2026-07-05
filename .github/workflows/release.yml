@@ -1,0 +1,39 @@
+name: release
+
+# E1：tag 触发的可复现发布流水线——此前 GitHub Release 资产（tgz + .mcpb）在开发机手工构建，
+# 真实 mcpb pack 从未在 CI 跑过，分发通道无可复现性。
+# 流程：全量门禁 → npm pack → mcpb pack（锁定版本）→ SHA-256 清单 → 草稿 Release 挂资产。
+# 草稿（--draft）：发布前人工核对资产与说明，点击 Publish 才对外——发布是不可逆动作，留人工闸。
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # 创建 Release 与上传资产所需；其余步骤只读。
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+      # 门禁与 CI 同口径：任何一道红都不允许出资产。
+      - run: npm test
+      - run: npm run coverage
+      # tgz：与 npm registry 发布物同源（registry 发布解锁后两渠道一致性由此保证）。
+      - run: npm pack
+      # .mcpb：真实 pack（联网拉取锁定版本的打包器），产物 build/weapp-shipmate.mcpb。
+      - name: build mcpb bundle
+        run: npm run build:mcpb
+      - name: checksums
+        run: sha256sum weapp-shipmate-*.tgz build/weapp-shipmate.mcpb > SHA256SUMS.txt && cat SHA256SUMS.txt
+      # 用 runner 自带 gh CLI 而非第三方 action——与仓库"最小供应链面"取向一致。
+      - name: create draft release with assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" --generate-notes
+          weapp-shipmate-*.tgz build/weapp-shipmate.mcpb SHA256SUMS.txt
