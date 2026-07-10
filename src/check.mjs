@@ -1,6 +1,6 @@
 // src/check.mjs —— 代码感知预检引擎：扫描结果 × preflight 规则 → 个性化清单
 import { loadData, ruleToItem, apiMatches, appliesToSubject, SUBJECT_ENUM } from "./data.mjs";
-import { scanProject, MAX_FILE_BYTES, MAX_FILES } from "./scanner.mjs";
+import { scanProject, MAX_FILE_BYTES, MAX_WALK_ENTRIES } from "./scanner.mjs";
 import { crossChecks } from "./crosscheck.mjs";
 
 /**
@@ -51,7 +51,7 @@ export function runCheck(dir, { subjectType, includeDrafts = false } = {}) {
     );
   if (scan.truncated)
     notes.push(
-      `⚠️ 文件数超过扫描上限（${MAX_FILES}），结果已截断——请确认目录选择正确，或对子目录分别执行 check。`,
+      `⚠️ 遍历目录项超过扫描上限（${MAX_WALK_ENTRIES}），结果已截断——请确认目录选择正确，或对子目录分别执行 check。`,
     );
   // B3（阶段3复核 MINOR）：拒权子目录的未覆盖面必须显性——与超大文件/截断同一原则。
   if (scan.skippedDirs)
