@@ -1,13 +1,12 @@
 // src/report.mjs —— 把检查/导航结果渲染为 Markdown 或 JSON
 // 输出口径受 GOVERNANCE.md 约束：只给"待用户确认"的建议，绝不声称"已合规/保证过审"。
+import { loadFlow } from "./data.mjs";
+
 const SEV_ICON = { blocker: "🔴", warning: "🟠", info: "🟡" };
 const SEV_RANK = { blocker: 0, warning: 1, info: 2 };
 const SEV_LABEL = { blocker: "阻断", warning: "警告", info: "提示" };
-const STAGE_TITLE = {
-  registration: "注册账号", certification: "主体认证", filing: "ICP 备案",
-  category: "服务类目", privacy: "用户隐私保护指引", domain: "服务器域名白名单",
-  review: "提交审核", release: "发布上线",
-};
+const FLOW = loadFlow();
+const STAGE_TITLE = new Map(FLOW.map((stage) => [stage.stage, stage.title]));
 
 const DISCLAIMER =
   "本报告仅为**待你确认**的导航建议，依据官方来源整理；不构成合规担保，不代表“已合规”或“保证过审”。所有官方后台提交、认证、备案、发布均需你本人完成。";
@@ -33,7 +32,7 @@ export function toMarkdown(result) {
   if (overview.length) lines.push(`**概览**：${overview.join(" · ")}`, "");
 
   // 按 flow 阶段顺序分组
-  const order = Object.keys(STAGE_TITLE);
+  const order = FLOW.map((stage) => stage.stage);
   const byStage = new Map();
   for (const it of result.items) {
     if (!byStage.has(it.stage)) byStage.set(it.stage, []);
@@ -56,12 +55,12 @@ export function toMarkdown(result) {
   for (const stage of order) {
     const items = byStage.get(stage);
     if (!items || !items.length) continue;
-    pushStageMd(`${STAGE_TITLE[stage]}（${stage}）`, items);
+    pushStageMd(`${STAGE_TITLE.get(stage)}（${stage}）`, items);
   }
   // V6：未知 stage 的条目此前被静默丢弃，而概览计数与 CLI 退出码都包含它们——
   // 报告自相矛盾，阻断项甚至可能不可见。兜底渲染成"其他"段，绝不吞条目。
   for (const [stage, items] of byStage) {
-    if (Object.hasOwn(STAGE_TITLE, stage) || !items.length) continue;
+    if (STAGE_TITLE.has(stage) || !items.length) continue;
     pushStageMd(`其他（${stage}）`, items);
   }
 
@@ -116,17 +115,17 @@ export function toChecklist(result) {
     return actions;
   };
   let total = 0;
-  for (const stage of Object.keys(STAGE_TITLE)) {
+  for (const { stage, title } of FLOW) {
     const items = byStage.get(stage);
     if (!items || !items.length) continue;
     const actions = stageActions(items);
     if (!actions.length) continue;
-    lines.push(`## ${STAGE_TITLE[stage]}（${stage}）`, ...actions, "");
+    lines.push(`## ${title}（${stage}）`, ...actions, "");
     total += actions.length;
   }
   // V6：未知 stage 兜底（与 toMarkdown 同理）——清单是行动入口，动作项静默蒸发比叙事丢失更糟。
   for (const [stage, items] of byStage) {
-    if (Object.hasOwn(STAGE_TITLE, stage) || !items.length) continue;
+    if (STAGE_TITLE.has(stage) || !items.length) continue;
     const actions = stageActions(items);
     if (!actions.length) continue;
     lines.push(`## 其他（${stage}）`, ...actions, "");

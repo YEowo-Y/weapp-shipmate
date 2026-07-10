@@ -28,6 +28,15 @@ test("guide 收集敏感信息时含隐私阶段", () => {
   assert.ok(stages.has("privacy"));
 });
 
+test("guide 未指定主体时只返回全主体通用规则", () => {
+  const r = runGuide({ has_server_domain: true });
+  const ids = new Set([...r.items, ...r.selfCheck].map((i) => i.ruleId));
+  assert.ok(ids.has("filing.required-before-release"), "全主体规则应继续出现");
+  assert.ok(ids.has("domain.must-icp-filed"), "全主体域名规则应继续出现");
+  assert.ok(!ids.has("filing.individual-id-materials"), "个人主体备案规则不应在主体未知时出现");
+  assert.ok(!ids.has("domain.web-view-personal"), "个人主体 web-view 阻断不应在主体未知时出现");
+});
+
 test("guide 默认含已核验的提交审核规则（review 阶段）", () => {
   const r = runGuide({ subject_type: "personal" });
   const reviewIds = r.items.filter((i) => i.stage === "review").map((i) => i.ruleId);

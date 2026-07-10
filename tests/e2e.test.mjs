@@ -36,6 +36,8 @@ test("E2E check --blockers-only leaky-app：仍 exit 2 且只列阻断", () => {
   const { code, stdout } = run("check", FIX("leaky-app"), "--subject", "personal", "--blockers-only", "--json");
   const o = JSON.parse(stdout);
   assert.ok(o.items.length >= 1 && o.items.every((i) => i.severity === "blocker"), "只应剩阻断项");
+  assert.match(o.meta.summary, new RegExp(`命中 ${o.items.length} 条阻断规则`), "摘要应使用过滤后的 blocker 数");
+  assert.ok(!/命中 \d+ 条规则/.test(o.meta.summary), "摘要不得保留过滤前的笼统命中数");
   assert.equal(code, 2);
 });
 

@@ -32,9 +32,32 @@ test("guide --blockers-only 只保留阻断项", () => {
     out, err,
   );
   assert.equal(code, 0);
-  const items = JSON.parse(out.get()).items;
-  assert.ok(items.length > 0, "应有阻断项");
-  assert.ok(items.every((i) => i.severity === "blocker"), "所有项均为 blocker");
+  const result = JSON.parse(out.get());
+  const visible = [...result.items, ...result.selfCheck];
+  assert.ok(visible.length > 0, "应有阻断项");
+  assert.ok(visible.every((i) => i.severity === "blocker"), "items 与 selfCheck 的所有项均为 blocker");
+  assert.match(result.meta.summary, new RegExp(`仅显示 ${visible.length} 条阻断项`));
+  assert.ok(
+    result.notes.every((note) => !/^另有 \d+ 条规则是否适用/.test(note)),
+    "备注不得沿用过滤前的自查计数",
+  );
+  assert.ok(
+    result.notes.some((note) => note.includes(`另有 ${result.selfCheck.length} 条阻断规则`)),
+    "自查备注应与过滤后的 blocker 数一致",
+  );
+});
+
+test("explain --blockers-only 的条目与摘要均只统计阻断规则", () => {
+  const out = capture(), err = capture();
+  assert.equal(main(["node", "cli", "explain", "隐私", "--blockers-only", "--json"], out, err), 0);
+  const result = JSON.parse(out.get());
+  const rejectCount = new Set(result.items.map((item) => item.rejectId)).size;
+  assert.ok(result.items.every((item) => item.severity === "blocker"));
+  assert.match(
+    result.meta.summary,
+    new RegExp(`匹配到 ${rejectCount} 条含阻断规则的相关拒审原因，对应 ${result.items.length} 条阻断规则`),
+  );
+  assert.equal(result.meta.query, "隐私", "结构化查询字段应保持原值");
 });
 
 test("未知命令返回 1", () => {

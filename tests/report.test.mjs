@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { render } from "../src/report.mjs";
+import { loadFlow } from "../src/data.mjs";
 
 const result = {
   command: "check",
@@ -37,6 +38,30 @@ test("checklist 只列待办动作、含勾选框、阻断动作在前", () => {
 test("json 输出不受渲染排序影响（保持 items 原序）", () => {
   const j = JSON.parse(render(result, "json"));
   assert.deepEqual(j.items.map((i) => i.ruleId), ["a.warn", "a.block", "a.info"]);
+});
+
+test("markdown 与 checklist 的已知阶段标题和顺序直接跟随 flow.yaml", () => {
+  const flow = loadFlow();
+  const flowResult = {
+    command: "check", meta: {}, notes: [],
+    items: [...flow].reverse().map((stage) => ({
+      ruleId: `flow-test.${stage.stage}`,
+      title: stage.title,
+      stage: stage.stage,
+      severity: "info",
+      requires: [`完成 ${stage.stage}`],
+    })),
+  };
+  for (const format of ["markdown", "checklist"]) {
+    const output = render(flowResult, format);
+    let previous = -1;
+    for (const stage of flow) {
+      const heading = `## ${stage.title}（${stage.stage}）`;
+      const position = output.indexOf(heading);
+      assert.ok(position > previous, `${format} 应按 flow 顺序渲染 ${heading}`);
+      previous = position;
+    }
+  }
 });
 
 // ── 边界渲染（此前零覆盖的三个分支）──

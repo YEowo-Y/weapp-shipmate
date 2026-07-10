@@ -7,6 +7,8 @@
 
 ### Fixed
 
+- 未指定主体的 `guide` 现在与 `check` 共用同一适用性边界，只返回覆盖全部主体的通用规则；不再把个人主体备案材料或 `web-view` 限制误报给主体未知的用户。
+- `--blockers-only` 现在同时过滤普通条目与“可能适用”自查项，并让 check/guide/explain 的摘要和派生备注使用过滤后的 blocker 数；此前 JSON 仍会泄漏 warning/info 自查项及过滤前计数。
 - MCP 面非法 `subject` 曾在个别路径伪装成清白报告；校验下沉到引擎层（`SUBJECT_ENUM` 唯一事实源），CLI/MCP 两侧行为对齐。
 - 坏 `app.json`（解析失败/字段缺失）此前会反向触发误报 blocker；改为把配置解析错误信号化（`configErrors`），与真实规则命中区分，不再污染阻断计数。
 - MCP 处理 `null`/畸形请求行崩溃问题修复；坏行按 JSON-RPC 2.0 回 `-32700`（`id:null`）+ stderr 诊断，不再击穿事件循环。
@@ -28,6 +30,7 @@
 
 ### Changed
 
+- Markdown 与 checklist 的已知阶段顺序和标题改为直接读取 `flow.yaml`；因此 `registration`/`certification` 标题分别统一为“注册小程序账号”和“主体认证 / 实名核验”，未知阶段仍在“其他”段兜底。
 - `scanProject` 拆分为 `extractFacts` + `parseAppConfig`，圈复杂度从 ~20–24 降至各子函数 <10（FX-05）。
 - `chooseLocation` 相关的双触发信号收敛，减少重复命中。
 - 预览服务器（`desktop/design-previews/_serve.mjs`）仅绑定回环地址（`127.0.0.1`）并加路径遏制，拒绝越出项目根目录的请求。
