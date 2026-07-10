@@ -23,7 +23,7 @@ export const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        dir: { type: "string", description: "小程序项目目录路径" },
+        dir: { type: "string", minLength: 1, description: "小程序项目目录路径" },
         subject: { type: "string", enum: SUBJECT_ENUM, description: "主体类型" },
         includeDrafts: { type: "boolean", description: "是否包含未核验来源的 draft 规则（默认 false）" },
         format: { type: "string", enum: ["markdown", "json"], description: "输出格式（默认 markdown）" },
@@ -63,11 +63,12 @@ export const TOOLS = [
     },
   },
 ];
+const TOOL_BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));
 
 function callTool(name, args = {}) {
   const format = args.format || "markdown";
   if (name === "weapp_shipmate_check") {
-    const result = runCheck(args.dir || ".", { subjectType: args.subject, includeDrafts: !!args.includeDrafts });
+    const result = runCheck(args.dir, { subjectType: args.subject, includeDrafts: !!args.includeDrafts });
     return { text: render(result, format), result };
   }
   if (name === "weapp_shipmate_guide") {
@@ -90,13 +91,59 @@ function callTool(name, args = {}) {
   throw new Error(`未知工具: ${name}`);
 }
 
+function invalidRequest() {
+  return { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } };
+}
+
+function hasValidRequestEnvelope(msg) {
+  if (typeof msg !== "object" || msg === null || Array.isArray(msg)) return false;
+  if (msg.jsonrpc !== "2.0" || typeof msg.method !== "string") return false;
+  if (Object.hasOwn(msg, "id")) {
+    const id = msg.id;
+    if (id !== null && typeof id !== "string" && !(typeof id === "number" && Number.isFinite(id))) return false;
+  }
+  if (Object.hasOwn(msg, "params")) {
+    const params = msg.params;
+    if (typeof params !== "object" || params === null || Array.isArray(params)) return false;
+  }
+  return true;
+}
+
+function validateToolCall(params) {
+  if (typeof params !== "object" || params === null || Array.isArray(params))
+    return { error: "tools/call params 必须是对象" };
+
+  const tool = TOOL_BY_NAME.get(params.name);
+  if (!tool) return { error: `未知工具: ${params.name}` };
+
+  let args = {};
+  if (Object.hasOwn(params, "arguments")) {
+    if (typeof params.arguments !== "object" || params.arguments === null || Array.isArray(params.arguments))
+      return { error: "tools/call arguments 必须是对象" };
+    args = params.arguments;
+  }
+
+  for (const required of tool.inputSchema.required || []) {
+    if (!Object.hasOwn(args, required)) return { error: `缺少必填参数: ${required}` };
+  }
+  for (const [name, schema] of Object.entries(tool.inputSchema.properties || {})) {
+    if (!Object.hasOwn(args, name)) continue;
+    const value = args[name];
+    if (schema.type && typeof value !== schema.type)
+      return { error: `参数 ${name} 类型错误：应为 ${schema.type}` };
+    if (schema.minLength && typeof value === "string" && value.length < schema.minLength)
+      return { error: `参数 ${name} 不能为空` };
+    if (schema.enum && !schema.enum.includes(value))
+      return { error: `参数 ${name} 取值无效：可选值为 ${schema.enum.join(" | ")}` };
+  }
+  return { args };
+}
+
 /** 处理单条 JSON-RPC 消息。通知（无 id）返回 null（不应答）。纯函数，便于测试。 */
 export async function dispatch(msg) {
-  // V2：JSON.parse 合法但非对象的行（null / 42 / [] / "str"）此前在解构处 TypeError——
-  // 一行输入打死整个 MCP 服务进程。非对象消息按脏行容错契约跳过。
-  if (typeof msg !== "object" || msg === null || Array.isArray(msg)) return null;
+  if (!hasValidRequestEnvelope(msg)) return invalidRequest();
   const { id, method, params } = msg;
-  const isNotification = id === undefined || id === null;
+  const isNotification = !Object.hasOwn(msg, "id");
   const ok = (result) => (isNotification ? null : { jsonrpc: "2.0", id, result });
   const fail = (code, message) => (isNotification ? null : { jsonrpc: "2.0", id, error: { code, message } });
 
@@ -112,14 +159,16 @@ export async function dispatch(msg) {
       });
     case "notifications/initialized":
     case "initialized":
-      return null;
+      return ok({});
     case "ping":
       return ok({});
     case "tools/list":
       return ok({ tools: TOOLS });
     case "tools/call": {
+      const validation = validateToolCall(params);
+      if (validation.error) return fail(-32602, validation.error);
       try {
-        const { text, result } = callTool(params?.name, params?.arguments);
+        const { text, result } = callTool(params.name, validation.args);
         return ok({ content: [{ type: "text", text }], structuredContent: result, isError: false });
       } catch (e) {
         return ok({ content: [{ type: "text", text: `错误：${e.message}` }], isError: true });

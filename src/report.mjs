@@ -11,6 +11,23 @@ const STAGE_TITLE = new Map(FLOW.map((stage) => [stage.stage, stage.title]));
 const DISCLAIMER =
   "本报告仅为**待你确认**的导航建议，依据官方来源整理；不构成合规担保，不代表“已合规”或“保证过审”。所有官方后台提交、认证、备案、发布均需你本人完成。";
 
+function escapeMarkdownInline(value) {
+  return String(value)
+    .replace(/[\p{Cc}\p{Cf}]/gu, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\\/g, "\\\\")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/([`*_[\]{}()#+!|~])/g, "\\$1");
+}
+
+function explainSummaryForMarkdown(result) {
+  const summary = result.meta?.summary || "";
+  const query = String(result.meta?.query ?? "");
+  return summary.replace(`「${query}」`, () => `「${escapeMarkdownInline(query)}」`);
+}
+
 export function toJson(result) {
   return JSON.stringify(result, null, 2);
 }
@@ -156,7 +173,7 @@ export function toExplain(result) {
   const lines = [];
   lines.push("# weapp-shipmate · 拒因解读", "");
   lines.push(`> ${DISCLAIMER}`, "");
-  if (result.meta?.summary) lines.push(result.meta.summary, "");
+  if (result.meta?.summary) lines.push(explainSummaryForMarkdown(result), "");
 
   // 按 rejectId 分组，保持 items 的命中排序（已按相关度降序）
   const byReject = new Map();
