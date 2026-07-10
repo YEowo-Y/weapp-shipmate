@@ -12,11 +12,11 @@
 - 状态：`executing`
 - 分支：`codex/strengthen-core-contracts-2026-07`
 - 基准 HEAD：`14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`
-- 工作树：阶段 4 产品提交 `f7da93c` 后干净；本节是随后唯一的恢复点更新。
-- 最近完成产品提交：`f7da93c`（阶段 4）；当前 HEAD 为包含本恢复点的计划提交，其父为 `f7da93c`。
+- 工作树：阶段 5 产品提交 `e025d66` 后干净；本节是随后唯一的恢复点更新。
+- 最近完成产品提交：`e025d66`（阶段 5）；当前 HEAD 为包含本恢复点的计划提交，其父为 `e025d66`。
 - 最后验证：2026-07-10（America/New_York）。
-- 当前阶段：阶段 5 — 发布一致性门禁。
-- 下一条可直接执行的动作：复核现有发布 workflow、打包脚本和测试约定，随后先增加版本载体/tag 漂移与 workflow 顺序的失败测试；取得红灯后才实现可复用校验并接入 release workflow。
+- 当前阶段：阶段 6 — 文档、路线图与最终复核。
+- 下一条可直接执行的动作：逐项对照 README、CONTRIBUTING、相关工程文档和现有路线图与当前 HEAD/实测结果，只修正可由仓库证明的漂移；随后在最终文档提交上重跑全部适用门禁并启动独立只读终审。
 - 恢复检查：确认当前分支和 HEAD；确认工作树中仅有本轮记录的路径；复跑当前阶段列出的验证命令；若仓库状态或批准边界不一致，停止写入并重新核对。
 
 ### 已批准范围
@@ -125,6 +125,7 @@
 - 兼容裁决：本轮按已批准契约把显式 `id: null` 视为请求、响应并回显 `null`。独立复核指出严格 MCP 类型不接受该值；这是有意兼容选择，未来若改为严格拒绝须作为公共契约变化另行审批。
 - 扫描预算按所有实际遇到的 `Dirent` 计数并在递归间共享；保留 `MAX_FILES` 导出和外部结果形状。`readdirSync` 仍会一次物化单个目录，因此单个超大目录的硬内存边界仍是已知风险，不能宣称已经解决。
 - 发布 tag 只校验版本一致性，不增加 main 分支或远端状态假设。
+- 阶段 5 的本地证据只支持 `local-ready`：真实 tag、GitHub Actions、联网 `.mcpb` pack 和 GitHub Release 均按批准边界未执行，不能据此宣称 `CI-ready` 或 `release-ready`。
 - 被取代的决策：后文 2026-07-04 战役的“当前阶段/下一动作”已失效，但历史结论和提交证据保留。
 
 ### 当前战役进度
@@ -135,8 +136,8 @@
 | 2. 输出正确性 | 完成 | `d7b7d96` | 目标测试 59/59；`npm test` 172/172；`npm run lint`；`npm run accuracy`（TP 54 / FP 0 / FN 0）；`git diff --check` |
 | 3. MCP 边界与文本输出安全 | 完成 | `c483bb5` | 目标测试 32/32；`npm test` 177/177；`npm run lint`；`NO_PACK=1 npm run build:mcpb`；`git diff --check`；独立复核初次 2×P1+1×P2 均修复后复核 PASS |
 | 4. 扫描遍历预算 | 完成 | `f7da93c` | 红灯测试确认旧实现漏计不可扫描目录项；目标测试 51/51；`npm test` 179/179；`npm run lint`、`npm run coverage`、`npm run accuracy`、`npm run dogfood`；固定场景中位数 75.941→3.478 ms 且截断信号由 false→true；`git diff --check`；独立只读复核 PASS |
-| 5. 发布一致性门禁 | 执行中 | — | 下一动作见恢复入口 |
-| 6. 文档、路线图与最终复核 | 待执行 | — | — |
+| 5. 发布一致性门禁 | 完成 | `e025d66` | 红灯测试确认基线缺校验模块；版本/workflow 契约 10/10；`npm test` 189/189；`npm run lint`；正确/错误 tag CLI 分别 exit 0/1；`NO_PACK=1 npm run build:mcpb`；`npm pack --dry-run`；`git diff --check`；独立只读复核 PASS |
+| 6. 文档、路线图与最终复核 | 执行中 | — | 下一动作见恢复入口 |
 
 ---
 
