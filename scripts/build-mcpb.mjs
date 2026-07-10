@@ -5,6 +5,7 @@ import { readFileSync, rmSync, mkdirSync, cpSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import { assertVersionIdentity } from "./check-release-version.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const STAGE = join(ROOT, "build", "mcpb-stage");
@@ -19,12 +20,16 @@ function readJSON(p) {
   return JSON.parse(readFileSync(p, "utf-8"));
 }
 
-// 1) 版本一致性：manifest.version 必须等于 package.json.version，杜绝静默漂移。
+// 1) 版本一致性：所有仓库版本载体必须相等，杜绝静默漂移。
 const pkg = readJSON(join(ROOT, "package.json"));
 const manifest = readJSON(join(ROOT, "manifest.json"));
-if (manifest.version !== pkg.version) {
-  throw new Error(`版本漂移：manifest.json=${manifest.version} 与 package.json=${pkg.version} 不一致。请同步后再打包。`);
-}
+const lock = readJSON(join(ROOT, "package-lock.json"));
+assertVersionIdentity({
+  packageVersion: pkg.version,
+  manifestVersion: manifest.version,
+  lockVersion: lock.version,
+  lockPackageVersion: lock.packages?.[""]?.version,
+});
 log(`✓ 版本一致：${pkg.version}`);
 
 // 2) 暂存纯生产副本。
