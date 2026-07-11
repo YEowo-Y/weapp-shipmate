@@ -12,11 +12,11 @@
 - 状态：`executing`
 - 分支：`codex/strengthen-core-contracts-2026-07`
 - 基准 HEAD：`14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`
-- 工作树：阶段 5 产品提交 `e025d66` 后干净；本节是随后唯一的恢复点更新。
-- 最近完成产品提交：`e025d66`（阶段 5）；当前 HEAD 为包含本恢复点的计划提交，其父为 `e025d66`。
+- 工作树：阶段 6 文档提交 `21179c0` 后干净；无 staged 或 unstaged 改动。
+- 最近完成提交：`21179c0`（阶段 6 文档与路线图对账）。
 - 最后验证：2026-07-10（America/New_York）。
-- 当前阶段：阶段 6 — 文档、路线图与最终复核。
-- 下一条可直接执行的动作：逐项对照 README、CONTRIBUTING、相关工程文档和现有路线图与当前 HEAD/实测结果，只修正可由仓库证明的漂移；随后在最终文档提交上重跑全部适用门禁并启动独立只读终审。
+- 当前阶段：阶段 6 — 独立终审与最终 HEAD 验证；文档、路线图和全套阶段门禁已完成。
+- 下一条可直接执行的动作：提交本恢复点，启动独立只读终审；处置并复验其发现后，把状态改为 `complete`，提交最终计划状态，并在该最终 HEAD 上复跑关键门禁。
 - 恢复检查：确认当前分支和 HEAD；确认工作树中仅有本轮记录的路径；复跑当前阶段列出的验证命令；若仓库状态或批准边界不一致，停止写入并重新核对。
 
 ### 已批准范围
@@ -24,7 +24,7 @@
 本轮只处理已复现、预期收益高且可回退的六组工作：
 
 1. 持久化当前战役的批准范围、排除项、验收标准和恢复入口。
-2. 统一 `guide` 与 `check` 的 subject 适用性；使 `--blockers-only` 同时过滤条目、自检和摘要；报告阶段标题及顺序以 `src/data/flow.yaml` 为单一来源。
+2. 统一 `guide` 与 `check` 的 subject 适用性；使 `--blockers-only` 同时过滤条目、自检和摘要；报告阶段标题及顺序以 `flow.yaml` 为单一来源。
 3. 在 MCP stdio 边界实施 JSON-RPC 请求校验，并净化 Markdown 文本中的用户查询；不改变结构化 JSON 中的原始查询。
 4. 为扫描遍历建立可比较的合成基准，并让扫描预算覆盖实际遍历的目录项，而不只覆盖已产出的可扫描文件。
 5. 强化发布工作流：补上 lint，并校验 tag、`package.json`、`manifest.json` 与 `package-lock.json` 版本一致。
@@ -106,13 +106,13 @@
 
 ### 当前基线与已知限制
 
-- `npm test`：169 通过、0 失败。
+- `npm test`：189 通过、0 失败。
 - `npm run lint`：通过。
 - `npm run coverage`：63/63 源字段；68 个可匹配载体；precision/recall 均为 1.000（TP 54、FP 0、FN 0）；30/68 rule ID 有标签锚点。该指标只覆盖已标注夹具，不外推为全域准确率。
 - `npm run accuracy`：86 个标签、14 个夹具项目、覆盖 30 个 rule ID。
 - `npm run dogfood`：11 个固定样本通过；`npm run rot`：97 个载体、0 stale。
 - 根与桌面 `npm audit`：0 漏洞；桌面 TypeScript 和 Cargo metadata 通过。
-- 已知环境限制：`cargo-audit` 未安装；Codex Security 扫描器因其 GBK 解码问题无法读取含中文的 Git 提交主题，已改用本地防御性审计，不能把插件扫描描述为通过。
+- 已知环境限制：`actionlint` 与 `cargo-audit` 未安装；Codex Security 扫描器因其 GBK 解码问题无法读取含中文的 Git 提交主题，已改用本地防御性审计。三者都不能描述为已运行或通过；相应替代证据是 YAML 解析、workflow 契约测试、Cargo metadata、`npm audit` 和本地边界测试。
 - 性能结论规则：只有同场景前后测量才可宣称改善；阶段 4 的目标是遍历有界，不承诺单目录 `readdirSync` 的硬内存上限。
 - 阶段 4 固定场景：同一棵含 512 个目录和 512 个不可扫描 `.txt` 文件的 1024-entry 合成树、注入预算 64、各 5 次；改动前中位数 75.941 ms 且未截断，改动后中位数 3.478 ms 且正确截断，场景内中位耗时下降约 95.42%。该结果只证明有界预算场景改善，不外推为通用扫描吞吐量。
 
@@ -137,7 +137,7 @@
 | 3. MCP 边界与文本输出安全 | 完成 | `c483bb5` | 目标测试 32/32；`npm test` 177/177；`npm run lint`；`NO_PACK=1 npm run build:mcpb`；`git diff --check`；独立复核初次 2×P1+1×P2 均修复后复核 PASS |
 | 4. 扫描遍历预算 | 完成 | `f7da93c` | 红灯测试确认旧实现漏计不可扫描目录项；目标测试 51/51；`npm test` 179/179；`npm run lint`、`npm run coverage`、`npm run accuracy`、`npm run dogfood`；固定场景中位数 75.941→3.478 ms 且截断信号由 false→true；`git diff --check`；独立只读复核 PASS |
 | 5. 发布一致性门禁 | 完成 | `e025d66` | 红灯测试确认基线缺校验模块；版本/workflow 契约 10/10；`npm test` 189/189；`npm run lint`；正确/错误 tag CLI 分别 exit 0/1；`NO_PACK=1 npm run build:mcpb`；`npm pack --dry-run`；`git diff --check`；独立只读复核 PASS |
-| 6. 文档、路线图与最终复核 | 执行中 | — | 下一动作见恢复入口 |
+| 6. 文档、路线图与最终复核 | 执行中（仅余终审/最终状态） | `21179c0`（文档与路线图） | YAML 解析和本地相对链接检查；`npm run lint`；`npm test` 189/189；`npm run coverage`（TP 54 / FP 0 / FN 0）；`npm run accuracy`（86 标签）；`npm run dogfood`（11/11）；`npm run rot`（97 载体、0 stale）；根与桌面 `npm audit`（0 漏洞）；桌面构建、Cargo metadata、release 正/负控制、`NO_PACK=1 npm run build:mcpb`、`npm pack --dry-run`、CLI smoke、`git diff --check` 均通过；`actionlint`/`cargo-audit` 因未安装未运行；独立终审待执行 |
 
 ---
 
