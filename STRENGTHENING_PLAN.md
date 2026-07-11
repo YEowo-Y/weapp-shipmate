@@ -12,9 +12,9 @@
 - 状态：`complete`
 - 分支：`codex/strengthen-core-contracts-2026-07`
 - 基准 HEAD：`14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`
-- 当前 HEAD：本文件所在的 `complete` 状态提交；其父、最终实现复核基准为 `d1adc70`，产品与公共文档最后提交为 `21179c0`。恢复时以 `git rev-parse HEAD` 核对本文件所在提交，不依赖聊天记录。
+- 当前 HEAD：本文件所在的 `complete` 状态提交；独立终审的实现复核基准为 `d1adc70`，产品与公共文档最后提交为 `21179c0`，完成状态提交为 `e8eb064`。其后的当前证据修正只改本计划。恢复时以 `git rev-parse HEAD` 核对本文件所在提交，不依赖聊天记录。
 - 工作树：完成状态提交后已核对为干净；无 staged 或 unstaged 改动。
-- 已完成提交序列：`11d5fda`、`d7b7d96`、`25edb9e`、`c483bb5`、`3636ae0`、`f7da93c`、`cb76310`、`e025d66`、`0cd8469`、`21179c0`、`d1adc70`，以及本文件所在的最终状态提交。
+- 已完成提交序列：`11d5fda`、`d7b7d96`、`25edb9e`、`c483bb5`、`3636ae0`、`f7da93c`、`cb76310`、`e025d66`、`0cd8469`、`21179c0`、`d1adc70`、`e8eb064`，以及本文件所在的证据修正提交。
 - 最后验证：2026-07-10（America/New_York）。
 - 当前阶段：已完成；六个批准阶段的验收标准均满足。
 - 下一条可直接执行的动作：本轮无待执行动作；后续仅在 `EVOLUTION_ROADMAP.md` 的触发条件成立并重新取得相应批准后启动新战役。
@@ -76,7 +76,7 @@
 - 范围：手工、无新依赖的请求与当前工具 schema 校验；额外未知属性继续接受；Markdown 查询净化；结构化 JSON 保持原值。
 - 错误矩阵：非法请求 `-32600`；未知方法 `-32601`；未知工具/缺必填/类型或枚举错误 `-32602`；合法工具执行错误保持 `result.isError: true`；缺少 `id` 的 notification 不响应，显式 `id: null` 响应并回显 `null`。
 - 验收：每类正负控制均有边界测试；合法请求结果不漂移；Markdown 无标题/控制字符注入。
-- 验证：目标 `node --test`（MCP、smoke、explain），`npm test`，`NO_PACK=1 npm run build:mcpb`（PowerShell 使用等价环境变量设置）。
+- 验证：目标 `node --test`（MCP、smoke、explain），`npm test`，`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb`（PowerShell 使用 `$env:WEAPP_SHIPMATE_NO_PACK='1'`）。
 - 风险/回退：协议边界属高风险；最小实现、独立只读复核，阶段提交可整体 revert。
 
 #### 阶段 4 — 扫描遍历预算
@@ -102,7 +102,7 @@
 - 证据：README/CONTRIBUTING/工程文档存在已复现的测试数、依赖归类、性能状态和规则监控描述漂移。
 - 范围：只对账可由当前仓库证明的事实；路线图按短期（不超过 1 个月）、中期（1–3 个月）、长期（超过 3 个月）分层，并加入单点故障、性能、依赖、安全兜底预案。
 - 验收：所有批准阶段标准满足；当前 HEAD 上适用门禁实际通过；既有失败与新增失败已区分；独立复核无未处置高风险发现；工作树仅含预期改动。
-- 验证：`npm run lint`、`npm test`、`npm run coverage`、`npm run accuracy`、`npm run dogfood`、`npm run rot`、根与桌面 `npm audit`、桌面 TypeScript、Cargo metadata、`NO_PACK=1 npm run build:mcpb`、`git diff --check`，以及风险匹配的 smoke test。
+- 验证：`npm run lint`、`npm test`、`npm run coverage`、`npm run accuracy`、`npm run dogfood`、`npm run rot`、根与桌面 `npm audit`、桌面 TypeScript、Cargo metadata、`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb`、`git diff --check`，以及风险匹配的 smoke test。
 - 风险/回退：文档可单独 revert；代码按阶段提交回退，不做历史重写。
 
 ### 当前基线与已知限制
@@ -138,9 +138,9 @@
 |---|---|---|---|
 | 1. 状态与恢复点 | 完成 | `11d5fda` | `git diff --check`；分支、状态与 staged 路径复核 |
 | 2. 输出正确性 | 完成 | `d7b7d96` | 目标测试 59/59；`npm test` 172/172；`npm run lint`；`npm run accuracy`（TP 54 / FP 0 / FN 0）；`git diff --check` |
-| 3. MCP 边界与文本输出安全 | 完成 | `c483bb5` | 目标测试 32/32；`npm test` 177/177；`npm run lint`；`NO_PACK=1 npm run build:mcpb`；`git diff --check`；独立复核初次 2×P1+1×P2 均修复后复核 PASS |
+| 3. MCP 边界与文本输出安全 | 完成 | `c483bb5` | 目标测试 32/32；`npm test` 177/177；`npm run lint`；`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb`；`git diff --check`；独立复核初次 2×P1+1×P2 均修复后复核 PASS |
 | 4. 扫描遍历预算 | 完成 | `f7da93c` | 红灯测试确认旧实现漏计不可扫描目录项；目标测试 51/51；`npm test` 179/179；`npm run lint`、`npm run coverage`、`npm run accuracy`、`npm run dogfood`；固定场景中位数 75.941→3.478 ms 且截断信号由 false→true；`git diff --check`；独立只读复核 PASS |
-| 5. 发布一致性门禁 | 完成 | `e025d66` | 红灯测试确认基线缺校验模块；版本/workflow 契约 10/10；`npm test` 189/189；`npm run lint`；正确/错误 tag CLI 分别 exit 0/1；`NO_PACK=1 npm run build:mcpb`；`npm pack --dry-run`；`git diff --check`；独立只读复核 PASS |
+| 5. 发布一致性门禁 | 完成 | `e025d66` | 红灯测试确认基线缺校验模块；版本/workflow 契约 10/10；`npm test` 189/189；`npm run lint`；正确/错误 tag CLI 分别 exit 0/1；`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb`；`npm pack --dry-run`；`git diff --check`；独立只读复核 PASS |
 | 6. 文档、路线图与最终复核 | 完成 | `21179c0`（文档与路线图）、`d1adc70`（终审恢复点）、本文件所在提交（完成状态） | YAML 解析和 23 个 tracked Markdown 文件的本地链接检查；`npm run lint`；`npm test` 189/189；`npm run coverage`（TP 54 / FP 0 / FN 0）；`npm run accuracy`（86 标签）；`npm run dogfood`（11/11）；`npm run rot`（97 载体、0 stale）；根与桌面 `npm audit`（0 漏洞）；桌面构建、Cargo metadata、release 正/负控制、本地 `build:mcpb`、`npm pack --dry-run`、CLI smoke、`git diff --check` 均通过；`actionlint`/`cargo-audit` 因未安装未运行；独立终审 PASS/APPROVE（代码 APPROVE、架构 CLEAR，无 P0/P1/P2） |
 
 ---
