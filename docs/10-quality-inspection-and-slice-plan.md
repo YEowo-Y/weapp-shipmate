@@ -4,6 +4,7 @@
 > 来源:多 agent 全面体检工作流 `rnd-quality-inspection`(16 agents:DOD对抗审查 / 代码质量 / 安全漏洞 / 全链路测试 / Dogfood 5 维并行 → 对每条 blocker/high 对抗式复核滤误报 → 综合)。基线:**83 测试全绿**、~1215 LOC(src+bin)、46 规则、desktop Rust 薄壳 59 LOC。
 > 标注:🔴 热修(本轮准入须修) · 🟡 延期(标解锁阶段) · ⚪ 不予 · ✅ 通过 · ⚠️ 部分 · ❌ 缺失。
 > 权威源:质量规则/6 闸见 [`docs/06`](06-quality-and-acceptance.md);愿景/路线见 [`docs/08`](08-product-vision.md);记忆/上下文架构见 [`docs/09`](09-memory-context-architecture.md)。
+> 阅读口径(2026-07-10):§1 与下列带日期的执行记录是不可改写的历史快照，测试数 / 规则数保留其当日证据；当前处置状态以 §2 台账为准，不能把历史基线当作当前 HEAD 健康度。
 
 ---
 
@@ -40,6 +41,8 @@
 > **✅ S5 部分执行(2026-07-01)**:FX-06 完成——`SUBJECT_ENUM` 提取至 `data.mjs`(CLI/MCP 共享唯一事实源),`cli.mjs` 对 `--subject` 出现即校验(`"subject" in flags`,含缺值/吞 flag 边界),非法主体→退出 1 + 枚举提示 + 零报告输出;cli 单测 ×2。4 个单文件提交。
 >
 > **✅ S5 续(2026-07-02,公开前体检把 FX-14/16 升级为必修)**:FX-16——parseFlags 加已知选项白名单,未知/拼错选项与布尔开关误带 =值 一律报错退出 1;新支持 `--key=value` 语法(此前 `--subject=personal` 被静默丢弃产出主体错误的报告);`--subject` 缺值报「缺少取值」不再泄漏 undefined;`check --help` 生效。FX-14——runCheck 对 filesScanned==0 注入显式警告 note「未在该目录发现可识别的小程序源码…本报告不构成任何已通过检查的结论」。cli 单测 ×5 + e2e 空目录 ×1。S5 仅剩 FX-13(blockers-only 空态文案)延期。
+>
+> **✅ 强化战役对账(2026-07-10)**:FX-07 当前源码 / 草稿 RC 与最新公开版的版本措辞已分开并对齐四个仓库版本字段；FX-13 已闭合——`--blockers-only` 同时过滤 `items` / `selfCheck`，并以过滤后的集合重算摘要和派生 notes。FX-03 / FX-11 的台账状态也已从过期“延期”校正为既有完成事实；上方旧记录不回填。
 
 | ID | 处理 | 严 | 标题 | 位置 | 回归点 |
 |---|---|---|---|---|---|
@@ -50,12 +53,12 @@
 | FX-06 | ✅已修(2026-07-01) | med | **非法 `--subject` 静默产出伪清白报告** | cli.mjs:78 / check.mjs:19 | `--subject foobar`→非 0 退出 + 提示枚举;与 mcp.mjs SUBJECT_ENUM 行为对齐;加 cli 单测 |
 | FX-08 | 🔴热修 | med | docs/08 "全行业没人做透"命中 DOD-P0 禁词变体 | docs/08:267 | 加来源限定或删绝对化从句;grep 全仓无正面绝对化用法 |
 | FX-09 | 🔴热修 | med | **README mpvue 框架枚举无证据**(无夹具/别名/内部清单不含) | README:96,124 / data.mjs:42 / README:71 | 去 mpvue→五大框架,或补夹具+测试;四处枚举一致 |
-| FX-03 | 🟡延期 | med | docs/04 计数过期自相矛盾(45 vs 46 / 支付 1 vs 2 / 0draft vs 2draft) | docs/04:7,10 | 计数=46/payment2/0draft;或顶部加权威计数引用声明 |
-| FX-07 | 🟡延期 | med | CHANGELOG 版本陈述(0.0.0 未推送)与 package.json=0.1.0 冲突 | CHANGELOG:4 | 顶部版本=0.1.0、删"未推送公共远程" |
+| FX-03 | ✅已修(S2;2026-06-22) | med | docs/04 历史计数快照曾与当时权威计数冲突 | docs/04:5,7,10 | 保留带日期快照;顶部声明当前计数以 `npm run validate` / `npm run coverage` 实测为准 |
+| FX-07 | ✅已修(S2;2026-07-10 再对账) | med | CHANGELOG 当前源码 / 草稿 RC 与最新公开版的版本口径已分开 | CHANGELOG:4 / package.json / manifest.json / package-lock.json | 当前仓库四个版本字段均为 `0.2.0-rc.1`;最新公开版明确为 `v0.1.0` |
 | FX-10 | ✅已修(S6执行,2026-07-05) | med | 性能基线门禁无实现 | tests/perf.test.mjs | 1000 文件 <3s 本机/8s CI、heap 增量 <200MB,已实测通过 |
-| FX-11 | 🟡延期 | med | **准确性工程地基缺失**(corpus/labels.json + scripts/accuracy.mjs + 黄金快照) | corpus/ scripts/(无) | 按 docs/08 §4.2/§9 P2.0.5:precision≥0.95 且单规则 FP=0,快照 diff 即 fail(=切片1) |
+| FX-11 | ✅已修(S1;2026-06-22) | med | **准确性工程地基已落地**(labels + accuracy 门禁 + fixture pins) | corpus/labels.json / corpus/fixture-pins.json / scripts/accuracy.mjs / tests/accuracy.test.mjs | 当前标注集 86 条:TP=54 / FP=0 / FN=0;precision=recall=1.000,漂移即 fail |
 | FX-12 | ✅已修(S4执行,2026-07-05) | low | scanner walk 跟随符号链接可读所选目录外文件 | src/scanner.mjs walk（`isSymbolicLink()` 跳过） | 不跟符号链接/junction,软链越界单测已覆盖 |
-| FX-13 | 🟡延期 | low | `--blockers-only` 无阻断时表头计数与正文矛盾 | cli.mjs / report.mjs:82 | 空态文案区分"无阻断(但 M 条非阻断)" |
+| FX-13 | ✅已修(强化战役;2026-07-10) | low | `--blockers-only` 的条目、摘要与派生注记已统一按过滤后集合计算 | src/cli.mjs / tests/cli.test.mjs / tests/e2e.test.mjs | `items` 与 `selfCheck` 都只留 blocker;摘要 / notes 不泄漏过滤前计数或非阻断自查项 |
 | FX-14 | ✅已修(2026-07-02) | low | 扫 0 文件给虚假安心 | check.mjs:42 / report.mjs:82 | notes 含"未扫描到源码,请确认项目根" |
 | FX-15 | 🟡延期 | low | 桌面薄壳 markdown 原样塞 `<pre>` 用户看字面量 | desktop lib.rs / main.ts | P2.1:`--json` + DOM 结构化渲染(=切片7) |
 | FX-16 | ✅已修(2026-07-02,公开前体检升级为必修) | low | 未知/拼错 flag 静默忽略 | cli.mjs:45-56 | flag 白名单,未知→提示 + return 1 |

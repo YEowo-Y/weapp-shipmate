@@ -20,7 +20,7 @@ test("准确性门禁：全局 precision ≥ 0.95、零误报 FP、无未知 rul
   assert.ok(guards >= 8, `no_hit FP-guard 锚点过少（${guards}）`);
 });
 
-test("准确性黄金快照：命中基线 53 TP / 0 FP / 0 FN（14 夹具，含主体维度，漂移须人工确认后更新）", () => {
+test("准确性黄金快照：命中基线 54 TP / 0 FP / 0 FN（14 夹具，含主体维度，漂移须人工确认后更新）", () => {
   const { labels, subjectDefault } = loadLabels();
   const { global } = computeAccuracy(labels, { subjectDefault });
   // 改了规则/扫描器导致真实夹具(原生/uni/Taro/mpx/wepy/edge/template/#ifdef/recall/missing-decl/sensor/broken-config + 企业主体 web-view)的命中变化 → 此断言 RED。

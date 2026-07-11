@@ -23,14 +23,14 @@ AI 编码工具基本解决了"写代码"。但一个零基础的人真正卡死
 
 ---
 
-## v0 先做什么
+## v0 已形成的最小闭环
 
-weapp-shipmate 不先做"平台"，先做一个可验证的最小闭环：
+weapp-shipmate 没有先做"平台"，而是先把一个可验证的最小闭环做实：
 
-1. **规则库**：先种 30 条以内高质量规则，覆盖备案、服务类目、用户隐私保护指引、服务器域名白名单、提交审核材料和常见拒审原因。
-2. **问答式导航**：`weapp-shipmate guide` 根据主体类型、是否经营、是否支付、是否收集手机号/位置/头像、是否有服务器域名，输出下一步清单。
-3. **本地代码预检**：`weapp-shipmate check ./app` 只在本地扫描源码，v0 先识别 `wx.request` / `uni.request` 域名、隐私相关 API、`app.json` / `project.config.json` 和高风险 open-type。
-4. **GitHub 协作入口**：先让社区能提交规则变更、拒审案例、官方链接变更和新手卡点，再扩展 MCP。
+1. **规则库**：当前 63 条默认规则均带已核验官方来源，覆盖备案、服务类目、用户隐私保护指引、服务器域名白名单、提交审核材料和常见拒审原因。
+2. **问答式导航**：`weapp-shipmate guide` 根据主体类型、是否收集手机号/位置/头像、是否有服务器域名，输出下一步清单。当前 `--payment` / `--business` 仍是兼容入口、尚未参与判定，后续语义或弃用方案见 `EVOLUTION_ROADMAP.md` S3。
+3. **本地代码预检**：`weapp-shipmate check ./app` 扫描受支持的源码与公开配置载体，识别跨框架请求域名、隐私 API、模板信号与声明一致性问题。
+4. **AI 与社区入口**：CLI 与三个 MCP 工具（check / guide / explain）均已落地；GitHub 继续承载规则变更、拒审案例、官方链接变更和新手卡点。
 
 ---
 
@@ -57,7 +57,7 @@ weapp-shipmate guide                 # 上线流程导航：你在哪一步、�
 weapp-shipmate explain "<审核反馈>"  # 拒因反查：把拒审信号映射到已核验规则与修复步骤
 ```
 
-**安装 / 运行**（v0.1.0 经 GitHub 分发，无需 npm registry）。需 **Node.js ≥ 20**；方式一/二另需本机已装 git。规则库随包冻结于安装时刻——重跑安装命令即更新到最新规则（每条输出都附「最后核验日期」，陈旧自现）：
+**安装 / 运行**（当前公开版为 v0.1.0；仓库源码 / 草稿 RC 版本为 0.2.0-rc.1，尚未发布到 npm registry）。需 **Node.js ≥ 20**；方式一/二另需本机已装 git。规则库随包冻结于安装时刻——重跑安装命令即更新到最新规则（每条输出都附「最后核验日期」，陈旧自现）：
 
 ```bash
 # 方式一（推荐）：直接从 GitHub 安装
@@ -93,7 +93,11 @@ node bin/weapp-shipmate.mjs guide --subject personal --sensitive --domain
 }
 ```
 
+> ⚠️ **local-only 不等于不读取**：`weapp_shipmate_check` 会按 MCP 客户端传入的 `dir`，以 server 进程现有的文件系统权限读取其中受支持的源码/配置文本。它不上传文件内容，但应只向可信客户端开放，并只传入你确实希望检查的项目目录。
+
 **Claude Desktop 一键安装（`.mcpb`）**：无需手写上面的 JSON。从 [Releases](https://github.com/YEowo-Y/weapp-shipmate/releases) 直接下载现成的 `weapp-shipmate.mcpb` 双击安装；或本地执行 `npm run build:mcpb` 自行打包（暂存 + 冒烟自检 + 官方 `mcpb pack`，产物在 `build/`，需联网拉取打包 CLI），在 Claude Desktop 中双击或经扩展设置导入即可使用。船友是纯规则引擎、不调用任何 LLM，故安装包不需要任何 API key。
+
+> 本地 `npm run build:mcpb` 默认把“暂存 + 冒烟”作为成功底线：若联网 pack 失败，会保留暂存目录并打印手动命令，退出成功不代表 `.mcpb` 已生成。tag 发布流水线启用严格模式，pack 失败会在生成校验和与 Release 资产之前直接失败。
 
 > 签名（分发可信）：默认产出**未签名**包（合法 zip）。正式分发设 `WEAPP_SHIPMATE_SIGN_CERT` + `WEAPP_SHIPMATE_SIGN_KEY`（受信证书）签名并校验；内部/TOFU 分发设 `WEAPP_SHIPMATE_SELF_SIGN=1` 自签名——注意 `mcpb verify` 只信任系统证书链，自签名不会被判为可信。
 
@@ -101,9 +105,9 @@ node bin/weapp-shipmate.mjs guide --subject personal --sensitive --domain
 
 ## 当前状态
 
-🟢 **v0 已在真实小程序上验证、多框架可用（2026-06-21）** —— 调研/定位/命名定稿；规则 schema、`flow.yaml`、**63 条已核验种子规则**、数据校验门禁与 CI 已落地。**四个渲染器**（`check` 代码预检 / `guide` 流程导航 / `explain` 拒因反查 / report 清单导出）共用同一份规则库、均可从源码运行；极简依赖 MCP server（`check`/`guide`/`explain`）与 `.mcpb` 一键安装包已落地。
+🟢 **v0 已在真实小程序上验证、多框架可用（当前 HEAD 于 2026-07-10 复验）** —— 调研/定位/命名定稿；规则 schema、`flow.yaml`、**63 条已核验种子规则**、数据校验门禁与 CI 已落地。**四个渲染器**（`check` 代码预检 / `guide` 流程导航 / `explain` 拒因反查 / report 清单导出）共用同一份规则库、均可从源码运行；极简依赖 MCP server（`check`/`guide`/`explain`）与 `.mcpb` 一键安装包已落地。
 
-**真实 dogfood 验证**：在多个真实开源小程序上逐条核验命中——覆盖**原生 wx / uni-app / Taro / mpvue / mpx / wepy 六大主流框架**，经 6-app 正确性核验把误报压到接近零、并补上支付/模板级隐私（头像/相机/麦克风）/web-view 业务域名等真实漏报。当前 **111 例测试全绿**，并有**准确性门禁**压阵：`corpus/labels.json` 81 条人工核验标注（12 夹具），precision = recall = 1.0、零误报即 CI 红线（`npm run accuracy`）。下一步：发 **v0.1.0 公开预览**；规则覆盖增量保鲜。
+**真实 dogfood 验证**：在 11 个固定真实开源样本上逐条核验命中——覆盖**原生 wx / uni-app / Taro / mpvue / mpx / wepy 六大主流框架**，并补上支付/模板级隐私（头像/相机/麦克风）/web-view 业务域名等真实漏报。当前 **189 例测试全绿**；准确性门禁在 `corpus/labels.json` 的 **86 条人工核验标注、14 个夹具**上得到 **TP 54 / FP 0 / FN 0**，precision = recall = 1.0、零误报即 CI 红线（`npm run accuracy`）。公开版为 **v0.1.0**；仓库源码 / 草稿 RC 为 **0.2.0-rc.1**，后续改动仍记在 Unreleased。
 
 文档导航：
 
@@ -130,9 +134,9 @@ AI has largely solved *writing the code*; what still blocks zero-to-one creators
 
 1. **Navigation** — which step you're on, what to click next, what to prepare.
 2. **Code-aware preflight** — scans your source locally to produce a *personalized* go-live checklist (request domains to allowlist, privacy APIs that mandate guideline fields, category hints & common rejection warnings).
-3. **AI glue** — a minimal-dependency **CLI core + MCP adapter** (a single parse dependency, js-yaml; no network or native deps) so the agent that just wrote your code can run the preflight and explain results, without bypassing the official console.
+3. **AI glue** — a minimal-dependency **CLI core + MCP adapter** (a single parse dependency, js-yaml; no network or native deps) so the agent that just wrote your code can run the preflight and explain results, without bypassing the official console. Local-only means no upload, not no read: MCP check reads the client-supplied directory with the server process's filesystem permissions, so expose it only to trusted clients.
 
-**Not** a code framework/UI lib · **not** one-click launch · **not** another DevTools-driving MCP · **no** compliance guarantees · **never** uploads source or secrets. Status: **v0 validated (2026-06-21)** — four renderers (check / guide / explain / report) run from source; dogfooded on real open-source mini-programs across **6 frameworks** (native wx · uni-app · Taro · mpvue · mpx · wepy); 111 tests green with an accuracy gate (81 hand-verified labels, precision = recall = 1.0, zero false positives as a CI red line); not yet published to npm.
+**Not** a code framework/UI lib · **not** one-click launch · **not** another DevTools-driving MCP · **no** compliance guarantees · **never** uploads source or secrets. Status: **v0 re-verified on 2026-07-10** — four renderers (check / guide / explain / report) run from source; dogfooded on 11 fixed real-world samples across **6 frameworks** (native wx · uni-app · Taro · mpvue · mpx · wepy); 189 tests green, with 86 hand-verified labels across 14 fixtures (TP 54 / FP 0 / FN 0; precision = recall = 1.0). Public release: **v0.1.0**; repository/draft RC: **0.2.0-rc.1**; not yet published to npm.
 
 ---
 

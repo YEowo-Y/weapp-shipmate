@@ -49,11 +49,11 @@
 
 **决定：导航图与规则内容分成两份产物（方案 a）。**
 
-- `flow.yaml`（**新增，二期第一批文件之一**）：定义上线阶段的**顺序、分支条件、前置依赖**——即决策树的"骨架"。分支条件只引用 `02` 已定义的导航输入：`subject_type`、`business_type`、`has_payment`、`collects_sensitive`(手机号/位置/头像)、`has_server_domain`。
+- `flow.yaml`（**新增，二期第一批文件之一**）：定义上线阶段的**顺序、分支条件、前置依赖**——即决策树的"骨架"。`guide` 使用它做阶段分支，Markdown/checklist 报告使用它统一阶段标题与顺序；代码预检的规则匹配本身仍只依赖 `rules/*.yaml` 与扫描事实。当前图只用 `collects_sensitive` 与 `has_server_domain` 做阶段跳过，`subject_type` 用于规则适用性过滤；已公开但尚未消费的 `business_type` / `has_payment` 进入 `EVOLUTION_ROADMAP.md` S3，不在文档中伪装成已生效条件。
 - `rules/*.yaml`（已设计）：每条规则用 `stage` 把自己**挂到** `flow` 的某个节点上，提供该节点的"内容"（要做什么、为什么、官方来源）。
 
 ```yaml
-# flow.yaml —— 上线流程的决策树骨架（导航专用；预检不读它）
+# flow.yaml —— 上线流程骨架（guide 与报告共用标题/顺序；规则匹配不依赖它）
 - stage: registration
   title: "注册小程序账号"
   next: certification
@@ -91,6 +91,21 @@
 - 改"阶段顺序/分支"（罕见，如官方调整备案前置）→ 只动 `flow.yaml`。
 
 > 把这层薄骨架显式化，胜过把分支逻辑硬编码进 CLI——否则"政策即数据、社区可维护"在导航侧就破功了。`flow.yaml` 同样要带 `last_verified` 与官方来源。
+
+## MCP JSON-RPC 边界契约
+
+MCP 适配层沿用同一 CLI/规则大脑，不把工具执行错误混成协议错误。当前边界由 `tests/mcp.test.mjs` 锁定：
+
+| 输入 / 结果 | 协议行为 |
+|---|---|
+| 非对象、错误 `jsonrpc`/`method`/`id`/`params` 等无效请求信封 | `-32600 Invalid Request` |
+| 请求了服务端未知的方法 | `-32601 Method not found` |
+| `tools/call` 的未知工具、缺少必填参数、参数类型或枚举非法 | `-32602 Invalid params` |
+| 真通知（请求中没有 `id` 字段） | 不写响应 |
+| 显式 `id: null` 的合法请求 | 正常响应并回显 `id: null` |
+| 参数合法、但工具执行失败（如目录不存在） | 返回工具结果并设 `result.isError: true`，不伪装成协议参数错误 |
+
+当前校验覆盖工具 schema 已声明的必填、类型、最小长度与枚举约束；未声明的扩展字段继续接受，给客户端演进留兼容空间。MCP 仍只提供本地 stdio 能力，不扩张第 #6 条 local-only 信任边界。
 
 ---
 
@@ -200,9 +215,9 @@ schema 要同时支撑三类读法：
 
 ## 安全与隐私默认值
 
-- 所有源码预检默认本地执行。
+- 所有源码预检默认在本机执行，只扫描用户明确选择且信任的项目目录；local-only 不等于“不读取”。
 - 默认忽略 `.env*`、`private.*.key`、`project.private.config.json`、`secret*`、`*.pem`、`*.p12`。
-- 报告只输出命中的文件路径、API、域名和规则 ID，不回显密钥、手机号、身份证号、Cookie、Token。
+- 报告除源码派生的相对路径、API、域名、配置键等事实外，还会包含规则标题、原因、动作和官方来源；疑似密钥只报告“文件 + 键名”，不回显密钥值、手机号、身份证号、Cookie 或 Token。完整读取与输出边界以 [`SECURITY.md`](../SECURITY.md) 为准。
 - MCP 适配层不得新增远程上传能力；如果未来支持远程服务，必须另写安全设计并默认关闭。
 
 ## 输出边界

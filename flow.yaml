@@ -1,4 +1,4 @@
-# flow.yaml —— 上线流程的决策树骨架（导航专用；预检不读它）
+# flow.yaml —— 上线流程的决策树骨架（guide 与报告共用阶段标题/顺序；规则匹配不依赖它）
 # 受 schemas/flow.schema.json 约束。阶段间的边（next / requires_stage / applies_when）
 # 在这里定义；每个阶段的"内容"（要做什么、为什么、官方来源）由 rules/*.yaml 用 stage 挂载。
 # 详见 docs/03 「导航的图模型」。

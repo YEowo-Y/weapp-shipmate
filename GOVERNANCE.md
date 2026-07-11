@@ -35,7 +35,7 @@ weapp-shipmate 是**纯公益、开源（MIT）**项目，做 AI 编码工具与
    - `medium` —— 要义已被官方确认，但"单条 API ↔ 具体声明项"等精确映射属合理推断（如隐私 API 逐项映射）。
    - `low` —— 仅启发式/推断，**必须** `draft: true`，不进默认集。
 5. **推断与原文的分界**（典型反例）：类目规则保留 `draft` 的原因正是——官方页确认"个人主体开放类目少于非个人主体"，但**从未明说**"个人主体在某类目因 X 被拒"；后者是合理推断、非原文，故不进默认集。
-6. **可回链 + 时效**：每条必带 `official_url`、`last_verified`；`npm run rot` 定期体检 `last_verified` 时效与 `official_url` 存活（每月定时任务），过期/失效会告警，提醒重新核验。
+6. **可回链 + 时效**：每条必带 `official_url`、`last_verified`；本地 `npm run rot` 默认只检查 `last_verified` 时效，月度 workflow 运行 `npm run rot -- --links` 额外体检 `official_url` 存活。过期或确证失效会告警，提醒重新核验。
 
 ## 边界争议时的判定顺序
 

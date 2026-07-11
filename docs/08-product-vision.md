@@ -30,7 +30,7 @@
 打开项目先选:**「这个小程序上线了吗?」** 两种模式共用同一个大脑(check/guide/explain + rot 监控),仅 UI 框架不同。
 
 ### 2.1 上线前 · 引导模式
-- 8 阶段上线流(注册→认证→类目→备案→隐私→域名→提审→发布),向前推进,**有终点**("你已走完上线全程",绝不说"已上线成功/已合规")。
+- 8 阶段上线流(注册→认证→备案→类目→隐私→域名→提审→发布，以 `flow.yaml` 为准),向前推进,**有终点**("你已走完上线全程",绝不说"已上线成功/已合规")。
 - 每阶段一个"工作区":子步骤清单 · 时间炸弹提醒 · 材料准备 · 官方后台交接(深链 + "我已完成"勾选,工具不代提交)· 已核验规则卡 · agent 协助。
 
 ### 2.2 上线后 · 健康检查模式
@@ -85,29 +85,36 @@
 | 机制 | 作用 |
 |---|---|
 | 确定性核心 | 每条命中回链已核验规则 + 官方原文 + `last_verified`,**无 LLM 杜撰** |
-| 真实语料回归 CI | `_dogfood` 6+ 真实开源 app 当回归套件,每次改扫描器/规则重验"TP/FP 无回归"(已证明能抓 framework 盲区) |
+| 本地真实语料回归 | `npm run dogfood` 在有本地路径映射的开发机上核对 11 个固定样本；CI 另由 accuracy + fixture pins 守门，不把不可用的本地样本假装成 CI 覆盖 |
 | 置信度 + abstain | high/medium 标注;内容相关进"可能适用·需确认"(已建 `selfCheck`);绝不把猜的当确定阻断 |
-| 规则腐烂监控 | `last_verified` 时效 + `official_url` 链接体检(已有 `npm run rot`) |
+| 规则腐烂监控 | `npm run rot` 默认离线检查 `last_verified` 时效；月度 `rule-rot.yml` 使用 `npm run rot -- --links` 追加 `official_url` 链接体检 |
 | 诚实框架边界 | 扫到未验证框架就明说"未验证·仅供参考",不静默给错结果 |
 | 用户反馈回路 | GitHub issue 模板(新手卡点/官方变更/拒审案例)→ 修 → 回归 |
 
 > 已落地的准确性资本(前序会话):6-app 正确性 triage 把隐私/密钥/后端 API 假阳性压到≈0;`security.insecure-request` 假阳性从"4/6 app 误报"清到"全语料 1 条真命中";修掉 uni-app/Taro/wepy/mpx framework 盲区。**这是永久地基,不是一个阶段。**
 
-### 4.2 准确性工程:把"我觉得准"变成"precision 0.9x"(R3,最高杠杆)
+### 4.2 准确性工程:度量地基已交付，细化项后续(R3,最高杠杆)
 
-**问题诊断**:当前"准不准"是**零数字、纯感觉**——一个把"检测准确性"当命门的产品,却没有度量准确性的工具,这本身就是最大漏洞。借成熟静态分析方法(Semgrep/ESLint/CodeQL/SonarQube),**借方法不引运行时**,全部落成纯 Node + JSON/YAML:
+最初“准不准只有感觉”的问题已闭合为可重复门禁。当前实现借成熟静态分析方法、**借方法不引新的运行时依赖**：
 
-| 工件 | 做什么 | 借鉴 |
-|---|---|---|
-| `corpus/labels.json` | 对 dogfood 语料做**三态 ground-truth 标注**:`(project, ruleId, hit/no_hit/unknown)`,**反例(no_hit)最值钱** | CodeQL `.expected`、ESLint `valid/invalid` |
-| `scripts/accuracy.mjs` | 复用 `scanProject`/`runCheck`,算出**逐规则 + 全局**的 TP/FP/FN/precision/recall/F1 | SAST 通用混淆矩阵 |
-| 准确率目标 | 默认(非 draft)规则集 **precision ≥ 0.95**(FP ≤ 5%,对齐 SonarQube 公开的 3.2% FP 哲学"only report what can actually happen");recall 只记趋势不设硬门槛但下跌要解释;**逐规则**看 precision(一条高 FP 规则污染全局信任) | SonarQube precision-first |
-| 规则内嵌测试 | 每条规则 YAML 加 `tests.hit` / `tests.no_hit`,数据驱动测试遍历断言;**schema 强制每条规则必带反例**(防误报) | Semgrep `ruleid:`/`ok:`、ESLint `valid/invalid` |
-| confidence 显性化 | 现 `confidence` 只用于 draft 过滤、用户看不到;**至少 JSON 报告带 confidence,Markdown 对 medium 加"(中等把握,建议人工复核)"** | Semgrep `metadata.confidence`、SARIF |
-| 抑制留痕 | 支持 `// shipmate-disable-next-line <ruleId> 原因`,报告里标"N 处已被开发者忽略"而非静默消失 | SARIF `suppressed`、Semgrep `nosemgrep` |
+| 已交付工件 | 当前契约 |
+|---|---|
+| `corpus/labels.json` | 对 dogfood 语料做 `hit` / `no_hit` ground-truth 标注，保留主体维度；反例直接守 FP 红线 |
+| `scripts/accuracy.mjs` + `tests/accuracy.test.mjs` | 复用 `runCheck` 计算逐规则与全局 TP/FP/FN/precision/recall/F1；precision <0.95、出现 FP 或未知 ruleId 即失败 |
+| `corpus/fixture-pins.json` | 钉住各夹具完整命中集合，让 labels 未锚定规则的新增/消失也在 CI 可见 |
+| CI 门禁 | `npm test` 执行准确性与钉板测试，`npm run coverage` 再核对逐字来源完整性与 precision 红线 |
 
-**纳入 CI**:`ci.yml` 加一步跑 `accuracy.mjs`,全局 precision 跌破阈值或任一规则新增 FP → 红。两道网:逐规则反例(微观防 FP)+ 语料黄金快照 `corpus/*.check.json`(宏观防回归,提供 `npm run golden:accept` 显式更新基线)。
-**最高杠杆单项**:先建 `labels.json` + `accuracy.mjs`——有了数字,后面所有优化才有靶子。
+当前可复现实测（2026-07-10）：`npm run accuracy` 覆盖 86 条人工标注，**TP=54 / FP=0 / FN=0，precision=recall=1.000**；这只证明已标注语料上的表现，不外推为所有真实项目零误报/零漏报。
+
+仍属后续演进而非当前能力：
+
+| 待演进项 | 触发与边界 |
+|---|---|
+| 逐规则 YAML 内嵌正/反例 | 当集中 labels/fixture pins 已难以定位规则级回归时，再评估 schema 与迁移成本 |
+| confidence 显性化 | JSON/Markdown 要形成一致契约并补回归测试后再暴露，不提前声称用户可见 |
+| 抑制留痕 | 需要明确注释语法、审计记录与“不静默消失”报告语义后实施 |
+
+后续规则扩充继续受现有数字地基约束：每批同时报告新增覆盖、逐字核验和 precision，不能用扩覆盖掩盖准确性下降。
 
 ### 4.3 真实卡点分布 与 规则再平衡(R3,最锋利的发现)
 
@@ -213,8 +220,8 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 | 阶段 | 范围 | 为什么这么排 |
 |---|---|---|
 | **P2.0 ✅** | 薄外壳 + 大脑 sidecar(Tauri 2,vanilla TS) | 已发布;证明 sidecar 边界、外壳可丢 |
-| **P2.0.5(可穿插)** | **准确性工程地基**:`corpus/labels.json` + `scripts/accuracy.mjs` + 逐规则反例 + confidence 显性化 + 补 3 条高价值漏检规则(§4.2/4.3) | **纯大脑层、零 UI 风险、直接兑现 make-or-break**;有了准确率数字后续才有靶子;与 P2.1 可并行 |
-| **P2.1** | 前端换骨:React+shadcn,四区 IA + ⌘K(mock 数据、无 LLM);本地字体;收紧 CSP | 纯 UI 零风险、立刻可演示、确立设计标杆。**启动仲裁(2026-07-02,与 docs/04 对齐)**:触发点 = v0.1.0 预览发出后,与 outreach 并行;视觉规范源 = `desktop/design-previews/` 14 屏 + 用户 Claude design 稿 |
+| **P2.0.5(可穿插，部分已交付)** | `corpus/labels.json` + `scripts/accuracy.mjs` + CI 红线已落地；逐规则 YAML 内嵌反例、confidence 显性化与 suppression 留痕仍按 §4.2 后续触发 | **纯大脑层、零 UI 风险、直接兑现 make-or-break**；现有准确率数字已成为后续规则扩充的门禁，与 P2.1 可并行 |
+| **P2.1** | 前端换骨:React+shadcn,四区 IA + ⌘K(mock 数据、无 LLM);本地字体;收紧 CSP | 可独立回退但并非零风险：新依赖、CSP/Tauri 权限和信息架构都须重新审批与验证。触发点以 outreach 信息架构反馈和 `EVOLUTION_ROADMAP.md` M1 为准；视觉规范源 = `desktop/design-previews/` 14 屏 + 用户 Claude design 稿 |
 | **P2.2** | 大脑接成内置 MCP + 确定性流 UI(8 阶段 + 交接闸门 + check 接真实文件夹 + SQLite + 无 key 首启分流),**仍无 LLM** | 这一阶段单独就是个可发布的诚实产品;零 LLM 风险、零担保暴露;最可砍 |
 | **P2.3** | BYO-key 对话 + 接地 agent loop(provider 适配 + keychain broker + 5 问访谈 + 护栏 + 绿/灰双标) | 辅助层叠在已正确的确定性核心上 |
 | **P2.4** | 项目命令器(PTY + 分级 Run Mode + diff 审核)+ 工程体检开关 + 类目顾问 + 旅程 PM + 健康检查模式 + 后台陪练(托盘通知) | "真帮你上线"那一下,价值高风险高,放信任层验证后 |
@@ -409,4 +416,4 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 
 ---
 
-> **一句话收束**:四轮调研把这张图从"愿望清单"变成了"带技术底座 + 准确性度量 + 真实痛点校准 + 枚举出的官方文档覆盖 backlog"的施工图。下一步把准确性工程地基 + 覆盖批1(可 curl 逐字的个人开发者必经项,§15.3)落成代码(P2.0.5,纯大脑、零风险、直接兑现 make-or-break),并起 P2.1 前端换骨——每一格都已钉死站在谁的肩膀上,且每条新规则都受"覆盖与 precision 同速增长"红线约束。
+> **一句话收束**:四轮调研把这张图从"愿望清单"变成了"带技术底座 + 准确性度量 + 真实痛点校准 + 枚举出的官方文档覆盖 backlog"的施工图。准确性数字地基已经落地；下一步是在它的门禁下推进覆盖批1(可 curl 逐字的个人开发者必经项,§15.3)、逐规则测试等后续细化，并起 P2.1 前端换骨——每一格都已钉死站在谁的肩膀上,且每条新规则都受"覆盖与 precision 同速增长"红线约束。

@@ -1,7 +1,7 @@
 # Changelog
 
 本项目变更记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
-版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。当前 `0.1.0`（已托管于 GitHub `YEowo-Y/weapp-shipmate`，尚未 npm publish）。
+版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。当前仓库源码 / 草稿 RC 版本为 `0.2.0-rc.1`，最新公开版为 `v0.1.0`；后续改动记录在 Unreleased，尚未发布到 npm registry。
 
 ## [Unreleased]
 
@@ -25,7 +25,7 @@
 
 - 夹具命中集钉板门禁（`corpus/fixture-pins.json` + `scripts/pin-fixtures.mjs` + `tests/fixture-pins.test.mjs`）：把标注未锚定规则的误报也纳入 CI 可见范围。
 - 边界与性能测试（`tests/perf.test.mjs`，FX-10）：1000 文件 <3s 本机 / <8s CI、heap 增量 <200MB。
-- MCP 单行 1MB 上限 + `-32700` 错误响应（FX-18）：超限行丢弃并 stderr 告警，避免无界内存增长。
+- MCP 单行缓冲上限（1,048,576 个 JavaScript UTF-16 code unit；ASCII 输入约 1 MiB）+ `-32700` 错误响应（FX-18）：超限行丢弃并 stderr 告警，避免无界增长。
 - rot 监控扩至 97 个载体（63 规则 + 5 crosscheck + 8 flow + 21 rejections）。
 - schema 死规则拦截：`scanner` 类型与所需字段绑定校验，防止声明了 scanner 类型但缺对应匹配字段的规则通过 CI。
 - `release.yml` 发布流水线。
