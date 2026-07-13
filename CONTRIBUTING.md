@@ -51,17 +51,26 @@ rules:
 
 ## 本地开发环境
 
-零运行时依赖；仅校验工具用到 devDependencies。
+运行时只有 1 个直接生产依赖 `js-yaml`，安装后的生产依赖闭包另含传递依赖 `argparse`；AJV / ajv-formats / ESLint / @eslint/js 仅用于开发门禁。
 
 ```bash
 # Node 版本对齐 CI（见 .nvmrc，>=20）
 nvm use            # 或自行确保 node >=20
 
-npm install        # 安装 devDeps：ajv / ajv-formats / js-yaml
-npm test           # 等价 npm run lint:rules / npm run validate
+npm ci             # 按 package-lock 精确安装生产依赖与 devDependencies
+npm run lint       # ESLint recommended 静态门禁
+npm test           # scripts/validate.mjs 数据门禁 + 全量 node --test
 ```
 
-`npm test` = `scripts/validate.mjs` 数据门禁（`schemas/*.json` 自身合法 → `flow.yaml` 与 `rules/*.yaml` 符合 schema → flow 图完整性（指向存在/唯一入口/唯一终点/无环）→ 跨文件 `stage` 一致性）+ 全量 `node --test`（含准确性金快照 `tests/accuracy.test.mjs`、夹具钉板 `corpus/fixture-pins.json`、覆盖率红线 `tests/coverage.test.mjs` 等 169 项）。CI（`.github/workflows/ci.yml`）在每次 push / PR 跑同一脚本，另跑 `npm run lint`（ESLint，`recommended` 级）作为独立门禁。
+`npm test` = `scripts/validate.mjs` 数据门禁（`schemas/*.json` 自身合法 → `flow.yaml` 与 `rules/*.yaml` 符合 schema → flow 图完整性（指向存在/唯一入口/唯一终点/无环）→ 跨文件 `stage` 一致性）+ 全量 `node --test`（含准确性金快照 `tests/accuracy.test.mjs`、夹具钉板 `corpus/fixture-pins.json`、覆盖率红线 `tests/coverage.test.mjs` 等；测试数以命令输出为准）。CI（`.github/workflows/ci.yml`）在 main push 与 pull request 上跑同一脚本，另跑 `npm run lint`（ESLint，`recommended` 级）作为独立门禁。
+
+维护者准备 tag 前，还须用**尚未使用的目标 tag** 对账 `package.json`、`manifest.json` 与 `package-lock.json` 两个根版本字段：
+
+```bash
+npm run release:check -- v<package.json 中的新版本>
+```
+
+`v0.2.0-rc.1` 已用于既有草稿 RC，不得移动或复用；后续发布须先选择并同步新版本。tag 发布流水线会在任何打包步骤前重跑 lint、版本对账、测试与覆盖率门禁；本地通过不等于已经创建 tag 或 Release。
 
 目录约定：
 

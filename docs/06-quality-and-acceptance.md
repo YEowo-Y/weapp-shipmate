@@ -12,7 +12,7 @@
 |---|---|---|---|
 | P0 文档先行（已过） | `README` + `docs/*` + `schemas/*.json` + 治理文档 | 文档一致性、schema 契约测试、DOD-P0 | — |
 | P1 规则数据（已过） | `flow.yaml` + `rules/*.yaml` + 种子规则 | schema 校验、来源可回链、图 linter、规则 lint | — |
-| **P2 代码骨架（当前）** | CLI 内核 + MCP 适配 + 规则数据 + 桌面薄壳 | **全部 6 类门禁正式生效（2026-06-22 首跑见 docs/10）** | 性能（无被测对象，标 N/A 待性能夹具，FX-10） |
+| **P2 代码骨架（当前）** | CLI 内核 + MCP 适配 + 规则数据 + 桌面薄壳 | **全部 6 类门禁正式生效（2026-06-22 首跑见 docs/10）** | — |
 
 > **诚实原则**：暂不适用的门禁标 `N/A（待 Px）`，**不允许**用"无代码"伪装成"全绿通过"。验收报告必须显式列出 N/A 项及其解锁阶段。
 >
@@ -41,8 +41,10 @@
 ### DOD-P2（代码）
 - [ ] 单元/接口/集成/冒烟测试通过；关键路径有 E2E。
 - [ ] 预检默认 local-only；脱敏与忽略清单生效（见 `SECURITY.md`）。
-- [ ] CLI 运行时依赖最小化:**"优先"= 允许有充分理由且过安全审计的最小解析依赖**(当前 prod 依赖 `js-yaml`→`argparse`,须在 §2.1 技术债台账登记引入理由);**对外措辞不得宣称"零依赖",除非 `npm ls --omit=dev` 为空**(见 docs/10 FX-01)。新增依赖须说明理由并过安全审计。
+- [ ] CLI 运行时依赖最小化:**"优先"= 允许有充分理由且过安全审计的最小解析依赖**(当前 prod 依赖 `js-yaml`→`argparse`,引入理由已记入 §2.1 技术债台账);**对外措辞不得宣称"零依赖",除非 `npm ls --omit=dev` 为空**(见 docs/10 FX-01)。新增依赖须说明理由并过安全审计。
 - [ ] 性能基线达标（见 §4 性能门禁）。
+- [ ] 发布 tag 必须是 `v<package.version>`，且 `package.json`、`manifest.json`、`package-lock.json.version` 与 `package-lock.json.packages[""].version` 完全一致。
+- [ ] release workflow 的 lint 与版本一致性校验必须先于 npm / MCPB 两条打包路径，失败不得忽略。
 
 ---
 
@@ -52,7 +54,7 @@
 |---|---|---|---|
 | 数据模型规范 | `schemas/*.json` 校验 | 0 校验错误 | P0/P1 |
 | 文档一致性 | 链接体检 + 计数/枚举核对 | 0 死链、0 计数错位 | P0 |
-| 编码规范 | ESLint + Prettier（二期定 config） | 0 error | P2 |
+| 编码规范 | ESLint（`npm run lint`） | 0 error | P2 |
 | 代码复杂度 | 圈复杂度（如 ≤10/函数） | 超阈需说明 | P2 |
 | 静态安全扫描 | `npm audit` / CodeQL / semgrep | 0 high/critical | P2 |
 | 漏洞与隐私审计 | 人工 + 规则：不回显密钥/PII，无远程上传默认开 | 见 `SECURITY.md` | P2 |
@@ -71,6 +73,30 @@
 | 性能门禁无实现 | docs/06 §4 要求数千文件 <5s，无被测对象（FX-10） | 已补 `tests/perf.test.mjs`（1000 文件 <3s 本机/8s CI、heap<200MB） | ✅ 已修(S6) |
 | `mcp.test.mjs` setTimeout+kill 竞态 | 固定 400ms 等待非确定性收尾（FX-WONTFIX-01 误报底层异味） | 已改事件驱动：收齐 id===1/2 再 resolve（`tests/mcp.test.mjs`） | ✅ 已修 |
 | 桌面 markdown 裸 `<pre>` / 退出码契约 | P2.0 薄壳直出字面量（FX-15） | P2.1：MD→DOM 结构化 + 退出码语义 | 🟡 延期(P2.1) |
+
+### 2.2 当前扫描资源边界
+
+- 单个文件超过 **5 MiB** 时跳过并计入 `skippedLargeFiles`，报告必须提示存在未覆盖内容。
+- 一次扫描最多处理 **20,000 个实际遇到的目录项（Dirent）**；目录、被忽略文件和不可扫描扩展名都消耗同一递归预算，不能借“可扫描文件数不增长”绕过上限。
+- 符号链接 / junction 不跟随，避免把项目外代码带入报告或形成遍历环。预算耗尽时返回 `truncated: true`，`check` 必须提示用户核对目录或拆分子目录重跑。
+- 当前 walker 使用 `readdirSync`，仍会一次加载正在读取的单个目录；因此 20,000 项是**总遍历工作预算，不是单目录硬内存上限**。若需硬内存保证，必须另立流式遍历方案与基准后再宣称。
+
+### 2.3 MCP 请求与错误契约
+
+| 情形 | 响应契约 |
+|---|---|
+| 无效 JSON-RPC 请求信封 | `-32600` |
+| 未知方法 | `-32601` |
+| 未知工具、缺少必填参数、参数类型或枚举非法 | `-32602` |
+| 真通知（不存在 `id` 字段） | 无响应 |
+| 显式 `id: null` 的合法请求 | 正常响应并回显 `id: null` |
+| 参数合法但工具执行失败 | `result.isError: true`，不是协议错误 |
+
+该矩阵由 `tests/mcp.test.mjs` 锁定。当前工具 schema 对已声明的必填、类型、最小长度和枚举做校验，同时接受未知扩展字段；改变通知或 `id: null` 语义属于协议契约变更。
+
+### 2.4 发布身份门禁
+
+`npm run release:check` 以一个可测试的契约核对 tag 与四个仓库版本字段；`.github/workflows/release.yml` 在 `npm pack` 和 `npm run build:mcpb` 前依次运行 lint 与版本校验。当前强化战役只在本地验证了正确/错误 tag 的退出码、workflow 结构、`npm pack --dry-run` 与无联网 MCPB smoke；**没有创建真实 tag，也没有实际触发 GitHub Actions、联网 MCPB pack 或 GitHub Release**，不得把这些未运行项报告为已通过。
 
 ---
 
@@ -94,13 +120,13 @@
 
 | 层级 | 测什么 | 现状 |
 |---|---|---|
-| **契约测试**（现存唯一可跑） | 示例规则/flow 是否符合 `schemas/*.json`，含反例（越界规则必须被拒） | ✅ 已通过（P0） |
-| 单元测试 | 扫描器从源码提取域名/隐私 API/配置的纯函数 | ✅ P2（2026-06-22；部分纯函数缺直接覆盖 FX-17） |
+| **契约测试** | 示例规则/flow 是否符合 `schemas/*.json`，含反例（越界规则必须被拒） | ✅ 已通过（P0） |
+| 单元测试 | 扫描器从源码提取域名/隐私 API/配置的纯函数 | ✅ P2（含 `stripUniConditional`、`parseISODate`、位置声明 API 集合等 FX-17 直接覆盖） |
 | 接口测试 | CLI 子命令入参→输出契约（`check` / `guide` 的 JSON 报告 schema） | ✅ P2（mcp dispatch + cli 主路径） |
 | 集成测试 | 规则库 + 扫描器 + 渲染器串起来，喂真实小程序源码 | ✅ P2（fixtures `runCheck` 端到端） |
 | 冒烟测试 | `check ./fixture` 与 `guide` 在样例项目上不崩、出非空报告 | ✅ `tests/smoke.test.mjs`（全夹具 + guide/explain/dispatch ping 最小存活） |
 | **E2E** | 从"用户答问卷/给源码"到"拿到个性化上线清单"全流程 | ✅ `tests/e2e.test.mjs`（spawn 驱动二进制，覆盖 check/guide/explain/checklist + 退出码契约） |
-| 性能 | 预检在中型小程序（数千文件）上耗时/内存基线（如 < 5s、不 OOM） | ✅ `tests/perf.test.mjs`（1000 文件 <3s 本机/8s CI、heap 增量 <200MB） |
+| 性能 | 预检在中型小程序（数千文件）上耗时/内存基线（如 < 5s、不 OOM） | ✅ `tests/perf.test.mjs`（1000 文件 <3s 本机/8s CI、heap 增量 <200MB；这是合成回归阈值，不是单个超大目录的硬内存保证） |
 
 > **E2E 锚点**：用 §0 Go/No-Go 的"3 个真实/模拟小程序跑出有价值报告"作为 P2 的 E2E 验收集。
 > **测试夹具**：二期建 `fixtures/`（脱敏样例小程序）作为集成/E2E/性能的共享输入。

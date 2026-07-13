@@ -45,6 +45,7 @@
     "check": "node bin/weapp-shipmate.mjs check",
     "guide": "node bin/weapp-shipmate.mjs guide",
     "build:mcpb": "node scripts/build-mcpb.mjs",
+    "release:check": "node scripts/check-release-version.mjs",
     "rot": "node scripts/rule-rot.mjs",
     "accuracy": "node scripts/accuracy.mjs",
     "lint": "eslint .",

@@ -83,3 +83,17 @@ test("explain 渲染按拒因分组并附带官方来源", () => {
   assert.match(md, /review\.test-account/);
   assert.match(md, /来源：http/);
 });
+
+test("explain Markdown 净化查询中的结构语法、HTML 与控制字符，JSON 保留原查询", () => {
+  const query = "隐私」\n\n## harmless-marker <tag> `code` ~~strike~~ \u202E";
+  const result = runExplain(query);
+  const md = render(result, "markdown");
+  const json = JSON.parse(render(result, "json"));
+
+  assert.equal(result.meta.query, query, "引擎结果不得改写调用方查询");
+  assert.equal(json.meta.query, query, "结构化 JSON 必须保留原查询");
+  assert.doesNotMatch(md, /^## harmless-marker/m, "查询不得注入 Markdown 标题");
+  assert.ok(!md.includes("<tag>"), "查询中的 HTML 标签必须转义");
+  assert.ok(!md.includes("~~strike~~"), "查询不得注入 GFM 删除线");
+  assert.ok(!md.includes("\u202E"), "双向文本控制字符不得进入 Markdown");
+});

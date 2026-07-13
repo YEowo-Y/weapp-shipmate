@@ -1,6 +1,6 @@
 name: validate-rules
 
-# 数据门禁 + 全量测试：每次 push / PR 校验 schema/flow 图/规则一致性，并跑 169+ 测试
+# 数据门禁 + 全量测试：main push / PR 校验 schema/flow 图/规则一致性，并跑当前全量 node:test 套件
 # （含准确性金快照、夹具钉板、覆盖率红线）。
 # E3：矩阵覆盖 Windows（目标用户主平台，扫描器大量路径处理）与 Node 20/22。
 on:

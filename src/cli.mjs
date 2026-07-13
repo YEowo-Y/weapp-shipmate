@@ -101,9 +101,37 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
   const format = flags.json ? "json" : flags.checklist ? "checklist" : "markdown";
   const includeDrafts = !!flags["include-drafts"];
   const blockersOnly = !!flags["blockers-only"];
-  // 仅过滤展示用的 items；阻断退出码仍按过滤后的结果判定（无阻断则 0）。
+  let hiddenNonBlockerCount = 0;
+  // 聚焦模式覆盖所有可渲染规则集合；摘要/派生备注也必须使用过滤后的计数，
+  // 否则 JSON 会一边只展示 blocker，一边声称命中了已隐藏的 warning/info。
   const focus = (result) => {
-    if (blockersOnly) result.items = result.items.filter((i) => i.severity === "blocker");
+    if (!blockersOnly) return result;
+    hiddenNonBlockerCount = result.items.filter((i) => i.severity !== "blocker").length;
+    if (Array.isArray(result.selfCheck))
+      hiddenNonBlockerCount += result.selfCheck.filter((i) => i.severity !== "blocker").length;
+    result.items = result.items.filter((i) => i.severity === "blocker");
+    if (Array.isArray(result.selfCheck))
+      result.selfCheck = result.selfCheck.filter((i) => i.severity === "blocker");
+
+    if (result.command === "check") {
+      result.meta.summary = result.meta.summary.replace(
+        /命中 \d+ 条规则。$/,
+        `命中 ${result.items.length} 条阻断规则（仅显示 blocker）。`,
+      );
+    } else if (result.command === "guide") {
+      const visibleCount = result.items.length + (result.selfCheck?.length || 0);
+      result.meta.summary = `${result.meta.summary} 当前仅显示 ${visibleCount} 条阻断项。`;
+      result.notes = result.notes.filter((note) => !/^另有 \d+ 条规则是否适用/.test(note));
+      if (result.selfCheck?.length)
+        result.notes.push(
+          `另有 ${result.selfCheck.length} 条阻断规则是否适用取决于你的具体功能，已列入『可能适用 · 请按业务自查』。`,
+        );
+    } else if (result.command === "explain") {
+      const rejectCount = new Set(result.items.map((item) => item.rejectId)).size;
+      result.meta.summary =
+        `为「${result.meta.query}」匹配到 ${rejectCount} 条含阻断规则的相关拒审原因，` +
+        `对应 ${result.items.length} 条阻断规则（仅显示 blocker）。`;
+    }
     return result;
   };
 
@@ -116,7 +144,7 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
       }
       const dir = flags._[0] || ".";
       const result = focus(runCheck(dir, { subjectType: flags.subject, includeDrafts }));
-      out.write(render(result, format) + "\n");
+      out.write(render(result, format, { hiddenNonBlockerCount }) + "\n");
       return result.items.some((i) => i.severity === "blocker") ? 2 : 0;
     }
     if (cmd === "guide") {
@@ -133,7 +161,7 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
         has_server_domain: !!flags.domain,
       };
       const result = focus(runGuide(inputs, { includeDrafts }));
-      out.write(render(result, format) + "\n");
+      out.write(render(result, format, { hiddenNonBlockerCount }) + "\n");
       return 0;
     }
     if (cmd === "explain") {
@@ -144,7 +172,7 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
       }
       // explain 是信息查询而非上线门禁，不返回阻断退出码。
       const result = focus(runExplain(query, { includeDrafts }));
-      out.write(render(result, format) + "\n");
+      out.write(render(result, format, { hiddenNonBlockerCount }) + "\n");
       return 0;
     }
   } catch (e) {

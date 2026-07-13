@@ -2,7 +2,211 @@
 
 > 一条一更;已被仓库/台账记录的不重复;过时即删。
 > 建立:2026-07-04。证据来源:8 路并行深勘 + 高危项对抗复核 + 独立安全审计(共 11 个代理,~105 万 token)。
-> 状态:**执行中**(2026-07-04 用户已拍板 4 项决策,见 §3)。
+> 当前状态:**complete（条件化）**（用户已批准远端合并阶段 B；只有本文件所在提交通过 PR CI、PR #4 以 merge commit 合并、远端及本地 `main` 同步且 post-merge CI 四腿全绿时才生效，条件未满足时状态仍为 `executing`）。
+> 2026-07-04 至 2026-07-05 的上一轮战役已完成；其基线、决策和提交记录保留在后文，作为历史证据而非当前恢复点。
+
+## 当前恢复入口：远端合并阶段 B（2026-07-13）
+
+### 状态、批准范围与恢复检查
+
+- 状态：`complete` 仅在本节全部验收条件满足后生效；否则按 `executing` 恢复。
+- 当前分支：`codex/strengthen-core-contracts-2026-07`；Phase B 起点为 `46bea2be281f74efb7fc883de6336cc524b99d84`，当前 HEAD 为本文件所在的合并恢复提交。
+- 已批准范围：推送本恢复提交；等待 PR #4 当前 head 的四腿 CI；将 Draft PR 转为 Ready；通过 GitHub 以 merge commit 合并到 `main`；fetch 远端引用；本地 `main` 仅以 `--ff-only` 同步到 `origin/main`；等待并核对 merge commit 触发的 main 四腿 CI。
+- 明确排除：直接 push `main`；squash、rebase、amend、force-push 或历史重写；删除功能分支；版本提升；创建/移动 tag；创建、修改或发布 Release；部署；安装或运行 `cargo-audit`；其他外部写入。
+- 合并决策：使用 merge commit，保留已经独立复核和真实 CI 验证的提交 SHA，并提供一个可由后续 PR 整体 revert 的明确回退点。拒绝 squash/rebase，因为两者会改写已审提交身份；保留源分支，避免把清理动作混入合并。
+- 远端基线：`main` 为 `14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`；PR #4 Phase A head `46bea2be281f74efb7fc883de6336cc524b99d84` 的 run [29255850966](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29255850966) 四腿成功，PR 为 Draft/Open/Clean/Mergeable。
+- 当前阶段：B1，持久化合并范围并让本文件所在提交接受 PR CI。
+- 下一条可直接执行的动作：推送本文件所在提交并等待 [PR #4 checks](https://github.com/YEowo-Y/weapp-shipmate/pull/4/checks) 四腿成功；随后进行独立只读合并条件复核，再转 Ready 并执行 merge commit。
+- 恢复检查：确认工作树干净且本地/远端功能分支/PR head 同指向；确认 `origin/main` 未漂移；确认 PR 当前 head 四腿成功；合并后确认 PR 状态为 Merged、merge commit 的两个父提交分别为批准的 base/head、远端 `main` 指向该 merge commit、本地 `main` 与之同步且 main 的最新四腿 CI 成功。
+
+### 阶段 B 验收标准、风险与回退
+
+1. 本文件所在提交的 PR 四腿 CI 全部成功，且独立只读复核没有 P0/P1/P2 或范围越界。
+2. PR #4 从 Draft 转为 Ready 后以 merge commit 合并；不使用 squash/rebase，不删除源分支。
+3. merge commit 的第一父提交是合并前远端 `main`，第二父提交是经过当前 PR CI 的 head；PR 显示 `MERGED`。
+4. 远端 `main` 指向 merge commit；本地 `main` 只通过 `git merge --ff-only origin/main` 同步，工作树及 staged diff 为空。
+5. merge commit 触发的 `push/main` Actions 在 ubuntu/windows × Node 20/22 四腿全部成功；旧 PR run 不能替代该结果。
+6. 既有 `v0.2.0-rc.1` tag 仍指向 `95eb2a331a1332b729368d389d942f57f024914f`，其 Draft Release 未发布；没有新 tag、Release、部署、版本提升或 `cargo-audit` 安装/执行。
+
+主要风险是合并前远端 base 漂移、GitHub 合并语义与预期不符、以及 post-merge CI 才暴露集成问题。任一前置条件漂移即停止合并；合并后若 CI 失败，不重写历史或直接修 main，而是在新修复分支中处理。正常回退是针对 merge commit 创建独立 revert PR。
+
+## 已完成的远端验证阶段 A（2026-07-13）
+
+### 状态、批准范围与恢复检查
+
+- 状态：`complete`；Phase A 最终 head `46bea2be281f74efb7fc883de6336cc524b99d84` 的 [run 29255850966](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29255850966) 四腿成功。
+- 阶段分支：`codex/strengthen-core-contracts-2026-07`；阶段起点 `07f94a148f4d5246fe3ab22cf66ed7815101d6c1` 的代码树已在本地 `main` 通过 `--ff-only` 集成。
+- 已批准范围：临时运行固定版本 `actionlint`；执行 `git fetch --prune --tags origin`；只推送当前功能分支；以远端 `main` 为 base 创建 Draft PR；等待该 PR 的 ubuntu/windows × Node 20/22 四腿 Actions 并核对结论。
+- 明确排除：直接推送或修改远端 `main`；把 Draft PR 转为 ready 或合并；创建/移动 tag；创建、修改或发布 GitHub Release；部署；版本提升；安装或运行 `cargo-audit`；任何其他外部写入。
+- 远端状态（2026-07-13 fetch 后）：`origin/main` 为 `14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`，是功能分支祖先；远端功能分支与本地同指向本文件所在提交后方可恢复。Draft PR 为 [#4](https://github.com/YEowo-Y/weapp-shipmate/pull/4)，base=`main`。
+- 已知发布冲突：远端已有 `v0.2.0-rc.1`，其提交为 `95eb2a331a1332b729368d389d942f57f024914f`，并已有同版本 Draft Release；当前三个版本载体仍为 `0.2.0-rc.1`。因此本阶段禁止 tag/Release，后续发布需另行批准新版本（推荐 `0.2.0-rc.2`）。
+- 当前阶段：已完成；其下一批准边界已由用户授权的 Phase B 取代。
+- 历史恢复检查：确认 Phase A head、PR #4 和 run 29255850966 对应；后续动作以本文件最上方 Phase B 恢复入口为准。
+
+### 阶段 A 已取得的证据
+
+- 固定版本临时门禁：`go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12` 无诊断；未增加仓库依赖或全局安装。
+- 本地当前代码门禁：`npm run lint`；`npm test`（191/191）；`npm run coverage`（TP 54 / FP 0 / FN 0）；`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb`；`npm run release:check -- v0.2.0-rc.1`；`npm audit --audit-level=high`（0 漏洞）均通过。
+- 待推送差异：`git diff --check origin/main..HEAD`、高置信秘密模式与敏感文件名扫描通过；两路独立只读复核均为 PASS，无 P0/P1/P2。
+- 首个真实 PR run [29255613118](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29255613118) 在 `09a5eef5d88f79649fecb44b93b0d2d30c70c083` 上 ubuntu/windows × Node 20/22 四腿成功。它证明代码与首版恢复提交，但不能替代本文件所在提交的 current-head 检查。
+- `cargo-audit` 未安装、未运行，也未宣称通过；本阶段发布资产不含桌面 Rust 产物。未执行 PR 合并、tag、Release 或部署。
+
+### 阶段 A 的验收标准、风险与回退
+
+1. `actionlint@v1.7.12` 对 `.github/workflows/*.yml` 无诊断；该临时执行不得向仓库或全局工具链写入依赖声明。
+2. fetch 后记录远端 `main` 与 tag 事实；若远端基线漂移或不再是当前分支祖先，停止推送并重新评估，不做 rebase/force-push。
+3. `origin/main..HEAD` 的 diff、秘密扫描、`git diff --check`、lint 和全量测试通过；独立只读复核没有未处置的高风险发现。
+4. 远端只新增/更新 `codex/strengthen-core-contracts-2026-07`，并创建以 `main` 为 base 的 Draft PR；不合并、不打 tag、不发布。
+5. PR 当前 HEAD 的四个 `validate` 矩阵检查全部成功；失败必须如实诊断，不能用旧 run 替代。
+6. 完成后把状态改为 `awaiting_approval`，记录 PR/Actions URL、远端 HEAD、验证结果和下一批准边界；将该恢复提交推送并再次等待当前 HEAD 的 CI。
+
+风险主要是远端基线并发变化、凭据/权限失败和真实 CI 与本地环境差异。所有仓库改动都限定在功能分支且可用普通 revert 回退；远端分支可由后续明确授权删除。Draft PR、tag 与 Release 是不同外部对象，本阶段只授权前者。
+
+## 已完成的本地战役：核心契约与发布门禁（2026-07-10）
+
+### 状态与恢复入口
+
+- 状态：`complete`
+- 分支：本地 `main`（集成目标）；源分支 `codex/strengthen-core-contracts-2026-07` 保留。
+- 基准 HEAD：`14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`
+- 当前 HEAD：本文件所在的复核修正与本地集成记录提交；其父为 `ed90e672315e2827426f297a65368c51c6c769b8`。本地 `main` 通过 `--ff-only` 接纳后应与源分支同指向本提交；恢复时以实际 refs 核对，不依赖聊天记录。
+- 工作树：本文件所在提交创建后、`main` fast-forward 后均须核对为干净；复核前无用户既有改动，本次只拥有本提交的四个路径。
+- 已完成提交序列：`11d5fda`、`d7b7d96`、`25edb9e`、`c483bb5`、`3636ae0`、`f7da93c`、`cb76310`、`e025d66`、`0cd8469`、`21179c0`、`d1adc70`、`e8eb064`、`ed90e67`，以及本文件所在的复核修正与集成记录提交。
+- 最后验证：2026-07-13（America/New_York）；新增 E2E 在旧实现上 11/12（预期红），最小修复后目标 E2E 13/13、全量测试 191/191、lint、validate、coverage、accuracy、11/11 dogfood、MCPB 冒烟和 Markdown/checklist/explain CLI smoke 均通过；修正后代码 `APPROVE`、架构 `CLEAR`。
+- 当前阶段：已完成；七个批准及复核修正阶段的验收标准均满足，本地 fast-forward 集成及合并后核验完成后无剩余动作。
+- 当前验收标准：旧实现上可失败的 Markdown 与 checklist 回归测试；最小文案修复能区分“真实零命中”和“过滤后为空”；目标测试、全量测试、lint、适用 smoke 均通过；独立代码复核改为 `APPROVE`，架构复核保持 `CLEAR`。
+- 下一条可直接执行的动作：本轮无本地待执行动作；未授权的 fetch/push、PR、tag、Release、部署与外部写入均未执行，后续需用户另行授权。
+- 恢复检查：确认当前分支为 `main`；确认 `main` 与 `codex/strengthen-core-contracts-2026-07` 同指向本文件所在提交且工作树干净；真实 CI、tag 或发布不能用本地证据替代。
+
+### 已批准范围
+
+本轮只处理已复现、预期收益高且可回退的六组工作：
+
+1. 持久化当前战役的批准范围、排除项、验收标准和恢复入口。
+2. 统一 `guide` 与 `check` 的 subject 适用性；使 `--blockers-only` 同时过滤条目、自检和摘要；报告阶段标题及顺序以 `flow.yaml` 为单一来源。
+3. 在 MCP stdio 边界实施 JSON-RPC 请求校验，并净化 Markdown 文本中的用户查询；不改变结构化 JSON 中的原始查询。
+4. 为扫描遍历建立可比较的合成基准，并让扫描预算覆盖实际遍历的目录项，而不只覆盖已产出的可扫描文件。
+5. 强化发布工作流：补上 lint，并校验 tag、`package.json`、`manifest.json` 与 `package-lock.json` 版本一致。
+6. 对账文档，完成 `EVOLUTION_ROADMAP.md`，复跑当前 HEAD 的全部适用门禁并接受独立只读复核。
+
+已批准的可见行为变化：
+
+- 未提供 subject 的指南不再混入 subject 专属规则。
+- `--blockers-only` 只展示 blocker，并给出与过滤结果一致的摘要和注记。
+- 报告阶段标题与顺序跟随 `flow.yaml`。
+- 非法 MCP 调用返回相应 JSON-RPC 错误；合法工具执行失败仍通过 `result.isError: true` 表达。
+- 发布 tag 必须匹配三个版本载体。
+
+### 明确排除项
+
+- 桌面端 P2.1、桌面安全边界与桌面依赖变更。
+- 新增业务规则、扩大规则覆盖面、支付或其他产品语义裁决。
+- EPIPE 行为、全量准确率标签补齐。
+- release 的 main 分支祖先约束、Actions SHA 固定化。
+- 新生产依赖、重大版本升级、框架替换或架构重写。
+- 公共 API、数据模型、数据库 schema、认证或授权边界变更。
+- push、PR、tag、发布、部署、云资源/生产数据写入和外部 outreach。
+
+未进入本轮的候选项只写入 `EVOLUTION_ROADMAP.md`，不提前实现。
+
+### 阶段、验收标准与回退
+
+#### 阶段 1 — 状态与恢复点
+
+- 证据：旧文档仍把已于 2026-07-05 收官的战役标为“执行中”，不能作为可信恢复入口。
+- 范围：仅本文件与安全任务分支；不修改产品代码。
+- 验收：批准范围、排除项、阶段、风险、恢复检查均可从本文件独立恢复；`git diff --check` 通过；工作树路径符合预期。
+- 验证：`git status --short --branch`、`git diff --check`、人工复核本节。
+- 风险/回退：文档风险低；单独 revert 阶段提交即可。
+
+#### 阶段 2 — 输出正确性
+
+- 证据：`guide` 无 subject 时会采用 subject 专属规则，而 `check` 已排除；`--blockers-only` 只过滤 `items`，自检及摘要仍泄漏非 blocker/未过滤计数；`src/report.mjs` 的阶段标题复制自 flow 且已漂移。
+- 范围：subject 适用性共享逻辑、CLI 聚焦过滤、报告 flow 驱动渲染、最小回归/契约测试和对应变更说明。
+- 排除：不新增或改写规则语义，不新增 JSON 字段。
+- 验收：无 subject 的 `guide` 不含 subject 专属项；聚焦输出中的条目、自检、摘要和注记一致；已知/未知阶段均不丢项，已知阶段顺序/标题来自 flow。
+- 验证：目标 `node --test`（guide、check、CLI、e2e、report），随后 `npm test`、`npm run accuracy`。
+- 风险/回退：影响用户可见输出但契约由测试锁定；阶段提交可整体 revert。
+
+#### 阶段 3 — MCP 边界与文本输出安全
+
+- 证据：当前 dispatch 接受错误 `jsonrpc`、弱类型参数及 `id: null` 处理不正确；Markdown explain 会把查询中的标题/控制字符直接渲染。
+- 范围：手工、无新依赖的请求与当前工具 schema 校验；额外未知属性继续接受；Markdown 查询净化；结构化 JSON 保持原值。
+- 错误矩阵：非法请求 `-32600`；未知方法 `-32601`；未知工具/缺必填/类型或枚举错误 `-32602`；合法工具执行错误保持 `result.isError: true`；缺少 `id` 的 notification 不响应，显式 `id: null` 响应并回显 `null`。
+- 验收：每类正负控制均有边界测试；合法请求结果不漂移；Markdown 无标题/控制字符注入。
+- 验证：目标 `node --test`（MCP、smoke、explain），`npm test`，`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb`（PowerShell 使用 `$env:WEAPP_SHIPMATE_NO_PACK='1'`）。
+- 风险/回退：协议边界属高风险；最小实现、独立只读复核，阶段提交可整体 revert。
+
+#### 阶段 4 — 扫描遍历预算
+
+- 证据：现有文件上限在 generator 产出后计数，包含大量不可扫描文件/目录的树可在触发上限前被无界遍历。
+- 范围：先固定合成树基准；预算计入全部遍历目录项；用可注入的小预算测试截断行为；尽量保持外部结果形状。
+- 排除：不声称 `readdirSync` 已获得硬内存上限；不重写扫描架构。
+- 验收：同一合成场景有前后数据；小预算下遍历有界且有可验证截断信号；常规夹具结果不回归。
+- 验证：目标 boundary/perf/scanner 测试，`npm test`，`npm run coverage`、`npm run dogfood`。
+- 风险/回退：可能改变极端大树的截断点；阶段提交可整体 revert，基准数据保留用于比较。
+
+#### 阶段 5 — 发布一致性门禁
+
+- 证据：release workflow 未运行 lint，且 tag 没有与 package/manifest/lock 版本对账。
+- 范围：复用现有工具实现可单测的版本校验，并在 release workflow 中运行 lint 和校验。
+- 排除：不要求 tag 来自 main；不执行真实 tag/release；不升级 action 或依赖。
+- 验收：匹配版本通过，tag 或任一载体漂移明确失败；workflow 在打包前运行 lint 和版本校验。
+- 验证：版本校验单元测试、workflow 契约测试或静态断言、`npm run lint`、`npm test`。
+- 风险/回退：仅收紧发布前置条件；单独 revert workflow/校验提交即可。
+
+#### 阶段 6 — 文档、路线图与最终复核
+
+- 证据：README/CONTRIBUTING/工程文档存在已复现的测试数、依赖归类、性能状态和规则监控描述漂移。
+- 范围：只对账可由当前仓库证明的事实；路线图按短期（不超过 1 个月）、中期（1–3 个月）、长期（超过 3 个月）分层，并加入单点故障、性能、依赖、安全兜底预案。
+- 验收：所有批准阶段标准满足；当前 HEAD 上适用门禁实际通过；既有失败与新增失败已区分；独立复核无未处置高风险发现；工作树仅含预期改动。
+- 验证：`npm run lint`、`npm test`、`npm run coverage`、`npm run accuracy`、`npm run dogfood`、`npm run rot`、根与桌面 `npm audit`、桌面 TypeScript、Cargo metadata、`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb`、`git diff --check`，以及风险匹配的 smoke test。
+- 风险/回退：文档可单独 revert；代码按阶段提交回退，不做历史重写。
+
+### 当前基线与已知限制
+
+- `npm test`：189 通过、0 失败。
+- `npm run lint`：通过。
+- `npm run coverage`：63/63 源字段；68 个可匹配载体；precision/recall 均为 1.000（TP 54、FP 0、FN 0）；30/68 rule ID 有标签锚点。该指标只覆盖已标注夹具，不外推为全域准确率。
+- `npm run accuracy`：86 个标签、14 个夹具项目、覆盖 30 个 rule ID。
+- `npm run dogfood`：11 个固定样本通过；`npm run rot`：97 个载体、0 stale。
+- 根与桌面 `npm audit`：0 漏洞；桌面 TypeScript 和 Cargo metadata 通过。
+- 已知环境限制：`actionlint` 与 `cargo-audit` 未安装；Codex Security 扫描器因其 GBK 解码问题无法读取含中文的 Git 提交主题，已改用本地防御性审计。三者都不能描述为已运行或通过；相应替代证据是 YAML 解析、workflow 契约测试、Cargo metadata、`npm audit` 和本地边界测试。
+- 性能结论规则：只有同场景前后测量才可宣称改善；阶段 4 的目标是遍历有界，不承诺单目录 `readdirSync` 的硬内存上限。
+- 阶段 4 固定场景：同一棵含 512 个目录和 512 个不可扫描 `.txt` 文件的 1024-entry 合成树、注入预算 64、各 5 次；改动前中位数 75.941 ms 且未截断，改动后中位数 3.478 ms 且正确截断，场景内中位耗时下降约 95.42%。该结果只证明有界预算场景改善，不外推为通用扫描吞吐量。
+
+### 当前风险与决策
+
+- 输出和 MCP 阶段会改变已批准的可见错误行为；用公共边界测试定义新契约，避免额外 API 漂移。
+- flow 是报告阶段标题/顺序的唯一来源；未知 stage 仍需兜底，不能静默丢项。
+- MCP 校验精确覆盖当前 schema，继续接受额外属性，避免无依据的兼容性收紧。
+- MCP 请求的 `params` 依 MCP 对 JSON-RPC 的对象型收窄处理：数组属于非法请求并返回 `-32600`；工具 `arguments` 的类型/枚举错误仍返回 `-32602`。
+- 兼容裁决：本轮按已批准契约把显式 `id: null` 视为请求、响应并回显 `null`。独立复核指出严格 MCP 类型不接受该值；这是有意兼容选择，未来若改为严格拒绝须作为公共契约变化另行审批。
+- 扫描预算按所有实际遇到的 `Dirent` 计数并在递归间共享；保留 `MAX_FILES` 导出和外部结果形状。`readdirSync` 仍会一次物化单个目录，因此单个超大目录的硬内存边界仍是已知风险，不能宣称已经解决。
+- 发布 tag 只校验版本一致性，不增加 main 分支或远端状态假设。
+- 阶段 5 的本地证据只支持 `local-ready`：真实 tag、GitHub Actions、联网 `.mcpb` pack 和 GitHub Release 均按批准边界未执行，不能据此宣称 `CI-ready` 或 `release-ready`。
+- 最终独立终审审查 `14a7f359..d1adc70` 的 35 个变更文件，代码结论为 APPROVE、架构结论为 CLEAR；未发现 P0/P1/P2，批准范围内验收无缺口，排除项未被提前实现。
+- 终审 P3-1：`--blockers-only` 当前通过中文摘要模式重算计数，测试已锁定现状但未来文案变化可能形成隐式耦合。本轮无已复现错误，不做投机重构；已把结构化计数触发点并入路线图 S3。
+- 终审 P3-2：报告在模块加载时缓存 flow，而 guide 按调用读取；当前不可变安装包无行为问题。本轮没有运行时热更新需求，不改变快照模型；若 L2 自定义规则触发，则按路线图统一 flow/rules 快照生命周期。
+- 2026-07-13 合并前复核纠正：代码审查复现 `sample-app --blockers-only` 过滤 5 条 warning 后仍输出“未命中任何规则/无可执行清单项”，结论为 MEDIUM/`REQUEST CHANGES`。新增二进制级 Markdown/checklist 回归先红后绿；CLI 现将隐藏数量作为仅供文本渲染的上下文传入，不改变 JSON 结果形状，并统一修正 check/guide/explain 的过滤后空态。修正后代码复核 `APPROVE`（14 夹具 × 4 主体 × 3 输出共 168 组合无回归）、架构复核 `CLEAR`，无 P0/P1/P2 或其他遗留 finding。
+- 本地集成决策：合并前 `main` 为 `14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1` 且是候选祖先；只允许 `git merge --ff-only codex/strengthen-core-contracts-2026-07`，不创建 merge commit。未 fetch 或比较远端 `main`，因此结论严格限于本地仓库，发布状态仍仅为 `local-ready`。
+- 被取代的决策：后文 2026-07-04 战役的“当前阶段/下一动作”已失效，但历史结论和提交证据保留。
+
+### 当前战役进度
+
+| 阶段 | 状态 | 提交 | 验证证据 |
+|---|---|---|---|
+| 1. 状态与恢复点 | 完成 | `11d5fda` | `git diff --check`；分支、状态与 staged 路径复核 |
+| 2. 输出正确性 | 完成 | `d7b7d96` | 目标测试 59/59；`npm test` 172/172；`npm run lint`；`npm run accuracy`（TP 54 / FP 0 / FN 0）；`git diff --check` |
+| 3. MCP 边界与文本输出安全 | 完成 | `c483bb5` | 目标测试 32/32；`npm test` 177/177；`npm run lint`；`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb`；`git diff --check`；独立复核初次 2×P1+1×P2 均修复后复核 PASS |
+| 4. 扫描遍历预算 | 完成 | `f7da93c` | 红灯测试确认旧实现漏计不可扫描目录项；目标测试 51/51；`npm test` 179/179；`npm run lint`、`npm run coverage`、`npm run accuracy`、`npm run dogfood`；固定场景中位数 75.941→3.478 ms 且截断信号由 false→true；`git diff --check`；独立只读复核 PASS |
+| 5. 发布一致性门禁 | 完成 | `e025d66` | 红灯测试确认基线缺校验模块；版本/workflow 契约 10/10；`npm test` 189/189；`npm run lint`；正确/错误 tag CLI 分别 exit 0/1；`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb`；`npm pack --dry-run`；`git diff --check`；独立只读复核 PASS |
+| 6. 文档、路线图与最终复核 | 完成 | `21179c0`（文档与路线图）、`d1adc70`（终审恢复点）、本文件所在提交（完成状态） | YAML 解析和 23 个 tracked Markdown 文件的本地链接检查；`npm run lint`；`npm test` 189/189；`npm run coverage`（TP 54 / FP 0 / FN 0）；`npm run accuracy`（86 标签）；`npm run dogfood`（11/11）；`npm run rot`（97 载体、0 stale）；根与桌面 `npm audit`（0 漏洞）；桌面构建、Cargo metadata、release 正/负控制、本地 `build:mcpb`、`npm pack --dry-run`、CLI smoke、`git diff --check` 均通过；`actionlint`/`cargo-audit` 因未安装未运行；独立终审 PASS/APPROVE（代码 APPROVE、架构 CLEAR，无 P0/P1/P2） |
+| 7. 合并前复核修正与本地集成 | 完成 | 本文件所在提交 | 首轮代码复核 MEDIUM/REQUEST CHANGES；回归旧实现 11/12（预期红）→ 最终 E2E 13/13；全量 191/191；lint、validate、coverage、accuracy、11/11 dogfood、MCPB 与 CLI smoke 通过；修正后代码 APPROVE、架构 CLEAR；本地 `main` 仅以 `--ff-only` 集成并在集成后复验 |
+
+---
+
+## 历史战役（2026-07-04 至 2026-07-05，已完成）
 
 ## 0. 基线(2026-07-04)
 

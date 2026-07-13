@@ -37,9 +37,11 @@ const SCAN_EXT = new Set([
 
 const ignored = (name) => IGNORE_FILE.some((re) => re.test(name));
 
-// B2：资源上限——单文件超限视为构建产物/数据文件跳过并计数，文件总数超限截断；两者都在报告注记显性化。
+// B2：资源上限——单文件超限视为构建产物/数据文件跳过并计数，遍历目录项超限截断；两者都在报告注记显性化。
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
-export const MAX_FILES = 20000;
+export const MAX_WALK_ENTRIES = 20000;
+// 保留既有导出，避免外部消费者因常量改名中断；扫描文件数天然不可能超过目录项预算。
+export const MAX_FILES = MAX_WALK_ENTRIES;
 
 function* walk(dir, depth = 0, stats = null) {
   let entries;
@@ -54,6 +56,13 @@ function* walk(dir, depth = 0, stats = null) {
     return;
   }
   for (const e of entries) {
+    // 预算覆盖每个实际遇到的 Dirent，包括目录、忽略文件和不可扫描扩展名；否则它们可在
+    // filesScanned 不增长时无界消耗遍历时间。readdirSync 仍会一次加载当前单目录，故这不是硬内存上限。
+    if (stats && stats.entriesVisited >= stats.maxEntries) {
+      stats.truncated = true;
+      return;
+    }
+    if (stats) stats.entriesVisited++;
     const full = join(dir, e.name);
     // B1（FX-12）：不跟符号链接/junction（Windows junction 的 dirent 同样报 isSymbolicLink，已实测）——
     // 链接指向项目外会把外部代码的 API/域名带进合规报告；自环会让 filesScanned 无限膨胀直至路径长度崩溃。
@@ -62,6 +71,7 @@ function* walk(dir, depth = 0, stats = null) {
       if (IGNORE_DIRS.has(e.name)) continue;
       if (depth === 0 && ROOT_ONLY_IGNORE.has(e.name)) continue; // B4：歧义名仅根层忽略
       yield* walk(full, depth + 1, stats);
+      if (stats?.truncated) return;
     } else if (e.isFile() && SCAN_EXT.has(extname(e.name)) && !ignored(e.name)) {
       let st;
       try { st = statSync(full); } catch { continue; }
@@ -391,9 +401,11 @@ function parseAppConfig(base, code, rel, facts) {
 
 /**
  * 扫描一个小程序项目目录（R1/FX-05 后只负责编排：walk 边界 → 逐文件事实提取 → 配置解析 → 汇总）。
+ * @param {string} dir 小程序项目目录
+ * @param {{maxEntries?:number}} opts 仅供内部/测试注入更小的遍历预算；默认使用 MAX_WALK_ENTRIES
  * @returns {{ filesScanned:number, apis:string[], domains:string[], dynamicRequest:boolean, configKeys:string[] }}
  */
-export function scanProject(dir) {
+export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES } = {}) {
   const facts = {
     apis: new Set(),
     domains: new Set(),
@@ -407,14 +419,17 @@ export function scanProject(dir) {
   };
   let filesScanned = 0;
   let skippedLargeFiles = 0;
-  let truncated = false;
-  const walkStats = { skippedDirs: 0 }; // B3：拒权跳过的子目录数——未覆盖面必须可见
+  const walkStats = {
+    skippedDirs: 0, // B3：拒权跳过的子目录数——未覆盖面必须可见
+    entriesVisited: 0,
+    maxEntries: Math.min(maxEntries, MAX_WALK_ENTRIES),
+    truncated: false,
+  };
   // B5：相对路径统一净化——控制字符/反引号可借恶意文件名注入 markdown/提示词到报告与 MCP 文本。
   // eslint-disable-next-line no-control-regex -- 本正则的净化目标就是控制字符本身
   const relSafe = (f) => relative(dir, f).replace(/\\/g, "/").replace(/[\u0000-\u001f\u007f`]/g, "?");
 
   for (const { file, size } of walk(dir, 0, walkStats)) {
-    if (filesScanned >= MAX_FILES) { truncated = true; break; } // B2：截断而非无限吃内存/时间
     if (size > MAX_FILE_BYTES) { skippedLargeFiles++; continue; } // B2：超大文件跳过并计数
     let text;
     try { text = readFileSync(file, "utf-8"); }
@@ -433,7 +448,7 @@ export function scanProject(dir) {
     filesScanned,
     skippedLargeFiles,
     skippedDirs: walkStats.skippedDirs,
-    truncated,
+    truncated: walkStats.truncated,
     apis: [...facts.apis].sort(),
     domains: [...facts.domains].sort(),
     dynamicRequest: facts.dynamicRequest,

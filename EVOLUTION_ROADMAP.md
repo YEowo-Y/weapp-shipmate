@@ -1,79 +1,141 @@
-# EVOLUTION_ROADMAP — 未来演进规划
+# EVOLUTION_ROADMAP — 可信后续演进路线
 
-> 初稿:2026-07-05(强化战役阶段 3 末);同日随阶段 4/5 完成更新锚点。
-> 依据:11 路深勘证据 + 强化战役五阶段实施经验 + docs/04 既定路线与 Go/No-Go 门。
-> 本文件只写"强化战役之后"的演进;战役本身的计划与台账在 STRENGTHENING_PLAN.md,不重复。
+> 更新：2026-07-10（America/New_York）。
+> 当前战役的批准范围、阶段提交、验证结果和恢复入口见 `STRENGTHENING_PLAN.md`；本文件只记录尚未实施的后续候选，不把设想写成承诺。
+> 时间口径：短期不超过 1 个月；中期为 1–3 个月；长期超过 3 个月。任何项目只有在其触发条件成立、重新越过相应审批边界后才进入实施。
 
-## 0. 现状锚点(2026-07-05,战役末)
+## 0. 当前证据锚点
 
-- 【事实】v0.1.0 已发 GitHub Release(tgz+mcpb);npm registry 因注册受阻暂缓。
-- 【事实】63 条规则全带官方出处;测试 169 全绿(含 lint 门禁);金快照 54 TP/0 FP;dogfood 11 真实样本钉板;夹具钉板 28 条;rot 监控 97 个载体。
-- 【事实】发布工程已就位:release.yml(tag→门禁→双资产→SHA-256→草稿 Release)、CI 矩阵 ubuntu/windows×node20/22、mcpb 打包器锁 2.1.2、dependabot。
-- 【事实】唯一未过的 Go/No-Go 门是 outreach(docs/11 台账待填,Release 资产下载数 0)——项目自己的规则把 P2.2 之后全部绑在这一勾上。
+- 【事实】最新公开 GitHub Release 是 `v0.1.0`。2026-07-10 外部观察到 `v0.2.0-rc.1` draft；`npm view weapp-shipmate` 返回 `E404`，因此不能声称 npm registry 已发布或双渠道可用。
+- 【事实】当前数据基线为 63 条规则、8 个流程阶段；`registration`、`certification`、`release` 三阶段各为 0 条规则。规则数量以 `npm run validate` 的当前输出为准，不在路线图中推演未来数量。
+- 【事实】当前验证基线为 `npm test` 189/189、86 个 accuracy labels、TP 54 / FP 0 / FN 0、dogfood 11 个固定样本、rot 97 个载体。accuracy 只证明已标注语料，不外推为全域准确率。
+- 【事实】本轮已在本地强化四类契约：输出的 subject/聚焦过滤/阶段渲染一致性；MCP 请求校验与 Markdown 文本净化；扫描目录项预算；release tag 与 package/manifest/lock 版本一致性及 lint 工作流契约。
+- 【事实】扫描预算现在覆盖实际遇到的全部 `Dirent`，固定 1024-entry、预算 64 场景的中位耗时由 75.941 ms 降至 3.478 ms 并正确截断；这只证明该有界场景，不代表通用吞吐提升。`readdirSync` 仍会一次物化单个目录，尚无单目录硬内存上限。
+- 【事实】本轮发布证据仅为 `local-ready`：没有创建真实 tag，没有运行新的 GitHub Actions release job、联网 `.mcpb` pack、签名或真实 Release。不得把本地契约测试写成 `CI-ready` 或 `release-ready`。
+- 【事实】CLI/MCP 当前接受 `payment`、`business` 输入，但现有 flow 条件和规则选择不使用二者，输入不会形成可见差异；普通 CLI 也尚无被回归测试锁定的 EPIPE 契约。
+- 【事实】MCP stdio 的单行阈值当前用 JavaScript 字符串 `length` 实现，即按 UTF-16 code unit 而非 UTF-8 字节计数；文档已如实描述，若要改成字节契约仍需单独定义兼容边界。
+- 【事实】唯一未完成的既定 Go/No-Go 是 `docs/11-outreach-plan.md` 的 5 人导航验证；结果台账仍为空。P2.2 及以后继续以真实验证通过为前置。
+- 【事实】治理仍是单一维护者；默认安全边界仍是 local-only、源码不上传、秘密不回显、不做合规担保。
 
-## 1. 短期(≤1 个月)
+## 1. 排序原则与审批边界
 
-### 1.1 强化战役收尾(已完成 2026-07-05)
-- **已完成(2026-07-05)**:scanProject 拆分(FX-05)、正则字面量启发式、Taro 具名导入、规则层收尾(R5);release.yml、CI 矩阵、锁 mcpb、eslint 门禁、文档对账(E6)。
-- **①release.yml 全流程演练(已跑通)**:先把 package.json/manifest/lockfile 三处版本同步 bump 至 `0.2.0-rc.1`(保产物自洽)→ tag `v0.2.0-rc.1` 触发 release run 成功;草稿 Release 挂三资产(`weapp-shipmate-0.2.0-rc.1.tgz` + `weapp-shipmate.mcpb` + `SHA256SUMS.txt`),**真实 mcpb pack 首次在 runner 跑通**(此前均开发机手工构建)。首跑因 e2e `--version` 断言窄化成三段式而误红(合法预发布段 `-rc.1` 被拒),已修(正则放宽为完整 SemVer 含预发布/build 段)——本地无法复现的预发布边界被 CI 首跑抓到,正是本项存在的意义。
-- **②CI 矩阵 GitHub runner 首跑(全绿)**:ubuntu/windows × node20/22 四腿全过(windows 腿 43~51s、ubuntu 14~16s);目标用户主平台 Windows 此前零覆盖,现证实绿;perf 腿未在 CI 波动(8s 预算兜住)。
-- **下一步**:草稿 Release 为演练产物,人工核对后可删;正式发布走 §1.2(bump `0.2.0` GA + outreach)。
+1. 先完成不能由代码替代的用户验证，再扩规则、桌面或 agent 能力。
+2. 只在触发条件出现后投入；工作量大、技术新或已有愿景文档本身不构成优先级证据。
+3. 公共接口、数据模型、认证/授权、新生产依赖、重大升级、真实发布及外部写入仍须重新确认。
+4. 每项先定义证明正确的证据，再实施；没有可比较测量时不宣称性能改善。
+5. 路线项默认可推迟或取消；未满足前置条件时保持当前 CLI + MCP 确定性核心。
 
-### 1.2 发布 v0.2.0 并执行 outreach(关键路径,代码不可替代)
-- **目标**:以强化后的版本重发预览;按 docs/11 协议找 5 个目标用户读导航,≥3/5 能复述"下一步做什么"。
-- **影响范围**:GitHub Release、README 安装路径(零安装 npx 优先)。
-- **风险与收益**:不做则一切后续阶段被自家 Go/No-Go 规则阻塞;做了才有真实用户信号校准规则优先级。
-- **验收**:docs/11 结果台账填实;门勾上或明确记录失败教训。
+## 2. 短期（不超过 1 个月）
 
-### 1.3 规则回填:3 个零规则阶段(注册/认证/发布)——D3 决策产物
-- **目标**:每阶段 2-3 条导航级规则,逐条官方源核验(宁缺毋造),补齐漏斗首尾的空占位。
-- **迁移步骤**:独立分支;每条规则带 official_url/source_quote/last_verified;labels 至少各配 1 hit 锚点;金快照与钉板同步更新。
-- **风险与收益**:内容工作量大于代码;收益是 guide 在漏斗首尾不再输出裸占位,产品完整性可感知提升。
-- **验收**:`npm run validate` 8 阶段全部非零规则;新规则全部入 rot 监控。
+### S1 — 完成 5 人 outreach，并以证据决定 RC 是否进入 GA
 
-## 2. 中期(1–3 个月)
+- **目标**：按 `docs/11-outreach-plan.md` 让 5 个目标用户在不被提示答案的情况下阅读导航，至少 3 人能准确复述下一步；仅在结果支持时，才把当前 RC 候选推进为 GA。
+- **触发条件**：可获得 5 个符合画像的参与者，且用户愿意执行外部联系；RC 物料可被参与者稳定访问。若招募、凭据或发布授权不可得，本项保持等待而不是用内部测试替代。
+- **影响范围**：`docs/11-outreach-plan.md`、由共性反馈直接支持的导航文案、README 安装说明、三个版本载体、release 工作流及 GitHub/npm 分发状态。
+- **前置条件**：当前 HEAD 的 lint/test/coverage/accuracy/dogfood/rot/打包 smoke 均通过；用户明确批准 tag、Release、npm publish 等外部写入。tag 必须继续通过版本一致性门禁。发布前若要增加 main 祖先约束、Actions 完整 SHA 固定、受信 `.mcpb` 签名或真实 release rehearsal，须作为强化候选重新审批；本轮不预先实现。
+- **迁移步骤**：①冻结统一测试物料；②记录 5 人逐字复述、判定和卡点；③只对重复、可复现的卡点做最小文案修正并复测；④通过 Go/No-Go 后再决定 `0.2.0` 或后续版本号并同步 package/manifest/lock；`v0.2.0-rc.1` 已被既有草稿 RC 使用，不移动、不复用；⑤重跑全部门禁与 release 检查；⑥取得外部写入批准后创建新 tag 和 draft Release，人工核对资产/校验和后再发布；⑦只有 npm 账号/包名可用且另获批准时才发布 registry。
+- **风险与收益**：样本可能偏置，文案修正可能过拟合；公开版本不可假装完全回滚。收益是首次用真实用户信号验证产品核心价值，并让 GA、规则优先级与信息架构不再只由内部推断驱动。
+- **验收标准**：`docs/11` 填满 5 条真实记录且至少 3/5 通过；失败卡点及是否修复有明确结论。若进入 GA，tag/package/manifest/lock 完全一致，适用门禁与真实 GitHub Actions 均通过，tgz/`.mcpb`/SHA 清单可核对；签名仅在该候选获批且有受信凭据时作为验收项。若 npm 发布获批，`npm view` 必须返回相同版本。
+- **回退方式**：验证未过则不发 GA，保留 RC 并回退过拟合文案提交；draft 未发布时停止在人工闸。已公开版本不宣称可删除式回滚，发现问题时停止继续分发、记录影响并发布经验证的修正版。
 
-### 2.1 用户自定义规则库(既定产品方向)
-- **目标**:loadData 支持用户规则目录;运行时 AJV 校验(勘察已证实 dev-time schema 不护航运行时);自定义规则灰标"自定义"、不计入 precision 基线。
-- **影响范围**:src/data.mjs(加载与校验)、schemas/(校验入口)、report(灰标渲染)、docs(编写指南)。
-- **迁移步骤**:①运行时结构校验(带文件名的可读报错——勘察发现 malformed YAML 目前裸 TypeError)②`--rules-dir` / 配置文件寻径 ③灰标与基线隔离 ④CONTRIBUTING 规则编写协议。
-- **风险与收益**:风险是用户规则质量污染工具信誉——靠灰标+不计基线隔离;收益是社区扩充覆盖面而不动核验红线。
-- **验收**:坏用户规则文件 → 带文件名的人话报错;自定义规则命中在报告中可视区分;官方基线 precision 不受影响(accuracy 门禁不变绿转红)。
+### S2 — 仅在证据支持时补齐注册、认证、发布三个零规则阶段
 
-### 2.2 桌面 P2.1(设计轨,已拍板在 Claude design 上做)
-- **目标**:按 design-previews(engineered-calm 方向,14 屏)重写薄壳前端;恢复时首批执行搁置的 E7 安全底线(CSP、去 withGlobalTauri、删 opener 死权限、sidecar 退出码判别)。
-- **风险与收益**:P2.1 触发条件(v0.1.0 已发)已满足;风险是 UI 先行会固化未经用户验证的信息架构——outreach 信号应先行喂入。
-- **验收**:E7 四项落地;报告区无裸 markdown(FX-15/S7);Rust+前端各 ≥1 happy-path 测试。
+- **目标**：在不杜撰产品语义的前提下，为 `registration`、`certification`、`release` 各补最多 2–3 条高价值导航规则，消除流程首尾只有占位文案的缺口；数量是上限而非凑数指标。
+- **触发条件**：S1 反馈显示这些空阶段造成理解或行动障碍，或维护者另行确认其优先级；同时能取得稳定、可逐字核验的官方来源。没有用户信号或官方证据时不启动。
+- **影响范围**：`rules/*.yaml`、必要的 flow/guide 契约测试、accuracy/fixture 锚点、rot 监控、CONTRIBUTING 与相关导航文档；不扩第 9 个阶段，不顺带增加新框架适配。
+- **前置条件**：每个候选结论有 `official_url`、连续逐字 `source_quote`、`last_verified` 和主体适用性依据；规则边界经人工核验。静态可检测规则要有正反例，纯导航规则要有 guide 契约测试。
+- **迁移步骤**：①按阶段建立独立候选清单；②先补最小正/负控制；③每次只加入一个来源明确的内聚批次；④同步标签、fixture pin 与 rot 载体；⑤逐批运行 validate/test/coverage/accuracy/dogfood/rot；⑥用户可见语义另写迁移说明。
+- **风险与收益**：错误或过宽规则会直接损害“宁缺毋造”的信任根基；内容核验成本可能高于代码。收益是让用户从注册到发布都能获得可行动的官方导航，而不是裸占位。
+- **验收标准**：三个阶段均至少有一条真正适用的非 draft 导航规则；所有新增规则可回链、进入 rot 且无新增 FP/FN。可静态检测项具备 hit/no_hit；纯导航项的 subject、条件分支和报告顺序有契约测试。
+- **回退方式**：按阶段或来源批次独立 revert；发现来源漂移时先降为 draft 或移出默认输出，不改动既有 63 条规则的语义。
 
-### 2.3 分发与信任链
-- **目标**:npm registry 发布(注册解锁后)、mcpb 签名评估、GitHub Release 下载量/Issue 反馈回路。
-- **验收**:两渠道版本一致性由 release.yml 保证;README 明示 MCP 工具具有本机文件读取能力(勘察决策:不加允许列表,改为明示)。
+### S3 — 处置公共接口与传输契约债：payment/business、CLI EPIPE 与 MCP 行单位
 
-## 3. 长期(>3 个月)
+- **目标**：让 CLI/MCP 暴露的 `payment`、`business` 输入与真实行为一致，为普通 CLI stdout 管道关闭时的 EPIPE 定义明确、可测试的退出行为，并决定 MCP 单行阈值继续按 UTF-16 code unit 还是迁移为 UTF-8 字节；不在路线图里替产品决定支付或业务语义。
+- **触发条件**：outreach/集成反馈表明用户依赖这两个输入，或进入下一次公共接口版本窗口；EPIPE 有最小、稳定的管道复现；MCP 多字节输入出现互操作问题或下一次触碰 stdio framing。若无真实使用证据，只记录债务，不主动扩语义。
+- **影响范围**：`src/cli.mjs`、`src/guide.mjs`、MCP tool schema/dispatch/stdio framing、CLI/MCP 帮助和契约测试；EPIPE 只涉及普通 CLI 入口与输出流，MCP 行单位变更须保持 JSON-RPC 错误与存活契约。
+- **前置条件**：产品负责人选择其一：为 payment/business 定义有官方依据的可见语义，或启动兼容的弃用/移除流程；任何删除、枚举收紧或错误码变化按公共 API 变更重新审批。EPIPE 需先确定安静退出、诊断和退出码契约。
+- **迁移步骤**：①先加探针证明当前 payment/business 输入不改变输出；②若保留，先用 flow/rules 的单一事实源定义语义和正反契约，再实现；③若弃用，先在帮助/文档/诊断中标明无效果并给迁移期，重大版本才移除；④下一次改动 `--blockers-only` 摘要文案前，先让可见计数成为结构化派生值，移除对中文句尾模式的依赖；⑤对 CLI EPIPE 先加关闭下游管道的回归测试，再做最小输出边界修复；⑥若迁移 MCP 阈值，先为 ASCII、中文和代理对边界建立正负控制，再用 `Buffer.byteLength` 或等价增量计数实现；⑦复跑 e2e、CLI、guide、MCP 与打包 smoke。
+- **风险与收益**：擅自解释 payment/business 会制造合规结论，直接删除会破坏自动化；不恰当吞掉 EPIPE 也可能掩盖真实 I/O 错误。收益是消除“参数存在即能力存在”的误导，并让 Unix/PowerShell 管道行为可预测。
+- **验收标准**：payment/business 要么产生文档化、由测试锁定的差异，要么完成明确且兼容的弃用路径，CLI、MCP、README 三处表述一致；不允许继续无声 no-op。聚焦摘要的可见计数由结构化结果生成，文案调整不会静默保留旧计数。CLI 下游关闭时无未处理堆栈、无挂起，退出码与诊断符合批准契约；既有 0/1/2 业务退出码不漂移。MCP 阈值单位与常量/文档一致，多字节边界有直接测试，超限请求仍受控失败且后续请求可存活。
+- **回退方式**：语义实现、EPIPE 修复与 MCP 行单位迁移分别成独立提交；行为不符可单独 revert。弃用期保留旧参数解析，移除前不得用兼容垫片掩盖未经批准的语义变化；MCP 单位迁移若破坏既有客户端，则恢复旧阈值并保留诚实文档，另开版本化方案。
 
-### 3.1 BYO-key 桌面代理(产品终态,决策 #8)
-- **目标**:桌面壳内嵌 Claude Code/Codex 终端,BYO-key;预检工具成为代理的"事实来源"层。
-- **迁移步骤**:①sidecar 打包(P2.1 遗留的 packaged-sidecar)②终端嵌入与密钥安全存储(OS keychain)③代理调 MCP 工具的回路。
-- **风险**:密钥安全是新攻击面(CSP/withGlobalTauri 底线必须先行);Tauri 2 生态演进风险以 Cargo.lock 钉住。
-- **验收**:密钥不落盘明文;代理会话可复现调用本地 check 并引用其输出。
+## 3. 中期（1–3 个月）
 
-### 3.2 规则生态与保鲜规模化
-- **目标**:rot 监控扩展到 flow/rejections/crosscheck 内联规则(R5 部分先行);月度 cron 存活保障(GitHub 60 天不活跃自动停用——需 keepalive 或通知回路);社区规则 PR 协议(CONTRIBUTING 对账后)。
-- **验收**:任一 last_verified 载体逃逸监控 → rule-rot 测试红;cron 停用有告警路径。
+### M1 — P2.1：先落安全底线与测试地基，再重做桌面 UI
 
-## 4. 兜底预案
+- **目标**：按已选定的 engineered-calm 设计方向把薄壳报告改为结构化界面，同时完成 CSP、移除 `withGlobalTauri`、删除无用 opener 权限、按 sidecar 退出码判定结果四项安全/正确性底线。
+- **触发条件**：S1 提供足够的信息架构反馈，目标设计稿稳定；用户重新批准桌面范围及所需依赖。公开 `v0.1.0` 只说明原触发条件已到，不代表可以绕过新审批和安全门。
+- **影响范围**：`desktop/` 前端、Tauri 配置、Rust sidecar 边界、桌面测试和构建；CLI/MCP 核心保持独立。任何 React/UI/test 新依赖均属于需确认的依赖范围。
+- **前置条件**：确定设计源与受支持平台；建立最小 Rust command 与前端组件测试；sidecar 依赖的 CLI 输出/退出码契约已固定；对 Tauri capability/CSP 做范围明确的安全审查。
+- **迁移步骤**：①先锁现有 happy/error path；②收紧 CSP、global API 和 capability；③按 0/1/2 退出码区分成功/阻断/运行失败；④用结构化 JSON→DOM 替代裸 Markdown `<pre>`；⑤逐屏迁移设计并验证空态、错态、键盘与可访问性；⑥跑前端 build/typecheck、Rust tests/metadata 和桌面 smoke。
+- **风险与收益**：新增前端依赖和 Tauri 权限配置会扩大供应链与回归面，UI 也可能固化错误的信息架构。收益是使现有确定性结果真正可读、可操作，并在进入数据库或 LLM 前补齐桌面安全基础。
+- **验收标准**：四项底线全部落地；报告区无裸 Markdown；Rust 与前端各至少一个 happy path 和一个关键失败路径；CSP/capability 无无关权限；类型检查、构建、Cargo metadata/测试和支持平台 smoke 通过。
+- **回退方式**：桌面改动保持与 CLI/MCP 分离；按安全底线、输出适配、视觉层分段回退。P2.1 不引入用户数据迁移，失败时可恢复前一薄壳版本并继续分发 CLI/MCP。
 
-| 风险面 | 现状 | 预案 |
-|--------|------|------|
-| 单点故障(维护者) | 单人维护;流程文档化程度高(docs/10 切片协议) | STRENGTHENING_PLAN/docs 台账使任何接手者可续;发布全自动化(release.yml)后无手工黑箱 |
-| 单点故障(分发) | 仅 GitHub Releases | npm 注册解锁后双渠道;mcpb 可从源码 `npm run build:mcpb` 复现(NO_PACK 冒烟已入 CI) |
-| 性能 | 1000 文件 <3s 基线已锁(perf.test) | 若真实项目超 2 万文件上限:截断注记已显性化;后续可加 packOptions.ignore 解析缩扫描面 |
-| 依赖 | 运行时仅 js-yaml(8 包锁);打包器 npx 拉取 | 阶段 5 锁 mcpb 精确版本;dependabot 盯 actions+npm;js-yaml 若弃更,YAML 面窄、可内联极简解析器替换 |
-| 安全 | MCP 全盘读能力(设计如此) | README 明示;若用户反馈要求,允许列表以环境变量 opt-in 提供(不默认) |
-| 规则腐烂 | rot 监控月度 cron | 扩展覆盖(3.2);官方文档域名 geo 阻断误报→重试+inconclusive 分级(勘察在案) |
+### M2 — P2.2：交付无 LLM 的确定性桌面产品
 
-## 5. 明确不做(负空间)
+- **目标**：把当前规则大脑作为内置 MCP/sidecar 接入桌面，以 `flow.yaml` 的 8 阶段、交接闸门、真实文件夹 check 和最小 SQLite 状态组成可独立发布的无 key 产品。
+- **触发条件**：S1 Go/No-Go 通过，M1 可用性与安全验收完成，并出现用户希望保存项目/阶段状态的真实需求；否则继续使用无状态 CLI/MCP。
+- **影响范围**：桌面进程边界、项目/阶段状态、SQLite schema 与迁移、文件夹选择和本地报告；属于数据模型与桌面架构变化，必须重新审批。
+- **前置条件**：批准数据模型和迁移策略；确定 SQLite 唯一真源、源码永不落库、单实例/并发边界、一致快照备份与失败恢复；完成 L2 Rust、L3 前端和迁移测试设计。
+- **迁移步骤**：①用契约测试固定 MCP/flow 输入输出；②实现最小 schema 与 `user_version` 单向迁移，迁移前创建一致快照；③接入无 key 首启和真实文件夹扫描；④实现阶段状态与交接闸门；⑤验证多窗口/异常退出/损坏数据库恢复；⑥最后再评估是否需要打包 sidecar 优化。
+- **风险与收益**：数据库迁移、双真相源和多进程写入可能导致状态损坏；桌面读取路径权限也会扩大信任边界。收益是先交付一个无需模型、结果可复现、边界诚实的完整桌面产品，为后续 agent 提供稳定底座。
+- **验收标准**：无 key 冷启动可选择目录并得到与 CLI 等价的结果；阶段标题/顺序只来自 flow；源码、秘密和原始报告不进入数据库；迁移失败原子回滚且一致快照可恢复；单实例/并发契约、L2/L3、桌面构建与 smoke 全部通过。
+- **回退方式**：发布前保留迁移前一致快照；失败时恢复旧桌面版本和快照，不让半迁移 schema 启动。CLI/MCP 与规则数据不依赖桌面数据库，可继续独立工作。
 
-- 不做云端上传/远程扫描——local-only 是信任根基(SECURITY.md 契约)。
-- 不做"合规担保"类输出口径——GOVERNANCE.md 红线。
-- 不在 outreach 信号回来前扩充第 9+ 阶段或新框架适配——避免在未经验证的方向上堆内容。
+## 4. 长期（超过 3 个月）
+
+### L1 — 分闸实现 BYO-key agent、PTY 与记忆，而非一次性终态重写
+
+- **目标**：在 M2 的确定性核心之上，依次加入 OS keychain broker、provider adapter、受控 agent loop、PTY/终端和最后的轻量记忆；规则工具始终是事实来源，LLM 只做辅助。
+- **触发条件**：M2 有持续使用证据，用户明确需要 AI 对话或命令执行；各阶段的价值足以覆盖安全和维护成本。没有 adoption 信号时长期保持确定性产品。
+- **影响范围**：认证/授权、第三方模型数据出站、OS keychain、进程与 PTY 生命周期、provider 适配、上下文构造、SQLite/记忆数据模型和跨平台分发。
+- **前置条件**：逐阶段重新批准认证边界、新生产依赖、数据模型和 provider 决策；完成威胁模型、隐私告知、权限确认、超时/进程清理和跨平台测试方案。用户自行提供合法 key；项目不代管云凭据。
+- **迁移步骤**：①只做 keychain broker 和 mock provider，key 不过前端 IPC/日志；②加入可取消、有限工具、带超时的 agent loop；③稳定后才接 PTY，逐项处理 resize-after-exit、ConPTY EOF、孤儿进程和 PATH；④最后以显式“记住”为默认关闭的记忆入口，先 SQLite/FTS，不上向量；⑤每一闸单独安全复核和可关闭发布。
+- **风险与收益**：这是最大的新攻击面，包含秘密外泄、提示注入、任意命令、孤儿进程、第三方出站与迁移损坏。收益是实现真正的上线陪跑，同时保留可核验的确定性底层和用户控制权。
+- **验收标准**：key 不以明文落盘、不进 CLI 参数、环境、前端 IPC 或日志；敏感项目信息出站前用户可见且可关闭；工具权限最小化并逐次确认；PTY 能正确退出、取消和清理；agent 可复现调用本地 check 并引用原始规则结果；记忆不存“已合规”判断。
+- **回退方式**：每个能力有独立关闭开关和发布边界；禁用 agent/PTY 后回到 M2 确定性模式，清理活跃进程和 keychain 引用；数据迁移通过一致快照恢复。不得以兼容模式继续暴露已知不安全能力。
+
+### L2 — 仅在真实贡献压力出现后建设规则生态与自定义规则
+
+- **目标**：先让官方规则贡献与保鲜流程可持续；只有真实需求证明有价值时，才支持运行时自定义规则目录，并把官方与自定义结论清晰隔离。
+- **触发条件**：【建议默认门】出现至少 3 个独立用户的自定义规则需求、持续社区 PR，或维护者规则保鲜工作成为可量化瓶颈；任一条件均需真实记录。当前没有这些证据，因此不排入近期实现。
+- **影响范围**：`src/data.mjs`、runtime schema 校验、CLI/MCP 参数、报告来源标识、CONTRIBUTING、accuracy/coverage 口径、rot/cron 与社区治理。
+- **前置条件**：定义 provenance、冲突/覆盖规则、官方与自定义优先级、失败隔离和责任说明；批准新增公共参数或配置格式；定义 report、guide 和 check 共用的 flow/rules 快照生命周期。运行时校验不得把 dev-time AJV 假装成生产保护。
+- **迁移步骤**：①先完善社区 PR 协议与 rot cron 停用告警；②收集需求样本并设计最小格式；③先加带文件名的运行时校验和坏文件隔离；④在引入运行时加载前统一 flow/rules 快照的创建、刷新和失败回退；⑤再加 `--rules-dir`/配置寻径；⑥报告显著标记“自定义”，不计入官方 accuracy 基线；⑦用冲突、坏 YAML、来源缺失、多目录和同一请求快照一致性测试验收。
+- **风险与收益**：自定义规则可能污染可信度、覆盖官方规则或引入解析/路径攻击，社区自动化也会增加维护成本。收益是在需求成立后扩大覆盖并降低单维护者内容瓶颈，而不稀释官方规则红线。
+- **验收标准**：坏文件以文件名和原因失败，不使官方规则不可用；官方/自定义来源可视区分，冲突行为确定；同一请求内 report、guide、check 使用一致的 flow/rules 快照；官方 TP/FP/FN 基线独立；所有官方载体继续被 rot 覆盖，cron 停用有可验证告警路径。
+- **回退方式**：关闭自定义入口后默认只加载仓库官方规则；自定义规则目录不做自动迁移或静默吸收；社区/rot 自动化按独立配置回退，不删除用户文件。
+
+## 5. 兜底预案
+
+| 风险面 | 触发信号 | 立即动作 | 恢复证据 | 回退方式 |
+|---|---|---|---|---|
+| 单点故障（维护者或分发渠道） | 维护者无法响应；GitHub Release/npm 任一渠道不可用；发布凭据或自动化所有权不清 | 冻结新发布与规则语义变更；以最后一个已验证 tag/commit、lockfile、`npm pack`、`build:mcpb` 和 SHA 清单复现资产；按 STRENGTHENING_PLAN/CONTRIBUTING/发布 runbook 交接 | 新接手者能在干净环境重跑适用门禁、重建同版本资产并核对 SHA；权限与凭据所有者明确；至少一个渠道可恢复安装 | 撤销临时凭据和未发布 draft，恢复上一已验证版本/资产；不 reset、改写历史或伪造已发布版本的“删除式回滚” |
+| 性能与资源 | 报告出现 `truncated`；真实项目在相同硬件/版本下明显退化；单个超大目录因 `readdirSync` 一次物化导致内存压力 | 保留显式截断注记，不盲目提高 20,000 预算；建议对可信子目录分别扫描；保存项目形状、版本、耗时/内存和同场景复现 | 同一合成/脱敏真实场景有前后多次测量；scanner/boundary/perf/fixtures/dogfood 均通过；若改 walker，证明单目录峰值内存受控且结果语义不漂移 | 回退 walker/优化提交并恢复已验证预算；继续显式截断和分目录操作，不以隐藏警告换表面完整 |
+| 依赖与供应链 | root/desktop/Cargo audit 出现 high/critical；运行时包、mcpb 打包器或 Action 弃维/被攻陷；lockfile 异常漂移 | 冻结 release；区分 root runtime、root dev、desktop npm、Cargo 和 Actions 受影响面；固定当前已知版本，查官方公告，不做盲目大版本升级 | 根与 desktop audit、可用时的 `cargo audit`、lint/test/build/mcpb smoke/桌面检查全绿；lockfile 与产物来源可追溯；真实 release 候选另获批准 | 回退到最后已验证 lockfile/Action/打包器和资产；若旧版存在已知漏洞则禁用受影响发布面，而不是回滚到不安全版本 |
+| 安全与隐私 | 越界读取、源码/秘密回显、MCP 协议绕过、桌面权限扩大、key 或敏感项目信息意外出站 | 停止受影响入口或分发；用本地、最小、非武器化复现留证，立即脱敏；按 SECURITY responsible disclosure 处理；不把真实秘密写入测试或报告 | 根因、影响范围、回归测试和迁移说明齐全；security diff/threat model、适用 audit、MCP/CLI/desktop 边界测试通过；独立只读复核无未处置高风险 | 回退或禁用整个受影响功能，恢复最近安全版本并清理暴露凭据/进程；不得为保持兼容而重开已验证漏洞 |
+
+## 6. 明确不承诺或不提前实现
+
+- 不做云端上传或远程扫描；local-only 仍是信任根基。
+- 不输出“已合规”“保证过审”“可直接提交”等担保性结论，不替用户完成官方后台操作。
+- 不在 outreach 信号回来前扩第 9 个流程阶段、增加新框架或批量灌规则。
+- 不把“环境变量 allowlist”写成既定安全方案；只有真实边界需求和威胁模型支持时，才另行设计并审批目录授权模型。
+- 不因“YAML 面较小”就承诺内联解析器替代 `js-yaml`；只有弃维、安全或可测成本证据成立时才评估替换。
+- 不把 main 祖先约束、Actions SHA 固定、`.mcpb` 签名、真实 tag/Release/npm publish 视为已批准；它们只是在 S1 发布前可重新审批的强化候选。
+- 不以当前扫描场景的约 95.42% 中位耗时下降宣称通用性能提升，也不声称单目录内存已硬有界。
+- 不在没有互操作问题证据和公共契约审批时收紧 MCP 当前显式 `id: null` 的兼容裁决。
+- 不在 L2 触发门成立前实现 `--rules-dir`、远程规则市场或自动吸收社区规则。
+
+## 7. 证据入口
+
+- 当前执行与恢复：`STRENGTHENING_PLAN.md`
+- Go/No-Go 与 outreach：`docs/04-roadmap.md`、`docs/11-outreach-plan.md`
+- 流程与规则：`flow.yaml`、`rules/*.yaml`、`scripts/validate.mjs`
+- 公共接口债：`src/cli.mjs`、`src/guide.mjs`、`src/mcp.mjs`、`bin/weapp-shipmate.mjs`
+- 扫描预算：`src/scanner.mjs`、`tests/boundary.test.mjs`、`tests/perf.test.mjs`
+- 发布边界：`.github/workflows/release.yml`、`scripts/check-release-version.mjs`、`scripts/build-mcpb.mjs`
+- 桌面顺序与数据模型：`docs/08-product-vision.md`、`docs/09-memory-context-architecture.md`、`docs/10-quality-inspection-and-slice-plan.md`
+- 长期安全边界：`SECURITY.md`、`GOVERNANCE.md`、`docs/07-desktop-agent-tech-research.md`

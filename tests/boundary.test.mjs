@@ -55,6 +55,32 @@ test("B2: 超过上限的文件跳过并计数，不整读入内存", () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("阶段4：遍历预算覆盖不可扫描文件与目录项，耗尽后显式截断", () => {
+  const dir = mktmp();
+  try {
+    for (let i = 0; i < 8; i++) {
+      const sub = join(dir, `ignored-${i}`);
+      mkdirSync(sub);
+      writeFileSync(join(sub, "note.txt"), "不属于扫描扩展名");
+    }
+    const r = scanProject(dir, { maxEntries: 3 });
+    assert.equal(r.filesScanned, 0);
+    assert.equal(r.truncated, true, "不可扫描的 Dirent 也必须消耗遍历预算");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("阶段4：目录项总数恰好等于预算时不误报截断", () => {
+  const dir = mktmp();
+  try {
+    const sub = join(dir, "only-dir");
+    mkdirSync(sub);
+    writeFileSync(join(sub, "note.txt"), "两个目录项：目录 + 文件");
+    const r = scanProject(dir, { maxEntries: 2 });
+    assert.equal(r.filesScanned, 0);
+    assert.equal(r.truncated, false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("B4: 嵌套 pages/test/ 会被扫描（随包上传的业务代码），根层 test/ 仍被忽略（工具惯例位）", () => {
   const dir = mktmp();
   try {

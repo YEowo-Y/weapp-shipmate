@@ -36,7 +36,32 @@ test("E2E check --blockers-only leaky-app：仍 exit 2 且只列阻断", () => {
   const { code, stdout } = run("check", FIX("leaky-app"), "--subject", "personal", "--blockers-only", "--json");
   const o = JSON.parse(stdout);
   assert.ok(o.items.length >= 1 && o.items.every((i) => i.severity === "blocker"), "只应剩阻断项");
+  assert.match(o.meta.summary, new RegExp(`命中 ${o.items.length} 条阻断规则`), "摘要应使用过滤后的 blocker 数");
+  assert.ok(!/命中 \d+ 条规则/.test(o.meta.summary), "摘要不得保留过滤前的笼统命中数");
   assert.equal(code, 2);
+});
+
+test("E2E check --blockers-only 过滤后为空：Markdown/checklist 不得声称原始结果为空", () => {
+  for (const formatArgs of [[], ["--checklist"]]) {
+    const { code, stdout } = run(
+      "check",
+      FIX("sample-app"),
+      "--subject",
+      "personal",
+      "--blockers-only",
+      ...formatArgs,
+    );
+    assert.equal(code, 0, "只有非阻断命中时应保持退出码 0");
+    assert.match(stdout, /未命中阻断项；已隐藏 5 条非阻断项/);
+    assert.doesNotMatch(stdout, /未命中任何规则|无可执行清单项/);
+  }
+});
+
+test("E2E explain --blockers-only 过滤后为空：说明隐藏的非阻断规则", () => {
+  const { code, stdout } = run("explain", "隐私", "--blockers-only");
+  assert.equal(code, 0);
+  assert.match(stdout, /未命中阻断项；已隐藏 3 条非阻断项/);
+  assert.doesNotMatch(stdout, /未匹配到已收录的拒审原因/);
 });
 
 test("E2E guide --json：command=guide，退出码 0", () => {

@@ -1,12 +1,18 @@
 # Changelog
 
 本项目变更记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
-版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。当前 `0.1.0`（已托管于 GitHub `YEowo-Y/weapp-shipmate`，尚未 npm publish）。
+版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。当前仓库源码 / 草稿 RC 版本为 `0.2.0-rc.1`，最新公开版为 `v0.1.0`；后续改动记录在 Unreleased，尚未发布到 npm registry。
 
 ## [Unreleased]
 
 ### Fixed
 
+- tag 发布现在会在打包前运行 lint，并要求 `v<package.version>` 与 `package.json`、`manifest.json`、`package-lock.json` 顶层及根包版本完全一致；同一文件版本契约也由 `.mcpb` 构建复用。
+- 扫描上限现在覆盖实际遇到的全部目录项（含目录、忽略文件和不可扫描扩展名），不再只在已读取源码文件增长时生效；超限继续通过既有 `truncated` 信号和报告注记显式告知。
+- MCP JSON-RPC 边界现在区分无效请求（`-32600`）、未知方法（`-32601`）与未知工具/非法参数（`-32602`）；真正缺少 `id` 的通知保持无响应，显式 `id: null` 则按请求响应并原样回显。合法工具调用的执行失败仍使用 `result.isError: true`，且保留输入中的未知扩展字段以兼容客户端演进。
+- `explain` 的 Markdown 查询回显会转义标题、标签、代码和双向控制字符等展示语法，避免不可信查询文本改变报告结构；JSON 输出仍保留原始查询，便于机器消费和精确追踪。
+- 未指定主体的 `guide` 现在与 `check` 共用同一适用性边界，只返回覆盖全部主体的通用规则；不再把个人主体备案材料或 `web-view` 限制误报给主体未知的用户。
+- `--blockers-only` 现在同时过滤普通条目与“可能适用”自查项，并让 check/guide/explain 的摘要和派生备注使用过滤后的 blocker 数；此前 JSON 仍会泄漏 warning/info 自查项及过滤前计数。
 - MCP 面非法 `subject` 曾在个别路径伪装成清白报告；校验下沉到引擎层（`SUBJECT_ENUM` 唯一事实源），CLI/MCP 两侧行为对齐。
 - 坏 `app.json`（解析失败/字段缺失）此前会反向触发误报 blocker；改为把配置解析错误信号化（`configErrors`），与真实规则命中区分，不再污染阻断计数。
 - MCP 处理 `null`/畸形请求行崩溃问题修复；坏行按 JSON-RPC 2.0 回 `-32700`（`id:null`）+ stderr 诊断，不再击穿事件循环。
@@ -19,7 +25,7 @@
 
 - 夹具命中集钉板门禁（`corpus/fixture-pins.json` + `scripts/pin-fixtures.mjs` + `tests/fixture-pins.test.mjs`）：把标注未锚定规则的误报也纳入 CI 可见范围。
 - 边界与性能测试（`tests/perf.test.mjs`，FX-10）：1000 文件 <3s 本机 / <8s CI、heap 增量 <200MB。
-- MCP 单行 1MB 上限 + `-32700` 错误响应（FX-18）：超限行丢弃并 stderr 告警，避免无界内存增长。
+- MCP 单行缓冲上限（1,048,576 个 JavaScript UTF-16 code unit；ASCII 输入约 1 MiB）+ `-32700` 错误响应（FX-18）：超限行丢弃并 stderr 告警，避免无界增长。
 - rot 监控扩至 97 个载体（63 规则 + 5 crosscheck + 8 flow + 21 rejections）。
 - schema 死规则拦截：`scanner` 类型与所需字段绑定校验，防止声明了 scanner 类型但缺对应匹配字段的规则通过 CI。
 - `release.yml` 发布流水线。
@@ -28,6 +34,7 @@
 
 ### Changed
 
+- Markdown 与 checklist 的已知阶段顺序和标题改为直接读取 `flow.yaml`；因此 `registration`/`certification` 标题分别统一为“注册小程序账号”和“主体认证 / 实名核验”，未知阶段仍在“其他”段兜底。
 - `scanProject` 拆分为 `extractFacts` + `parseAppConfig`，圈复杂度从 ~20–24 降至各子函数 <10（FX-05）。
 - `chooseLocation` 相关的双触发信号收敛，减少重复命中。
 - 预览服务器（`desktop/design-previews/_serve.mjs`）仅绑定回环地址（`127.0.0.1`）并加路径遏制，拒绝越出项目根目录的请求。

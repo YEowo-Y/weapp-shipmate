@@ -1,10 +1,11 @@
 // scripts/build-mcpb.mjs —— 把极简依赖 MCP server 打成 .mcpb Desktop 扩展（P1 轻量分发）。
-// 零运行时依赖；只用 node 内置模块。流程：版本校验 → 暂存纯生产副本 → 冒烟自检 → mcpb pack。
+// 构建脚本自身只用 Node 内置模块；扩展包会捆绑服务端生产依赖闭包（js-yaml → argparse）。流程：版本校验 → 暂存纯生产副本 → 冒烟自检 → mcpb pack。
 // 设计要点：暂存目录是独立副本，绝不触碰开发用 node_modules（保留 ajv 等 devDeps 供 npm test）。
 import { readFileSync, rmSync, mkdirSync, cpSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import { assertVersionIdentity } from "./check-release-version.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const STAGE = join(ROOT, "build", "mcpb-stage");
@@ -19,12 +20,16 @@ function readJSON(p) {
   return JSON.parse(readFileSync(p, "utf-8"));
 }
 
-// 1) 版本一致性：manifest.version 必须等于 package.json.version，杜绝静默漂移。
+// 1) 版本一致性：所有仓库版本载体必须相等，杜绝静默漂移。
 const pkg = readJSON(join(ROOT, "package.json"));
 const manifest = readJSON(join(ROOT, "manifest.json"));
-if (manifest.version !== pkg.version) {
-  throw new Error(`版本漂移：manifest.json=${manifest.version} 与 package.json=${pkg.version} 不一致。请同步后再打包。`);
-}
+const lock = readJSON(join(ROOT, "package-lock.json"));
+assertVersionIdentity({
+  packageVersion: pkg.version,
+  manifestVersion: manifest.version,
+  lockVersion: lock.version,
+  lockPackageVersion: lock.packages?.[""]?.version,
+});
 log(`✓ 版本一致：${pkg.version}`);
 
 // 2) 暂存纯生产副本。

@@ -13,13 +13,18 @@ export const SUBJECT_ENUM = ["personal", "individual_business", "enterprise"];
 
 const readYaml = (p) => yaml.load(readFileSync(p, "utf-8"));
 
+/** 加载流程阶段；报告与导航共用同一份顺序和标题事实源。 */
+export function loadFlow({ root = ROOT } = {}) {
+  return readYaml(join(root, "flow.yaml")).stages;
+}
+
 /**
  * 加载 flow.yaml 与 rules/*.yaml。
  * @param {{includeDrafts?: boolean, root?: string}} opts
  * @returns {{ flow: object[], rules: object[] }}
  */
 export function loadData({ includeDrafts = false, root = ROOT } = {}) {
-  const flow = readYaml(join(root, "flow.yaml")).stages;
+  const flow = loadFlow({ root });
   const rulesDir = join(root, "rules");
   const rules = [];
   for (const f of readdirSync(rulesDir).filter((f) => f.endsWith(".yaml")).sort()) {
@@ -32,12 +37,18 @@ export function loadData({ includeDrafts = false, root = ROOT } = {}) {
   return { flow, rules };
 }
 
+/** 主体适用性：已知主体精确命中；主体未知时仅采用覆盖全部主体的通用规则。 */
+export function appliesToSubject(rule, subjectType) {
+  if (subjectType) return rule.subject_type.includes(subjectType);
+  return SUBJECT_ENUM.every((subject) => rule.subject_type.includes(subject));
+}
+
 /** 按 stage 取出该阶段的规则；可选按 subject_type、kind 过滤。 */
 export function rulesForStage(rules, stage, subjectType, kinds) {
   return rules.filter(
     (r) =>
       r.stage === stage &&
-      (!subjectType || r.subject_type.includes(subjectType)) &&
+      appliesToSubject(r, subjectType) &&
       (!kinds || kinds.includes(r.kind)),
   );
 }

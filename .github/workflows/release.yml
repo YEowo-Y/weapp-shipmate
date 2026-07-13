@@ -21,6 +21,8 @@ jobs:
           node-version: "20"
       - run: npm ci
       # 门禁与 CI 同口径：任何一道红都不允许出资产。
+      - run: npm run lint
+      - run: npm run release:check
       - run: npm test
       - run: npm run coverage
       # tgz：与 npm registry 发布物同源（registry 发布解锁后两渠道一致性由此保证）。
