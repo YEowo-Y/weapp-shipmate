@@ -2,10 +2,35 @@
 
 > 一条一更;已被仓库/台账记录的不重复;过时即删。
 > 建立:2026-07-04。证据来源:8 路并行深勘 + 高危项对抗复核 + 独立安全审计(共 11 个代理,~105 万 token)。
-> 当前状态:**complete**（2026-07-13 合并前复核发现的 `--blockers-only` 空过滤文案缺口已修复并通过双通道复核；本地 `main` 集成见“当前战役”）。
+> 当前状态:**executing**（2026-07-13 已获准执行“远端验证阶段 A”；本地强化与集成已完成，当前只发布功能分支、创建 Draft PR 并等待真实 CI）。
 > 2026-07-04 至 2026-07-05 的上一轮战役已完成；其基线、决策和提交记录保留在后文，作为历史证据而非当前恢复点。
 
-## 当前战役：核心契约与发布门禁（2026-07-10）
+## 当前恢复入口：远端验证阶段 A（2026-07-13）
+
+### 状态、批准范围与恢复检查
+
+- 状态：`executing`。
+- 当前分支：`codex/strengthen-core-contracts-2026-07`；阶段起点 `07f94a148f4d5246fe3ab22cf66ed7815101d6c1`，其树已在本地 `main` 通过 `--ff-only` 集成。
+- 已批准范围：临时运行固定版本 `actionlint`；执行 `git fetch --prune --tags origin`；只推送当前功能分支；以远端 `main` 为 base 创建 Draft PR；等待该 PR 的 ubuntu/windows × Node 20/22 四腿 Actions 并核对结论。
+- 明确排除：直接推送或修改远端 `main`；把 Draft PR 转为 ready 或合并；创建/移动 tag；创建、修改或发布 GitHub Release；部署；版本提升；安装或运行 `cargo-audit`；任何其他外部写入。
+- 已知远端基线（执行 fetch 前的只读证据）：`origin/main` 为 `14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`；远端尚无同名功能分支。fetch 后必须重新核对，不能把该值当作不变事实。
+- 已知发布冲突：远端已有 `v0.2.0-rc.1`，其提交为 `95eb2a331a1332b729368d389d942f57f024914f`，并已有同版本 Draft Release；当前三个版本载体仍为 `0.2.0-rc.1`。因此本阶段禁止 tag/Release，后续发布需另行批准新版本（推荐 `0.2.0-rc.2`）。
+- 当前阶段：A1，持久化范围并运行本地发布前门禁。
+- 下一条可直接执行的动作：提交本恢复入口，运行 `go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12`，随后 fetch 并复核待推送差异。
+- 恢复检查：确认分支名、工作树和阶段提交；确认 `origin/main` 仍是功能分支祖先；确认远端同名分支/PR 的实际状态；确认没有 tag、Release 或 `main` 写入；从本节“下一条可直接执行的动作”继续。
+
+### 阶段 A 的验收标准、风险与回退
+
+1. `actionlint@v1.7.12` 对 `.github/workflows/*.yml` 无诊断；该临时执行不得向仓库或全局工具链写入依赖声明。
+2. fetch 后记录远端 `main` 与 tag 事实；若远端基线漂移或不再是当前分支祖先，停止推送并重新评估，不做 rebase/force-push。
+3. `origin/main..HEAD` 的 diff、秘密扫描、`git diff --check`、lint 和全量测试通过；独立只读复核没有未处置的高风险发现。
+4. 远端只新增/更新 `codex/strengthen-core-contracts-2026-07`，并创建以 `main` 为 base 的 Draft PR；不合并、不打 tag、不发布。
+5. PR 当前 HEAD 的四个 `validate` 矩阵检查全部成功；失败必须如实诊断，不能用旧 run 替代。
+6. 完成后把状态改为 `awaiting_approval`，记录 PR/Actions URL、远端 HEAD、验证结果和下一批准边界；将该恢复提交推送并再次等待当前 HEAD 的 CI。
+
+风险主要是远端基线并发变化、凭据/权限失败和真实 CI 与本地环境差异。所有仓库改动都限定在功能分支且可用普通 revert 回退；远端分支可由后续明确授权删除。Draft PR、tag 与 Release 是不同外部对象，本阶段只授权前者。
+
+## 已完成的本地战役：核心契约与发布门禁（2026-07-10）
 
 ### 状态与恢复入口
 
