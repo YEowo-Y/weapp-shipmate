@@ -2,33 +2,61 @@
 
 > 一条一更;已被仓库/台账记录的不重复;过时即删。
 > 建立:2026-07-04。证据来源:8 路并行深勘 + 高危项对抗复核 + 独立安全审计(共 11 个代理,~105 万 token)。
-> 当前状态:**complete（条件化）**（用户已批准远端合并阶段 B；只有本文件所在提交通过 PR CI、PR #4 以 merge commit 合并、远端及本地 `main` 同步且 post-merge CI 四腿全绿时才生效，条件未满足时状态仍为 `executing`）。
+> 当前状态:**complete（条件化）**（只有本文件所在提交通过 PR #6 current-head CI、PR 以 merge commit 合并、main CI 全绿、annotated `v0.2.0-rc.2` 精确指向该 merge、tag workflow 成功且 Draft 三资产/校验和复验通过时才生效；任一条件未满足时状态仍为 `executing`。公开发布仍未获授权）。
 > 2026-07-04 至 2026-07-05 的上一轮战役已完成；其基线、决策和提交记录保留在后文，作为历史证据而非当前恢复点。
 
-## 当前恢复入口：远端合并阶段 B（2026-07-13）
+## 当前恢复入口：发布候选阶段 C（2026-07-13）
 
 ### 状态、批准范围与恢复检查
 
-- 状态：`complete` 仅在本节全部验收条件满足后生效；否则按 `executing` 恢复。
-- 当前分支：`codex/strengthen-core-contracts-2026-07`；Phase B 起点为 `46bea2be281f74efb7fc883de6336cc524b99d84`，当前 HEAD 为本文件所在的合并恢复提交。
-- 已批准范围：推送本恢复提交；等待 PR #4 当前 head 的四腿 CI；将 Draft PR 转为 Ready；通过 GitHub 以 merge commit 合并到 `main`；fetch 远端引用；本地 `main` 仅以 `--ff-only` 同步到 `origin/main`；等待并核对 merge commit 触发的 main 四腿 CI。
-- 明确排除：直接 push `main`；squash、rebase、amend、force-push 或历史重写；删除功能分支；版本提升；创建/移动 tag；创建、修改或发布 Release；部署；安装或运行 `cargo-audit`；其他外部写入。
-- 合并决策：使用 merge commit，保留已经独立复核和真实 CI 验证的提交 SHA，并提供一个可由后续 PR 整体 revert 的明确回退点。拒绝 squash/rebase，因为两者会改写已审提交身份；保留源分支，避免把清理动作混入合并。
-- 远端基线：`main` 为 `14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`；PR #4 Phase A head `46bea2be281f74efb7fc883de6336cc524b99d84` 的 run [29255850966](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29255850966) 四腿成功，PR 为 Draft/Open/Clean/Mergeable。
-- 当前阶段：B1，持久化合并范围并让本文件所在提交接受 PR CI。
-- 下一条可直接执行的动作：推送本文件所在提交并等待 [PR #4 checks](https://github.com/YEowo-Y/weapp-shipmate/pull/4/checks) 四腿成功；随后进行独立只读合并条件复核，再转 Ready 并执行 merge commit。
-- 恢复检查：确认工作树干净且本地/远端功能分支/PR head 同指向；确认 `origin/main` 未漂移；确认 PR 当前 head 四腿成功；合并后确认 PR 状态为 Merged、merge commit 的两个父提交分别为批准的 base/head、远端 `main` 指向该 merge commit、本地 `main` 与之同步且 main 的最新四腿 CI 成功。
+- 状态：`complete` 仅在下方“条件化完成判定”全部成立后生效；否则以 `executing` 恢复。
+- 当前 refs：执行中分支为 `codex/release-0.2.0-rc.2`；阶段起点为已验证的 `main@94dce70f970113d835396c5bdcba9436b32494f5`。当前 HEAD 为本文件所在的 C4 条件化恢复提交，其第一父为 `4a3fd3a30c2802c557e8cf21cc0c59c641cdcafb`，精确值由 [PR #6](https://github.com/YEowo-Y/weapp-shipmate/pull/6) `headRefOid`/`git rev-parse HEAD` 解析；最终条件成立后本地分支应为 `main`，HEAD 应等于 `git rev-parse 'v0.2.0-rc.2^{}'` 与远端 `main`。每个恢复点工作树及 staged diff均须干净。
+- 最后验证：2026-07-13（America/New_York）。基线 main 的 [run 29257079688](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29257079688) 四腿成功；版本/文档提交后本地 C2 全部门禁已通过；Draft PR #6 的 head `4a3fd3a30c2802c557e8cf21cc0c59c641cdcafb` 对应 [run 29262603255](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29262603255)，ubuntu/windows × Node 20/22 四腿全部成功。若本文件再次提交，必须以新 current-head run 取代该证据。
+- 已批准范围：在新发布分支持久化本阶段；将 `package.json`、`manifest.json` 与 `package-lock.json` 两个根版本字段同步为 `0.2.0-rc.2`；把当前 Unreleased 归档为 `0.2.0-rc.2` 并保留新的空 Unreleased；只校准直接受版本/发布事实影响的 README、质量文档和 `EVOLUTION_ROADMAP.md`；运行本地发布门禁与独立只读复核；推送本分支并创建 Draft PR；等待当前 head 四腿 CI；转 Ready 后以 merge commit 合并并保留分支；本地 `main` 仅以 `--ff-only` 同步并等待 main 四腿 CI；在远端 `main` 的精确合并提交创建、推送新的 annotated `v0.2.0-rc.2` tag；等待真实 release workflow，核对新 Draft Release 的 tag、提交、三项资产与 SHA-256。
+- 明确排除：发布或公开 Draft Release；npm publish、部署、云资源或生产数据写入；修改、移动、删除或复用 `v0.2.0-rc.1` 及其 Draft Release；直接 push `main`；squash、rebase、amend、force-push、历史重写或删除分支；修改 release/CI 行为；设置 prerelease 或签名；新依赖、升级、产品逻辑、公共 API、数据模型、schema、认证/授权；桌面 Rust 产物；安装或运行 `cargo-audit`；其他外部写入。
+- 远端碰撞检查：`v0.2.0-rc.2` tag、Release、同名远端分支与同 head PR 均不存在；既有 annotated `v0.2.0-rc.1` tag object 仍为 `c1fadbd8897b001561f79c8e4ed56559cf4c018a`、peeled commit 仍为 `95eb2a331a1332b729368d389d942f57f024914f`，其 Draft Release 未发布且仍为原三项资产。
+- 发布决策：使用新版本和新 tag，绝不移动既有 RC；release workflow 只由 `v*` tag push 触发并创建 Draft。Draft 当前不是 prerelease 不阻塞本阶段，因为它不会公开；若后续批准公开 RC，必须在独立审批中先确认 prerelease 标记与发布说明。
+- 当前阶段：C4，PR #6 current-head 四腿 CI 已成功；正在对新增的桌面 Rust 依赖告警及合并条件做独立只读复核，尚未满足 tag 前置条件。
+- 下一条可直接执行的动作：提交并推送本风险登记；等待 PR #6 对新 current head 的四腿 CI，再启动独立只读合并条件复核。若已越过此动作，则按下方条件化判定执行第一项尚未满足的检查，不重复外部写入。
+- 恢复检查：先核对当前分支、HEAD、status/diff 与本节记录；fetch 后确认远端 `main` 未漂移且 `v0.2.0-rc.2` tag/Release 仍不存在。PR 前核对只含批准路径、本地门禁与独立复核；合并前核对 PR head/base、四腿 CI 和 mergeability；tag 前再次核对本地/远端 `main` 精确一致、main 四腿 CI 成功、工作树干净、四个版本字段一致且新 tag/Release 仍未占用。tag 推送后不得移动或复用；若 workflow 失败，保持 Draft/未发布状态并以新版本修复前进。
 
-### 阶段 B 验收标准、风险与回退
+### 阶段 C 与验收标准
 
-1. 本文件所在提交的 PR 四腿 CI 全部成功，且独立只读复核没有 P0/P1/P2 或范围越界。
-2. PR #4 从 Draft 转为 Ready 后以 merge commit 合并；不使用 squash/rebase，不删除源分支。
-3. merge commit 的第一父提交是合并前远端 `main`，第二父提交是经过当前 PR CI 的 head；PR 显示 `MERGED`。
-4. 远端 `main` 指向 merge commit；本地 `main` 只通过 `git merge --ff-only origin/main` 同步，工作树及 staged diff 为空。
-5. merge commit 触发的 `push/main` Actions 在 ubuntu/windows × Node 20/22 四腿全部成功；旧 PR run 不能替代该结果。
-6. 既有 `v0.2.0-rc.1` tag 仍指向 `95eb2a331a1332b729368d389d942f57f024914f`，其 Draft Release 未发布；没有新 tag、Release、部署、版本提升或 `cargo-audit` 安装/执行。
+1. **C1 — 恢复入口与发布身份**：本节完整记录授权、排除、风险、恢复点；四个仓库版本字段均为 `0.2.0-rc.2`；CHANGELOG 保留空 Unreleased 并新增 `0.2.0-rc.2`（2026-07-13）节；当前版本/测试事实的直接文档引用一致，历史 `rc.1` 证据不被改写。
+2. **C2 — 本地门禁**：固定临时版本 `actionlint@v1.7.12` 无诊断；`npm run lint`、`npm test`（当前基线 191/191）、`npm run coverage`（TP 54 / FP 0 / FN 0）、`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb`、`npm pack --dry-run`、`npm audit --audit-level=high` 均成功；`npm run release:check -- v0.2.0-rc.2` 成功，旧 `v0.2.0-rc.1` 负控制按预期失败；diff/check 与秘密扫描无发现。性能路径未改，沿用已验证基线但不宣称新增性能改善。
+3. **C3 — 预推送复核**：独立只读复核对照批准范围、diff、门禁和供应链边界，没有未处置 P0/P1/P2；只暂存本任务拥有的路径，staged diff 与 Lore commit 信息经检查。
+4. **C4 — PR 与合并**：发布分支推送后创建 Draft PR；当前 head 的 ubuntu/windows × Node 20/22 四腿 CI 成功；转 Ready 后通过 merge commit 合并，第一父为合并前远端 `main`、第二父为已验证 PR head；保留源分支。远端 `main` 指向该 merge，本地仅 `--ff-only` 同步，随后 `push/main` 四腿 CI 全绿。
+5. **C5 — tag 与 Draft 资产**：tag 前重新检查版本、main、CI 与远端碰撞；annotated `v0.2.0-rc.2` 的 peeled commit 精确等于远端 `main` 合并提交；仅推送该 tag。tag-triggered release workflow 成功；GitHub Release 保持 `draft=true`、`publishedAt=null`，三项资产恰为 `weapp-shipmate-0.2.0-rc.2.tgz`、`weapp-shipmate.mcpb`、`SHA256SUMS.txt`，下载后 SHA-256 与清单及 GitHub digest 一致。
+6. **C6 — 最终复核与停止点**：当前 HEAD 上适用检查、工作树、refs、PR、main CI、tag workflow、Draft 与旧 rc.1 均复验；独立复核无未处置高风险发现；本文件的完成判定与恢复动作准确。停止在未发布 Draft，公开 Release、prerelease 标记、npm publish 与部署仍需新的明确批准。
 
-主要风险是合并前远端 base 漂移、GitHub 合并语义与预期不符、以及 post-merge CI 才暴露集成问题。任一前置条件漂移即停止合并；合并后若 CI 失败，不重写历史或直接修 main，而是在新修复分支中处理。正常回退是针对 merge commit 创建独立 revert PR。
+### 阶段 C 当前证据（截至本文件所在提交之前）
+
+- 已完成提交：`34ed480dc44f0b3bdacef494ad90f4c4ad5d3a78`（批准范围与恢复入口）；`3c15c3ae697568cb6317dc1248d8993c801a8076`（四个版本字段、CHANGELOG 与直接相关文档）；`d6436d3ec22fec10e9e9254adeddf098ab2d538e`（C2 证据与恢复点）。三者均有 intent-first 标题、叙事正文和可由 Git 解析的最终 `Not-tested:` trailer；但其他 Lore 标签因命令消息分段间的空行被 Git 视为正文段落，不得误称为 git-native trailers。批准范围禁止 amend/rebase，因此不改写这些已经验证的 SHA；本文件所在的追加式修正提交用连续 trailer 块记录该取舍，后续提交沿用此格式。每次只暂存拥有路径并检查 staged diff、`git diff --cached --check` 与高置信秘密模式。
+- 发布身份：`package.json`、`manifest.json`、`package-lock.json.version`、`package-lock.json.packages[""].version` 均为 `0.2.0-rc.2`；`npm run release:check -- v0.2.0-rc.2` 成功，`v0.2.0-rc.1` 负控制退出 1 并明确期望 rc.2。
+- 静态与测试：`go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12` 无诊断；`npm run lint` 成功；`npm test` 191/191；`npm run coverage` 为 TP 54 / FP 0 / FN 0、precision/recall 1.000；`npm run dogfood` 的 11 个样本与钉板一致。
+- 打包与供应链：`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb` 的版本、暂存、生产依赖闭包与三工具冒烟通过；`npm pack --dry-run --json` 产物名为 `weapp-shipmate-0.2.0-rc.2.tgz`、32 entries；`npm ls --omit=dev --all` 仍只有 `js-yaml`→`argparse` 生产闭包；`npm audit --audit-level=high` 为 0 漏洞。未新增依赖或改动 workflow。
+- 性能：本阶段未改性能路径；没有新前后测量，也不宣称新增性能改善。`cargo-audit` 未安装、未运行且不适用于本次不含桌面 Rust 的 npm/MCPB 资产。
+- 修复登记 `RC2-001`（low / quality / hotfix）：独立预推送复核确认前三笔提交只有 `Not-tested:` 被 `git interpret-trailers --parse` 识别。处理为追加式诚实校正，不修改产品、refs 或既有提交；验收为本文件不再误述、当前修正提交的全部 Lore 字段可由 Git 解析、重新独立复核无阻断。Owner：Codex；Due：本阶段推送前；Tracking：本文件所在提交。历史重写方案因超出批准范围且会改变已验证 SHA 而拒绝。
+- 风险登记 `RC2-002`（medium / security / scheduled）：GitHub [Dependabot alert #1](https://github.com/YEowo-Y/weapp-shipmate/security/dependabot/1) 报告 `desktop/src-tauri/Cargo.lock` 的 `glib 0.18.5` 落在 `GHSA-wrw7-89jp-8q8g` / `RUSTSEC-2024-0429` 受影响范围（修复版本 `0.20.0`）；`cargo tree --locked --target all --invert glib` 将其追到 Tauri 的 Linux GTK/WebKit 依赖链。RC2 的 npm `files` 清单与 MCPB `INCLUDE` 均不含 `desktop/`，因此该告警不进入本轮 tgz/MCPB Draft 资产，也不扩展本轮去做依赖升级；它会阻断任何未来桌面构建/发布的安全就绪结论，直到在重新批准的桌面范围内升级并运行适用 Rust audit、构建和支持平台 smoke。Owner：仓库维护者；Due：任何桌面发布前；Tracking：Dependabot alert #1、`EVOLUTION_ROADMAP.md` M1 与依赖兜底。`cargo-audit` 仍未安装、未运行且不得宣称通过。
+- 独立预推送复核：初审对 `RC2-001` 给出 P2 后，主代理复验为真实格式缺陷并完成追加式修正；复审对 `b0a35516cbe165aeeb8326be39aff732888ba553` 给出 `PASS`，P0/P1/P2 均为 0。剩余 P3 是既有 `actions/*@v4` 可移动引用与联网 MCPB 获取，未由本轮引入，已在路线图登记，不阻断 Draft PR。复核明确授权的下一步仅为 fetch 复核、推发布分支、建 Draft PR、等待 current-head 四腿 CI；`RC2-001` 关闭。
+- 远端 C4：发布分支已推送；[Draft PR #6](https://github.com/YEowo-Y/weapp-shipmate/pull/6) base=`main@94dce70f970113d835396c5bdcba9436b32494f5`。head `4a3fd3a30c2802c557e8cf21cc0c59c641cdcafb` 的 [run 29262603255](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29262603255) 为 `pull_request`、head 精确匹配，ubuntu/windows × Node 20/22 四腿全 success，Ubuntu Node 20 MCPB smoke 成功；其他三腿按 workflow 设计跳过该 smoke。推送本风险登记后必须以新 run 取代该证据。
+
+### 条件化完成判定与最终恢复
+
+1. PR #6 的最终 `headRefOid` 等于本文件所在提交；该精确 head 的四个 `validate` job 全部成功，且独立只读合并复核没有未处置 P0/P1/P2。
+2. PR #6 转为 Ready 后以 merge commit 合并并保留源分支；merge 第一父为合并前远端 `main`，第二父为已验证 PR head，PR 状态为 `MERGED`。远端 `main` 指向该 merge，本地只以 `git merge --ff-only origin/main` 同步且工作树干净。
+3. 该 merge 的 `push/main` workflow 在 ubuntu/windows × Node 20/22 四腿成功；tag 前再次确认四个版本字段、`npm run release:check -- v0.2.0-rc.2`、新 tag/Release 未占用、rc.1 原样和远端 main 无漂移，并完成独立只读 tag 就绪复核。
+4. 新 annotated `v0.2.0-rc.2` tag 的 peeled commit 精确等于远端 `main` merge；只推送该 tag。由该 tag 触发的 `release` workflow 成功；`gh release view v0.2.0-rc.2` 显示 `draft=true`、`publishedAt=null`，三项资产名称精确匹配本节 C5，下载后的两个二进制 SHA-256 与 `SHA256SUMS.txt`、GitHub asset digest 全部一致。
+5. 最终独立复核没有未处置高风险发现；本地 `main`、远端 `main`、tag peeled commit 一致，工作树/staged diff 干净，rc.1 未变。本轮停止在未发布 Draft；条件成立后下一动作仅是等待用户对 prerelease 标记与公开发布另行批准。
+
+风险与回退：版本/文档提交可在 tag 前通过普通 revert PR 回退；PR 或 main CI 失败时在新分支修复，不改写历史。tag 是不可复用的发布身份：推送前做最后门禁，推送后不得移动、删除后复用或用同版本覆盖；workflow/资产失败时保持未发布状态，记录失败并改用新的修复版本。Draft 未公开前停止即可；公开后不承诺删除式回滚。`cargo-audit` 不适用本次 npm/MCPB 资产，保持未安装/未运行并不得宣称通过。
+
+## 已完成的远端合并阶段 B（2026-07-13）
+
+- 状态：`complete`。PR [#4](https://github.com/YEowo-Y/weapp-shipmate/pull/4) 以 merge commit `94dce70f970113d835396c5bdcba9436b32494f5` 合并；第一父为 `14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`，第二父为 `1d42b37e7274a5d54a48f4e0ab18259a1d8efa17`。
+- 验证：PR 当前 head 的 [run 29256720039](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29256720039) 与合并后的 main [run 29257079688](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29257079688) 均在 ubuntu/windows × Node 20/22 四腿成功；PR 为 `MERGED`，功能分支保留。
+- refs：远端及本地 `main` 均已通过 fetch/`--ff-only` 对齐到 `94dce70f970113d835396c5bdcba9436b32494f5`，工作树干净；未直接 push main，未使用 squash/rebase，未删除分支。
+- 发布边界：阶段 B 未创建新 tag/Release、未提升版本、未部署，也未安装/运行 `cargo-audit`；其下一批准边界已由本文件最上方 Phase C 取代。
 
 ## 已完成的远端验证阶段 A（2026-07-13）
 
@@ -41,7 +69,7 @@
 - 远端状态（2026-07-13 fetch 后）：`origin/main` 为 `14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`，是功能分支祖先；远端功能分支与本地同指向本文件所在提交后方可恢复。Draft PR 为 [#4](https://github.com/YEowo-Y/weapp-shipmate/pull/4)，base=`main`。
 - 已知发布冲突：远端已有 `v0.2.0-rc.1`，其提交为 `95eb2a331a1332b729368d389d942f57f024914f`，并已有同版本 Draft Release；当前三个版本载体仍为 `0.2.0-rc.1`。因此本阶段禁止 tag/Release，后续发布需另行批准新版本（推荐 `0.2.0-rc.2`）。
 - 当前阶段：已完成；其下一批准边界已由用户授权的 Phase B 取代。
-- 历史恢复检查：确认 Phase A head、PR #4 和 run 29255850966 对应；后续动作以本文件最上方 Phase B 恢复入口为准。
+- 历史恢复检查：确认 Phase A head、PR #4 和 run 29255850966 对应；后续动作以本文件最上方当前恢复入口为准。
 
 ### 阶段 A 已取得的证据
 

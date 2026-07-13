@@ -1,17 +1,18 @@
 # EVOLUTION_ROADMAP — 可信后续演进路线
 
-> 更新：2026-07-10（America/New_York）。
+> 更新：2026-07-13（America/New_York）。
 > 当前战役的批准范围、阶段提交、验证结果和恢复入口见 `STRENGTHENING_PLAN.md`；本文件只记录尚未实施的后续候选，不把设想写成承诺。
 > 时间口径：短期不超过 1 个月；中期为 1–3 个月；长期超过 3 个月。任何项目只有在其触发条件成立、重新越过相应审批边界后才进入实施。
 
 ## 0. 当前证据锚点
 
-- 【事实】最新公开 GitHub Release 是 `v0.1.0`。2026-07-10 外部观察到 `v0.2.0-rc.1` draft；`npm view weapp-shipmate` 返回 `E404`，因此不能声称 npm registry 已发布或双渠道可用。
+- 【事实】最新公开 GitHub Release 是 `v0.1.0`；既有 `v0.2.0-rc.1` 仍是未发布 Draft 且不得移动或复用。仓库现以 `0.2.0-rc.2` 作为新的发布候选；本轮只授权把它推进到已核对资产的未发布 Draft，实际 refs、workflow 与资产证据以 `STRENGTHENING_PLAN.md` 为准。npm registry 仍不能声称已发布或双渠道可用。
 - 【事实】当前数据基线为 63 条规则、8 个流程阶段；`registration`、`certification`、`release` 三阶段各为 0 条规则。规则数量以 `npm run validate` 的当前输出为准，不在路线图中推演未来数量。
-- 【事实】当前验证基线为 `npm test` 189/189、86 个 accuracy labels、TP 54 / FP 0 / FN 0、dogfood 11 个固定样本、rot 97 个载体。accuracy 只证明已标注语料，不外推为全域准确率。
+- 【事实】当前验证基线为 `npm test` 191/191、86 个 accuracy labels、TP 54 / FP 0 / FN 0、dogfood 11 个固定样本、rot 97 个载体。accuracy 只证明已标注语料，不外推为全域准确率。
 - 【事实】本轮已在本地强化四类契约：输出的 subject/聚焦过滤/阶段渲染一致性；MCP 请求校验与 Markdown 文本净化；扫描目录项预算；release tag 与 package/manifest/lock 版本一致性及 lint 工作流契约。
 - 【事实】扫描预算现在覆盖实际遇到的全部 `Dirent`，固定 1024-entry、预算 64 场景的中位耗时由 75.941 ms 降至 3.478 ms 并正确截断；这只证明该有界场景，不代表通用吞吐提升。`readdirSync` 仍会一次物化单个目录，尚无单目录硬内存上限。
-- 【事实】本轮发布证据仅为 `local-ready`：没有创建真实 tag，没有运行新的 GitHub Actions release job、联网 `.mcpb` pack、签名或真实 Release。不得把本地契约测试写成 `CI-ready` 或 `release-ready`。
+- 【事实】核心强化提交已经 PR #4 与合并后的 main 四腿 CI 验证。`0.2.0-rc.2` 的 tag、release workflow、联网 `.mcpb` pack 与 Draft 资产只有在 `STRENGTHENING_PLAN.md` 的 Phase C 条件实际满足后才算取得证据；未发布 Draft 不等于公开发布，也没有签名或 npm registry 证据。
+- 【事实】GitHub Dependabot alert #1 已确认桌面 `Cargo.lock` 中的 `glib 0.18.5` 受 `GHSA-wrw7-89jp-8q8g` 影响；当前 npm `files` 与 MCPB 打包清单不含 `desktop/`，所以它不进入 `0.2.0-rc.2` 的 tgz/MCPB Draft 资产，但任何未来桌面发布都必须先关闭该告警并补齐 Rust audit、构建与支持平台 smoke 证据。
 - 【事实】CLI/MCP 当前接受 `payment`、`business` 输入，但现有 flow 条件和规则选择不使用二者，输入不会形成可见差异；普通 CLI 也尚无被回归测试锁定的 EPIPE 契约。
 - 【事实】MCP stdio 的单行阈值当前用 JavaScript 字符串 `length` 实现，即按 UTF-16 code unit 而非 UTF-8 字节计数；文档已如实描述，若要改成字节契约仍需单独定义兼容边界。
 - 【事实】唯一未完成的既定 Go/No-Go 是 `docs/11-outreach-plan.md` 的 5 人导航验证；结果台账仍为空。P2.2 及以后继续以真实验证通过为前置。
@@ -67,7 +68,7 @@
 - **目标**：按已选定的 engineered-calm 设计方向把薄壳报告改为结构化界面，同时完成 CSP、移除 `withGlobalTauri`、删除无用 opener 权限、按 sidecar 退出码判定结果四项安全/正确性底线。
 - **触发条件**：S1 提供足够的信息架构反馈，目标设计稿稳定；用户重新批准桌面范围及所需依赖。公开 `v0.1.0` 只说明原触发条件已到，不代表可以绕过新审批和安全门。
 - **影响范围**：`desktop/` 前端、Tauri 配置、Rust sidecar 边界、桌面测试和构建；CLI/MCP 核心保持独立。任何 React/UI/test 新依赖均属于需确认的依赖范围。
-- **前置条件**：确定设计源与受支持平台；建立最小 Rust command 与前端组件测试；sidecar 依赖的 CLI 输出/退出码契约已固定；对 Tauri capability/CSP 做范围明确的安全审查。
+- **前置条件**：确定设计源与受支持平台；建立最小 Rust command 与前端组件测试；sidecar 依赖的 CLI 输出/退出码契约已固定；关闭 Dependabot alert #1（`glib 0.18.5` / `GHSA-wrw7-89jp-8q8g`）并补齐适用 Rust audit；对 Tauri capability/CSP 做范围明确的安全审查。
 - **迁移步骤**：①先锁现有 happy/error path；②收紧 CSP、global API 和 capability；③按 0/1/2 退出码区分成功/阻断/运行失败；④用结构化 JSON→DOM 替代裸 Markdown `<pre>`；⑤逐屏迁移设计并验证空态、错态、键盘与可访问性；⑥跑前端 build/typecheck、Rust tests/metadata 和桌面 smoke。
 - **风险与收益**：新增前端依赖和 Tauri 权限配置会扩大供应链与回归面，UI 也可能固化错误的信息架构。收益是使现有确定性结果真正可读、可操作，并在进入数据库或 LLM 前补齐桌面安全基础。
 - **验收标准**：四项底线全部落地；报告区无裸 Markdown；Rust 与前端各至少一个 happy path 和一个关键失败路径；CSP/capability 无无关权限；类型检查、构建、Cargo metadata/测试和支持平台 smoke 通过。
@@ -114,7 +115,7 @@
 |---|---|---|---|---|
 | 单点故障（维护者或分发渠道） | 维护者无法响应；GitHub Release/npm 任一渠道不可用；发布凭据或自动化所有权不清 | 冻结新发布与规则语义变更；以最后一个已验证 tag/commit、lockfile、`npm pack`、`build:mcpb` 和 SHA 清单复现资产；按 STRENGTHENING_PLAN/CONTRIBUTING/发布 runbook 交接 | 新接手者能在干净环境重跑适用门禁、重建同版本资产并核对 SHA；权限与凭据所有者明确；至少一个渠道可恢复安装 | 撤销临时凭据和未发布 draft，恢复上一已验证版本/资产；不 reset、改写历史或伪造已发布版本的“删除式回滚” |
 | 性能与资源 | 报告出现 `truncated`；真实项目在相同硬件/版本下明显退化；单个超大目录因 `readdirSync` 一次物化导致内存压力 | 保留显式截断注记，不盲目提高 20,000 预算；建议对可信子目录分别扫描；保存项目形状、版本、耗时/内存和同场景复现 | 同一合成/脱敏真实场景有前后多次测量；scanner/boundary/perf/fixtures/dogfood 均通过；若改 walker，证明单目录峰值内存受控且结果语义不漂移 | 回退 walker/优化提交并恢复已验证预算；继续显式截断和分目录操作，不以隐藏警告换表面完整 |
-| 依赖与供应链 | root/desktop/Cargo audit 出现 high/critical；运行时包、mcpb 打包器或 Action 弃维/被攻陷；lockfile 异常漂移 | 冻结 release；区分 root runtime、root dev、desktop npm、Cargo 和 Actions 受影响面；固定当前已知版本，查官方公告，不做盲目大版本升级 | 根与 desktop audit、可用时的 `cargo audit`、lint/test/build/mcpb smoke/桌面检查全绿；lockfile 与产物来源可追溯；真实 release 候选另获批准 | 回退到最后已验证 lockfile/Action/打包器和资产；若旧版存在已知漏洞则禁用受影响发布面，而不是回滚到不安全版本 |
+| 依赖与供应链 | root/desktop/Cargo 运行时 audit 出现 medium 以上或其他可达安全告警；运行时包、mcpb 打包器或 Action 弃维/被攻陷；lockfile 异常漂移 | 冻结受影响的发布面；区分 root runtime、root dev、desktop npm、Cargo 和 Actions 影响边界；固定当前已知版本，查官方公告，不做盲目大版本升级 | 根与 desktop audit、可用时的 `cargo audit`、lint/test/build/mcpb smoke/桌面检查全绿；lockfile 与产物来源可追溯；真实 release 候选另获批准 | 回退到最后已验证 lockfile/Action/打包器和资产；若旧版存在已知漏洞则禁用受影响发布面，而不是回滚到不安全版本 |
 | 安全与隐私 | 越界读取、源码/秘密回显、MCP 协议绕过、桌面权限扩大、key 或敏感项目信息意外出站 | 停止受影响入口或分发；用本地、最小、非武器化复现留证，立即脱敏；按 SECURITY responsible disclosure 处理；不把真实秘密写入测试或报告 | 根因、影响范围、回归测试和迁移说明齐全；security diff/threat model、适用 audit、MCP/CLI/desktop 边界测试通过；独立只读复核无未处置高风险 | 回退或禁用整个受影响功能，恢复最近安全版本并清理暴露凭据/进程；不得为保持兼容而重开已验证漏洞 |
 
 ## 6. 明确不承诺或不提前实现
@@ -124,7 +125,7 @@
 - 不在 outreach 信号回来前扩第 9 个流程阶段、增加新框架或批量灌规则。
 - 不把“环境变量 allowlist”写成既定安全方案；只有真实边界需求和威胁模型支持时，才另行设计并审批目录授权模型。
 - 不因“YAML 面较小”就承诺内联解析器替代 `js-yaml`；只有弃维、安全或可测成本证据成立时才评估替换。
-- 不把 main 祖先约束、Actions SHA 固定、`.mcpb` 签名、真实 tag/Release/npm publish 视为已批准；它们只是在 S1 发布前可重新审批的强化候选。
+- 除 `STRENGTHENING_PLAN.md` 明确批准的 `v0.2.0-rc.2` annotated tag 与未发布 Draft 外，不把 main 祖先约束、Actions SHA 固定、`.mcpb` 签名、公开 Release 或 npm publish 视为已批准；它们仍须在对应触发条件下重新审批。
 - 不以当前扫描场景的约 95.42% 中位耗时下降宣称通用性能提升，也不声称单目录内存已硬有界。
 - 不在没有互操作问题证据和公共契约审批时收紧 MCP 当前显式 `id: null` 的兼容裁决。
 - 不在 L2 触发门成立前实现 `--rules-dir`、远程规则市场或自动吸收社区规则。
