@@ -10,7 +10,7 @@
 ### 状态、批准范围与恢复检查
 
 - 状态：`executing`。
-- 当前分支：`codex/release-0.2.0-rc.2`；阶段起点/基线 HEAD 为已验证的 `main@94dce70f970113d835396c5bdcba9436b32494f5`；当前 HEAD 为本文件所在的 C2 证据提交，其第一父为 release metadata 提交 `3c15c3ae697568cb6317dc1248d8993c801a8076`，恢复时以 `git rev-parse HEAD` 解析精确值；提交后工作树须干净。
+- 当前分支：`codex/release-0.2.0-rc.2`；阶段起点/基线 HEAD 为已验证的 `main@94dce70f970113d835396c5bdcba9436b32494f5`；当前 HEAD 为本文件所在的审计格式修正提交，其第一父为 C2 证据提交 `d6436d3ec22fec10e9e9254adeddf098ab2d538e`，恢复时以 `git rev-parse HEAD` 解析精确值；提交后工作树须干净。
 - 最后验证：2026-07-13（America/New_York）。基线时本地 `HEAD`、本地 `main`、`origin/main` 与 `git ls-remote origin refs/heads/main` 均为 `94dce70f970113d835396c5bdcba9436b32494f5`；其 [post-merge run 29257079688](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29257079688) 在 ubuntu/windows × Node 20/22 四腿成功。版本/文档提交后本地 C2 全部门禁已通过，远端状态须在推送前重新 fetch 核对。
 - 已批准范围：在新发布分支持久化本阶段；将 `package.json`、`manifest.json` 与 `package-lock.json` 两个根版本字段同步为 `0.2.0-rc.2`；把当前 Unreleased 归档为 `0.2.0-rc.2` 并保留新的空 Unreleased；只校准直接受版本/发布事实影响的 README、质量文档和 `EVOLUTION_ROADMAP.md`；运行本地发布门禁与独立只读复核；推送本分支并创建 Draft PR；等待当前 head 四腿 CI；转 Ready 后以 merge commit 合并并保留分支；本地 `main` 仅以 `--ff-only` 同步并等待 main 四腿 CI；在远端 `main` 的精确合并提交创建、推送新的 annotated `v0.2.0-rc.2` tag；等待真实 release workflow，核对新 Draft Release 的 tag、提交、三项资产与 SHA-256。
 - 明确排除：发布或公开 Draft Release；npm publish、部署、云资源或生产数据写入；修改、移动、删除或复用 `v0.2.0-rc.1` 及其 Draft Release；直接 push `main`；squash、rebase、amend、force-push、历史重写或删除分支；修改 release/CI 行为；设置 prerelease 或签名；新依赖、升级、产品逻辑、公共 API、数据模型、schema、认证/授权；桌面 Rust 产物；安装或运行 `cargo-audit`；其他外部写入。
@@ -31,11 +31,12 @@
 
 ### 阶段 C 当前证据（截至本文件所在提交之前）
 
-- 已完成提交：`34ed480dc44f0b3bdacef494ad90f4c4ad5d3a78`（批准范围与恢复入口）；`3c15c3ae697568cb6317dc1248d8993c801a8076`（四个版本字段、CHANGELOG 与直接相关文档）。两者均按 Lore trailers 提交；每次只暂存拥有路径并检查 staged diff、`git diff --cached --check` 与高置信秘密模式。
+- 已完成提交：`34ed480dc44f0b3bdacef494ad90f4c4ad5d3a78`（批准范围与恢复入口）；`3c15c3ae697568cb6317dc1248d8993c801a8076`（四个版本字段、CHANGELOG 与直接相关文档）；`d6436d3ec22fec10e9e9254adeddf098ab2d538e`（C2 证据与恢复点）。三者均有 intent-first 标题、叙事正文和可由 Git 解析的最终 `Not-tested:` trailer；但其他 Lore 标签因命令消息分段间的空行被 Git 视为正文段落，不得误称为 git-native trailers。批准范围禁止 amend/rebase，因此不改写这些已经验证的 SHA；本文件所在的追加式修正提交用连续 trailer 块记录该取舍，后续提交沿用此格式。每次只暂存拥有路径并检查 staged diff、`git diff --cached --check` 与高置信秘密模式。
 - 发布身份：`package.json`、`manifest.json`、`package-lock.json.version`、`package-lock.json.packages[""].version` 均为 `0.2.0-rc.2`；`npm run release:check -- v0.2.0-rc.2` 成功，`v0.2.0-rc.1` 负控制退出 1 并明确期望 rc.2。
 - 静态与测试：`go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12` 无诊断；`npm run lint` 成功；`npm test` 191/191；`npm run coverage` 为 TP 54 / FP 0 / FN 0、precision/recall 1.000；`npm run dogfood` 的 11 个样本与钉板一致。
 - 打包与供应链：`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb` 的版本、暂存、生产依赖闭包与三工具冒烟通过；`npm pack --dry-run --json` 产物名为 `weapp-shipmate-0.2.0-rc.2.tgz`、32 entries；`npm ls --omit=dev --all` 仍只有 `js-yaml`→`argparse` 生产闭包；`npm audit --audit-level=high` 为 0 漏洞。未新增依赖或改动 workflow。
 - 性能：本阶段未改性能路径；没有新前后测量，也不宣称新增性能改善。`cargo-audit` 未安装、未运行且不适用于本次不含桌面 Rust 的 npm/MCPB 资产。
+- 修复登记 `RC2-001`（low / quality / hotfix）：独立预推送复核确认前三笔提交只有 `Not-tested:` 被 `git interpret-trailers --parse` 识别。处理为追加式诚实校正，不修改产品、refs 或既有提交；验收为本文件不再误述、当前修正提交的全部 Lore 字段可由 Git 解析、重新独立复核无阻断。Owner：Codex；Due：本阶段推送前；Tracking：本文件所在提交。历史重写方案因超出批准范围且会改变已验证 SHA 而拒绝。
 
 风险与回退：版本/文档提交可在 tag 前通过普通 revert PR 回退；PR 或 main CI 失败时在新分支修复，不改写历史。tag 是不可复用的发布身份：推送前做最后门禁，推送后不得移动、删除后复用或用同版本覆盖；workflow/资产失败时保持未发布状态，记录失败并改用新的修复版本。Draft 未公开前停止即可；公开后不承诺删除式回滚。`cargo-audit` 不适用本次 npm/MCPB 资产，保持未安装/未运行并不得宣称通过。
 
