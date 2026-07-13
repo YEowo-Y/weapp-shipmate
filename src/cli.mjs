@@ -101,10 +101,14 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
   const format = flags.json ? "json" : flags.checklist ? "checklist" : "markdown";
   const includeDrafts = !!flags["include-drafts"];
   const blockersOnly = !!flags["blockers-only"];
+  let hiddenNonBlockerCount = 0;
   // 聚焦模式覆盖所有可渲染规则集合；摘要/派生备注也必须使用过滤后的计数，
   // 否则 JSON 会一边只展示 blocker，一边声称命中了已隐藏的 warning/info。
   const focus = (result) => {
     if (!blockersOnly) return result;
+    hiddenNonBlockerCount = result.items.filter((i) => i.severity !== "blocker").length;
+    if (Array.isArray(result.selfCheck))
+      hiddenNonBlockerCount += result.selfCheck.filter((i) => i.severity !== "blocker").length;
     result.items = result.items.filter((i) => i.severity === "blocker");
     if (Array.isArray(result.selfCheck))
       result.selfCheck = result.selfCheck.filter((i) => i.severity === "blocker");
@@ -140,7 +144,7 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
       }
       const dir = flags._[0] || ".";
       const result = focus(runCheck(dir, { subjectType: flags.subject, includeDrafts }));
-      out.write(render(result, format) + "\n");
+      out.write(render(result, format, { hiddenNonBlockerCount }) + "\n");
       return result.items.some((i) => i.severity === "blocker") ? 2 : 0;
     }
     if (cmd === "guide") {
@@ -157,7 +161,7 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
         has_server_domain: !!flags.domain,
       };
       const result = focus(runGuide(inputs, { includeDrafts }));
-      out.write(render(result, format) + "\n");
+      out.write(render(result, format, { hiddenNonBlockerCount }) + "\n");
       return 0;
     }
     if (cmd === "explain") {
@@ -168,7 +172,7 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
       }
       // explain 是信息查询而非上线门禁，不返回阻断退出码。
       const result = focus(runExplain(query, { includeDrafts }));
-      out.write(render(result, format) + "\n");
+      out.write(render(result, format, { hiddenNonBlockerCount }) + "\n");
       return 0;
     }
   } catch (e) {

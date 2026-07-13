@@ -32,7 +32,13 @@ export function toJson(result) {
   return JSON.stringify(result, null, 2);
 }
 
-export function toMarkdown(result) {
+function filteredEmptyMessage(hiddenNonBlockerCount) {
+  return hiddenNonBlockerCount > 0
+    ? `_未命中阻断项；已隐藏 ${hiddenNonBlockerCount} 条非阻断项。_`
+    : null;
+}
+
+export function toMarkdown(result, { hiddenNonBlockerCount = 0 } = {}) {
   const lines = [];
   const title = result.command === "check" ? "上线预检清单" : "上线导航清单";
   lines.push(`# weapp-shipmate · ${title}`, "");
@@ -104,12 +110,13 @@ export function toMarkdown(result) {
     for (const n of result.notes) lines.push(`- ${n}`);
     lines.push("");
   }
-  if (!result.items.length && !result.selfCheck?.length) lines.push("_未命中任何规则。_", "");
+  if (!result.items.length && !result.selfCheck?.length)
+    lines.push(filteredEmptyMessage(hiddenNonBlockerCount) || "_未命中任何规则。_", "");
   return lines.join("\n");
 }
 
 // 可勾选清单：把待办动作从叙事里抽出来拍平，按阶段分组 + 严重度排序，便于粘进任务清单。
-export function toChecklist(result) {
+export function toChecklist(result, { hiddenNonBlockerCount = 0 } = {}) {
   const lines = [];
   const title = result.command === "check" ? "上线预检清单" : "上线导航清单";
   lines.push(`# weapp-shipmate · ${title}（可勾选）`, "");
@@ -164,12 +171,18 @@ export function toChecklist(result) {
     }
   }
 
-  if (!total) lines.push("_无可执行清单项。_", "");
+  if (!total) {
+    const filteredEmpty = !result.items.length && !result.selfCheck?.length;
+    lines.push(
+      (filteredEmpty && filteredEmptyMessage(hiddenNonBlockerCount)) || "_无可执行清单项。_",
+      "",
+    );
+  }
   return lines.join("\n");
 }
 
 // 拒因反查渲染：按"拒审原因"分组（而非 flow 阶段），每组列出背后已核验规则的修复步骤与官方来源。
-export function toExplain(result) {
+export function toExplain(result, { hiddenNonBlockerCount = 0 } = {}) {
   const lines = [];
   lines.push("# weapp-shipmate · 拒因解读", "");
   lines.push(`> ${DISCLAIMER}`, "");
@@ -200,13 +213,14 @@ export function toExplain(result) {
     for (const n of result.notes) lines.push(`- ${n}`);
     lines.push("");
   }
-  if (!result.items.length) lines.push("_未匹配到已收录的拒审原因。_", "");
+  if (!result.items.length)
+    lines.push(filteredEmptyMessage(hiddenNonBlockerCount) || "_未匹配到已收录的拒审原因。_", "");
   return lines.join("\n");
 }
 
-export function render(result, format = "markdown") {
+export function render(result, format = "markdown", options = {}) {
   if (format === "json") return toJson(result);
-  if (format === "checklist") return toChecklist(result);
-  if (result.command === "explain") return toExplain(result);
-  return toMarkdown(result);
+  if (format === "checklist") return toChecklist(result, options);
+  if (result.command === "explain") return toExplain(result, options);
+  return toMarkdown(result, options);
 }

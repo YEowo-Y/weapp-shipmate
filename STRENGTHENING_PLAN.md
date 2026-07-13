@@ -2,7 +2,7 @@
 
 > 一条一更;已被仓库/台账记录的不重复;过时即删。
 > 建立:2026-07-04。证据来源:8 路并行深勘 + 高危项对抗复核 + 独立安全审计(共 11 个代理,~105 万 token)。
-> 当前状态:**complete**（2026-07-10 批准的“核心契约与发布门禁”强化范围已完成；见“当前战役”）。
+> 当前状态:**complete**（2026-07-13 合并前复核发现的 `--blockers-only` 空过滤文案缺口已修复并通过双通道复核；本地 `main` 集成见“当前战役”）。
 > 2026-07-04 至 2026-07-05 的上一轮战役已完成；其基线、决策和提交记录保留在后文，作为历史证据而非当前恢复点。
 
 ## 当前战役：核心契约与发布门禁（2026-07-10）
@@ -10,15 +10,16 @@
 ### 状态与恢复入口
 
 - 状态：`complete`
-- 分支：`codex/strengthen-core-contracts-2026-07`
+- 分支：本地 `main`（集成目标）；源分支 `codex/strengthen-core-contracts-2026-07` 保留。
 - 基准 HEAD：`14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`
-- 当前 HEAD：本文件所在的 `complete` 状态提交；独立终审的实现复核基准为 `d1adc70`，产品与公共文档最后提交为 `21179c0`，完成状态提交为 `e8eb064`。其后的当前证据修正只改本计划。恢复时以 `git rev-parse HEAD` 核对本文件所在提交，不依赖聊天记录。
-- 工作树：完成状态提交后已核对为干净；无 staged 或 unstaged 改动。
-- 已完成提交序列：`11d5fda`、`d7b7d96`、`25edb9e`、`c483bb5`、`3636ae0`、`f7da93c`、`cb76310`、`e025d66`、`0cd8469`、`21179c0`、`d1adc70`、`e8eb064`，以及本文件所在的证据修正提交。
-- 最后验证：2026-07-10（America/New_York）。
-- 当前阶段：已完成；六个批准阶段的验收标准均满足。
-- 下一条可直接执行的动作：本轮无待执行动作；后续仅在 `EVOLUTION_ROADMAP.md` 的触发条件成立并重新取得相应批准后启动新战役。
-- 恢复检查：确认当前分支、`git rev-parse HEAD` 与本节关系；确认工作树干净；若要基于本轮结果继续演进，先复跑适用门禁并核对路线图触发条件，不能把历史验证当作未来 HEAD 的通过证明。
+- 当前 HEAD：本文件所在的复核修正与本地集成记录提交；其父为 `ed90e672315e2827426f297a65368c51c6c769b8`。本地 `main` 通过 `--ff-only` 接纳后应与源分支同指向本提交；恢复时以实际 refs 核对，不依赖聊天记录。
+- 工作树：本文件所在提交创建后、`main` fast-forward 后均须核对为干净；复核前无用户既有改动，本次只拥有本提交的四个路径。
+- 已完成提交序列：`11d5fda`、`d7b7d96`、`25edb9e`、`c483bb5`、`3636ae0`、`f7da93c`、`cb76310`、`e025d66`、`0cd8469`、`21179c0`、`d1adc70`、`e8eb064`、`ed90e67`，以及本文件所在的复核修正与集成记录提交。
+- 最后验证：2026-07-13（America/New_York）；新增 E2E 在旧实现上 11/12（预期红），最小修复后目标 E2E 13/13、全量测试 191/191、lint、validate、coverage、accuracy、11/11 dogfood、MCPB 冒烟和 Markdown/checklist/explain CLI smoke 均通过；修正后代码 `APPROVE`、架构 `CLEAR`。
+- 当前阶段：已完成；七个批准及复核修正阶段的验收标准均满足，本地 fast-forward 集成及合并后核验完成后无剩余动作。
+- 当前验收标准：旧实现上可失败的 Markdown 与 checklist 回归测试；最小文案修复能区分“真实零命中”和“过滤后为空”；目标测试、全量测试、lint、适用 smoke 均通过；独立代码复核改为 `APPROVE`，架构复核保持 `CLEAR`。
+- 下一条可直接执行的动作：本轮无本地待执行动作；未授权的 fetch/push、PR、tag、Release、部署与外部写入均未执行，后续需用户另行授权。
+- 恢复检查：确认当前分支为 `main`；确认 `main` 与 `codex/strengthen-core-contracts-2026-07` 同指向本文件所在提交且工作树干净；真实 CI、tag 或发布不能用本地证据替代。
 
 ### 已批准范围
 
@@ -130,6 +131,8 @@
 - 最终独立终审审查 `14a7f359..d1adc70` 的 35 个变更文件，代码结论为 APPROVE、架构结论为 CLEAR；未发现 P0/P1/P2，批准范围内验收无缺口，排除项未被提前实现。
 - 终审 P3-1：`--blockers-only` 当前通过中文摘要模式重算计数，测试已锁定现状但未来文案变化可能形成隐式耦合。本轮无已复现错误，不做投机重构；已把结构化计数触发点并入路线图 S3。
 - 终审 P3-2：报告在模块加载时缓存 flow，而 guide 按调用读取；当前不可变安装包无行为问题。本轮没有运行时热更新需求，不改变快照模型；若 L2 自定义规则触发，则按路线图统一 flow/rules 快照生命周期。
+- 2026-07-13 合并前复核纠正：代码审查复现 `sample-app --blockers-only` 过滤 5 条 warning 后仍输出“未命中任何规则/无可执行清单项”，结论为 MEDIUM/`REQUEST CHANGES`。新增二进制级 Markdown/checklist 回归先红后绿；CLI 现将隐藏数量作为仅供文本渲染的上下文传入，不改变 JSON 结果形状，并统一修正 check/guide/explain 的过滤后空态。修正后代码复核 `APPROVE`（14 夹具 × 4 主体 × 3 输出共 168 组合无回归）、架构复核 `CLEAR`，无 P0/P1/P2 或其他遗留 finding。
+- 本地集成决策：合并前 `main` 为 `14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1` 且是候选祖先；只允许 `git merge --ff-only codex/strengthen-core-contracts-2026-07`，不创建 merge commit。未 fetch 或比较远端 `main`，因此结论严格限于本地仓库，发布状态仍仅为 `local-ready`。
 - 被取代的决策：后文 2026-07-04 战役的“当前阶段/下一动作”已失效，但历史结论和提交证据保留。
 
 ### 当前战役进度
@@ -142,6 +145,7 @@
 | 4. 扫描遍历预算 | 完成 | `f7da93c` | 红灯测试确认旧实现漏计不可扫描目录项；目标测试 51/51；`npm test` 179/179；`npm run lint`、`npm run coverage`、`npm run accuracy`、`npm run dogfood`；固定场景中位数 75.941→3.478 ms 且截断信号由 false→true；`git diff --check`；独立只读复核 PASS |
 | 5. 发布一致性门禁 | 完成 | `e025d66` | 红灯测试确认基线缺校验模块；版本/workflow 契约 10/10；`npm test` 189/189；`npm run lint`；正确/错误 tag CLI 分别 exit 0/1；`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb`；`npm pack --dry-run`；`git diff --check`；独立只读复核 PASS |
 | 6. 文档、路线图与最终复核 | 完成 | `21179c0`（文档与路线图）、`d1adc70`（终审恢复点）、本文件所在提交（完成状态） | YAML 解析和 23 个 tracked Markdown 文件的本地链接检查；`npm run lint`；`npm test` 189/189；`npm run coverage`（TP 54 / FP 0 / FN 0）；`npm run accuracy`（86 标签）；`npm run dogfood`（11/11）；`npm run rot`（97 载体、0 stale）；根与桌面 `npm audit`（0 漏洞）；桌面构建、Cargo metadata、release 正/负控制、本地 `build:mcpb`、`npm pack --dry-run`、CLI smoke、`git diff --check` 均通过；`actionlint`/`cargo-audit` 因未安装未运行；独立终审 PASS/APPROVE（代码 APPROVE、架构 CLEAR，无 P0/P1/P2） |
+| 7. 合并前复核修正与本地集成 | 完成 | 本文件所在提交 | 首轮代码复核 MEDIUM/REQUEST CHANGES；回归旧实现 11/12（预期红）→ 最终 E2E 13/13；全量 191/191；lint、validate、coverage、accuracy、11/11 dogfood、MCPB 与 CLI smoke 通过；修正后代码 APPROVE、架构 CLEAR；本地 `main` 仅以 `--ff-only` 集成并在集成后复验 |
 
 ---
 
