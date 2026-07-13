@@ -2,22 +2,30 @@
 
 > 一条一更;已被仓库/台账记录的不重复;过时即删。
 > 建立:2026-07-04。证据来源:8 路并行深勘 + 高危项对抗复核 + 独立安全审计(共 11 个代理,~105 万 token)。
-> 当前状态:**executing**（2026-07-13 已获准执行“远端验证阶段 A”；本地强化与集成已完成，当前只发布功能分支、创建 Draft PR 并等待真实 CI）。
+> 当前状态:**awaiting_approval**（远端验证阶段 A 已形成 Draft PR #4；本状态以“本文件所在提交的四腿 PR CI 全绿”为生效条件，任一检查未成功时恢复为 `executing`）。
 > 2026-07-04 至 2026-07-05 的上一轮战役已完成；其基线、决策和提交记录保留在后文，作为历史证据而非当前恢复点。
 
 ## 当前恢复入口：远端验证阶段 A（2026-07-13）
 
 ### 状态、批准范围与恢复检查
 
-- 状态：`executing`。
-- 当前分支：`codex/strengthen-core-contracts-2026-07`；阶段起点 `07f94a148f4d5246fe3ab22cf66ed7815101d6c1`，其树已在本地 `main` 通过 `--ff-only` 集成。
+- 状态：`awaiting_approval`；生效条件是 [PR #4 checks](https://github.com/YEowo-Y/weapp-shipmate/pull/4/checks) 对本文件所在提交显示四个 `validate` 全部成功，否则按 `executing` 恢复。
+- 当前分支：`codex/strengthen-core-contracts-2026-07`；当前 HEAD 为本文件所在的交接状态提交，其父为 `09a5eef5d88f79649fecb44b93b0d2d30c70c083`。阶段起点 `07f94a148f4d5246fe3ab22cf66ed7815101d6c1` 的代码树已在本地 `main` 通过 `--ff-only` 集成。
 - 已批准范围：临时运行固定版本 `actionlint`；执行 `git fetch --prune --tags origin`；只推送当前功能分支；以远端 `main` 为 base 创建 Draft PR；等待该 PR 的 ubuntu/windows × Node 20/22 四腿 Actions 并核对结论。
 - 明确排除：直接推送或修改远端 `main`；把 Draft PR 转为 ready 或合并；创建/移动 tag；创建、修改或发布 GitHub Release；部署；版本提升；安装或运行 `cargo-audit`；任何其他外部写入。
-- 已知远端基线（执行 fetch 前的只读证据）：`origin/main` 为 `14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`；远端尚无同名功能分支。fetch 后必须重新核对，不能把该值当作不变事实。
+- 远端状态（2026-07-13 fetch 后）：`origin/main` 为 `14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`，是功能分支祖先；远端功能分支与本地同指向本文件所在提交后方可恢复。Draft PR 为 [#4](https://github.com/YEowo-Y/weapp-shipmate/pull/4)，base=`main`。
 - 已知发布冲突：远端已有 `v0.2.0-rc.1`，其提交为 `95eb2a331a1332b729368d389d942f57f024914f`，并已有同版本 Draft Release；当前三个版本载体仍为 `0.2.0-rc.1`。因此本阶段禁止 tag/Release，后续发布需另行批准新版本（推荐 `0.2.0-rc.2`）。
-- 当前阶段：A1，持久化范围并运行本地发布前门禁。
-- 下一条可直接执行的动作：提交本恢复入口，运行 `go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12`，随后 fetch 并复核待推送差异。
-- 恢复检查：确认分支名、工作树和阶段提交；确认 `origin/main` 仍是功能分支祖先；确认远端同名分支/PR 的实际状态；确认没有 tag、Release 或 `main` 写入；从本节“下一条可直接执行的动作”继续。
+- 当前阶段：A5，交接状态提交；本文件推送后只等待其当前 HEAD 的四腿 PR CI。
+- 下一条可直接执行的动作：核对 [PR #4 checks](https://github.com/YEowo-Y/weapp-shipmate/pull/4/checks) 的 head SHA 与功能分支一致。四腿全绿后停止并等待 Phase B 的合并授权；否则恢复为 `executing` 并诊断失败。
+- 恢复检查：确认分支名和干净工作树；确认本地、远端功能分支及 PR head 同指向；确认 `origin/main` 仍是祖先；确认四个检查属于该 head 且成功；确认没有 tag、Release 或 `main` 写入。
+
+### 阶段 A 已取得的证据
+
+- 固定版本临时门禁：`go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12` 无诊断；未增加仓库依赖或全局安装。
+- 本地当前代码门禁：`npm run lint`；`npm test`（191/191）；`npm run coverage`（TP 54 / FP 0 / FN 0）；`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb`；`npm run release:check -- v0.2.0-rc.1`；`npm audit --audit-level=high`（0 漏洞）均通过。
+- 待推送差异：`git diff --check origin/main..HEAD`、高置信秘密模式与敏感文件名扫描通过；两路独立只读复核均为 PASS，无 P0/P1/P2。
+- 首个真实 PR run [29255613118](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29255613118) 在 `09a5eef5d88f79649fecb44b93b0d2d30c70c083` 上 ubuntu/windows × Node 20/22 四腿成功。它证明代码与首版恢复提交，但不能替代本文件所在提交的 current-head 检查。
+- `cargo-audit` 未安装、未运行，也未宣称通过；本阶段发布资产不含桌面 Rust 产物。未执行 PR 合并、tag、Release 或部署。
 
 ### 阶段 A 的验收标准、风险与回退
 
