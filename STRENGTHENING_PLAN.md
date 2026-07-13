@@ -10,14 +10,14 @@
 ### 状态、批准范围与恢复检查
 
 - 状态：`executing`。
-- 当前分支：`codex/release-0.2.0-rc.2`；阶段起点/基线 HEAD 为已验证的 `main@94dce70f970113d835396c5bdcba9436b32494f5`；当前 HEAD 为本文件所在的审计格式修正提交，其第一父为 C2 证据提交 `d6436d3ec22fec10e9e9254adeddf098ab2d538e`，恢复时以 `git rev-parse HEAD` 解析精确值；提交后工作树须干净。
+- 当前分支：`codex/release-0.2.0-rc.2`；阶段起点/基线 HEAD 为已验证的 `main@94dce70f970113d835396c5bdcba9436b32494f5`；当前 HEAD 为本文件所在的 C3 复核恢复提交，其第一父为审计格式修正提交 `b0a35516cbe165aeeb8326be39aff732888ba553`，恢复时以 `git rev-parse HEAD` 解析精确值；提交后工作树须干净。
 - 最后验证：2026-07-13（America/New_York）。基线时本地 `HEAD`、本地 `main`、`origin/main` 与 `git ls-remote origin refs/heads/main` 均为 `94dce70f970113d835396c5bdcba9436b32494f5`；其 [post-merge run 29257079688](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29257079688) 在 ubuntu/windows × Node 20/22 四腿成功。版本/文档提交后本地 C2 全部门禁已通过，远端状态须在推送前重新 fetch 核对。
 - 已批准范围：在新发布分支持久化本阶段；将 `package.json`、`manifest.json` 与 `package-lock.json` 两个根版本字段同步为 `0.2.0-rc.2`；把当前 Unreleased 归档为 `0.2.0-rc.2` 并保留新的空 Unreleased；只校准直接受版本/发布事实影响的 README、质量文档和 `EVOLUTION_ROADMAP.md`；运行本地发布门禁与独立只读复核；推送本分支并创建 Draft PR；等待当前 head 四腿 CI；转 Ready 后以 merge commit 合并并保留分支；本地 `main` 仅以 `--ff-only` 同步并等待 main 四腿 CI；在远端 `main` 的精确合并提交创建、推送新的 annotated `v0.2.0-rc.2` tag；等待真实 release workflow，核对新 Draft Release 的 tag、提交、三项资产与 SHA-256。
 - 明确排除：发布或公开 Draft Release；npm publish、部署、云资源或生产数据写入；修改、移动、删除或复用 `v0.2.0-rc.1` 及其 Draft Release；直接 push `main`；squash、rebase、amend、force-push、历史重写或删除分支；修改 release/CI 行为；设置 prerelease 或签名；新依赖、升级、产品逻辑、公共 API、数据模型、schema、认证/授权；桌面 Rust 产物；安装或运行 `cargo-audit`；其他外部写入。
 - 远端碰撞检查：`v0.2.0-rc.2` tag、Release、同名远端分支与同 head PR 均不存在；既有 annotated `v0.2.0-rc.1` tag object 仍为 `c1fadbd8897b001561f79c8e4ed56559cf4c018a`、peeled commit 仍为 `95eb2a331a1332b729368d389d942f57f024914f`，其 Draft Release 未发布且仍为原三项资产。
 - 发布决策：使用新版本和新 tag，绝不移动既有 RC；release workflow 只由 `v*` tag push 触发并创建 Draft。Draft 当前不是 prerelease 不阻塞本阶段，因为它不会公开；若后续批准公开 RC，必须在独立审批中先确认 prerelease 标记与发布说明。
-- 当前阶段：C3，执行独立只读预推送复核。
-- 下一条可直接执行的动作：让复核者对照 `origin/main..HEAD`、批准范围、提交、门禁与供应链边界审查；主代理复验其发现后，持久化复核结果并仅推送当前发布分支、创建 Draft PR。
+- 当前阶段：C4，推送发布分支、创建 Draft PR 并等待 current-head CI；尚未授权任何 tag 前置执行。
+- 下一条可直接执行的动作：fetch 并重新核对远端 `main`、rc.2 分支/tag/Release/PR 碰撞；若仍无漂移，仅推送 `codex/release-0.2.0-rc.2`，以 `main` 为 base 创建 Draft PR，等待该 head 的四腿 CI。
 - 恢复检查：先核对当前分支、HEAD、status/diff 与本节记录；fetch 后确认远端 `main` 未漂移且 `v0.2.0-rc.2` tag/Release 仍不存在。PR 前核对只含批准路径、本地门禁与独立复核；合并前核对 PR head/base、四腿 CI 和 mergeability；tag 前再次核对本地/远端 `main` 精确一致、main 四腿 CI 成功、工作树干净、四个版本字段一致且新 tag/Release 仍未占用。tag 推送后不得移动或复用；若 workflow 失败，保持 Draft/未发布状态并以新版本修复前进。
 
 ### 阶段 C 与验收标准
@@ -37,6 +37,7 @@
 - 打包与供应链：`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb` 的版本、暂存、生产依赖闭包与三工具冒烟通过；`npm pack --dry-run --json` 产物名为 `weapp-shipmate-0.2.0-rc.2.tgz`、32 entries；`npm ls --omit=dev --all` 仍只有 `js-yaml`→`argparse` 生产闭包；`npm audit --audit-level=high` 为 0 漏洞。未新增依赖或改动 workflow。
 - 性能：本阶段未改性能路径；没有新前后测量，也不宣称新增性能改善。`cargo-audit` 未安装、未运行且不适用于本次不含桌面 Rust 的 npm/MCPB 资产。
 - 修复登记 `RC2-001`（low / quality / hotfix）：独立预推送复核确认前三笔提交只有 `Not-tested:` 被 `git interpret-trailers --parse` 识别。处理为追加式诚实校正，不修改产品、refs 或既有提交；验收为本文件不再误述、当前修正提交的全部 Lore 字段可由 Git 解析、重新独立复核无阻断。Owner：Codex；Due：本阶段推送前；Tracking：本文件所在提交。历史重写方案因超出批准范围且会改变已验证 SHA 而拒绝。
+- 独立预推送复核：初审对 `RC2-001` 给出 P2 后，主代理复验为真实格式缺陷并完成追加式修正；复审对 `b0a35516cbe165aeeb8326be39aff732888ba553` 给出 `PASS`，P0/P1/P2 均为 0。剩余 P3 是既有 `actions/*@v4` 可移动引用与联网 MCPB 获取，未由本轮引入，已在路线图登记，不阻断 Draft PR。复核明确授权的下一步仅为 fetch 复核、推发布分支、建 Draft PR、等待 current-head 四腿 CI；`RC2-001` 关闭。
 
 风险与回退：版本/文档提交可在 tag 前通过普通 revert PR 回退；PR 或 main CI 失败时在新分支修复，不改写历史。tag 是不可复用的发布身份：推送前做最后门禁，推送后不得移动、删除后复用或用同版本覆盖；workflow/资产失败时保持未发布状态，记录失败并改用新的修复版本。Draft 未公开前停止即可；公开后不承诺删除式回滚。`cargo-audit` 不适用本次 npm/MCPB 资产，保持未安装/未运行并不得宣称通过。
 
