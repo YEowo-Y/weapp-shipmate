@@ -2,22 +2,46 @@
 
 > 一条一更;已被仓库/台账记录的不重复;过时即删。
 > 建立:2026-07-04。证据来源:8 路并行深勘 + 高危项对抗复核 + 独立安全审计(共 11 个代理,~105 万 token)。
-> 当前状态:**awaiting_approval**（远端验证阶段 A 已形成 Draft PR #4；本状态以“本文件所在提交的四腿 PR CI 全绿”为生效条件，任一检查未成功时恢复为 `executing`）。
+> 当前状态:**complete（条件化）**（用户已批准远端合并阶段 B；只有本文件所在提交通过 PR CI、PR #4 以 merge commit 合并、远端及本地 `main` 同步且 post-merge CI 四腿全绿时才生效，条件未满足时状态仍为 `executing`）。
 > 2026-07-04 至 2026-07-05 的上一轮战役已完成；其基线、决策和提交记录保留在后文，作为历史证据而非当前恢复点。
 
-## 当前恢复入口：远端验证阶段 A（2026-07-13）
+## 当前恢复入口：远端合并阶段 B（2026-07-13）
 
 ### 状态、批准范围与恢复检查
 
-- 状态：`awaiting_approval`；生效条件是 [PR #4 checks](https://github.com/YEowo-Y/weapp-shipmate/pull/4/checks) 对本文件所在提交显示四个 `validate` 全部成功，否则按 `executing` 恢复。
-- 当前分支：`codex/strengthen-core-contracts-2026-07`；当前 HEAD 为本文件所在的交接状态提交，其父为 `09a5eef5d88f79649fecb44b93b0d2d30c70c083`。阶段起点 `07f94a148f4d5246fe3ab22cf66ed7815101d6c1` 的代码树已在本地 `main` 通过 `--ff-only` 集成。
+- 状态：`complete` 仅在本节全部验收条件满足后生效；否则按 `executing` 恢复。
+- 当前分支：`codex/strengthen-core-contracts-2026-07`；Phase B 起点为 `46bea2be281f74efb7fc883de6336cc524b99d84`，当前 HEAD 为本文件所在的合并恢复提交。
+- 已批准范围：推送本恢复提交；等待 PR #4 当前 head 的四腿 CI；将 Draft PR 转为 Ready；通过 GitHub 以 merge commit 合并到 `main`；fetch 远端引用；本地 `main` 仅以 `--ff-only` 同步到 `origin/main`；等待并核对 merge commit 触发的 main 四腿 CI。
+- 明确排除：直接 push `main`；squash、rebase、amend、force-push 或历史重写；删除功能分支；版本提升；创建/移动 tag；创建、修改或发布 Release；部署；安装或运行 `cargo-audit`；其他外部写入。
+- 合并决策：使用 merge commit，保留已经独立复核和真实 CI 验证的提交 SHA，并提供一个可由后续 PR 整体 revert 的明确回退点。拒绝 squash/rebase，因为两者会改写已审提交身份；保留源分支，避免把清理动作混入合并。
+- 远端基线：`main` 为 `14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`；PR #4 Phase A head `46bea2be281f74efb7fc883de6336cc524b99d84` 的 run [29255850966](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29255850966) 四腿成功，PR 为 Draft/Open/Clean/Mergeable。
+- 当前阶段：B1，持久化合并范围并让本文件所在提交接受 PR CI。
+- 下一条可直接执行的动作：推送本文件所在提交并等待 [PR #4 checks](https://github.com/YEowo-Y/weapp-shipmate/pull/4/checks) 四腿成功；随后进行独立只读合并条件复核，再转 Ready 并执行 merge commit。
+- 恢复检查：确认工作树干净且本地/远端功能分支/PR head 同指向；确认 `origin/main` 未漂移；确认 PR 当前 head 四腿成功；合并后确认 PR 状态为 Merged、merge commit 的两个父提交分别为批准的 base/head、远端 `main` 指向该 merge commit、本地 `main` 与之同步且 main 的最新四腿 CI 成功。
+
+### 阶段 B 验收标准、风险与回退
+
+1. 本文件所在提交的 PR 四腿 CI 全部成功，且独立只读复核没有 P0/P1/P2 或范围越界。
+2. PR #4 从 Draft 转为 Ready 后以 merge commit 合并；不使用 squash/rebase，不删除源分支。
+3. merge commit 的第一父提交是合并前远端 `main`，第二父提交是经过当前 PR CI 的 head；PR 显示 `MERGED`。
+4. 远端 `main` 指向 merge commit；本地 `main` 只通过 `git merge --ff-only origin/main` 同步，工作树及 staged diff 为空。
+5. merge commit 触发的 `push/main` Actions 在 ubuntu/windows × Node 20/22 四腿全部成功；旧 PR run 不能替代该结果。
+6. 既有 `v0.2.0-rc.1` tag 仍指向 `95eb2a331a1332b729368d389d942f57f024914f`，其 Draft Release 未发布；没有新 tag、Release、部署、版本提升或 `cargo-audit` 安装/执行。
+
+主要风险是合并前远端 base 漂移、GitHub 合并语义与预期不符、以及 post-merge CI 才暴露集成问题。任一前置条件漂移即停止合并；合并后若 CI 失败，不重写历史或直接修 main，而是在新修复分支中处理。正常回退是针对 merge commit 创建独立 revert PR。
+
+## 已完成的远端验证阶段 A（2026-07-13）
+
+### 状态、批准范围与恢复检查
+
+- 状态：`complete`；Phase A 最终 head `46bea2be281f74efb7fc883de6336cc524b99d84` 的 [run 29255850966](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/29255850966) 四腿成功。
+- 阶段分支：`codex/strengthen-core-contracts-2026-07`；阶段起点 `07f94a148f4d5246fe3ab22cf66ed7815101d6c1` 的代码树已在本地 `main` 通过 `--ff-only` 集成。
 - 已批准范围：临时运行固定版本 `actionlint`；执行 `git fetch --prune --tags origin`；只推送当前功能分支；以远端 `main` 为 base 创建 Draft PR；等待该 PR 的 ubuntu/windows × Node 20/22 四腿 Actions 并核对结论。
 - 明确排除：直接推送或修改远端 `main`；把 Draft PR 转为 ready 或合并；创建/移动 tag；创建、修改或发布 GitHub Release；部署；版本提升；安装或运行 `cargo-audit`；任何其他外部写入。
 - 远端状态（2026-07-13 fetch 后）：`origin/main` 为 `14a7f3598b29c1ff421adab4d9c0cb0aa5c9c1c1`，是功能分支祖先；远端功能分支与本地同指向本文件所在提交后方可恢复。Draft PR 为 [#4](https://github.com/YEowo-Y/weapp-shipmate/pull/4)，base=`main`。
 - 已知发布冲突：远端已有 `v0.2.0-rc.1`，其提交为 `95eb2a331a1332b729368d389d942f57f024914f`，并已有同版本 Draft Release；当前三个版本载体仍为 `0.2.0-rc.1`。因此本阶段禁止 tag/Release，后续发布需另行批准新版本（推荐 `0.2.0-rc.2`）。
-- 当前阶段：A5，交接状态提交；本文件推送后只等待其当前 HEAD 的四腿 PR CI。
-- 下一条可直接执行的动作：核对 [PR #4 checks](https://github.com/YEowo-Y/weapp-shipmate/pull/4/checks) 的 head SHA 与功能分支一致。四腿全绿后停止并等待 Phase B 的合并授权；否则恢复为 `executing` 并诊断失败。
-- 恢复检查：确认分支名和干净工作树；确认本地、远端功能分支及 PR head 同指向；确认 `origin/main` 仍是祖先；确认四个检查属于该 head 且成功；确认没有 tag、Release 或 `main` 写入。
+- 当前阶段：已完成；其下一批准边界已由用户授权的 Phase B 取代。
+- 历史恢复检查：确认 Phase A head、PR #4 和 run 29255850966 对应；后续动作以本文件最上方 Phase B 恢复入口为准。
 
 ### 阶段 A 已取得的证据
 
