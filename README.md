@@ -57,7 +57,7 @@ weapp-shipmate guide                 # 上线流程导航：你在哪一步、�
 weapp-shipmate explain "<审核反馈>"  # 拒因反查：把拒审信号映射到已核验规则与修复步骤
 ```
 
-**安装 / 运行**（当前公开版为 v0.1.0；仓库源码 / 草稿 RC 版本为 0.2.0-rc.1，尚未发布到 npm registry）。需 **Node.js ≥ 20**；方式一/二另需本机已装 git。规则库随包冻结于安装时刻——重跑安装命令即更新到最新规则（每条输出都附「最后核验日期」，陈旧自现）：
+**安装 / 运行**（当前公开版为 v0.1.0；仓库发布候选版本为 0.2.0-rc.2，尚未发布到 npm registry）。需 **Node.js ≥ 20**；方式一/二另需本机已装 git。规则库随包冻结于安装时刻——重跑安装命令即更新到最新规则（每条输出都附「最后核验日期」，陈旧自现）：
 
 ```bash
 # 方式一（推荐）：直接从 GitHub 安装
@@ -105,9 +105,9 @@ node bin/weapp-shipmate.mjs guide --subject personal --sensitive --domain
 
 ## 当前状态
 
-🟢 **v0 已在真实小程序上验证、多框架可用（当前 HEAD 于 2026-07-10 复验）** —— 调研/定位/命名定稿；规则 schema、`flow.yaml`、**63 条已核验种子规则**、数据校验门禁与 CI 已落地。**四个渲染器**（`check` 代码预检 / `guide` 流程导航 / `explain` 拒因反查 / report 清单导出）共用同一份规则库、均可从源码运行；极简依赖 MCP server（`check`/`guide`/`explain`）与 `.mcpb` 一键安装包已落地。
+🟢 **v0 已在真实小程序上验证、多框架可用（当前 HEAD 于 2026-07-13 复验）** —— 调研/定位/命名定稿；规则 schema、`flow.yaml`、**63 条已核验种子规则**、数据校验门禁与 CI 已落地。**四个渲染器**（`check` 代码预检 / `guide` 流程导航 / `explain` 拒因反查 / report 清单导出）共用同一份规则库、均可从源码运行；极简依赖 MCP server（`check`/`guide`/`explain`）与 `.mcpb` 一键安装包已落地。
 
-**真实 dogfood 验证**：在 11 个固定真实开源样本上逐条核验命中——覆盖**原生 wx / uni-app / Taro / mpvue / mpx / wepy 六大主流框架**，并补上支付/模板级隐私（头像/相机/麦克风）/web-view 业务域名等真实漏报。当前 **189 例测试全绿**；准确性门禁在 `corpus/labels.json` 的 **86 条人工核验标注、14 个夹具**上得到 **TP 54 / FP 0 / FN 0**，precision = recall = 1.0、零误报即 CI 红线（`npm run accuracy`）。公开版为 **v0.1.0**；仓库源码 / 草稿 RC 为 **0.2.0-rc.1**，后续改动仍记在 Unreleased。
+**真实 dogfood 验证**：在 11 个固定真实开源样本上逐条核验命中——覆盖**原生 wx / uni-app / Taro / mpvue / mpx / wepy 六大主流框架**，并补上支付/模板级隐私（头像/相机/麦克风）/web-view 业务域名等真实漏报。当前 **191 例测试全绿**；准确性门禁在 `corpus/labels.json` 的 **86 条人工核验标注、14 个夹具**上得到 **TP 54 / FP 0 / FN 0**，precision = recall = 1.0、零误报即 CI 红线（`npm run accuracy`）。公开版为 **v0.1.0**；仓库发布候选为 **0.2.0-rc.2**，后续改动记在 Unreleased。
 
 文档导航：
 
@@ -136,7 +136,7 @@ AI has largely solved *writing the code*; what still blocks zero-to-one creators
 2. **Code-aware preflight** — scans your source locally to produce a *personalized* go-live checklist (request domains to allowlist, privacy APIs that mandate guideline fields, category hints & common rejection warnings).
 3. **AI glue** — a minimal-dependency **CLI core + MCP adapter** (a single parse dependency, js-yaml; no network or native deps) so the agent that just wrote your code can run the preflight and explain results, without bypassing the official console. Local-only means no upload, not no read: MCP check reads the client-supplied directory with the server process's filesystem permissions, so expose it only to trusted clients.
 
-**Not** a code framework/UI lib · **not** one-click launch · **not** another DevTools-driving MCP · **no** compliance guarantees · **never** uploads source or secrets. Status: **v0 re-verified on 2026-07-10** — four renderers (check / guide / explain / report) run from source; dogfooded on 11 fixed real-world samples across **6 frameworks** (native wx · uni-app · Taro · mpvue · mpx · wepy); 189 tests green, with 86 hand-verified labels across 14 fixtures (TP 54 / FP 0 / FN 0; precision = recall = 1.0). Public release: **v0.1.0**; repository/draft RC: **0.2.0-rc.1**; not yet published to npm.
+**Not** a code framework/UI lib · **not** one-click launch · **not** another DevTools-driving MCP · **no** compliance guarantees · **never** uploads source or secrets. Status: **v0 re-verified on 2026-07-13** — four renderers (check / guide / explain / report) run from source; dogfooded on 11 fixed real-world samples across **6 frameworks** (native wx · uni-app · Taro · mpvue · mpx · wepy); 191 tests green, with 86 hand-verified labels across 14 fixtures (TP 54 / FP 0 / FN 0; precision = recall = 1.0). Public release: **v0.1.0**; repository release candidate: **0.2.0-rc.2**; not yet published to npm.
 
 ---
 

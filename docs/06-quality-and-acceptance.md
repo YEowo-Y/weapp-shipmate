@@ -96,7 +96,7 @@
 
 ### 2.4 发布身份门禁
 
-`npm run release:check` 以一个可测试的契约核对 tag 与四个仓库版本字段；`.github/workflows/release.yml` 在 `npm pack` 和 `npm run build:mcpb` 前依次运行 lint 与版本校验。当前强化战役只在本地验证了正确/错误 tag 的退出码、workflow 结构、`npm pack --dry-run` 与无联网 MCPB smoke；**没有创建真实 tag，也没有实际触发 GitHub Actions、联网 MCPB pack 或 GitHub Release**，不得把这些未运行项报告为已通过。
+`npm run release:check` 以一个可测试的契约核对 tag 与四个仓库版本字段；`.github/workflows/release.yml` 在 `npm pack` 和 `npm run build:mcpb` 前依次运行 lint 与版本校验。2026-07-10 的核心强化阶段只在本地验证了正确/错误 tag、workflow 结构、`npm pack --dry-run` 与无联网 MCPB smoke；后续真实 PR/main CI 及 `v0.2.0-rc.2` tag、联网 pack、Draft Release 资产的当前证据与恢复入口统一记录在 `STRENGTHENING_PLAN.md`。不得用本节的设计契约替代实际 run、ref 与资产核对。
 
 ---
 

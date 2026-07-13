@@ -1,17 +1,17 @@
 # EVOLUTION_ROADMAP — 可信后续演进路线
 
-> 更新：2026-07-10（America/New_York）。
+> 更新：2026-07-13（America/New_York）。
 > 当前战役的批准范围、阶段提交、验证结果和恢复入口见 `STRENGTHENING_PLAN.md`；本文件只记录尚未实施的后续候选，不把设想写成承诺。
 > 时间口径：短期不超过 1 个月；中期为 1–3 个月；长期超过 3 个月。任何项目只有在其触发条件成立、重新越过相应审批边界后才进入实施。
 
 ## 0. 当前证据锚点
 
-- 【事实】最新公开 GitHub Release 是 `v0.1.0`。2026-07-10 外部观察到 `v0.2.0-rc.1` draft；`npm view weapp-shipmate` 返回 `E404`，因此不能声称 npm registry 已发布或双渠道可用。
+- 【事实】最新公开 GitHub Release 是 `v0.1.0`；既有 `v0.2.0-rc.1` 仍是未发布 Draft 且不得移动或复用。仓库现以 `0.2.0-rc.2` 作为新的发布候选；本轮只授权把它推进到已核对资产的未发布 Draft，实际 refs、workflow 与资产证据以 `STRENGTHENING_PLAN.md` 为准。npm registry 仍不能声称已发布或双渠道可用。
 - 【事实】当前数据基线为 63 条规则、8 个流程阶段；`registration`、`certification`、`release` 三阶段各为 0 条规则。规则数量以 `npm run validate` 的当前输出为准，不在路线图中推演未来数量。
-- 【事实】当前验证基线为 `npm test` 189/189、86 个 accuracy labels、TP 54 / FP 0 / FN 0、dogfood 11 个固定样本、rot 97 个载体。accuracy 只证明已标注语料，不外推为全域准确率。
+- 【事实】当前验证基线为 `npm test` 191/191、86 个 accuracy labels、TP 54 / FP 0 / FN 0、dogfood 11 个固定样本、rot 97 个载体。accuracy 只证明已标注语料，不外推为全域准确率。
 - 【事实】本轮已在本地强化四类契约：输出的 subject/聚焦过滤/阶段渲染一致性；MCP 请求校验与 Markdown 文本净化；扫描目录项预算；release tag 与 package/manifest/lock 版本一致性及 lint 工作流契约。
 - 【事实】扫描预算现在覆盖实际遇到的全部 `Dirent`，固定 1024-entry、预算 64 场景的中位耗时由 75.941 ms 降至 3.478 ms 并正确截断；这只证明该有界场景，不代表通用吞吐提升。`readdirSync` 仍会一次物化单个目录，尚无单目录硬内存上限。
-- 【事实】本轮发布证据仅为 `local-ready`：没有创建真实 tag，没有运行新的 GitHub Actions release job、联网 `.mcpb` pack、签名或真实 Release。不得把本地契约测试写成 `CI-ready` 或 `release-ready`。
+- 【事实】核心强化提交已经 PR #4 与合并后的 main 四腿 CI 验证。`0.2.0-rc.2` 的 tag、release workflow、联网 `.mcpb` pack 与 Draft 资产只有在 `STRENGTHENING_PLAN.md` 的 Phase C 条件实际满足后才算取得证据；未发布 Draft 不等于公开发布，也没有签名或 npm registry 证据。
 - 【事实】CLI/MCP 当前接受 `payment`、`business` 输入，但现有 flow 条件和规则选择不使用二者，输入不会形成可见差异；普通 CLI 也尚无被回归测试锁定的 EPIPE 契约。
 - 【事实】MCP stdio 的单行阈值当前用 JavaScript 字符串 `length` 实现，即按 UTF-16 code unit 而非 UTF-8 字节计数；文档已如实描述，若要改成字节契约仍需单独定义兼容边界。
 - 【事实】唯一未完成的既定 Go/No-Go 是 `docs/11-outreach-plan.md` 的 5 人导航验证；结果台账仍为空。P2.2 及以后继续以真实验证通过为前置。
@@ -124,7 +124,7 @@
 - 不在 outreach 信号回来前扩第 9 个流程阶段、增加新框架或批量灌规则。
 - 不把“环境变量 allowlist”写成既定安全方案；只有真实边界需求和威胁模型支持时，才另行设计并审批目录授权模型。
 - 不因“YAML 面较小”就承诺内联解析器替代 `js-yaml`；只有弃维、安全或可测成本证据成立时才评估替换。
-- 不把 main 祖先约束、Actions SHA 固定、`.mcpb` 签名、真实 tag/Release/npm publish 视为已批准；它们只是在 S1 发布前可重新审批的强化候选。
+- 除 `STRENGTHENING_PLAN.md` 明确批准的 `v0.2.0-rc.2` annotated tag 与未发布 Draft 外，不把 main 祖先约束、Actions SHA 固定、`.mcpb` 签名、公开 Release 或 npm publish 视为已批准；它们仍须在对应触发条件下重新审批。
 - 不以当前扫描场景的约 95.42% 中位耗时下降宣称通用性能提升，也不声称单目录内存已硬有界。
 - 不在没有互操作问题证据和公共契约审批时收紧 MCP 当前显式 `id: null` 的兼容裁决。
 - 不在 L2 触发门成立前实现 `--rules-dir`、远程规则市场或自动吸收社区规则。
