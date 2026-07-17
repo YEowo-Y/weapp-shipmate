@@ -97,3 +97,42 @@ test("release workflow 在任何打包步骤前运行 lint 与版本契约", () 
   assert.ok(lint < npmPack && lint < mcpbPack, "lint 必须早于打包");
   assert.ok(versionCheck < npmPack && versionCheck < mcpbPack, "版本一致性校验必须早于打包");
 });
+
+// ── 2026-07-16 审计 A3：交付末端 ──
+test("checksums 以扁平资产名生成——清单含路径前缀会让下载者 sha256sum -c 必败（rc.1 演练未覆盖的最后一步）", () => {
+  const workflow = yaml.load(readFileSync(join(ROOT, ".github", "workflows", "release.yml"), "utf-8"));
+  const steps = workflow.jobs.release.steps;
+  const checksums = steps.find((s) => s.name === "checksums");
+  assert.ok(checksums, "release workflow 缺少 checksums 步骤");
+  const m = checksums.run.match(/sha256sum\s+([^>]+)>/);
+  assert.ok(m, "checksums 步骤应生成 SHA256SUMS 清单");
+  for (const arg of m[1].trim().split(/\s+/))
+    assert.ok(!arg.includes("/"), `校验和清单条目含路径前缀，gh 上传资产按 basename 拍平后校验必败：${arg}`);
+  const release = steps.find((s) => s.name === "create draft release with assets");
+  assert.ok(release, "release workflow 缺少资产上传步骤");
+  assert.ok(!release.run.includes("build/"), "上传资产应与校验和清单同名（扁平文件名），否则清单与资产名对不上");
+});
+
+test("release 构建腿不得钉在已 EOL 的运行时（Node 20 EOL 2026-04-30）", () => {
+  const workflow = yaml.load(readFileSync(join(ROOT, ".github", "workflows", "release.yml"), "utf-8"));
+  const setupNode = workflow.jobs.release.steps.find((s) => s.uses?.startsWith("actions/setup-node"));
+  assert.ok(setupNode, "release workflow 缺少 setup-node");
+  // String() 归一 + 主版本下限断言（复核 P3）：notEqual("20") 会被未加引号的数字 20、"20.x"、
+  // "lts/iron" 三种自然写法绕过。有意排除 lts/* 别名——发布腿版本必须显式可读。
+  const v = String(setupNode.with["node-version"]);
+  assert.match(v, /^(2[2-9]|[3-9]\d)(\.|$)/, `发布构建腿应为显式的 >=22 主版本，实际：${v}`);
+});
+
+test("mcpb INCLUDE 清单 ⊇ package.json files ∪ {manifest.json, package.json}（0.1.0 漏包 rejections.yaml 事故的结构锁）", () => {
+  const src = readFileSync(join(ROOT, "scripts", "build-mcpb.mjs"), "utf-8");
+  const m = src.match(/const INCLUDE = \[([^\]]*)\]/);
+  assert.ok(m, "build-mcpb.mjs 应有 INCLUDE 字面量清单");
+  const include = new Set(
+    m[1].split(",").map((s) => s.trim().replace(/^"|"$/g, "")).filter(Boolean),
+  );
+  const files = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8")).files.map((f) =>
+    f.replace(/\/$/, ""),
+  );
+  for (const f of [...files, "manifest.json", "package.json"])
+    assert.ok(include.has(f), `INCLUDE 缺少 ${f}——npm 包有而 .mcpb 没有，安装后运行时 ENOENT`);
+});
