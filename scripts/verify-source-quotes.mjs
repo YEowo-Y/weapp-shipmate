@@ -37,7 +37,7 @@ function main() {
   const { rules } = loadData({ includeDrafts: false });
   const snapshots = loadSnapshots();
   const results = verifyQuotes(rules, snapshots);
-  const { total, passed, failures } = summarize(results);
+  const { total, failures } = summarize(results);
 
   const exact = results.filter((r) => r.status === "exact").length;
   const ws = results.filter((r) => r.status === "whitespace-normalized").length;
