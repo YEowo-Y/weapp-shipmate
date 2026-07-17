@@ -136,3 +136,14 @@ test("mcpb INCLUDE 清单 ⊇ package.json files ∪ {manifest.json, package.jso
   for (const f of [...files, "manifest.json", "package.json"])
     assert.ok(include.has(f), `INCLUDE 缺少 ${f}——npm 包有而 .mcpb 没有，安装后运行时 ENOENT`);
 });
+
+test("release 必须创建 Draft 且不得自动公开：--draft 在场、prerelease/latest 标记不在场", () => {
+  // 2026-07-17 预推送复核 P3：--draft 是「演练」与「公开发布」之间唯一的闸，此前零测试覆盖——
+  // 删掉它则全量测试与六腿 CI 依旧全绿，而下一次 tag push 会直接对外发布（历轮审批均明确排除该动作）。
+  // 公开发布/prerelease 标记必须是人工在 Draft 上的显式决定，不可由 workflow 编辑静默获得。
+  const workflow = yaml.load(readFileSync(join(ROOT, ".github", "workflows", "release.yml"), "utf-8"));
+  const release = workflow.jobs.release.steps.find((s) => s.name === "create draft release with assets");
+  assert.ok(release, "release workflow 缺少资产上传步骤");
+  assert.match(release.run, /--draft(\s|$)/, "gh release create 必须带 --draft：发布是不可逆动作，须留人工闸");
+  assert.doesNotMatch(release.run, /--prerelease|--latest/, "prerelease/latest 标记须人工在 Draft 上决定，不得由 workflow 预设");
+});
