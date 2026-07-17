@@ -82,16 +82,52 @@ function* walk(dir, depth = 0, stats = null) {
 
 const API_RE = /\b(wx|uni|Taro|wepy)\.([a-zA-Z][a-zA-Z0-9]*)/g; // 跨端框架的 API 命名空间（Taro/wepy 等）
 const URL_RE = /(["'`])(https?:\/\/|wss?:\/\/)([^"'`\s/?#]+)/g;
+// 请求 API 调用前缀与"选项对象里的 url:"上下文——动态/明文正则的单一派生源。
+// V4 的教训：同一命名空间清单散落多处内联时，框架间口径会静默漂移（wx≡uni≡Taro≡wepy 是 data.mjs 的等价契约）。
 // 选项对象扫描片段容忍一层嵌套（header:{...} 前置是封装 request 工具的普遍写法，否则漏报）；
 // 空白必须并入否定 lookahead（写成 :\s*(?!["'`]) 时 \s* 可回溯为零宽，静态 `url: "..."` 会被误判为动态）。
-// V4：四个命名空间一视同仁（wx≡uni≡Taro≡wepy 是 data.mjs 的等价契约），此前漏 Taro/wepy——
-// Taro 项目的动态拼接请求不出"可能漏报域名"注记、wepy 明文请求无警告，框架间口径不一致。
-const REQUEST_DYNAMIC_RE =
-  /\b(?:wx|uni|Taro|wepy)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\burl\s*:(?!\s*["'`])/;
+// TS 泛型实参（Taro.request<Res>(cfg)）不得挡住匹配（复核 P2）：有界字符类、无嵌套，无回溯风险。
+const REQUEST_CALL_SRC = String.raw`\b(?:wx|uni|Taro|wepy)\.(?:request|connectSocket|uploadFile|downloadFile)(?:<[^<>(){}\n]{1,200}>)?`;
+const REQUEST_URL_KEY_SRC = REQUEST_CALL_SRC + String.raw`\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\burl\s*:`;
+// A1（2026-07-16 审计）：「引号/反引号开头即静态可提取」的前提不成立——判定信号（引号）与
+// 真实语义（host 是否静态可得）脱钩。此前 ①②③④ 四种高频形态静默漏报且补偿注记不触发：
+//   ① url: `https://${HOST}/...`   模板字面量插值（现代 uni-app/Taro 最常见写法）
+//   ② url: "https://" + host        引号字面量闭合后拼接
+//   ③ wx.request(cfg)               变量配置对象，url 完全不在调用点
+//   ④ wx.request({ url })           ES6 简写属性——按定义取同名变量，host 静态不可得
+// 运行副本分工（复核 P2：文案诱饵）：0/②/③/④ 跑在 blankStrings 置空副本上——字符串/正则
+// 字面量里提及 "wx.request(cfg)" 的日志/报错文案不是真实调用（置空后定界符保留、调用结构不变）；
+// 仅①必须留在原文上：blankStrings 会把模板字面量内容连同 ${ 一并置空。
+// 已知限制（有意取舍，均由测试或注记显性化）：
+//   - ② 形态里字面量 scheme 为 http:// 时 host 不在字面量内，insecureHosts 无从记录，
+//     由 dynamicRequest 的"人工核对全部出站域名"注记兜底；
+//   - ① 对"真实请求选项对象内的字符串文案恰好嵌着 url: `${...}`"的诱饵仍会误触（走廊极窄）；
+//   - 带引号的 url 键（{"url": getUrl()}）在置空副本上随字符串内容消失，动态族不可见——与
+//     INSECURE_REQUEST_RE（跑原文、容忍引号键）存在有意不对称；
+//   - 展开形态 wx.request({ ...cfg }) 不检测（展开后可能仍有静态 url: 覆盖，误报代价更高），
+//     已在 known-gaps 钉板显性化。
+const REQUEST_DYNAMIC_ON_BLANKED = [
+  // 0：url: 后不是字符串/模板字面量 → 变量/函数表达式
+  new RegExp(REQUEST_URL_KEY_SRC + String.raw`(?!\s*["'\x60])`),
+  // ②：引号字面量闭合后紧跟 + → 拼接（置空后 url: "" + h 形状保留）
+  new RegExp(REQUEST_URL_KEY_SRC + String.raw`\s*(["'])(?:(?!\1)[^\\\n]|\\.)*\1\s*\+`),
+  // ③：调用参数既不是对象字面量也不是空参 → url 不在调用点，域名/明文检测全部失明。
+  // 空白必须并入否定 lookahead（与 bare 形态同一教训）：写成 \s*(?![{)]) 时 \s* 可回溯少吃
+  // 一个空白，让 lookahead 落在空白字符上假成功——换行的对象字面量会被误判为动态。
+  new RegExp(REQUEST_CALL_SRC + String.raw`\s*\(\s*(?![\s{)])`),
+  // ④：选项对象里出现简写 url 属性（url 后跟 , 或 } 而非 :）
+  new RegExp(REQUEST_CALL_SRC + String.raw`\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\burl\s*[,}]`),
+];
+const REQUEST_DYNAMIC_ON_CODE = [
+  // ①：反引号字面量在闭合前出现 ${ → 插值，host 静态不可得
+  new RegExp(REQUEST_URL_KEY_SRC + String.raw`\s*\x60(?:[^\x60\\]|\\[\s\S])*?\$\{`),
+];
 // 明文请求：http/ws 作为 *请求 API 调用* 的 url: 参数（不是任意 url 字段、不是 <image src>/媒体数据）。
 // 微信只对 request/connectSocket/uploadFile/downloadFile 强制 https/wss；据此精确定位，避免对图片数据误报。
-const INSECURE_REQUEST_RE =
-  /\b(?:wx|uni|Taro|wepy)\.(?:request|connectSocket|uploadFile|downloadFile)\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\burl["'`]?\s*:\s*["'`](http|ws):\/\/([^"'`\s/?#]+)/g;
+const INSECURE_REQUEST_RE = new RegExp(
+  REQUEST_CALL_SRC + String.raw`\s*\(\s*\{(?:[^{}]|\{[^{}]*\})*?\burl["'\x60]?\s*:\s*["'\x60](http|ws):\/\/([^"'\x60\s/?#]+)`,
+  "g",
+);
 const PHONE_BTN_RE = /open-?type\s*=\s*["']getPhoneNumber["']/;
 // 模板级隐私入口（JS 调用扫不到，须从模板属性/组件标签识别）：
 const AVATAR_BTN_RE = /open-?type\s*=\s*["']chooseAvatar["']/; // 头像填写能力（收集头像 PII）
@@ -318,9 +354,11 @@ function extractFacts(file, text, rel, facts) {
   let code = stripUniConditional(text);
   if (TEMPLATE_EXT.has(extname(file))) code = code.replace(HTML_COMMENT_RE, "");
   code = stripComments(code, regexAware);
-  // API 提取用字符串置空副本：日志/文案里引用的 "wx.getLocation" 不是真实调用；
-  // 其余提取（URL/密钥/模板属性/配置解析）都依赖字符串内容，必须继续用原文本。
-  for (const m of blankStrings(code, regexAware).matchAll(API_RE)) facts.apis.add(`${m[1]}.${m[2]}`);
+  // API 提取与动态请求判定（除①外）用字符串置空副本：日志/文案里引用的 "wx.getLocation"、
+  // "wx.request(cfg)" 不是真实调用；其余提取（URL/密钥/模板属性/配置解析）都依赖字符串内容，
+  // 必须继续用原文本。
+  const blanked = blankStrings(code, regexAware);
+  for (const m of blanked.matchAll(API_RE)) facts.apis.add(`${m[1]}.${m[2]}`);
   // R4：Taro 具名导入 → wx.* 等价事实（在字符串未置空的 code 上匹配，模块名是字符串字面量）。
   if (regexAware) {
     for (const m of code.matchAll(TARO_IMPORT_RE)) {
@@ -340,7 +378,12 @@ function extractFacts(file, text, rel, facts) {
     const host = normalizeHost(m[2]);
     if (isPlausibleHost(host)) facts.insecureHosts.add(host);
   }
-  if (REQUEST_DYNAMIC_RE.test(code)) facts.dynamicRequest = true;
+  if (
+    !facts.dynamicRequest &&
+    (REQUEST_DYNAMIC_ON_BLANKED.some((re) => re.test(blanked)) ||
+      REQUEST_DYNAMIC_ON_CODE.some((re) => re.test(code)))
+  )
+    facts.dynamicRequest = true;
   if (PHONE_BTN_RE.test(code)) facts.configKeys.add("button.open-type=getPhoneNumber");
   if (AVATAR_BTN_RE.test(code)) facts.configKeys.add("button.open-type=chooseAvatar");
   if (CAMERA_TAG_RE.test(code)) facts.configKeys.add("component.camera");
