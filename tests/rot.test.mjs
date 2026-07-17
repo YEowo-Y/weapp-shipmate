@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseISODate, ageInDays, staleness, uniqueUrls, classifyStatus } from "../src/rot.mjs";
+import { parseISODate, ageInDays, staleness, uniqueUrls, classifyStatus , classifyUrlHealth, isActionableHealth } from "../src/rot.mjs";
 
 // ── R2/FX-17 + R5（阶段4）：parseISODate 直测 + 坏日期显性化 ──
 test("parseISODate: 合法日期为 UTC 零点;非法/缺失得到 Invalid Date（NaN 时间戳）而非抛错", () => {
@@ -79,4 +79,56 @@ test("staleness: 未来 last_verified（超 1 天时区容差）标 invalid+stal
   assert.equal(st[1].invalid, false, "±1 天时区偏差不误伤");
   assert.equal(st[1].stale, false);
   assert.equal(st[2].invalid, true);
+});
+
+// —— official_url 落地页判定（2026-07-17 审计：只测存活必然漏报）——
+test("classifyUrlHealth: 落地页同路径且 2xx 判 ok", () => {
+  assert.equal(
+    classifyUrlHealth({ status: 200, requestedUrl: "https://a.com/doc/x.html", landedUrl: "https://a.com/doc/x.html" }),
+    "ok"
+  );
+});
+
+test("classifyUrlHealth: 查询串差异不算搬家（?from=… 是站点自加的回链参数）", () => {
+  assert.equal(
+    classifyUrlHealth({ status: 200, requestedUrl: "https://a.com/doc/x", landedUrl: "https://a.com/doc/x?from=y" }),
+    "ok"
+  );
+});
+
+test("负向控制：301 到别的路径判 moved —— 实测 payment.requires-merchant 的来源已搬家", () => {
+  assert.equal(
+    classifyUrlHealth({
+      status: 200,
+      requestedUrl: "https://pay.weixin.qq.com/docs/merchant/products/mini-program-payment/introduction.html",
+      landedUrl: "https://pay.weixin.qq.com/doc/v3/merchant/4012791894?from=https%3A%2F%2Fpay.weixin.qq.com%2Fdocs",
+    }),
+    "moved"
+  );
+});
+
+test("负向控制：302 到 forceLogin 错误页判 inaccessible —— 实测 login.* 的来源匿名不可读", () => {
+  assert.equal(
+    classifyUrlHealth({
+      status: 200,
+      requestedUrl: "https://developers.weixin.qq.com/community/develop/doc/000ea46d08898015317b956c65fc09",
+      landedUrl:
+        "https://developers.weixin.qq.com/community/error/emergency?forceLogin=true&force_redirect_url=/community/develop/doc/000ea46d08898015317b956c65fc09",
+    }),
+    "inaccessible"
+  );
+});
+
+test("旧实现漏报的正是上面两例：跟随重定向后都是 200，classifyStatus 一律判 ok", () => {
+  // 这条测试把「为什么需要 classifyUrlHealth」钉死：单看状态码，两个坏 URL 都是健康的。
+  assert.equal(classifyStatus(200), "ok");
+  assert.equal(classifyStatus(200), "ok");
+});
+
+test("moved / inaccessible / dead 均须人工处置；inconclusive 不阻断", () => {
+  assert.equal(isActionableHealth("moved"), true);
+  assert.equal(isActionableHealth("inaccessible"), true);
+  assert.equal(isActionableHealth("dead"), true);
+  assert.equal(isActionableHealth("inconclusive"), false);
+  assert.equal(isActionableHealth("ok"), false);
 });
