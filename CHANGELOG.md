@@ -5,6 +5,31 @@
 
 ## [Unreleased]
 
+> 2026-07-17 规则内容实证核验（63 条规则 × 官方页面逐字比对，继以 16 组 claim-support 审计与三镜头对抗证伪）。
+> 这是首次审「实质」而非「机制」：既有门禁只验 schema 合法、URL 存活、与标注语料一致，
+> 从未验过引文是否真的逐字、以及引文是否真的支撑规则所作的断言。
+
+### Added
+
+- `npm run verify:quotes` 离线逐字门禁（已进 PR CI）：每条非 draft 规则的 `source_quote` 必须是其 `official_url` 归档快照的连续子串。这是 `GOVERNANCE.md` 来源核验准则 1（逐字、不得改写/概括/翻译/跨段拼接）**第一次被代码执行**——此前该硬标准只写在文档里，因而漂移无声。归一化只折叠空白（容忍表格单元格/列表换行的渲染差异，实测 6 例），不动标点与字词（punctuation 差异正是要抓的对象）。
+- `corpus/source-snapshots/`：11 个 `official_url` 的官方正文归档 + `npm run snapshot:sources` 刷新脚本。抓取（联网、会失败、会被限流）与判定（纯函数、确定性）分离，使门禁零网络、可进每个 PR 而不依赖微信站点可用性。`corpus/` 不在 `package.json files` 与 MCPB `INCLUDE` 内，不进用户分发物。
+- rot 来源可达性判定 `classifyUrlHealth`：2xx 之外再看**落地 URL**——命中登录墙/错误页模式判 `inaccessible`，`origin+pathname` 与请求不符判 `moved`。
+
+### Fixed
+
+- **`review.function-matches-intro` 曾让用户删掉合规功能**（误报，high）：`reject.html` 3.1.1 整行为「小程序所实际提供的功能点，需与小程序的简介一致。示例：功能包括但不限于简介中提炼的功能点；」，旧引文恰在句号处截断，丢掉了后半句。原文确立的是**单向下界**（简介提炼的功能点须都实现），规则却据此写出「简介里没写的功能别上」这一原文明确容许其反面的**上界禁令**。现补全引文并把 `requires` 收回下界。
+- **`login.after-experience` 对「体验范围特定」小程序误报 blocker**（误报，high）：官方页把小程序二分为「体验范围开放」与「体验范围特定」并给出方向相反的整改建议，规则引用的只是「开放」分支原文，却无条件适用。对学校/员工/社保卡信息系统等「特定」小程序，官方**明文允许**首页即要求授权（另需使用范围说明与取消登录按钮）。现把适用分支写进 `title`/`requires`，并如实说明「特定」分支的另一套要求。
+- **`privacy.upp-required` 把插件的审核门槛套给了小程序**（越界，high）：「隐私说明须审核通过才可提交版本」出自该页「二、插件用户隐私保护说明填写」节；小程序节说的是平台默认拉取现网协议、有出入或为空「则在提审时会提醒开发者进行更新」，并无此前置。`why` 中「会导致接口不可用」的因果由 `PrivacyAuthorize.html` 建立、本页从未建立，一并移除。
+- **两条 `source_quote` 系跨段拼接**（违反准则 1）：`domain.request-whitelist` 把 `network.html` 两个不同章节的句子逆序焊接并补入「；」；`privacy.getUserProfile` 把 `user-privacy/` 首段与 §1.2 拼接并压缩改写。两串在页面上均不连续存在。现各改引一句连续原文。
+- **`content.no-illegal` 的引文末位标点被改写**（违反准则 1）：官方原文以全角冒号收尾（其后接 6.1.1~6.1.5 违规类型清单），引文写成句号。值得留档的是它为何能活到今天——该规则在 2026-07-16 批次一中被 LLM 代理判为「逐字核验 INTACT」并据此刷新 `last_verified`：代理做的是语义匹配（99% 像即判相同），不是字符匹配。这正是把「逐字」交给脚本而非人或代理判定的直接理由。
+- **rot 对失效来源必然漏报**：旧实现 `redirect: "follow"` + 任意 2xx 判 `ok`。实测两例（现由负向控制钉住）：`login.*` 引用的社区页 302 → `/community/error/emergency?forceLogin=true` 强制登录错误页 → 200 → 判 `ok`，即**用户点开 `official_url` 读不到被引用的原文**；`payment.requires-merchant` 引用的支付文档 301 → 新规范地址 → 200 → 判 `ok`。加固后实跑 `--links` 另发现审计范围外的第三例：`flow:registration` / `flow:certification` 引用的社区文章同样落在 forceLogin 错误页。
+
+### 已知未处置（记录在案，不在本轮范围）
+
+- 另有 14 条 medium/low 规则 claim-support 缺陷与 9 条拒因映射缺陷经对抗复核存活，未在本轮修复。
+- 三个 `official_url` 需人工决策：两个社区来源匿名不可达（且为 2020 年知识库贴、页面自带「可能已过期、失效」免责声明，而 `login.*` 标 `confidence: high`——按准则 3/4，社区精选属「准官方」而非 primary，该 confidence 是否成立待维护者裁定）；支付来源已搬家，是否跟随更新 `official_url` 待定。
+- 拒因 alias 按双向子串匹配且中文不分词（`src/explain.mjs:28`），短 alias（如「广告」「未经授权」）易误命中，无最低分阈值。
+
 ## [0.2.0-rc.3] - 2026-07-17
 
 > 2026-07-16 全仓审计批次一。`0.2.0-rc.2` 的 Draft Release 未发布且不含本节修复；本 RC 取代它作为当前候选，rc.2 的 tag 与 Draft 保持原样不动。
