@@ -27,7 +27,9 @@ export function staleness(rules, { today, staleDays = 180 }) {
     const ageDays = ageInDays(r.last_verified, today);
     // R5（阶段4）：缺失/非法 last_verified 产生 NaN，而 NaN > staleDays === false——
     // 坏日期的规则会被报成"新鲜"，恰好逃过唯一为它设的监控。显性标 invalid 并按 stale 处理。
-    const invalid = Number.isNaN(ageDays);
+    // 2026-07-16 审计：未来日期同样不可信——年份手误（如 2027 写成 2026 系列外的一条）会让
+    // 规则被报"新鲜"一年以上。容差 -1 天：核验者时区可领先 CI 时区最多一天，不误伤当日核验。
+    const invalid = Number.isNaN(ageDays) || ageDays < -1;
     return {
       id: r.id,
       file: r._file || null,
