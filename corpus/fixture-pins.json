@@ -16,6 +16,20 @@
       ]
     },
     {
+      "fixture": "dynamic-url",
+      "subject": "personal",
+      "rules": [
+        "domain.request-whitelist"
+      ]
+    },
+    {
+      "fixture": "dynamic-url",
+      "subject": "none",
+      "rules": [
+        "domain.request-whitelist"
+      ]
+    },
+    {
       "fixture": "edge-cases",
       "subject": "personal",
       "rules": [

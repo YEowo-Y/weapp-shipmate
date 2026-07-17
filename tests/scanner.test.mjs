@@ -368,3 +368,102 @@ test("app.json 尾逗号（JSONC 常态）不再丢失隐私声明", () => {
     `尾逗号 app.json 的声明应被容错解析：${JSON.stringify(r.configKeys)}`,
   );
 });
+
+// ── A1（2026-07-16 审计）：动态 URL 静默漏报走廊——"引号即静态"前提对三种高频形态全盲 ──
+const DYN = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "dynamic-url");
+const mkFacts = () => ({
+  apis: new Set(), domains: new Set(), configKeys: new Set(), secretHints: new Set(),
+  insecureHosts: new Set(), configErrors: [], dynamicRequest: false,
+});
+
+test("A1①: url 为含插值的模板字面量 → dynamicRequest（反引号开头不等于静态可提取）", () => {
+  const f = mkFacts();
+  _extractFacts("a.js", "wx.request({ url: `https://${HOST}/api` });", "a.js", f);
+  assert.equal(f.dynamicRequest, true, "插值模板字面量的 host 静态不可得，必须触发动态标记");
+  assert.equal(f.domains.size, 0, "占位 host 不得进域名清单");
+});
+
+test("A1②: url 为引号字面量 + 拼接 → dynamicRequest（scheme 字面量、host 在变量里）", () => {
+  const f = mkFacts();
+  _extractFacts("a.js", 'uni.connectSocket({ url: "wss://" + wsHost + "/live" });', "a.js", f);
+  assert.equal(f.dynamicRequest, true, "引号开头但闭合后拼接，host 静态不可得");
+  assert.equal(f.domains.size, 0);
+});
+
+test("A1③: 请求参数为变量而非对象字面量 → dynamicRequest（url 完全不在调用点）", () => {
+  const f = mkFacts();
+  _extractFacts("a.js", "Taro.uploadFile(cfg);", "a.js", f);
+  assert.equal(f.dynamicRequest, true, "变量配置对象的 url 静态不可见");
+});
+
+test("A1 防过杀: 无插值模板字面量与纯静态 url 不判动态，host 正常提取", () => {
+  const f = mkFacts();
+  _extractFacts("a.js", "wx.request({ url: `https://t.example.com/x` });\nuni.request({ url: 'https://s.example.com/y' });", "a.js", f);
+  assert.equal(f.dynamicRequest, false, "静态 URL（含无插值模板字面量）不是动态拼接");
+  assert.ok(f.domains.has("t.example.com") && f.domains.has("s.example.com"));
+});
+
+test("A1 防过杀: 空参调用与换行的对象字面量不判动态", () => {
+  const f = mkFacts();
+  _extractFacts("a.js", "wx.request();\nwx.request(\n  { url: 'https://a.example.com/c' }\n);", "a.js", f);
+  assert.equal(f.dynamicRequest, false);
+});
+
+test("dynamic-url 夹具：三形态全部触发 dynamicRequest，静态模板域名正常提取", () => {
+  const r = scanProject(DYN);
+  assert.equal(r.dynamicRequest, true);
+  assert.deepEqual(r.domains, ["static-template.example.com"], "防过杀反例的 host 必须在、占位 host 必须不在");
+  for (const a of ["wx.request", "uni.connectSocket", "Taro.uploadFile"])
+    assert.ok(r.apis.includes(a), `请求 API 事实应提取：${a}`);
+  assert.equal(r.insecureHosts.length, 0, "wss:// 是加密协议，拼接形态不得误判明文");
+});
+
+test("uni-app 夹具：连接 URL 为模板插值 → dynamicRequest 必须为 true（走廊回归锁）", () => {
+  assert.equal(scanProject(UNI).dynamicRequest, true, "修复前此夹具的 wss://${wsHost} 静默不触发任何警示");
+});
+
+test("已知限制钉板：解构/下标/别名调用当前不可见——本断言变红说明能力已扩展，须同步升级 labels 为 hit 锚点", () => {
+  const r = scanProject(DYN);
+  for (const a of ["wx.getLocation", "wx.getClipboardData", "wx.chooseImage"])
+    assert.ok(!r.apis.includes(a), `${a} 意外可见：请把 known-gaps.js 对应形态升级为 labels.json hit 锚点并更新本测试`);
+});
+
+// ── A1 复核修正（2026-07-16 独立复审的 4 条 CONFIRMED finding 回归锁）──
+test("A1 防过杀: 字符串/正则字面量里提及请求 API 不触发 dynamicRequest（复核 P2：文案诱饵跑在置空副本上灭）", () => {
+  const f = mkFacts();
+  _extractFacts(
+    "a.js",
+    'const s = "wx.request(cfg)";\nconsole.warn("wx.request(url) is deprecated");\nconst re = /wx.request(y)/;\nwx.request({ desc: "url: \'a\' + b 已弃用", url: "https://real.example.com/x" });',
+    "a.js",
+    f,
+  );
+  assert.equal(f.dynamicRequest, false, "字符串/正则文案不是真实调用；选项对象内的字符串诱饵也不算");
+  assert.ok(f.domains.has("real.example.com"), "真实静态 url 照常提取");
+});
+
+test("A1④: ES6 简写 url 属性 → dynamicRequest（简写按定义取同名变量，host 静态不可得）", () => {
+  const f = mkFacts();
+  _extractFacts("a.js", 'const url = buildUrl();\nwx.request({ url, method: "GET" });', "a.js", f);
+  assert.equal(f.dynamicRequest, true, "{ url } 简写是现代封装请求的高频写法，修复前完全静默");
+});
+
+test("A1④ 防过杀: 相似标识符（curl/urls）与静态 url: 不触发简写分支", () => {
+  const f = mkFacts();
+  _extractFacts("a.js", 'wx.request({ curl });\nwx.request({ urls: x, url: "https://s.example.com/x" });', "a.js", f);
+  assert.equal(f.dynamicRequest, false);
+});
+
+test("A1: TS 泛型实参不挡动态判定（Taro.request<Res>(cfg)，复核 P2）", () => {
+  const f1 = mkFacts();
+  _extractFacts("a.ts", "Taro.request<Res>(cfg);", "a.ts", f1);
+  assert.equal(f1.dynamicRequest, true, "泛型段后的变量配置对象（形态③）");
+  const f2 = mkFacts();
+  _extractFacts("a.ts", "Taro.uploadFile<UploadRes>({ url: `https://${h}/up` });", "a.ts", f2);
+  assert.equal(f2.dynamicRequest, true, "泛型段后的模板插值（形态①）");
+});
+
+test("已知限制钉板：展开形态 wx.request({ ...cfg }) 不触发动态判定——能力扩展后同步升级本断言与 known-gaps.js", () => {
+  const f = mkFacts();
+  _extractFacts("a.js", "wx.request({ ...cfg });", "a.js", f);
+  assert.equal(f.dynamicRequest, false, "展开后可能仍有静态 url: 覆盖，检测它的误报代价更高——有意不检测");
+});

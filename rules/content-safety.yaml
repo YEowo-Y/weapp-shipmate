@@ -47,5 +47,5 @@ rules:
     why: "发布国家法律法规禁止的内容会被直接拒审 / 封禁，并涉法律责任"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "微信小程序不得发布、传送、传播、储存国家法律法规禁止的以下信息内容，否则视为违规。"
-    last_verified: "2026-06-23"
+    last_verified: "2026-07-16"
     manual_required: true

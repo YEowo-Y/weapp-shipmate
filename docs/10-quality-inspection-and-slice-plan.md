@@ -56,7 +56,7 @@
 | FX-03 | ✅已修(S2;2026-06-22) | med | docs/04 历史计数快照曾与当时权威计数冲突 | docs/04:5,7,10 | 保留带日期快照;顶部声明当前计数以 `npm run validate` / `npm run coverage` 实测为准 |
 | FX-07 | ✅已修(S2;2026-07-13 再对账) | med | CHANGELOG 当前发布候选与最新公开版的版本口径已分开 | CHANGELOG:4 / package.json / manifest.json / package-lock.json | 当前仓库四个版本字段均为 `0.2.0-rc.2`;最新公开版明确为 `v0.1.0` |
 | FX-10 | ✅已修(S6执行,2026-07-05) | med | 性能基线门禁无实现 | tests/perf.test.mjs | 1000 文件 <3s 本机/8s CI、heap 增量 <200MB,已实测通过 |
-| FX-11 | ✅已修(S1;2026-06-22) | med | **准确性工程地基已落地**(labels + accuracy 门禁 + fixture pins) | corpus/labels.json / corpus/fixture-pins.json / scripts/accuracy.mjs / tests/accuracy.test.mjs | 当前标注集 86 条:TP=54 / FP=0 / FN=0;precision=recall=1.000,漂移即 fail |
+| FX-11 | ✅已修(S1;2026-06-22) | med | **准确性工程地基已落地**(labels + accuracy 门禁 + fixture pins) | corpus/labels.json / corpus/fixture-pins.json / scripts/accuracy.mjs / tests/accuracy.test.mjs | 当前标注集 89 条(2026-07-17):TP=55 / FP=0 / FN=0;precision=recall=1.000,漂移即 fail |
 | FX-12 | ✅已修(S4执行,2026-07-05) | low | scanner walk 跟随符号链接可读所选目录外文件 | src/scanner.mjs walk（`isSymbolicLink()` 跳过） | 不跟符号链接/junction,软链越界单测已覆盖 |
 | FX-13 | ✅已修(强化战役;2026-07-10) | low | `--blockers-only` 的条目、摘要与派生注记已统一按过滤后集合计算 | src/cli.mjs / tests/cli.test.mjs / tests/e2e.test.mjs | `items` 与 `selfCheck` 都只留 blocker;摘要 / notes 不泄漏过滤前计数或非阻断自查项 |
 | FX-14 | ✅已修(2026-07-02) | low | 扫 0 文件给虚假安心 | check.mjs:42 / report.mjs:82 | notes 含"未扫描到源码,请确认项目根" |

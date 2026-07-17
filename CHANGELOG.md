@@ -5,6 +5,25 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 动态 URL 静默漏报走廊（2026-07-16 审计 A1 + 独立复审修正）：`url:` 为模板字面量插值（`` `https://${HOST}/...` ``）、引号字面量拼接（`"https://" + host`）、变量配置对象（`wx.request(cfg)`）、ES6 简写属性（`wx.request({ url })`）四种高频形态此前既不提取域名也不触发「可能漏报域名」注记；现四者均置 `dynamicRequest` 并出注记与规则级 `dynamic_note`，TS 泛型实参（`Taro.request<Res>(cfg)`）不再挡住判定。除模板插值外，动态判定改在字符串置空副本上运行——日志/报错文案里提及 `wx.request(cfg)` 不再误触全局注记。无插值模板字面量仍按静态 URL 正常提取 host。新增 `fixtures/dynamic-url` 夹具与 3 条标注（黄金基线 54→55 TP）；解构/下标/别名/展开（`{ ...cfg }`）等仍不可见的调用形态以显式断言钉为已知限制。
+- `scripts/accuracy.mjs` 与 `scripts/coverage.mjs` 的通过判据加入 `FN === 0`：此前 54 个 hit 锚点全部漏报时 `precision` 按定义为 1，两脚本列完漏报清单后仍打 ✅ 退出 0。
+- 三个 schema 的 `last_verified` 由正则 pattern 改为 `format: "date"`（校验真实日历日期）：`2026-02-30` 此前通过校验并被 V8 静默滚成 3 月 2 日再进入 rot 时效计算。
+- rot 时效监控现把未来日期（超 1 天时区容差）判为 `invalid` 并按 stale 处理：此前 `last_verified` 年份手误会让规则被报「新鲜」一年以上，完全逃逸唯一为它设的监控。
+- draft 门禁旁路上锁：`validate` 现拒绝非 draft 拒因引用 draft 规则——`explain` 以 `includeDrafts:true` 解析规则链接，此前「draft 门禁在 rejections 层把关」只是注释里的口头约定，规则一旦降级为 draft 而拒因仍引用，未核验内容会进默认输出且 CI 全绿。
+- release 校验和清单改以扁平资产名生成（`.mcpb` 先复制到工作目录再计算）：此前清单内嵌 `build/` 路径前缀，而 GitHub 上传资产按 basename 拍平，下载者 `sha256sum -c SHA256SUMS.txt` 对 `.mcpb` 恒报 No such file——校验和是未签名包唯一的完整性通道。
+
+### Added
+
+- `.mcpb` 打包冒烟从「initialize + tools/list」升级为附加三次真实 `tools/call`（check/guide/explain），驱动 rules/flow/rejections 三份惰性加载数据的实际读取——0.1.0「打包漏 `rejections.yaml`」事故类缺陷不再能穿透冒烟；并新增结构锁测试断言打包 INCLUDE 清单 ⊇ `package.json` files。
+- 10 条引用《平台运营规范》首页的规则完成官方原文实证抽查（2026-07-16）：source_quote 全部逐字仍在（含条款编号 3.9/3.11/4.2/5.13/5.20/5.35/6.1/12.6.4/15.3.5/15.3.9），`last_verified` 相应刷新。
+
+### Changed
+
+- CI 矩阵新增 Node 24（Active LTS；`engines: >=20` 声明的支持范围此前对 24 零覆盖），release 构建腿由已 EOL 的 Node 20（2026-04-30）升至 22，CI 的 mcpb 打包冒烟腿与 `.nvmrc` 同步 22。
+- README 推荐安装路径由跟随 main HEAD 改为锚定发布候选 tag，恢复「安装物 = 过闸版本」的语义。
+
 ## [0.2.0-rc.2] - 2026-07-13
 
 ### Fixed

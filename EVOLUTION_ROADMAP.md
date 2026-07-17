@@ -1,6 +1,6 @@
 # EVOLUTION_ROADMAP — 可信后续演进路线
 
-> 更新：2026-07-13（America/New_York）。
+> 更新：2026-07-17（Asia/Shanghai）。
 > 当前战役的批准范围、阶段提交、验证结果和恢复入口见 `STRENGTHENING_PLAN.md`；本文件只记录尚未实施的后续候选，不把设想写成承诺。
 > 时间口径：短期不超过 1 个月；中期为 1–3 个月；长期超过 3 个月。任何项目只有在其触发条件成立、重新越过相应审批边界后才进入实施。
 
@@ -8,7 +8,7 @@
 
 - 【事实】最新公开 GitHub Release 是 `v0.1.0`；既有 `v0.2.0-rc.1` 仍是未发布 Draft 且不得移动或复用。仓库现以 `0.2.0-rc.2` 作为新的发布候选；本轮只授权把它推进到已核对资产的未发布 Draft，实际 refs、workflow 与资产证据以 `STRENGTHENING_PLAN.md` 为准。npm registry 仍不能声称已发布或双渠道可用。
 - 【事实】当前数据基线为 63 条规则、8 个流程阶段；`registration`、`certification`、`release` 三阶段各为 0 条规则。规则数量以 `npm run validate` 的当前输出为准，不在路线图中推演未来数量。
-- 【事实】当前验证基线为 `npm test` 191/191、86 个 accuracy labels、TP 54 / FP 0 / FN 0、dogfood 11 个固定样本、rot 97 个载体。accuracy 只证明已标注语料，不外推为全域准确率。
+- 【事实】当前验证基线为 `npm test` 214/214、89 个 accuracy labels、TP 55 / FP 0 / FN 0、dogfood 11 个固定样本、rot 97 个载体（2026-07-17 本地复验；accuracy 通过判据自此含 FN=0）。accuracy 只证明已标注语料，不外推为全域准确率。
 - 【事实】本轮已在本地强化四类契约：输出的 subject/聚焦过滤/阶段渲染一致性；MCP 请求校验与 Markdown 文本净化；扫描目录项预算；release tag 与 package/manifest/lock 版本一致性及 lint 工作流契约。
 - 【事实】扫描预算现在覆盖实际遇到的全部 `Dirent`，固定 1024-entry、预算 64 场景的中位耗时由 75.941 ms 降至 3.478 ms 并正确截断；这只证明该有界场景，不代表通用吞吐提升。`readdirSync` 仍会一次物化单个目录，尚无单目录硬内存上限。
 - 【事实】核心强化提交已经 PR #4 与合并后的 main 四腿 CI 验证。`0.2.0-rc.2` 的 tag、release workflow、联网 `.mcpb` pack 与 Draft 资产只有在 `STRENGTHENING_PLAN.md` 的 Phase C 条件实际满足后才算取得证据；未发布 Draft 不等于公开发布，也没有签名或 npm registry 证据。

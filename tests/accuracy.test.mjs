@@ -2,7 +2,7 @@
 // 把 docs/08 §4.2 / docs/10 FX-11 落成 CI 回归：改规则/扫描器若让真实夹具的命中漂移，这里立刻 RED。
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadLabels, computeAccuracy, PRECISION_MIN } from "../scripts/accuracy.mjs";
+import { loadLabels, computeAccuracy, accuracyOk, PRECISION_MIN } from "../scripts/accuracy.mjs";
 
 test("准确性门禁：全局 precision ≥ 0.95、零误报 FP、无未知 ruleId", () => {
   const { labels, subjectDefault } = loadLabels();
@@ -20,7 +20,7 @@ test("准确性门禁：全局 precision ≥ 0.95、零误报 FP、无未知 rul
   assert.ok(guards >= 8, `no_hit FP-guard 锚点过少（${guards}）`);
 });
 
-test("准确性黄金快照：命中基线 54 TP / 0 FP / 0 FN（14 夹具，含主体维度，漂移须人工确认后更新）", () => {
+test("准确性黄金快照：命中基线 55 TP / 0 FP / 0 FN（15 夹具，含主体维度，漂移须人工确认后更新）", () => {
   const { labels, subjectDefault } = loadLabels();
   const { global } = computeAccuracy(labels, { subjectDefault });
   // 改了规则/扫描器导致真实夹具(原生/uni/Taro/mpx/wepy/edge/template/#ifdef/recall/missing-decl/sensor/broken-config + 企业主体 web-view)的命中变化 → 此断言 RED。
@@ -33,9 +33,24 @@ test("准确性黄金快照：命中基线 54 TP / 0 FP / 0 FN（14 夹具，含
   // 修复前 API_RE 只认命名空间形式，此类调用整类不可见。
   // 2026-07-05 基线 55→54：R5 chooseLocation 双触发收敛——sensor-apis 的 privacy.getLocation 命中
   // 纯来自双映射（该夹具不直调 getLocation 系，已 grep 核验），label 翻转为 no_hit FP 卫兵。
+  // 2026-07-16 基线 54→55：A1 动态 URL 走廊修复——新增 dynamic-url 夹具（模板插值/引号拼接/变量
+  // 配置对象三形态），domain.request-whitelist 命中 +1 hit；另带 2 个 no_hit FP 卫兵（wss 拼接
+  // 不判明文、占位 host 不进 IP 核验）。已逐条核验夹具源码。
   assert.deepEqual(
     { tp: global.tp, fp: global.fp, fn: global.fn },
-    { tp: 54, fp: 0, fn: 0 },
+    { tp: 55, fp: 0, fn: 0 },
     "命中基线漂移：核对是否引入回归，确认无误后更新基线与 labels"
   );
+});
+
+// ── 2026-07-16 审计 A2：通过判据必须含 FN——precision 在 tp+fp=0 时按定义=1，召回全线崩塌旧判据仍打 ✅ ──
+test("accuracyOk: 召回崩塌（fn>0）不得放行", () => {
+  assert.equal(accuracyOk({ tp: 0, fp: 0, fn: 54, precision: 1, recall: 0 }, []), false, "54 个锚点全漏报时 precision=1，旧判据的绿灯即假绿");
+  assert.equal(accuracyOk({ tp: 54, fp: 0, fn: 1, precision: 1, recall: 0.98 }, []), false);
+});
+
+test("accuracyOk: 误报、未知 ruleId、低 precision 各自拦截；干净基线放行", () => {
+  assert.equal(accuracyOk({ tp: 54, fp: 1, fn: 0, precision: 0.982, recall: 1 }, []), false);
+  assert.equal(accuracyOk({ tp: 54, fp: 0, fn: 0, precision: 1, recall: 1 }, ["未知 ruleId"]), false);
+  assert.equal(accuracyOk({ tp: 54, fp: 0, fn: 0, precision: 1, recall: 1 }, []), true);
 });

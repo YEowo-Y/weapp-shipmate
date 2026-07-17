@@ -101,6 +101,10 @@
 
     { "project": "fixtures/fp-guards",     "ruleId": "privacy.werun",                    "expect": "hit",    "note": "R3 FN 卫兵：同行正则字面量（/\"/ 与 /\\//）之后的 wx.getWeRunData 必须存活——修复前被毒化的字符串/注释跟踪静默吞掉" },
     { "project": "fixtures/fp-guards",     "ruleId": "privacy.chooseAddress",            "expect": "no_hit", "note": "R3 FP 卫兵：正则文本 /wx.chooseAddress/ 不是真实调用，不得命中" },
-    { "project": "fixtures/taro-app",      "ruleId": "privacy.werun",                    "expect": "hit",    "note": "R4：具名导入 getWeRunData（摇树惯用法）→ wx.getWeRunData——修复前 API_RE 只认命名空间形式，整类不可见" }
+    { "project": "fixtures/taro-app",      "ruleId": "privacy.werun",                    "expect": "hit",    "note": "R4：具名导入 getWeRunData（摇树惯用法）→ wx.getWeRunData——修复前 API_RE 只认命名空间形式，整类不可见" },
+
+    { "project": "fixtures/dynamic-url",   "ruleId": "domain.request-whitelist",         "expect": "hit",    "note": "A1：请求 API 命中锚点（夹具含三动态形态 + 一条静态反例域名；命中来自 match.api 事实提取）。dynamicRequest/dynamic_note 契约由 scanner.test 的 A1 系列与 check.test 锁定，本锚点不锁动态判定本身" },
+    { "project": "fixtures/dynamic-url",   "ruleId": "security.insecure-request",        "expect": "no_hit", "note": "FP-guard：wss:// 是加密协议，'wss://' + host 拼接形态不得误判明文请求" },
+    { "project": "fixtures/dynamic-url",   "ruleId": "domain.ip-or-localhost",           "expect": "no_hit", "note": "FP-guard：占位 host（\\${BASE_HOST} 等）不得被当成真实域名进入 IP/localhost 核验" }
   ]
 }

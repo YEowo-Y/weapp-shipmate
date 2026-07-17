@@ -100,11 +100,11 @@
 | 已交付工件 | 当前契约 |
 |---|---|
 | `corpus/labels.json` | 对 dogfood 语料做 `hit` / `no_hit` ground-truth 标注，保留主体维度；反例直接守 FP 红线 |
-| `scripts/accuracy.mjs` + `tests/accuracy.test.mjs` | 复用 `runCheck` 计算逐规则与全局 TP/FP/FN/precision/recall/F1；precision <0.95、出现 FP 或未知 ruleId 即失败 |
+| `scripts/accuracy.mjs` + `tests/accuracy.test.mjs` | 复用 `runCheck` 计算逐规则与全局 TP/FP/FN/precision/recall/F1；precision <0.95、出现 FP、出现 FN 或未知 ruleId 即失败 |
 | `corpus/fixture-pins.json` | 钉住各夹具完整命中集合，让 labels 未锚定规则的新增/消失也在 CI 可见 |
 | CI 门禁 | `npm test` 执行准确性与钉板测试，`npm run coverage` 再核对逐字来源完整性与 precision 红线 |
 
-当前可复现实测（2026-07-10）：`npm run accuracy` 覆盖 86 条人工标注，**TP=54 / FP=0 / FN=0，precision=recall=1.000**；这只证明已标注语料上的表现，不外推为所有真实项目零误报/零漏报。
+当前可复现实测（2026-07-17）：`npm run accuracy` 覆盖 89 条人工标注，**TP=55 / FP=0 / FN=0，precision=recall=1.000**；这只证明已标注语料上的表现，不外推为所有真实项目零误报/零漏报。
 
 仍属后续演进而非当前能力：
 

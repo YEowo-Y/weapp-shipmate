@@ -12,6 +12,15 @@ import Ajv from "ajv";
 import addFormats from "ajv-formats";
 import yaml from "js-yaml";
 
+/** 生产门禁的 Ajv 装配（allErrors + strict:false + ajv-formats）。导出供测试复用**同一装配**——
+ *  strict:false 下若丢失 addFormats，format:"date" 不会报错而是被静默忽略（unknown format ignored），
+ *  测试若自建实例会锁不住这条走廊（2026-07-16 复核）。 */
+export function createAjv() {
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  addFormats(ajv);
+  return ajv;
+}
+
 /** flow 图 linter：指向存在、唯一入口/终点、无环、链路全可达（抓分离环/游离节点）。 */
 export function lintFlowGraph(flow) {
   const errors = [];
@@ -51,24 +60,35 @@ export function lintFlowGraph(flow) {
 export function lintRules(docs, stageSet) {
   const errors = [];
   const ruleIds = new Set();
+  const draftRuleIds = new Set(); // draft 规则 id——供 lintRejections 拦截"非 draft 拒因引用 draft 规则"的旁路
   let total = 0;
   for (const { file, doc } of docs) {
     for (const r of doc?.rules ?? []) {
       total++;
       if (ruleIds.has(r.id)) errors.push(`重复规则 id: ${r.id} @ ${file}（后加载者会静默遮蔽先加载者）`);
       ruleIds.add(r.id);
+      if (r.draft) draftRuleIds.add(r.id);
       if (!stageSet.has(r.stage)) errors.push(`${file} 规则 ${r.id} 的 stage ${r.stage} 不在 flow 中`);
     }
   }
-  return { errors, ruleIds, total };
+  return { errors, ruleIds, draftRuleIds, total };
 }
 
-/** rejections 引用完整性：每个拒因映射的 rule id 必须真实存在。 */
-export function lintRejections(rejections, ruleIds) {
+/** rejections 引用完整性：每个拒因映射的 rule id 必须真实存在；非 draft 拒因不得引用 draft 规则。
+ *  后者是 2026-07-16 审计上锁项：explain 以 includeDrafts:true 解析规则链接（src/explain.mjs），
+ *  "draft 门禁在 rejections 层把关"此前只是注释里的口头约定——一旦某规则被降级为 draft 而拒因仍
+ *  引用它，未核验内容会进入默认 explain 输出且 CI 全绿，击穿"默认输出绝不含未核验断言"的治理承诺。 */
+export function lintRejections(rejections, ruleIds, draftRuleIds = new Set()) {
   const errors = [];
   for (const rj of rejections.rejections ?? []) {
-    for (const rid of rj.rules ?? [])
-      if (!ruleIds.has(rid)) errors.push(`rejections ${rj.id} 引用了不存在的规则 id: ${rid}`);
+    for (const rid of rj.rules ?? []) {
+      if (!ruleIds.has(rid)) {
+        errors.push(`rejections ${rj.id} 引用了不存在的规则 id: ${rid}`);
+        continue;
+      }
+      if (!rj.draft && draftRuleIds.has(rid))
+        errors.push(`rejections ${rj.id}（非 draft）引用了 draft 规则 ${rid}——未核验内容将进入默认 explain 输出`);
+    }
   }
   return errors;
 }
@@ -79,8 +99,7 @@ function main() {
   const ok = (m) => console.log("OK   " + m);
   const fail = (m) => errors.push(m);
 
-  const ajv = new Ajv({ allErrors: true, strict: false });
-  addFormats(ajv);
+  const ajv = createAjv();
 
   const readJson = (p) => JSON.parse(readFileSync(join(ROOT, p), "utf-8"));
   const readYaml = (p) => yaml.load(readFileSync(join(ROOT, p), "utf-8"));
@@ -118,7 +137,7 @@ function main() {
   const rejections = readYaml("rejections.yaml");
   if (validateRejections(rejections)) ok(`rejections.yaml (${rejections.rejections.length} 条)`);
   else fail("rejections.yaml schema: " + ajv.errorsText(validateRejections.errors));
-  const rjErrors = lintRejections(rejections, r.ruleIds);
+  const rjErrors = lintRejections(rejections, r.ruleIds, r.draftRuleIds);
   for (const e of rjErrors) fail(e);
   if (!rjErrors.length && rejections.rejections) ok("rejections 引用的规则 id 全部存在");
 

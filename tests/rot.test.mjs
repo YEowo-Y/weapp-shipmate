@@ -66,3 +66,17 @@ test("classifyStatus 区分 ok / dead / inconclusive", () => {
   assert.equal(classifyStatus(403), "inconclusive");
   assert.equal(classifyStatus(301), "inconclusive");
 });
+
+test("staleness: 未来 last_verified（超 1 天时区容差）标 invalid+stale——未来日期不得报'新鲜'逃逸监控", () => {
+  const rules = [
+    { id: "future", last_verified: "2030-01-01" },
+    { id: "skew-ok", last_verified: "2026-07-02" }, // "明天"：核验者时区领先 CI 时区的正常情形
+    { id: "skew-bad", last_verified: "2026-07-03" }, // 后天：超出时区可解释范围
+  ];
+  const st = staleness(rules, { today: "2026-07-01", staleDays: 180 });
+  assert.equal(st[0].invalid, true, "2030 年的核验日期不可信");
+  assert.equal(st[0].stale, true, "未来日期必须按 stale 处理，否则年份手误可逃逸监控一年以上");
+  assert.equal(st[1].invalid, false, "±1 天时区偏差不误伤");
+  assert.equal(st[1].stale, false);
+  assert.equal(st[2].invalid, true);
+});

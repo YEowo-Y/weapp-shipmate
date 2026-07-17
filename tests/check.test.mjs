@@ -152,3 +152,17 @@ test("uni-app: check 让 uni.* 调用命中 wx.* 规则（BS6），且 manifest 
     "getLocation 已在 manifest mp-weixin 声明，交叉核验不应误报",
   );
 });
+
+// ── A1（2026-07-16 审计）：动态 URL 三形态的报告层契约——注记与规则级 dynamic_note 必须出现 ──
+const DYN = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "dynamic-url");
+
+test("A1: dynamic-url 夹具出全局'可能漏报域名'注记 + 规则级 dynamic_note（修复前三形态全静默）", () => {
+  const r = runCheck(DYN, { subjectType: "personal" });
+  assert.ok(
+    r.notes.some((n) => n.includes("动态拼接")),
+    `全局动态 URL 注记必须出现，实际 notes：${JSON.stringify(r.notes)}`,
+  );
+  const item = r.items.find((i) => i.ruleId === "domain.request-whitelist");
+  assert.ok(item, "请求 API 规则应命中（wx.request/uni.connectSocket/Taro.uploadFile）");
+  assert.ok(item.note && item.note.includes("静态扫描可能漏报"), "规则级 dynamic_note 必须附着");
+});

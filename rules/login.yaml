@@ -76,5 +76,5 @@ rules:
     why: "拒绝授权后仍留存/使用用户头像昵称等数据违反运营规范"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "用户拒绝授权后，开发者有义务清除并不再继续使用该用户的微信头像、昵称等数据。"
-    last_verified: "2026-06-14"
+    last_verified: "2026-07-16"
     manual_required: true

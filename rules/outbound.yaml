@@ -17,7 +17,7 @@ rules:
     why: "未经授权展示/推荐其他小程序或公众号、或功能依赖其他应用会被拒审"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "未经允许或未经腾讯公司授权的情况下，也不得展示或者推荐其他微信小程序或公众号。"
-    last_verified: "2026-06-14"
+    last_verified: "2026-07-16"
     manual_required: true
 
   - id: outbound.no-induced-app-download
@@ -34,5 +34,5 @@ rules:
     why: "诱导跳转/下载 App、破坏功能流程完整性会被拒审"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "小程序提供的服务中，不得存在影响功能服务或业务流程完整性、顺畅性的诱导用户跳转/下载APP的行为。"
-    last_verified: "2026-06-14"
+    last_verified: "2026-07-16"
     manual_required: true

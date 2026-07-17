@@ -105,3 +105,46 @@ test("lintRules + lintRejections: 真实仓库数据零错误（重构等价锁�
   const rejections = yaml.load(readFileSync(join(ROOT, "rejections.yaml"), "utf-8"));
   assert.deepEqual(lintRejections(rejections, r.ruleIds), []);
 });
+
+// ── 2026-07-16 审计 A4：可信度承诺上锁 ──
+test("lintRejections: 非 draft 拒因引用 draft 规则被点名（draft 门禁旁路 CI 上锁）", () => {
+  const errors = lintRejections(
+    { rejections: [{ id: "reject.x", rules: ["draft.rule"] }] },
+    new Set(["draft.rule"]),
+    new Set(["draft.rule"]),
+  );
+  assert.equal(errors.length, 1, "explain 以 includeDrafts:true 解析，未核验内容将进默认输出——必须在 validate 层拦截");
+  assert.match(errors[0], /draft/);
+});
+
+test("lintRejections: draft 拒因允许引用 draft 规则（显式开启才加载，不进默认输出）", () => {
+  const errors = lintRejections(
+    { rejections: [{ id: "reject.x", draft: true, rules: ["draft.rule"] }] },
+    new Set(["draft.rule"]),
+    new Set(["draft.rule"]),
+  );
+  assert.deepEqual(errors, []);
+});
+
+test("schema: last_verified 必须是真实日历日期（2026-02-30 会被 V8 静默滚动成 3 月 2 日再进 rot）", async () => {
+  // 必须用生产门禁的同一 Ajv 装配（createAjv）：strict:false 下丢失 addFormats 不会报错而是
+  // 静默放行 format:"date"——测试自建实例会在真实门禁失效时依然全绿（2026-07-16 复核）。
+  const { createAjv } = await import("../scripts/validate.mjs");
+  const ajv = createAjv();
+  const schema = JSON.parse(readFileSync(join(ROOT, "schemas", "rules.schema.json"), "utf-8"));
+  const validate = ajv.compile(schema);
+  const mkDoc = (lastVerified) => ({
+    schema_version: 1,
+    rules: [{
+      id: "privacy.dateProbe", title: "t", kind: "preflight", stage: "privacy",
+      subject_type: ["personal"], severity: "warning", confidence: "high",
+      match: { scanner: "static_api_call", api: ["wx.getLocation"] }, requires: ["x"], why: "w",
+      official_url: "https://example.com", source_quote: "q", last_verified: lastVerified,
+      manual_required: true,
+    }],
+  });
+  assert.equal(validate(mkDoc("2026-02-30")), false, "非法日历日期须拒（此前 pattern 只查形状）");
+  assert.equal(validate(mkDoc("2026-13-01")), false, "非法月份须拒");
+  assert.equal(validate(mkDoc("2024-02-29")), true, "真实闰日须过");
+  assert.equal(validate(mkDoc("2026-07-01")), true, "正常日期须过");
+});
