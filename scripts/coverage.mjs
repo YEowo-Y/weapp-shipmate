@@ -53,10 +53,14 @@ function main() {
 
   const verbatimOk = c.verbatim === c.rules;
   const precisionOk = c.precision >= PRECISION_MIN;
+  // A2 同款走廊（2026-07-16 复核）：precision 在 tp+fp=0 时按定义=1，召回全线崩塌时若不查 FN，
+  // 本脚本会照打 ✅——与 scripts/accuracy.mjs 的 accuracyOk 同口径补上 FN==0。
+  const fnOk = c.matrix.fn === 0;
   if (!verbatimOk) console.error(`\n❌ 红线告警：${c.rules - c.verbatim} 条默认规则缺逐字核验字段（覆盖跑赢了逐字核验）。`);
   if (!precisionOk) console.error(`❌ 红线告警：precision ${f3(c.precision)} < ${PRECISION_MIN}（覆盖跑赢了准确性）。`);
-  if (verbatimOk && precisionOk) console.log("\n✅ 红线：每条默认规则均逐字核验，且 precision ≥ 0.95——覆盖与准确性同速。");
-  process.exit(verbatimOk && precisionOk ? 0 : 1);
+  if (!fnOk) console.error(`❌ 红线告警：FN=${c.matrix.fn}（已标注锚点出现漏报——召回回归不允许绿灯放行）。`);
+  if (verbatimOk && precisionOk && fnOk) console.log("\n✅ 红线：每条默认规则均逐字核验，precision ≥ 0.95 且零漏报——覆盖与准确性同速。");
+  process.exit(verbatimOk && precisionOk && fnOk ? 0 : 1);
 }
 
 // 仅在直接运行时执行 main（被测试 import 时不执行）——原 `if (process.argv[1])` 恒真，
