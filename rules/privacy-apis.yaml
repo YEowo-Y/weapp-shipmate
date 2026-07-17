@@ -18,7 +18,7 @@ rules:
       - "在《小程序用户隐私保护指引》中声明：用户信息（昵称、头像）"
     why: "处理用户个人信息需在隐私指引声明；声明与接口调用不符或为空会在提审被拦截"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/"
-    source_quote: "小程序、插件中涉及处理用户个人信息的开发者，均需补充相应用户隐私保护指引；提审时若隐私接口调用情况与隐私协议内容有出入或为空，会被提醒更新。"
+    source_quote: "小程序、插件中涉及处理用户个人信息的开发者，均需补充相应用户隐私保护指引。"
     last_verified: "2026-06-13"
     manual_required: true
 
