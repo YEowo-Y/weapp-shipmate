@@ -2,7 +2,9 @@ name: validate-rules
 
 # 数据门禁 + 全量测试：main push / PR 校验 schema/flow 图/规则一致性，并跑当前全量 node:test 套件
 # （含准确性金快照、夹具钉板、覆盖率红线）。
-# E3：矩阵覆盖 Windows（目标用户主平台，扫描器大量路径处理）与 Node 20/22。
+# E3：矩阵覆盖 Windows（目标用户主平台，扫描器大量路径处理）与 Node 20/22/24——
+# engines 声明 >=20，零基础用户按官网默认装的是 Active LTS（24），必须有 CI 覆盖；
+# 20 已 EOL（2026-04-30）但仍在 engines 支持范围内，保留到 engines 底线上调为止。
 on:
   push:
     branches: [main]
@@ -18,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        node: ["20", "22"]
+        node: ["20", "22", "24"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -32,11 +34,12 @@ jobs:
       - run: npm test
       # 覆盖率红线（G3）：逐字核验完整性 + precision——脚本自带退出码 1 语义。
       - run: npm run coverage
-      # .mcpb 打包冒烟：暂存纯生产副本 + 启动 staged server 自检，防分发回归。
-      # 只跑一腿（ubuntu + node20）——它验的是打包清单完整性，与 OS/Node 版本无关。
+      # .mcpb 打包冒烟：暂存纯生产副本 + 启动 staged server 自检（含三次真实 tools/call），防分发回归。
+      # 只跑一腿（ubuntu + node22，与 release.yml 构建腿同版本互指）——它验的是打包清单完整性，
+      # 与 OS/Node 版本无关。矩阵未来剔除某版本时，此条件若失配会静默跳过，改动矩阵须同步检查这里。
       # NO_PACK 跳过需联网的 mcpb pack；真实 pack 由 release.yml 在打 tag 时执行。
       - name: mcpb package smoke
-        if: matrix.os == 'ubuntu-latest' && matrix.node == '20'
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '22'
         run: npm run build:mcpb
         env:
           WEAPP_SHIPMATE_NO_PACK: "1"
