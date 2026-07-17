@@ -61,9 +61,16 @@ export function classifyStatus(status) {
 }
 
 // 落地页若命中这些模式，说明请求虽然 200，但拿到的不是被引用的正文，而是登录墙/错误页。
-const INACCESSIBLE_PATTERNS = [/[?&]forceLogin=/i, /\/error\/emergency/i, /\/login\b/i];
+// 只匹配登录**墙**，不匹配 URL 里出现的 login 一词：微信自家的 wx.login 文档就住在
+// /miniprogram/dev/api/open-api/login/wx.login.html——用 /login\b 会把它误判为不可达，
+// 而 rules/login.yaml 恰是最可能引用它的文件（独立复核 P2 指出并实测复现）。
+const INACCESSIBLE_PATTERNS = [/[?&]forceLogin=/i, /\/error\/emergency/i, /\/login\/?$/i];
 
-/** 只比较 origin+pathname：查询串与 hash 的差异（如 ?from=…）不算搬家。 */
+/**
+ * 只比较 origin+pathname：查询串与 hash 的差异（如站点自加的 ?from=…）不算搬家。
+ * 已知取舍：因此查询串寻址的内容若改变（?id=1 → ?id=999）不会被判 moved。
+ * 本仓库 11 个 official_url 全为路径寻址，故该盲区当前不触发；若将来引用查询串寻址的来源，需重议。
+ */
 function pathKey(u) {
   try {
     const p = new URL(u);
