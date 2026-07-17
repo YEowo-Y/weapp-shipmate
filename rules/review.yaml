@@ -12,10 +12,10 @@ rules:
     severity: warning
     confidence: high
     requires:
-      - "确保小程序实际功能点与『简介』描述一致，简介里没写的功能别上，写了的功能要能用"
-    why: "功能与简介不一致是高频拒审原因之一"
+      - "确保『简介』中写明或可提炼的功能点在小程序中均已实现且可正常使用（官方示例明确『功能包括但不限于简介中提炼的功能点』，故实际功能多于简介所列本身不构成不一致）"
+    why: "简介中提炼的功能点未实现或不可用是高频拒审原因之一"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
-    source_quote: "小程序所实际提供的功能点，需与小程序的简介一致"
+    source_quote: "小程序所实际提供的功能点，需与小程序的简介一致。示例：功能包括但不限于简介中提炼的功能点"
     last_verified: "2026-06-14"
     manual_required: true
 
