@@ -16,5 +16,5 @@ rules:
     why: "未对不宜未成年人内容做处理会被拒审并涉法律风险"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "对可能涉及不宜未成年人接触的内容或服务予以提醒或处理，保护未成年人的身心健康和合法权益。"
-    last_verified: "2026-06-14"
+    last_verified: "2026-07-16"
     manual_required: true
