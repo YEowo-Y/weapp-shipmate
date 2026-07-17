@@ -32,6 +32,10 @@ jobs:
       # E5：静态错误门禁（eslint:recommended 级，风格不管）。
       - run: npm run lint
       - run: npm test
+      # 逐字红线：每条非 draft 规则的 source_quote 必须是其 official_url 归档快照的连续子串。
+      # 执行 GOVERNANCE.md 来源核验准则 1（不得改写 / 跨段拼接）。只读 corpus/source-snapshots/，
+      # 零网络——故可安全进 PR CI，不受微信站点可用性与限流影响。
+      - run: npm run verify:quotes
       # 覆盖率红线（G3）：逐字核验完整性 + precision——脚本自带退出码 1 语义。
       - run: npm run coverage
       # .mcpb 打包冒烟：暂存纯生产副本 + 启动 staged server 自检（含三次真实 tools/call），防分发回归。
