@@ -11,7 +11,7 @@
 
 ### Added
 
-- `npm run verify:quotes` 离线逐字门禁（已进 PR CI）：每条非 draft 规则的 `source_quote` 必须是其 `official_url` 归档快照的连续子串。这是 `GOVERNANCE.md` 来源核验准则 1（逐字、不得改写/概括/翻译/跨段拼接）**第一次被代码执行**——此前该硬标准只写在文档里，因而漂移无声。归一化只折叠空白（容忍表格单元格/列表换行的渲染差异，实测 6 例），不动标点与字词（punctuation 差异正是要抓的对象）。
+- `npm run verify:quotes` 离线逐字门禁（已进 PR CI）：每条非 draft 规则的 `source_quote` 必须是其 `official_url` 归档快照的连续子串。这是 `GOVERNANCE.md` 来源核验准则 1 **第一次被代码执行**——此前该硬标准只写在文档里，因而漂移无声。执行的是其中一个**子集**：改写（含标点）、概括、翻译、词序调换、词句增删一律必红；**纯粹顺序的跨段焊接抓不到**（归一化删除空白而非折叠，段落边界在比较时不存在），该缺口由 `tests/source-quotes.test.mjs` 的 known-gap 测试如实钉住。留着它是因为提取阶段无法区分 `</li>` 与 `</p>`（都落成换行），而跨列表项的引用是正当的（`category.finance-hint` 本就横跨两个 li），收紧会立刻制造假红。归一化只折叠空白与零宽字符（容忍表格单元格/列表换行的渲染差异，实测 6 例；官网正文夹带 ZWSP，两侧须同等清洗否则复制粘贴即假红），不动标点与字词（标点差异正是要抓的对象）。`loadSnapshots` 同时校验 `index.json` 记录的 sha256，使手工篡改快照去迁就引文从"静默通过"变为"显眼的双文件 diff"；对 `method: "manual"` 的快照（社区来源无法自动抓取），报告单列一行提示其快照本身未经自动核验。
 - `corpus/source-snapshots/`：11 个 `official_url` 的官方正文归档 + `npm run snapshot:sources` 刷新脚本。抓取（联网、会失败、会被限流）与判定（纯函数、确定性）分离，使门禁零网络、可进每个 PR 而不依赖微信站点可用性。`corpus/` 不在 `package.json files` 与 MCPB `INCLUDE` 内，不进用户分发物。
 - rot 来源可达性判定 `classifyUrlHealth`：2xx 之外再看**落地 URL**——命中登录墙/错误页模式判 `inaccessible`，`origin+pathname` 与请求不符判 `moved`。
 
