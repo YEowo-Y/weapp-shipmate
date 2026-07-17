@@ -132,3 +132,15 @@ test("moved / inaccessible / dead 均须人工处置；inconclusive 不阻断", 
   assert.equal(isActionableHealth("inconclusive"), false);
   assert.equal(isActionableHealth("ok"), false);
 });
+
+test("保绿侧：URL 里出现 login 一词不算登录墙 —— 微信自家 wx.login 文档就住在 /login/ 下", () => {
+  // 独立复核 P2：/login 会把这个健康的官方文档误判为 inaccessible，
+  // 而 rules/login.yaml 恰是最可能引用它的文件 —— 那会让 rot 对一个好来源报红。
+  const wxLogin = "https://developers.weixin.qq.com/miniprogram/dev/api/open-api/login/wx.login.html";
+  assert.equal(classifyUrlHealth({ status: 200, requestedUrl: wxLogin, landedUrl: wxLogin }), "ok");
+  // 而真正以 /login 结尾的落地页仍判不可达
+  assert.equal(
+    classifyUrlHealth({ status: 200, requestedUrl: "https://a.com/doc", landedUrl: "https://a.com/login" }),
+    "inaccessible"
+  );
+});
