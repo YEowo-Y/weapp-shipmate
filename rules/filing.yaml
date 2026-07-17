@@ -32,7 +32,7 @@ rules:
     why: "未及时变更或注销备案违反运营规范，可能导致警告、限制甚至强制注销"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "小程序名称变更、小程序负责人变更、小程序主体名称变更、小程序主体负责人变更、小程序或主体负责人联系方式变更时，都需要及时变更备案信息。"
-    last_verified: "2026-06-23"
+    last_verified: "2026-07-16"
     manual_required: true
 
   - id: filing.individual-id-materials
