@@ -1,10 +1,12 @@
 // tests/source-quotes.test.mjs —— 逐字门禁的契约测试。
-// 重点是负向控制：门禁必须对「跨段拼接」和「标点改写」变红，同时对「渲染空白差异」保持绿。
+// 重点是负向控制：门禁必须对「改写 / 词序调换 / 词句增删」变红，同时对「渲染空白差异」保持绿。
 // 这两侧都锁死，门禁才既抓得住真缺陷、又不制造假红。
+// 另有一条 known-gap 测试如实钉住它抓不到的东西（纯粹顺序的跨段焊接）——
+// 覆盖面必须由测试证明，不能由测试名宣称。
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { collapseWhitespace, classifyQuote, verifyQuotes, isPassing, summarize } from "../src/source-quotes.mjs";
+import { collapseWhitespace, classifyQuote, verifyQuotes, isPassing, summarize, stripProvenanceHeader } from "../src/source-quotes.mjs";
 import { loadData } from "../src/data.mjs";
 import { loadSnapshots } from "../scripts/verify-source-quotes.mjs";
 
@@ -26,17 +28,34 @@ test("classifyQuote：仅空白差异判 whitespace-normalized（表格单元格
   assert.equal(classifyQuote("（2选1）：1、《金融许可证》 2、《金融机构许可证》", "（2选1）：1、《金融许可证》\n2、《金融机构许可证》"), "whitespace-normalized");
 });
 
-test("负向控制：跨段拼接必须判 missing（GOVERNANCE 准则 1『不得跨段拼接』）", () => {
-  const page = [
-    "每个微信小程序需要事先设置通讯域名，小程序只可以跟指定的域名进行网络通信。",
-    "域名只支持 https 和 wss 协议；",
-    "服务器域名请在 「小程序后台-开发-开发设置-服务器域名」 中进行配置，配置时需要注意：",
-  ].join("\n");
-  // 把两段不同章节的句子逆序焊接、并补入「；」—— 各半句都在页面上，整串却不存在
-  const stitched = "服务器域名请在「小程序后台 - 开发 - 开发设置 - 服务器域名」中进行配置；小程序只可以跟指定的域名进行网络通信。";
-  assert.equal(classifyQuote(stitched, page), "missing");
-  // 而其中任一连续单句必须过 —— 证明判 missing 的原因是拼接本身，不是字词不符
-  assert.equal(classifyQuote("每个微信小程序需要事先设置通讯域名，小程序只可以跟指定的域名进行网络通信。", page), "exact");
+const NETWORK_PAGE = [
+  "每个微信小程序需要事先设置通讯域名，小程序只可以跟指定的域名进行网络通信。",
+  "域名只支持 https 和 wss 协议；",
+  "服务器域名请在 「小程序后台-开发-开发设置-服务器域名」 中进行配置，配置时需要注意：",
+].join("\n");
+
+test("负向控制：词序调换 + 补入分隔符必须判 missing（这正是 domain.request-whitelist 的旧引文）", () => {
+  // 注意本条**证明的是什么**：它红，是因为词序被调换且补入了「；」——不是因为跨段本身。
+  // 纯粹顺序的跨段焊接不在本门禁覆盖内，见下一条 known-gap 测试。
+  const rewritten = "服务器域名请在「小程序后台 - 开发 - 开发设置 - 服务器域名」中进行配置；小程序只可以跟指定的域名进行网络通信。";
+  assert.equal(classifyQuote(rewritten, NETWORK_PAGE), "missing");
+  // 对照：页面上任一连续单句必须过，证明上面判红的原因是引文被改动，而非字词不符
+  assert.equal(classifyQuote("每个微信小程序需要事先设置通讯域名，小程序只可以跟指定的域名进行网络通信。", NETWORK_PAGE), "exact");
+});
+
+test("已知缺口（如实钉住）：纯粹顺序的跨段焊接会判过，本门禁抓不到", () => {
+  // 归一化把空白**删除**而非折叠，故段落边界在比较时不复存在：
+  // 「段一末句 + 段二首句」不增不删不调序，归一化后恰好连续。
+  // GOVERNANCE 准则 1 管这叫跨段拼接，本门禁却放行。
+  //
+  // 这条测试存在的意义不是庆祝该行为，而是**不让这个缺口被遗忘或被误以为已覆盖**：
+  // 若将来有人让提取阶段区分段落边界与列表项，本条会变红，届时应改为断言 "missing"。
+  const pureStitch = "小程序只可以跟指定的域名进行网络通信。域名只支持 https 和 wss 协议；";
+  assert.equal(
+    classifyQuote(pureStitch, NETWORK_PAGE),
+    "whitespace-normalized",
+    "若此处变红，说明缺口已被堵上——请把本测试改为断言 missing 并更新 source-quotes.mjs 的覆盖面说明"
+  );
 });
 
 test("负向控制：末位标点改写必须判 missing（准则 1『不得改写』）", () => {
@@ -105,4 +124,13 @@ test("每条非 draft 规则的 official_url 都有归档快照", () => {
   const snapshots = loadSnapshots();
   const missing = [...new Set(rules.map((r) => r.official_url))].filter((u) => !snapshots[u]);
   assert.deepEqual(missing, [], "缺快照的来源无法离线核验，请先跑 npm run snapshot:sources");
+});
+
+test("stripProvenanceHeader 剥掉溯源头，使 sha256 不随抓取日期漂移、且元数据不进搜索空间", () => {
+  const raw = ["===== URL: https://x", "===== FETCHED: 2026-07-17", "", "正文第一行", "正文第二行"].join("\n");
+  assert.equal(stripProvenanceHeader(raw), "正文第一行\n正文第二行");
+  // 无溯源头时原样返回
+  assert.equal(stripProvenanceHeader("正文"), "正文");
+  // 溯源头里的字样不得被 source_quote 匹配到（否则引文可以"命中"我们自己写的元数据）
+  assert.ok(!stripProvenanceHeader(raw).includes("FETCHED"));
 });
