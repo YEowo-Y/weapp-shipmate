@@ -35,6 +35,11 @@ export function sha256(s) {
   return createHash("sha256").update(s, "utf8").digest("hex");
 }
 
+// 零宽字符（ZWSP / ZWNJ / ZWJ / BOM）：微信文档站正文里夹带这些，会让逐字子串匹配莫名落空。
+// 用码点集合剔除，而不是把它们当字面量写进正则——字面量既触发 no-irregular-whitespace，
+// 也在历次编辑中反复被转义/反转义弄坏（仓库已两次记录该坑）。
+const ZERO_WIDTH = new Set([0x200b, 0x200c, 0x200d, 0xfeff]);
+
 /** 从 VuePress 风格页面 HTML 中提取 <main class="page"> 正文纯文本。 */
 export function extractMainText(html) {
   let start = html.indexOf('<main class="page"');
@@ -54,7 +59,7 @@ export function extractMainText(html) {
     if (m.startsWith("&#")) return String.fromCodePoint(parseInt(m.slice(2, -1), 10));
     return m;
   });
-  body = body.replace(/[​‌‍﻿]/g, "");
+  body = [...body].filter((c) => !ZERO_WIDTH.has(c.codePointAt(0))).join("");
   return body
     .split("\n")
     .map((l) => l.replace(/[ \t]+/g, (s) => (s.includes("\t") ? "\t" : " ")).trim())
@@ -83,9 +88,7 @@ async function main() {
       continue;
     }
 
-    let html = null;
-    let status = 0;
-    let landed = url;
+    let html, status, landed;
     try {
       const res = await fetch(url, { redirect: "follow", headers: { "user-agent": "weapp-shipmate-snapshot" } });
       status = res.status;
