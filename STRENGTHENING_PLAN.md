@@ -2,10 +2,40 @@
 
 > 一条一更;已被仓库/台账记录的不重复;过时即删。
 > 建立:2026-07-04。证据来源:8 路并行深勘 + 高危项对抗复核 + 独立安全审计(共 11 个代理,~105 万 token)。
-> 当前状态:**complete（条件化）**（只有本文件所在提交通过 PR #6 current-head CI、PR 以 merge commit 合并、main CI 全绿、annotated `v0.2.0-rc.2` 精确指向该 merge、tag workflow 成功且 Draft 三资产/校验和复验通过时才生效；任一条件未满足时状态仍为 `executing`。公开发布仍未获授权）。
-> 2026-07-04 至 2026-07-05 的上一轮战役已完成；其基线、决策和提交记录保留在后文，作为历史证据而非当前恢复点。
+> 当前状态:`executing` —— 发布候选阶段 D（`v0.2.0-rc.3` 发布演练，2026-07-17）。
+> 阶段 C（rc.2）的"complete（条件化）"判定已按下方 §D 的诚实校正**撤回**：其 C5 判据不可能成立。
+> 2026-07-04 至 2026-07-05 的上一轮战役、阶段 A/B/C 均已完成或撤回，其基线、决策和提交记录保留在后文，作为历史证据而非当前恢复点。
 
-## 当前恢复入口：发布候选阶段 C（2026-07-13）
+## 当前恢复入口：发布候选阶段 D（2026-07-17）
+
+### 状态、批准范围与恢复检查
+
+- 状态：`executing`。执行中分支为 `claude/release-0.2.0-rc.3`；阶段起点为已验证的 `main@273913926a0a6ba8c764e5a5b675c399b362027f`（PR #7 的 merge commit，第一父 `4a800a2`、第二父 `25f7d6f`，其 push/main CI 六腿成功）。
+- 用户批准（2026-07-17 对话逐字："合并并演练"）：合并审计批次一 PR #7；铸造新发布身份 `0.2.0-rc.3` 并同步四个版本载体；把 Unreleased 归档为 `0.2.0-rc.3`；只校准直接受版本/发布事实影响的文档；跑本地发布门禁与独立只读复核；推送发布分支、建 PR、等当前 head 六腿 CI、以 merge commit 合并并保留分支；本地 `main` 仅 `--ff-only` 同步并等 main CI；在远端 `main` 的精确合并提交创建并推送 annotated `v0.2.0-rc.3`；等真实 release workflow；**下载 Draft 三资产并实测 `sha256sum -c`**（本阶段的核心验收，也是 rc.1/rc.2 演练缺失的一步）。
+- 明确排除：发布或公开 Draft Release；设置 prerelease 标记；npm publish；部署；修改、移动、删除或复用 `v0.2.0-rc.1` / `v0.2.0-rc.2` 及其 Draft Release；直接 push `main`；squash/rebase/amend/force-push/历史重写/删除分支；改产品逻辑、公共 API、数据模型、schema；新依赖或升级；桌面 Rust 产物；其他外部写入。
+- 为什么是 rc.3：`v0.2.0-rc.2` tag object `7575a341b82a96f85628bd0c6fd0c146333e8692`、peeled `4a800a24e261f8a606c4936e2081f0e7a6b90e85`（= 合并前 main）已存在，其 Draft Release 未发布。tag 是不可复用的发布身份，故新建 rc.3，rc.1/rc.2 原样不动。
+- 远端碰撞检查（2026-07-17 fetch 后实测）：`v0.2.0-rc.3` 的 tag、Release 与同名远端分支均不存在；`v0.2.0-rc.1`（tag object `c1fadbd8…`、peeled `95eb2a33…`）与 `v0.2.0-rc.2` 的 tag object、peeled commit 及各自 Draft 三资产均原样未动、`isDraft=true`/`publishedAt=null`。
+- 恢复检查：先核对当前分支、HEAD、status/diff 与本节记录；fetch 后确认远端 `main` 未漂移且 `v0.2.0-rc.3` tag/Release 仍不存在（**注意：rc.2 的 tag/Release 现在确实存在，这是既成事实，不是漂移**）。tag 前再次核对四个版本载体、`npm run release:check -- v0.2.0-rc.3`、main 六腿 CI、工作树干净。tag 推送后不得移动或复用；若 workflow 失败，保持 Draft/未发布状态并以新版本修复前进。
+
+### 阶段 D 与验收标准
+
+1. **D1 — 发布身份**：四个版本载体均为 `0.2.0-rc.3`；CHANGELOG 保留空 Unreleased 并新增 `[0.2.0-rc.3] - 2026-07-17` 节；README/docs 的安装锚点与版本口径一致；rc.1/rc.2 历史证据不被改写。
+2. **D2 — 本地门禁**：`npm run lint`、`npm test`（基线 214/214）、`npm run accuracy`（TP 55 / FP 0 / FN 0）、`npm run coverage`、`npm run dogfood`（11/11）、`npm run rot`、`WEAPP_SHIPMATE_NO_PACK=1 npm run build:mcpb`、`npm pack --dry-run`（`weapp-shipmate-0.2.0-rc.3.tgz`）、`npm audit --audit-level=high`（0 漏洞）、`git diff --check` 均通过；`npm run release:check -- v0.2.0-rc.3` 成功且 `v0.2.0-rc.2` 负控制按预期失败。
+3. **D3 — 预推送复核**：独立只读复核对照批准范围、diff 与门禁，无未处置 P1/P2。
+4. **D4 — PR 与合并**：Draft PR → 当前 head 六腿 CI（ubuntu/windows × Node 20/22/24）成功 → 转 Ready → merge commit 合并、保留分支；本地 `main` 仅 `--ff-only` 同步；push/main 六腿 CI 全绿。
+5. **D5 — tag 与演练验收**：annotated `v0.2.0-rc.3` 的 peeled commit 精确等于远端 `main` 合并提交；只推送该 tag；tag-triggered release workflow 成功；Draft Release 保持 `draft=true`/`publishedAt=null`、三项资产恰为 `weapp-shipmate-0.2.0-rc.3.tgz`、`weapp-shipmate.mcpb`、`SHA256SUMS.txt`；**下载三资产后 `sha256sum -c SHA256SUMS.txt` 实测全部 OK**，且两个二进制的 SHA-256 与 GitHub asset digest 一致。
+6. **D6 — 停止点**：停在未发布 Draft。公开 Release、prerelease 标记、npm publish 与部署仍需新的明确批准。
+
+### 诚实校正：撤回阶段 C（rc.2）的"complete（条件化）"判定
+
+- **事实**：本文件此前把阶段 C 标为 `complete（条件化）`，其条件之一 C5 为「下载后 SHA-256 与清单及 GitHub digest 一致」。2026-07-16 审计（finding A3）与本轮独立复核**分别独立证实**：`v0.2.0-rc.2` tag 所指版本的 `.github/workflows/release.yml` 以 `sha256sum weapp-shipmate-*.tgz build/weapp-shipmate.mcpb` 生成清单，而 `gh release create` 上传的资产名按 basename 拍平为 `weapp-shipmate.mcpb`。实测下载 rc.2 Draft 的 `SHA256SUMS.txt`，其第二行确为 `865bc4b…  build/weapp-shipmate.mcpb`——与资产名不匹配，`sha256sum -c` 对该条目必报 No such file。
+- **结论**：C5 判据在 rc.2 上**不可能通过**，因此「条件化 complete」是未挣得的绿灯。哈希值本身正确（与 GitHub digest 一致），错的是清单里的路径标签，使清单作为校验工件不可用。
+- **处置**（追加式，沿用 RC2-001 先例）：撤回阶段 C 的完成判定，不改写其已验证的提交 SHA、tag 或 Draft；rc.2 保持未发布 Draft 原样。校验和通道的修复已在审计批次一（PR #7，merge `2739139`）落地并由 `tests/release.test.mjs` 上锁，其端到端证据由本阶段 D5 取得。
+- **教训**（已写入 EVOLUTION_ROADMAP 兜底预案与本阶段验收）：rc.1/rc.2 两轮演练都验证了「流水线跑通」，却没有一步是「以下载者身份校验资产」——**门禁只覆盖到 CI 的最后一步，不等于覆盖到用户的第一步**。
+
+## 已撤回完成判定的发布候选阶段 C（2026-07-13）
+
+> 状态：完成判定已由上方 §D 的诚实校正撤回（C5 不可能成立）。以下内容保留为历史证据；其"当前阶段/下一动作/远端碰撞检查"均已失效，恢复请以上方阶段 D 为准。特别注意：本节 :17 声称「`v0.2.0-rc.2` tag、Release、同名远端分支与同 head PR 均不存在」——该断言在其写作时成立，现已为假（rc.2 tag 与 Draft 均已创建）。
 
 ### 状态、批准范围与恢复检查
 

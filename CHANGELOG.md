@@ -1,9 +1,13 @@
 # Changelog
 
 本项目变更记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
-版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。当前仓库发布候选版本为 `0.2.0-rc.2`，最新公开版为 `v0.1.0`；后续改动记录在 Unreleased，尚未发布到 npm registry。
+版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。当前仓库发布候选版本为 `0.2.0-rc.3`，最新公开版为 `v0.1.0`；后续改动记录在 Unreleased，尚未发布到 npm registry。
 
 ## [Unreleased]
+
+## [0.2.0-rc.3] - 2026-07-17
+
+> 2026-07-16 全仓审计批次一。`0.2.0-rc.2` 的 Draft Release 未发布且不含本节修复；本 RC 取代它作为当前候选，rc.2 的 tag 与 Draft 保持原样不动。
 
 ### Fixed
 
