@@ -16,7 +16,7 @@
 ## 给什么（统一物料，二选一）
 
 - **A（零安装）**：预先跑好的 `guide --subject personal --sensitive --domain` Markdown 输出 + `check` 真实项目报告样例，直接发文本。
-- **B（有包之后）**：`npm install -g github:YEowo-Y/weapp-shipmate#v0.2.0-rc.2`（锚定最新过闸 tag，与 README 安装口径一致）一行命令 + 让对方跑自己的项目。
+- **B（有包之后）**：`npm install -g github:YEowo-Y/weapp-shipmate#v0.2.0-rc.3`（锚定最新过闸 tag，与 README 安装口径一致）一行命令 + 让对方跑自己的项目。
 
 任务指令只一句：**「读完后，用你自己的话说：你的下一步是做什么？」** 不解释、不引导、不补充上下文（测的就是导航自解释能力）。
 
