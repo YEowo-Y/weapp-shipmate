@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "snapshots": [
+    {
+      "url": "https://developers.weixin.qq.com/community/develop/doc/000ea46d08898015317b956c65fc09",
+      "file": "develop-doc-000ea46d08898015317b956c65fc09-531b318a.txt",
+      "sha256": "327c02d63931e25766abb2ce9780195555b1093eb1038aa38abb5bf87d709be5",
+      "chars": 726,
+      "fetched_at": "2026-07-17",
+      "method": "manual",
+      "note": "客户端渲染 + 匿名 302 至 forceLogin 错误页，不可自动刷新；须人工核验。来源为社区知识库（官方精选/置顶），最后编辑 2020-12-24，页面自带可能过期免责声明。"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/component/web-view.html",
+      "file": "n-qq-com-miniprogram-dev-component-web-view-html-e32652cd.txt",
+      "sha256": "eaf7cf7112232ee6eb9a847f451031e05c174967d9415fa128c5bbcb3b479f34",
+      "chars": 3788,
+      "fetched_at": "2026-07-17",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html",
+      "file": "m-miniprogram-dev-framework-ability-network-html-fc7d0a47.txt",
+      "sha256": "fc441318dfc71c1e083d372ec1f4e508c473c9e436eb61b4c48f6a8017271740",
+      "chars": 3325,
+      "fetched_at": "2026-07-17",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/",
+      "file": "in-qq-com-miniprogram-dev-framework-user-privacy-778ac67d.txt",
+      "sha256": "50c39457816bf5615f4871b7bd1cafcc3b62454de88134f0583483080606e03d",
+      "chars": 1387,
+      "fetched_at": "2026-07-17",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html",
+      "file": "ev-framework-user-privacy-miniprogram-intro-html-a7dc8233.txt",
+      "sha256": "a6f7975a76b3fcdf3da0006fcd7c7ad96e7a36fa42c36dd2717903dec40c1e54",
+      "chars": 3549,
+      "fetched_at": "2026-07-17",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/PrivacyAuthorize.html",
+      "file": "dev-framework-user-privacy-PrivacyAuthorize-html-2887b496.txt",
+      "sha256": "08866a388803f56911aedfe7bbf79b9a0d8acc2ad16904d462676e1334bb75c3",
+      "chars": 7335,
+      "fetched_at": "2026-07-17",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/product/",
+      "file": "developers-weixin-qq-com-miniprogram-product-f3a87176.txt",
+      "sha256": "1c796438693da9a125508aef22992fefd71009c1c067a6498ef0d333f788b61d",
+      "chars": 33057,
+      "fetched_at": "2026-07-17",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/product/material/",
+      "file": "opers-weixin-qq-com-miniprogram-product-material-5080a757.txt",
+      "sha256": "1a6bff3fd8712cac5b043e31fcbb34d7b79feed801f1193396c918775b9a7cc4",
+      "chars": 68201,
+      "fetched_at": "2026-07-17",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/product/record_guidelines.html",
+      "file": "q-com-miniprogram-product-record-guidelines-html-76e8156b.txt",
+      "sha256": "6481e4c280b1d5006e0af28eb223eb3e690789eb10a0d4b90f9b2b04996b02b1",
+      "chars": 5561,
+      "fetched_at": "2026-07-17",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/product/reject.html",
+      "file": "rs-weixin-qq-com-miniprogram-product-reject-html-1ea6d349.txt",
+      "sha256": "eb04bd529fdc1877e12f8ee861a153c0b940aaf7a74f1000d1b1ccaa8f9b9996",
+      "chars": 4822,
+      "fetched_at": "2026-07-17",
+      "method": "fetch"
+    },
+    {
+      "url": "https://pay.weixin.qq.com/docs/merchant/products/mini-program-payment/introduction.html",
+      "file": "-products-mini-program-payment-introduction-html-04afc704.txt",
+      "sha256": "3b379915e4657bd7379120db184827b35a78e37f3eb72d7381c7a4e4bb57b98e",
+      "chars": 903,
+      "fetched_at": "2026-07-17",
+      "method": "fetch"
+    }
+  ]
+}
