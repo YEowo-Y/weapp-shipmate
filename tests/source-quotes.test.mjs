@@ -45,6 +45,22 @@ test("负向控制：末位标点改写必须判 missing（准则 1『不得改�
   assert.equal(classifyQuote(page, page), "exact");
 });
 
+test("保绿侧：零宽字符差异不得判 missing（官网正文夹带 ZWSP，复制粘贴会带进引文）", () => {
+  // snapshot-sources 抓取时把零宽字符从快照剔除；若引文侧不同等剔除，
+  // 维护者从官网复制一段实际逐字相同的文本就会撞上无线索的假红。
+  const zwsp = String.fromCodePoint(0x200b);
+  const bom = String.fromCodePoint(0xfeff);
+  assert.equal(classifyQuote("小程序只可以跟指定的域名", `x 小程序只${zwsp}可以跟指定的域名 y`), "whitespace-normalized");
+  assert.equal(classifyQuote(`小程序${bom}只可以跟指定的域名`, "x 小程序只可以跟指定的域名 y"), "whitespace-normalized");
+});
+
+test("保绿侧：全角空格 U+3000 / NBSP U+00A0 差异不得判 missing", () => {
+  const ideographic = String.fromCodePoint(0x3000);
+  const nbsp = String.fromCodePoint(0x00a0);
+  assert.equal(classifyQuote("a b", `x a${ideographic}b y`), "whitespace-normalized");
+  assert.equal(classifyQuote("a b", `x a${nbsp}b y`), "whitespace-normalized");
+});
+
 test("classifyQuote：缺快照判 no-snapshot，且不得冒充通过", () => {
   assert.equal(classifyQuote("任意", undefined), "no-snapshot");
   assert.equal(isPassing("no-snapshot"), false);
