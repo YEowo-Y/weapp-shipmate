@@ -150,8 +150,8 @@
         },
         "last_verified": {
           "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "description": "最后人工核验日期（ISO YYYY-MM-DD）。腐烂对抗的锚点；CI 会标记超期规则。"
+          "format": "date",
+          "description": "最后人工核验日期（ISO YYYY-MM-DD，format:date 校验真实日历日期——2026-02-30 会被 V8 静默滚成 3 月 2 日再进 rot）。腐烂对抗的锚点；CI 会标记超期规则。"
         },
         "manual_required": {
           "type": "boolean",
