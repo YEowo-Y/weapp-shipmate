@@ -119,6 +119,8 @@ async function main() {
     }
 
     const file = old?.file || slugForUrl(url);
+    // sha256 只覆盖正文，不含溯源头——头里有抓取日期，算进去的话每次重抓都"漂移"，
+    // 漂移信号随即失去意义。verify-source-quotes 按同一口径校验，两侧必须一致。
     const hash = sha256(text);
     const changed = old && old.sha256 !== hash;
     if (changed) drifted++;
@@ -147,6 +149,17 @@ async function main() {
   console.log(`\n快照 ${out.length} 份；漂移 ${drifted}；失败 ${failed}。`);
   if (failed > 0) {
     console.log("失败的来源保留旧快照；离线门禁仍以旧快照为准，请人工核验后再更新。");
+    process.exitCode = 1;
+  }
+  // --check 是定时监控的入口：漂移必须让 job 失败，否则"成功"就意味着没人会收到通知，
+  // 而快照可以无限期地与官方原文分家、陈旧引文被离线门禁认证为"逐字"。
+  // 非 --check（人工刷新）时漂移是预期结果，不该失败。
+  if (CHECK_ONLY && drifted > 0) {
+    console.log(
+      `⚠ ${drifted} 个来源的官方正文已与归档快照不一致。\n` +
+        "请跑 npm run snapshot:sources 重新抓取，并重新核验受影响规则的 source_quote 与断言——\n" +
+        "原文变了，引文可能仍逐字，但规则的断言未必还成立。"
+    );
     process.exitCode = 1;
   }
 }
