@@ -1,6 +1,6 @@
 // scripts/accuracy.mjs —— 准确性度量(极简依赖)：对 corpus/labels.json 的人工 ground-truth
 // 跑 check，算每规则 + 全局 precision/recall/F1。准确性是护城河，本脚本把"准不准"从感觉变数字。
-// 用法：node scripts/accuracy.mjs   （全局 precision < 0.95、任一规则有误报 FP、或有未知 ruleId → 退出码 1）
+// 用法：node scripts/accuracy.mjs （precision < 0.95、有误报 FP、有漏报 FN、或有未知 ruleId → 退出码 1）
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -56,6 +56,12 @@ export function computeAccuracy(labels, { rootDir = ROOT, subjectDefault = "pers
   return { global: { tp, fp, fn, precision, recall, f1 }, perRule, warnings };
 }
 
+/** 通过判据（2026-07-16 审计 A2）：必须含 FN==0——precision 在 tp+fp=0 时按定义=1，
+ *  召回全线崩塌（54 锚点全漏报）时旧判据仍打 ✅，单跑本脚本的开发者会带着回归继续工作。 */
+export function accuracyOk(global, warnings) {
+  return global.precision >= PRECISION_MIN && global.fp === 0 && global.fn === 0 && warnings.length === 0;
+}
+
 const f3 = (x) => (Math.round(x * 1000) / 1000).toFixed(3);
 
 function main() {
@@ -70,8 +76,8 @@ function main() {
   if (fpRules.length) { console.log("误报 FP（违准确性红线）："); for (const [id, o] of fpRules) console.log(`  - ${id}: FP=${o.fp}`); }
   if (fnRules.length) { console.log("漏报 FN："); for (const [id, o] of fnRules) console.log(`  - ${id}: FN=${o.fn}`); }
   for (const w of warnings) console.log(`⚠️ ${w}`);
-  const ok = global.precision >= PRECISION_MIN && global.fp === 0 && warnings.length === 0;
-  console.log(ok ? `✅ 通过：precision ≥ ${PRECISION_MIN}、零误报、无未知 ruleId` : `❌ 未通过：precision < ${PRECISION_MIN} 或有误报或有未知 ruleId`);
+  const ok = accuracyOk(global, warnings);
+  console.log(ok ? `✅ 通过：precision ≥ ${PRECISION_MIN}、零误报、零漏报、无未知 ruleId` : `❌ 未通过：precision < ${PRECISION_MIN} 或有误报/漏报或有未知 ruleId`);
   process.exit(ok ? 0 : 1);
 }
 
