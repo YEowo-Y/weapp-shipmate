@@ -6,13 +6,13 @@
 
 ## 0. 当前证据锚点
 
-- 【事实】最新公开 GitHub Release 是 `v0.1.0`；既有 `v0.2.0-rc.1` 仍是未发布 Draft 且不得移动或复用。仓库现以 `0.2.0-rc.2` 作为新的发布候选；本轮只授权把它推进到已核对资产的未发布 Draft，实际 refs、workflow 与资产证据以 `STRENGTHENING_PLAN.md` 为准。npm registry 仍不能声称已发布或双渠道可用。
+- 【事实】最新公开 GitHub Release 是 `v0.1.0`；既有 `v0.2.0-rc.1` 与 `v0.2.0-rc.2` 均是未发布 Draft 且不得移动或复用。仓库现以 `0.2.0-rc.3` 作为新的发布候选（2026-07-16 审计批次一已合并进 main，rc.2 的 Draft 不含这些修复）；本轮只授权把它推进到已核对资产的未发布 Draft，实际 refs、workflow 与资产证据以 `STRENGTHENING_PLAN.md` 为准。npm registry 仍不能声称已发布或双渠道可用。
 - 【事实】当前数据基线为 63 条规则、8 个流程阶段；`registration`、`certification`、`release` 三阶段各为 0 条规则。规则数量以 `npm run validate` 的当前输出为准，不在路线图中推演未来数量。
 - 【事实】当前验证基线为 `npm test` 214/214、89 个 accuracy labels、TP 55 / FP 0 / FN 0、dogfood 11 个固定样本、rot 97 个载体（2026-07-17 本地复验；accuracy 通过判据自此含 FN=0）。accuracy 只证明已标注语料，不外推为全域准确率。
 - 【事实】本轮已在本地强化四类契约：输出的 subject/聚焦过滤/阶段渲染一致性；MCP 请求校验与 Markdown 文本净化；扫描目录项预算；release tag 与 package/manifest/lock 版本一致性及 lint 工作流契约。
 - 【事实】扫描预算现在覆盖实际遇到的全部 `Dirent`，固定 1024-entry、预算 64 场景的中位耗时由 75.941 ms 降至 3.478 ms 并正确截断；这只证明该有界场景，不代表通用吞吐提升。`readdirSync` 仍会一次物化单个目录，尚无单目录硬内存上限。
-- 【事实】核心强化提交已经 PR #4 与合并后的 main 四腿 CI 验证。`0.2.0-rc.2` 的 tag、release workflow、联网 `.mcpb` pack 与 Draft 资产只有在 `STRENGTHENING_PLAN.md` 的 Phase C 条件实际满足后才算取得证据；未发布 Draft 不等于公开发布，也没有签名或 npm registry 证据。
-- 【事实】GitHub Dependabot alert #1 已确认桌面 `Cargo.lock` 中的 `glib 0.18.5` 受 `GHSA-wrw7-89jp-8q8g` 影响；当前 npm `files` 与 MCPB 打包清单不含 `desktop/`，所以它不进入 `0.2.0-rc.2` 的 tgz/MCPB Draft 资产，但任何未来桌面发布都必须先关闭该告警并补齐 Rust audit、构建与支持平台 smoke 证据。
+- 【事实】`0.2.0-rc.2` 的 tag、release workflow、联网 `.mcpb` pack 与 Draft 三资产**已经存在**，但其校验和清单内嵌 `build/` 路径前缀、与拍平后的资产名不匹配，`sha256sum -c` 对 `.mcpb` 必败（2026-07-16 审计 A3 与独立复核分别实证）——因此 rc.2 的"条件化完成"判定已被 `STRENGTHENING_PLAN.md` §D 如实撤回，其 Draft 保持未发布原样、不作为可交付证据。校验和通道的修复在审计批次一（PR #7，merge `2739139`）落地，端到端证据由 `v0.2.0-rc.3` 演练取得。未发布 Draft 不等于公开发布，也没有签名或 npm registry 证据。
+- 【事实】GitHub Dependabot alert #1 已确认桌面 `Cargo.lock` 中的 `glib 0.18.5` 受 `GHSA-wrw7-89jp-8q8g` 影响；当前 npm `files` 与 MCPB 打包清单不含 `desktop/`，所以它不进入 `0.2.0-rc.3` 的 tgz/MCPB Draft 资产，但任何未来桌面发布都必须先关闭该告警并补齐 Rust audit、构建与支持平台 smoke 证据。
 - 【事实】CLI/MCP 当前接受 `payment`、`business` 输入，但现有 flow 条件和规则选择不使用二者，输入不会形成可见差异；普通 CLI 也尚无被回归测试锁定的 EPIPE 契约。
 - 【事实】MCP stdio 的单行阈值当前用 JavaScript 字符串 `length` 实现，即按 UTF-16 code unit 而非 UTF-8 字节计数；文档已如实描述，若要改成字节契约仍需单独定义兼容边界。
 - 【事实】唯一未完成的既定 Go/No-Go 是 `docs/11-outreach-plan.md` 的 5 人导航验证；结果台账仍为空。P2.2 及以后继续以真实验证通过为前置。
@@ -125,7 +125,7 @@
 - 不在 outreach 信号回来前扩第 9 个流程阶段、增加新框架或批量灌规则。
 - 不把“环境变量 allowlist”写成既定安全方案；只有真实边界需求和威胁模型支持时，才另行设计并审批目录授权模型。
 - 不因“YAML 面较小”就承诺内联解析器替代 `js-yaml`；只有弃维、安全或可测成本证据成立时才评估替换。
-- 除 `STRENGTHENING_PLAN.md` 明确批准的 `v0.2.0-rc.2` annotated tag 与未发布 Draft 外，不把 main 祖先约束、Actions SHA 固定、`.mcpb` 签名、公开 Release 或 npm publish 视为已批准；它们仍须在对应触发条件下重新审批。
+- 除用户明确批准的 `v0.2.0-rc.3` annotated tag 与未发布 Draft（2026-07-17 发布演练）外，不把 main 祖先约束、Actions SHA 固定、`.mcpb` 签名、公开 Release 或 npm publish 视为已批准；它们仍须在对应触发条件下重新审批。
 - 不以当前扫描场景的约 95.42% 中位耗时下降宣称通用性能提升，也不声称单目录内存已硬有界。
 - 不在没有互操作问题证据和公共契约审批时收紧 MCP 当前显式 `id: null` 的兼容裁决。
 - 不在 L2 触发门成立前实现 `--rules-dir`、远程规则市场或自动吸收社区规则。
