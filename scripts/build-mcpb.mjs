@@ -1,7 +1,7 @@
 // scripts/build-mcpb.mjs —— 把极简依赖 MCP server 打成 .mcpb Desktop 扩展（P1 轻量分发）。
 // 构建脚本自身只用 Node 内置模块；扩展包会捆绑服务端生产依赖闭包（js-yaml → argparse）。流程：版本校验 → 暂存纯生产副本 → 冒烟自检 → mcpb pack。
 // 设计要点：暂存目录是独立副本，绝不触碰开发用 node_modules（保留 ajv 等 devDeps 供 npm test）。
-import { readFileSync, rmSync, mkdirSync, cpSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, rmSync, mkdirSync, cpSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -59,13 +59,25 @@ function copyDepClosure(name) {
 for (const dep of Object.keys(pkg.dependencies || {})) copyDepClosure(dep);
 log(`✓ 已捆绑生产依赖闭包：${[...copied].join(", ") || "（无）"}`);
 
-// 4) 冒烟自检：用暂存副本启动 server，跑 initialize + tools/list 往返。
+// 4) 冒烟自检：用暂存副本启动 server，跑 initialize + tools/list + 三次真实 tools/call 往返。
+// 2026-07-16 审计 A3：旧冒烟只发 initialize + tools/list，而规则/流程/拒因数据全部惰性加载——
+// 0.1.0 曾发生的"打包漏 rejections.yaml"事故类缺陷可穿透旧冒烟直达用户（装包后 explain 必 ENOENT）。
+// 三次 tools/call 恰好驱动三份运行时数据：check→rules+flow、guide→rules+flow、explain→rejections+rules。
+const SMOKE_FIXTURE = join(ROOT, "build", "smoke-fixture"); // 在 build/ 下、STAGE 之外——不进 .mcpb
+mkdirSync(SMOKE_FIXTURE, { recursive: true });
+writeFileSync(join(SMOKE_FIXTURE, "app.json"), '{ "pages": ["pages/index/index"] }\n');
+writeFileSync(join(SMOKE_FIXTURE, "index.js"), 'wx.request({ url: "https://smoke.example.com/api" });\n');
+
 async function smoke() {
   const child = spawn(process.execPath, [join(STAGE, "bin", "weapp-shipmate-mcp.mjs")], { cwd: STAGE });
   let out = "";
   const seen = {};
+  const WANT_IDS = [1, 2, 3, 4, 5];
   const done = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("冒烟自检超时（5s）")), 5000);
+    const timer = setTimeout(
+      () => reject(new Error(`冒烟自检超时（15s）：已收到 id=${Object.keys(seen).join(",") || "（无）"}`)),
+      15000,
+    );
     child.stdout.setEncoding("utf-8");
     child.stdout.on("data", (d) => {
       out += d;
@@ -76,7 +88,7 @@ async function smoke() {
         if (!line) continue;
         const msg = JSON.parse(line);
         seen[msg.id] = msg;
-        if (seen[1] && seen[2]) {
+        if (WANT_IDS.every((id) => seen[id])) {
           clearTimeout(timer);
           child.kill();
           resolve(seen);
@@ -85,15 +97,27 @@ async function smoke() {
     });
     child.on("error", reject);
   });
-  child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }) + "\n");
-  child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }) + "\n");
+  const send = (id, method, params) =>
+    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, ...(params !== undefined && { params }) }) + "\n");
+  send(1, "initialize", {});
+  send(2, "tools/list");
+  send(3, "tools/call", { name: "weapp_shipmate_check", arguments: { dir: SMOKE_FIXTURE } });
+  send(4, "tools/call", { name: "weapp_shipmate_guide", arguments: { subject: "personal" } });
+  send(5, "tools/call", { name: "weapp_shipmate_explain", arguments: { query: "诱导分享" } });
   const res = await done;
   const server = res[1]?.result?.serverInfo?.name;
   const tools = res[2]?.result?.tools?.map((t) => t.name) || [];
   if (server !== "weapp-shipmate") throw new Error(`冒烟失败：serverInfo.name=${server}`);
   const expected = ["weapp_shipmate_check", "weapp_shipmate_guide", "weapp_shipmate_explain"];
   if (!expected.every((t) => tools.includes(t))) throw new Error(`冒烟失败：tools=${tools.join(",")}`);
-  log(`✓ 冒烟自检通过：server=${server}，tools=${tools.join(", ")}`);
+  for (const [id, label] of [[3, "check"], [4, "guide"], [5, "explain"]]) {
+    const r = res[id]?.result;
+    if (!r || r.isError || !r.content?.length)
+      throw new Error(
+        `冒烟失败：tools/call ${label} 未返回正常结果——打包内容可能缺运行时数据文件（${JSON.stringify(res[id]?.error ?? r).slice(0, 300)}）`,
+      );
+  }
+  log(`✓ 冒烟自检通过：server=${server}，tools=${tools.join(", ")}；check/guide/explain 三次 tools/call 正常（规则/流程/拒因数据均已实际加载）`);
 }
 await smoke();
 
