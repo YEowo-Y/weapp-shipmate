@@ -21,7 +21,7 @@ rules:
     why: "虚拟商品绕开小程序虚拟支付、引导外部渠道支付会被限制功能或拒审"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "购买和支付均需接入小程序虚拟支付；不得引导至app、公众号、h5、个人号、网站完成支付"
-    last_verified: "2026-06-14"
+    last_verified: "2026-07-16"
     manual_required: true
 
   - id: payment.requires-merchant
