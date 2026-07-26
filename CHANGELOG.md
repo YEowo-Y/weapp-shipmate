@@ -24,6 +24,11 @@
 - **`content.no-illegal` 的引文末位标点被改写**（违反准则 1）：官方原文以全角冒号收尾（其后接 6.1.1~6.1.5 违规类型清单），引文写成句号。值得留档的是它为何能活到今天——该规则在 2026-07-16 批次一中被 LLM 代理判为「逐字核验 INTACT」并据此刷新 `last_verified`：代理做的是语义匹配（99% 像即判相同），不是字符匹配。这正是把「逐字」交给脚本而非人或代理判定的直接理由。
 - **rot 对失效来源必然漏报**：旧实现 `redirect: "follow"` + 任意 2xx 判 `ok`。实测两例（现由负向控制钉住）：`login.*` 引用的社区页 302 → `/community/error/emergency?forceLogin=true` 强制登录错误页 → 200 → 判 `ok`，即**用户点开 `official_url` 读不到被引用的原文**；`payment.requires-merchant` 引用的支付文档 301 → 新规范地址 → 200 → 判 `ok`。加固后实跑 `--links` 另发现审计范围外的第三例：`flow:registration` / `flow:certification` 引用的社区文章同样落在 forceLogin 错误页。
 
+### Security
+
+- 依赖安全升级（2026-07-26，三条均为 lockfile 内 semver 兼容提升，`npm audit` 归零）：`fast-uri` 3.1.2→3.1.4（ajv 传递依赖，两条 high：反斜杠 authority 定界符、IDN 规范化失败两种 host confusion）；`js-yaml` 4.2.0→4.3.0（high：merge-key 链可致二次方 CPU——它是 rules/flow/rejections 三份 YAML 的运行时解析器，故四道门禁在新版下复验全绿后才落锁）；`brace-expansion` 5.0.7→5.0.8（high：无界展开致 OOM，eslint 传递依赖、仅开发链）。
+- **glib 告警（desktop 原型 Cargo.lock，medium）不动，理由记录在案**：修复版 0.20.0 与 tauri 2.11.3 要求的 gtk-rs 0.18 栈（atk/gtk/gdk/cairo-rs/webkit2gtk）semver 不兼容，`cargo update -p glib` 实测「Locking 0 packages」（0.18.5 已是约束内最新）；该栈仅在 Linux 目标编译，且 `desktop/` 不在 `package.json` files 与 MCPB INCLUDE 内、不进分发物。待 tauri 上游迁移 gtk 0.20+ 后跟随升级。
+
 ### 已知未处置（记录在案，不在本轮范围）
 
 - 另有 14 条 medium/low 规则 claim-support 缺陷与 9 条拒因映射缺陷经对抗复核存活，未在本轮修复。
