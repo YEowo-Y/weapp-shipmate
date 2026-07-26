@@ -27,6 +27,7 @@
 ### Security
 
 - 依赖安全升级（2026-07-26，三条均为 lockfile 内 semver 兼容提升，`npm audit` 归零）：`fast-uri` 3.1.2→3.1.4（ajv 传递依赖，两条 high：反斜杠 authority 定界符、IDN 规范化失败两种 host confusion）；`js-yaml` 4.2.0→4.3.0（high：merge-key 链可致二次方 CPU——它是 rules/flow/rejections 三份 YAML 的运行时解析器，故四道门禁在新版下复验全绿后才落锁）；`brace-expansion` 5.0.7→5.0.8（high：无界展开致 OOM，eslint 传递依赖、仅开发链）。
+- `postcss` 8.5.15→8.5.23（desktop 原型 lockfile，high：sourceMappingURL 路径穿越致任意 .map 文件泄露，修复版 8.5.18；vite 传递依赖、仅构建链。该告警系 PR #9 合并触发 Dependabot 重扫时新发通告。升级后 desktop `npm audit` 归零、`tsc && vite build` 通过）。
 - **glib 告警（desktop 原型 Cargo.lock，medium）不动，理由记录在案**：修复版 0.20.0 与 tauri 2.11.3 要求的 gtk-rs 0.18 栈（atk/gtk/gdk/cairo-rs/webkit2gtk）semver 不兼容，`cargo update -p glib` 实测「Locking 0 packages」（0.18.5 已是约束内最新）；该栈仅在 Linux 目标编译，且 `desktop/` 不在 `package.json` files 与 MCPB INCLUDE 内、不进分发物。待 tauri 上游迁移 gtk 0.20+ 后跟随升级。
 
 ### 已知未处置（记录在案，不在本轮范围）
