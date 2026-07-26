@@ -6,7 +6,7 @@
 // 环境变量：WEAPP_SHIPMATE_TODAY=YYYY-MM-DD（确定性覆盖今天）、WEAPP_SHIPMATE_STALE_DAYS（默认 180）。
 import { loadData } from "../src/data.mjs";
 import { crossChecks, CROSSCHECK_RULE_IDS, CROSSCHECK_ALL_HIT_SCAN } from "../src/crosscheck.mjs";
-import { staleness, uniqueUrls, classifyStatus } from "../src/rot.mjs";
+import { staleness, uniqueUrls, classifyUrlHealth, isActionableHealth } from "../src/rot.mjs";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -83,7 +83,7 @@ if (checkLinks) {
       if (res.status === 405 || res.status === 403) {
         res = await fetch(url, { method: "GET", redirect: "follow", signal: ac.signal });
       }
-      return { status: res.status };
+      return { status: res.status, landedUrl: res.url };
     } catch (e) {
       return { status: 0, error: e.message };
     } finally {
@@ -91,17 +91,20 @@ if (checkLinks) {
     }
   }
   for (const { url, ids } of urls) {
-    const { status, error } = await check(url);
-    const kind = classifyStatus(status);
-    const mark = kind === "ok" ? "✓" : kind === "dead" ? "✗ 失效" : "? 待人工";
+    const { status, error, landedUrl } = await check(url);
+    const kind = classifyUrlHealth({ status, requestedUrl: url, landedUrl });
+    const mark =
+      kind === "ok" ? "✓" : kind === "dead" ? "✗ 失效" : kind === "moved" ? "→ 已搬家" : kind === "inaccessible" ? "🔒 不可达" : "? 待人工";
     log(`  ${mark} [${status || error}] ${url}  ←  ${ids.join(", ")}`);
-    if (kind === "dead") deadLinks.push({ url, ids });
+    if (kind === "moved") log(`      落地于 ${landedUrl} —— 引用地址已非规范地址，请更新 official_url。`);
+    if (kind === "inaccessible") log(`      落地于 ${landedUrl} —— 用户点开读不到被引用的原文（登录墙/错误页）。`);
+    if (isActionableHealth(kind)) deadLinks.push({ url, ids, kind, landedUrl });
   }
 }
 
 // 3) 汇总与退出码：超期或确证失效 → 非零（报警）；--report-only 永远 0。
 log("");
 if (stale.length) log(`⚠ ${stale.length} 条规则 last_verified 超 ${staleDays} 天，请重新核验官方来源并更新。`);
-if (deadLinks.length) log(`✗ ${deadLinks.length} 个 official_url 确证失效（404/410/网络错误），请修复来源。`);
+if (deadLinks.length) log(`✗ ${deadLinks.length} 个 official_url 需处置（失效 / 已搬家 / 登录墙不可达），请修复来源。`);
 if (!stale.length && !deadLinks.length) log("✓ 未发现超期规则或失效链接。");
 if (!reportOnly && (stale.length || deadLinks.length)) process.exitCode = 1;

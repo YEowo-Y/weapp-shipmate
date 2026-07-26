@@ -17,7 +17,7 @@ rules:
       - "在『小程序后台 - 开发 - 开发设置 - 服务器域名』中配置代码出现的全部域名"
     why: "小程序只可以跟指定的域名进行网络通信；未配置的域名在真机环境会被拦截"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html"
-    source_quote: "服务器域名请在「小程序后台 - 开发 - 开发设置 - 服务器域名」中进行配置；小程序只可以跟指定的域名进行网络通信。"
+    source_quote: "每个微信小程序需要事先设置通讯域名，小程序只可以跟指定的域名进行网络通信。"
     last_verified: "2026-06-13"
     manual_required: true
 

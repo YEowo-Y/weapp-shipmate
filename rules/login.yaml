@@ -5,15 +5,16 @@
 schema_version: 1
 rules:
   - id: login.after-experience
-    title: "不得未体验功能即要求授权登录"
+    title: "体验范围开放的小程序不得未体验功能即要求授权登录"
     kind: navigation
     stage: review
     subject_type: ["personal", "individual_business", "enterprise"]
     severity: blocker
     confidence: high
     requires:
-      - "把授权登录后置：让用户先充分了解、体验功能服务，再由用户主动点击触发登录授权，勿一进首页就强制授权"
-    why: "首页打开即要求授权登录、用户未体验功能即强制授权，是最高频的登录规范拒审原因"
+      - "先判定体验范围。『开放』（直接打开即可体验，或有账号限制但注册流程对外开放）：把授权登录后置，让用户先充分了解、体验功能服务，再由用户主动点击触发登录授权，勿一进首页就强制授权"
+      - "『特定』（仅供特定人员使用、对外无开放注册流程，如学校 / 员工 / 社保卡信息系统）不适用上一条：官方对该情形允许首页即要求授权以拉取身份鉴定类信息，但要求首页有明显的使用范围说明，并为用户提供暂不登录 / 取消登录选项按钮"
+    why: "体验范围开放时，首页打开即要求授权登录、用户未体验功能即强制授权，是最高频的登录规范拒审原因；官方对『体验范围特定』另有一套要求，不可一概而论"
     official_url: "https://developers.weixin.qq.com/community/develop/doc/000ea46d08898015317b956c65fc09"
     source_quote: "授权个人信息功能后置，给与用户充分了解、体验功能服务后，再由用户主动点击进一步功能触发登录授权"
     last_verified: "2026-06-14"
