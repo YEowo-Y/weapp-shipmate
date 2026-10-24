@@ -15,15 +15,21 @@
 /* ── 布局容器 ── */
 .audit        { overflow: auto; background: var(--bg); }
 .audit__inner { max-width: 720px; padding: 26px 30px 48px; }
+.audit-evidence > summary { display: list-item; cursor: pointer; color: var(--accent-2); font-size: 13px; padding: 10px 0; }
+.audit-evidence { margin-top: 4px; }
+.audit-context { margin-bottom: 16px; }
+.audit-context > summary { cursor: pointer; font-size: 13px; color: var(--text-2); padding: 8px 0; }
+.audit-context .freshbar { margin: 8px 0 0; }
+.product-surface .audit__inner .acard__body > .journey-next { margin-top: 8px; padding-top: 0; border: 0; }
 
 /* ── 置顶主张 banner（自定义，比 app.css .banner 更醒目）── */
 .claim-banner {
-  border: 1px solid var(--border-2);
-  border-left: 3px solid var(--accent);
+  border: 0;
+  border-left: 2px solid var(--border-2);
   border-radius: var(--r);
-  background: var(--accent-soft);
-  padding: 14px 16px;
-  margin-bottom: 20px;
+  background: transparent;
+  padding: 4px 14px;
+  margin-bottom: 8px;
   display: flex;
   gap: 11px;
   align-items: flex-start;
@@ -77,7 +83,7 @@
   display: flex; align-items: flex-start; gap: 10px;
   margin-bottom: 12px; flex-wrap: wrap;
 }
-.acard__title { font-size: 15px; font-weight: 500; color: var(--text); letter-spacing: -.01em; flex: 1; min-width: 0; }
+.acard__title { font-size: 16px; line-height: 1.5; font-weight: 500; color: var(--text); letter-spacing: -.01em; flex: 1; min-width: 0; }
 .acard__badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; flex-shrink: 0; }
 
 /* 严重度 chip */
@@ -90,7 +96,7 @@
 /* confidence chip */
 .conf { font-size: 10.5px; font-weight: 500; padding: 2px 8px; border-radius: 20px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .conf svg { width: 10px; height: 10px; }
-.conf--high { color: var(--ok);     background: var(--ok-soft);   }
+.conf--high { color: var(--text-2); background: var(--surface-2); }
 .conf--med  { color: var(--warn);   background: var(--warn-soft); }
 .conf--low  { color: var(--text-2); background: var(--surface-2); }
 
@@ -107,11 +113,11 @@
   display: flex; align-items: center; gap: 10px; margin-bottom: 13px; flex-wrap: wrap;
 }
 .rule-id {
-  font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
-  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-sm);
+  font-family: var(--font-mono); font-size: 12px; color: var(--text-2);
+  background: var(--surface-2); border: 0; border-radius: var(--r-sm);
   padding: 2px 8px; letter-spacing: -.02em;
 }
-.signal-txt { font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 5px; }
+.signal-txt { font-size: 14px; line-height: 1.65; color: var(--text-2); display: flex; align-items: center; gap: 5px; }
 .signal-txt svg { width: 12px; height: 12px; color: var(--text-3); }
 
 /* 逐字官方原文引用块 */
@@ -122,26 +128,26 @@
   cursor: pointer; display: inline-flex; align-items: center; gap: 5px; margin-bottom: 8px;
   transition: color .12s var(--ease);
 }
+.quote-toggle::-webkit-details-marker { display: none; }
 .quote-toggle:hover { color: var(--text); }
 .quote-toggle svg { width: 13px; height: 13px; color: var(--text-3); transition: transform .16s var(--ease); }
-.quote-toggle[aria-expanded="true"] svg.chev { transform: rotate(180deg); }
+.quote-wrap[open] .quote-toggle svg.chev { transform: rotate(180deg); }
 
 .quote-block {
   border-left: 2.5px solid var(--border-2);
   padding: 10px 13px;
   background: var(--surface-2);
   border-radius: 0 var(--r-sm) var(--r-sm) 0;
-  display: none;
   animation: fade .16s var(--ease);
 }
-.quote-block.open { display: block; }
+
 .quote-block__label {
   font-size: 10px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase;
   color: var(--text-3); margin: 0 0 7px; display: flex; align-items: center; gap: 5px;
 }
 .quote-block__label svg { width: 11px; height: 11px; }
 .quote-block__text {
-  font-family: var(--font-mono); font-size: 12px; color: var(--text); line-height: 1.75;
+  font-size: 14px; color: var(--text); line-height: 1.75;
   letter-spacing: -.02em; margin: 0; white-space: pre-wrap; word-break: break-all;
 }
 
@@ -149,9 +155,9 @@
 .acard__src {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   margin-bottom: 13px;
-  padding: 11px 13px;
-  border: 1px solid var(--border); border-radius: var(--r-sm);
-  background: var(--bg);
+  padding: 10px 0;
+  border: 0; border-radius: 0;
+  background: transparent;
 }
 .acard__src-url {
   font-family: var(--font-mono); font-size: 11px; color: var(--text-3);
@@ -159,6 +165,7 @@
   white-space: nowrap; min-width: 0; flex: 1;
 }
 .src-open-btn {
+  text-decoration: none;
   font: inherit; font-size: 12px; font-weight: 500;
   color: var(--accent-ink); background: var(--accent);
   border: 1px solid var(--accent); border-radius: var(--r-sm);
@@ -220,6 +227,7 @@
 }
 .audit-guard svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; color: var(--text-3); }
 </style>
+<link rel="stylesheet" href="responsive.css" />
 </head>
 <body data-theme="light">
   <h2 class="sr-only">上线船友可核查审计面：把每条预检结论摊开给用户逐条核对，每条结论带官方逐字原文、来源链接、新鲜度日期、置信度双标，以官方实时文档为最终依据。</h2>
@@ -242,67 +250,64 @@
 
           <!-- 面包屑 -->
           <p class="crumb">
-            <a href="#">主界面</a>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            <a href="main-four-region.html">主界面</a>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#chevron-right"></use></svg>
             预检报告
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#chevron-right"></use></svg>
             可核查审计
           </p>
 
           <!-- 页头 -->
           <div class="work__head" style="margin-bottom:16px">
-            <h1 style="font-size:22px;font-weight:500;margin:0;letter-spacing:-.02em">预检结论 · 可核查审计</h1>
+            <h1>预检示例报告</h1>
             <span class="statepill statepill--cur">共 5 条</span>
           </div>
 
           <!-- ① 置顶主张 banner -->
           <div class="claim-banner">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>
-            </svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#info"></use></svg>
             <div class="claim-banner__body">
               <p class="claim-banner__title">以官方实时文档为准</p>
-              <p class="claim-banner__sub">
-                以下每条结论都是<b>官方文档的带日期快照</b>，不是模型臆断。
-                官方页面随时可能更新——最终以你<b>点开的官方实时页面</b>为准。
-                每条卡片均提供逐字官方原文及来源链接，可自行核对。
-              </p>
+              <p class="claim-banner__sub">固定结果示例，未读取真实项目。展开每条依据查看带日期的来源快照；以实时官方文档为准。</p>
             </div>
           </div>
 
           <!-- ② 新鲜度总览小条 -->
+          <details class="audit-context"><summary>查看示例核验记录与日期</summary>
           <div class="freshbar" role="status" aria-label="规则新鲜度总览">
             <span class="freshbar__item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M20 6 9 17l-5-5"/></svg>
-              规则 <span class="freshbar__num">46</span> 条 · 全部带官方来源
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#circle-check"></use></svg>
+              固定结果示例 · 未读取真实项目
             </span>
             <span class="freshbar__divider" aria-hidden="true"></span>
             <span class="freshbar__item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
               <span class="freshbar__num">0</span> draft
             </span>
             <span class="freshbar__divider" aria-hidden="true"></span>
             <span class="freshbar__item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#clock"></use></svg>
               最早核验 <span class="freshbar__num">2026-06-13</span> · 最近 <span class="freshbar__num">2026-06-20</span>
             </span>
             <span class="freshbar__divider" aria-hidden="true"></span>
             <span class="freshbar__item freshbar__warn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#triangle-alert"></use></svg>
               <span class="freshbar__num" style="color:var(--warn)">3</span> 条临近复核（黄色标注）
             </span>
             <span class="freshbar__divider" aria-hidden="true"></span>
             <span class="freshbar__item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#wallet"></use></svg>
               rot 每月自动体检
             </span>
           </div>
+
+          </details>
 
           <!-- ③ 结论审计列表 -->
           <p class="sec__h">预检结论</p>
           <div class="audit-list" id="auditList">
 
-            <!-- 卡 1：privacy.getlocation-declare · 阻断 · high · 已核验 -->
+            <!-- 卡 1：privacy.getLocation · 阻断 · high · 已核验 -->
             <article class="acard" aria-label="隐私：位置接口未声明">
               <div class="acard__bar acard__bar--block"></div>
               <div class="acard__body">
@@ -310,58 +315,53 @@
                   <span class="acard__title">位置接口未在隐私保护指引声明</span>
                   <span class="acard__badges">
                     <span class="sev sev--block">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#circle-x"></use></svg>
                       阻断
                     </span>
-                    <span class="badge badge--ok">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-                      已核验
-                    </span>
                     <span class="conf conf--high">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
                       high · 可断言
                     </span>
                   </span>
                 </div>
 
                 <div class="acard__meta">
-                  <span class="rule-id">privacy.getlocation-declare</span>
+                  <span class="rule-id">privacy.getLocation</span>
                   <span class="signal-txt">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#search"></use></svg>
                     检出 <code style="font-family:var(--font-mono);font-size:11.5px;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:1px 5px">wx.getLocation</code> 调用但 <code style="font-family:var(--font-mono);font-size:11.5px;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:1px 5px">requiredPrivateInfos</code> 中未声明
                   </span>
                 </div>
 
                 <!-- 逐字官方原文 -->
-                <div class="quote-wrap">
-                  <button class="quote-toggle" aria-expanded="true" data-target="q1">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
+                <details class="quote-wrap"><summary class="quote-toggle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                     逐字官方原文
-                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                  </button>
-                  <div class="quote-block open" id="q1">
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#chevron-down"></use></svg>
+                  </summary>
+                  <div class="quote-block" id="q1">
                     <p class="quote-block__label">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                       官方原话 · 未经改写 · 摘自隐私指引文档
                     </p>
                     <p class="quote-block__text">在小程序中调用涉及用户隐私的相关接口及组件时，开发者应确保在隐私保护指引中声明该接口涉及的数据类型及使用目的，否则平台将拒绝提审。</p>
                   </div>
-                </div>
+                </details>
 
                 <!-- 官方来源 -->
                 <div class="acard__src">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--text-3);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--text-3);flex-shrink:0" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                   <span class="acard__src-url">developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/</span>
-                  <button class="src-open-btn" onclick="window.open('https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/','_blank','noopener')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  <a class="src-open-btn" href="https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#external-link"></use></svg>
                     打开实时官方页核对 →
-                  </button>
+                  </a>
                 </div>
 
                 <!-- 新鲜度 -->
                 <div class="acard__freshness">
                   <span class="fresh-pill fresh-pill--ok">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
                     6 天前核验
                   </span>
                   <span class="fresh-when">last_verified · 2026-06-17</span>
@@ -370,16 +370,16 @@
                 <!-- 底部：双标 + 反馈 -->
                 <div class="acard__foot">
                   <span class="badge badge--ok">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
                     已核验规则
                   </span>
                   <span class="badge badge--ai" style="display:none">AI 生成</span>
                   <div class="acard__foot-r">
-                    <button class="feedback-btn" data-feedback="privacy.getlocation-declare" aria-label="对此条结论提交反馈">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <button class="feedback-btn" data-feedback="privacy.getLocation" aria-label="对此条结论提交反馈">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#message-square"></use></svg>
                       这条不对？反馈
                     </button>
-                    <span class="feedback-toast" id="toast-privacy.getlocation-declare">已记录，感谢反馈</span>
+                    <span class="feedback-toast" id="toast-privacy.getLocation">反馈尚未发送</span>
                   </div>
                 </div>
               </div>
@@ -393,19 +393,15 @@
                   <span class="acard__title">请求域名未加入服务器域名白名单</span>
                   <span class="acard__badges">
                     <span class="sev sev--warn">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#triangle-alert"></use></svg>
                       警告
                     </span>
-                    <span class="badge badge--ok">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-                      已核验
-                    </span>
                     <span class="conf conf--high">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
                       high · 可断言
                     </span>
                     <span class="manual-tag">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#user"></use></svg>
                       需你本人完成
                     </span>
                   </span>
@@ -414,38 +410,37 @@
                 <div class="acard__meta">
                   <span class="rule-id">domain.request-whitelist</span>
                   <span class="signal-txt">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#search"></use></svg>
                     检出 <code style="font-family:var(--font-mono);font-size:11.5px;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:1px 5px">wx.request</code> 目标域名未在微信后台白名单中登记
                   </span>
                 </div>
 
-                <div class="quote-wrap">
-                  <button class="quote-toggle" aria-expanded="false" data-target="q2">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
+                <details class="quote-wrap"><summary class="quote-toggle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                     逐字官方原文
-                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                  </button>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#chevron-down"></use></svg>
+                  </summary>
                   <div class="quote-block" id="q2">
                     <p class="quote-block__label">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                       官方原话 · 未经改写 · 摘自网络 network.html
                     </p>
                     <p class="quote-block__text">小程序只可以跟指定的域名进行网络通信，包括普通 HTTPS 请求、上传文件、下载文件和 WebSocket 通信。每类请求需要在管理平台「开发」-「开发设置」-「服务器域名」中进行配置，域名只支持 https(request、uploadFile、downloadFile) 和 wss(connectSocket) 协议。</p>
                   </div>
-                </div>
+                </details>
 
                 <div class="acard__src">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--text-3);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--text-3);flex-shrink:0" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                   <span class="acard__src-url">developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html</span>
-                  <button class="src-open-btn" onclick="window.open('https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html','_blank','noopener')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  <a class="src-open-btn" href="https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#external-link"></use></svg>
                     打开实时官方页核对 →
-                  </button>
+                  </a>
                 </div>
 
                 <div class="acard__freshness">
                   <span class="fresh-pill fresh-pill--warn">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#triangle-alert"></use></svg>
                     已 28 天，建议复核
                   </span>
                   <span class="fresh-when">last_verified · 2026-05-25</span>
@@ -453,19 +448,19 @@
 
                 <div class="acard__foot">
                   <span class="badge badge--ok">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
                     已核验规则
                   </span>
                   <span class="manual-tag" style="margin-left:4px">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#user"></use></svg>
                     此步骤需你本人在微信后台完成
                   </span>
                   <div class="acard__foot-r">
                     <button class="feedback-btn" data-feedback="domain.request-whitelist" aria-label="对此条结论提交反馈">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#message-square"></use></svg>
                       这条不对？反馈
                     </button>
-                    <span class="feedback-toast" id="toast-domain.request-whitelist">已记录，感谢反馈</span>
+                    <span class="feedback-toast" id="toast-domain.request-whitelist">反馈尚未发送</span>
                   </div>
                 </div>
               </div>
@@ -479,15 +474,11 @@
                   <span class="acard__title">个人主体不支持 wx.requestPayment</span>
                   <span class="acard__badges">
                     <span class="sev sev--block">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#circle-x"></use></svg>
                       阻断
                     </span>
-                    <span class="badge badge--ok">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-                      已核验
-                    </span>
                     <span class="conf conf--high">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
                       high · 可断言
                     </span>
                   </span>
@@ -496,38 +487,37 @@
                 <div class="acard__meta">
                   <span class="rule-id">payment.requires-merchant</span>
                   <span class="signal-txt">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#search"></use></svg>
                     检出 <code style="font-family:var(--font-mono);font-size:11.5px;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:1px 5px">wx.requestPayment</code>，主体类型：个人
                   </span>
                 </div>
 
-                <div class="quote-wrap">
-                  <button class="quote-toggle" aria-expanded="false" data-target="q3">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
+                <details class="quote-wrap"><summary class="quote-toggle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                     逐字官方原文
-                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                  </button>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#chevron-down"></use></svg>
+                  </summary>
                   <div class="quote-block" id="q3">
                     <p class="quote-block__label">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                       官方原话 · 未经改写 · 摘自微信支付准入文档
                     </p>
                     <p class="quote-block__text">微信支付入驻主体类型包括：个体工商户、企业、政府及事业单位、其他组织、小微商户。个人主体不支持开通微信支付，需以上述合法主体完成入驻认证后方可申请。</p>
                   </div>
-                </div>
+                </details>
 
                 <div class="acard__src">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--text-3);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--text-3);flex-shrink:0" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                   <span class="acard__src-url">pay.weixin.qq.com/static/applyment_guide/applyment_index.shtml</span>
-                  <button class="src-open-btn" onclick="window.open('https://pay.weixin.qq.com/static/applyment_guide/applyment_index.shtml','_blank','noopener')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  <a class="src-open-btn" href="https://pay.weixin.qq.com/static/applyment_guide/applyment_index.shtml" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#external-link"></use></svg>
                     打开实时官方页核对 →
-                  </button>
+                  </a>
                 </div>
 
                 <div class="acard__freshness">
                   <span class="fresh-pill fresh-pill--ok">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
                     3 天前核验
                   </span>
                   <span class="fresh-when">last_verified · 2026-06-20</span>
@@ -535,15 +525,15 @@
 
                 <div class="acard__foot">
                   <span class="badge badge--ok">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
                     已核验规则
                   </span>
                   <div class="acard__foot-r">
                     <button class="feedback-btn" data-feedback="payment.requires-merchant" aria-label="对此条结论提交反馈">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#message-square"></use></svg>
                       这条不对？反馈
                     </button>
-                    <span class="feedback-toast" id="toast-payment.requires-merchant">已记录，感谢反馈</span>
+                    <span class="feedback-toast" id="toast-payment.requires-merchant">反馈尚未发送</span>
                   </div>
                 </div>
               </div>
@@ -557,19 +547,19 @@
                   <span class="acard__title">检出医疗相关词汇，服务类目可能涉及医疗</span>
                   <span class="acard__badges">
                     <span class="sev sev--info">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#info"></use></svg>
                       提示
                     </span>
                     <span class="badge badge--ai">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 13h.01M15 13h.01"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#bot"></use></svg>
                       AI 生成
                     </span>
                     <span class="conf conf--med">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#info"></use></svg>
                       medium · 需你自查
                     </span>
                     <span class="manual-tag">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#user"></use></svg>
                       需你本人确认
                     </span>
                   </span>
@@ -578,38 +568,37 @@
                 <div class="acard__meta">
                   <span class="rule-id">category.medical-hint</span>
                   <span class="signal-txt">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#search"></use></svg>
                     检出关键词"问诊""医生"——此为 AI 建议，不是确定性规则
                   </span>
                 </div>
 
-                <div class="quote-wrap">
-                  <button class="quote-toggle" aria-expanded="false" data-target="q4">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
+                <details class="quote-wrap"><summary class="quote-toggle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                     逐字官方原文
-                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                  </button>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#chevron-down"></use></svg>
+                  </summary>
                   <div class="quote-block" id="q4">
                     <p class="quote-block__label">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                       官方原话 · 未经改写 · 摘自类目资质文档
                     </p>
                     <p class="quote-block__text">选择"医疗"类目的小程序，需提供医疗机构执业许可证（对应等级），且个人主体暂不支持申请医疗类目。</p>
                   </div>
-                </div>
+                </details>
 
                 <div class="acard__src">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--text-3);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--text-3);flex-shrink:0" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                   <span class="acard__src-url">developers.weixin.qq.com/miniprogram/product/material/</span>
-                  <button class="src-open-btn" onclick="window.open('https://developers.weixin.qq.com/miniprogram/product/material/','_blank','noopener')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  <a class="src-open-btn" href="https://developers.weixin.qq.com/miniprogram/product/material/" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#external-link"></use></svg>
                     打开实时官方页核对 →
-                  </button>
+                  </a>
                 </div>
 
                 <div class="acard__freshness">
                   <span class="fresh-pill fresh-pill--warn">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#triangle-alert"></use></svg>
                     已 32 天，建议复核
                   </span>
                   <span class="fresh-when">last_verified · 2026-05-22</span>
@@ -617,15 +606,15 @@
 
                 <div class="acard__foot">
                   <span class="badge badge--ai">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 13h.01M15 13h.01"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#bot"></use></svg>
                     AI 建议 · 未经逐字核验
                   </span>
                   <div class="acard__foot-r">
                     <button class="feedback-btn" data-feedback="category.medical-hint" aria-label="对此条结论提交反馈">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#message-square"></use></svg>
                       这条不对？反馈
                     </button>
-                    <span class="feedback-toast" id="toast-category.medical-hint">已记录，感谢反馈</span>
+                    <span class="feedback-toast" id="toast-category.medical-hint">反馈尚未发送</span>
                   </div>
                 </div>
               </div>
@@ -639,15 +628,11 @@
                   <span class="acard__title">检出非 https/wss 请求域名，真机将被拦截</span>
                   <span class="acard__badges">
                     <span class="sev sev--warn">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#triangle-alert"></use></svg>
                       警告
                     </span>
-                    <span class="badge badge--ok">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-                      已核验
-                    </span>
                     <span class="conf conf--high">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
                       high · 可断言
                     </span>
                   </span>
@@ -656,38 +641,37 @@
                 <div class="acard__meta">
                   <span class="rule-id">domain.https-wss-only</span>
                   <span class="signal-txt">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#search"></use></svg>
                     检出 <code style="font-family:var(--font-mono);font-size:11.5px;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:1px 5px">http://api.example.com</code> — 协议非 https
                   </span>
                 </div>
 
-                <div class="quote-wrap">
-                  <button class="quote-toggle" aria-expanded="false" data-target="q5">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
+                <details class="quote-wrap"><summary class="quote-toggle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                     逐字官方原文
-                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                  </button>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#chevron-down"></use></svg>
+                  </summary>
                   <div class="quote-block" id="q5">
                     <p class="quote-block__label">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                       官方原话 · 未经改写 · 摘自网络请求文档
                     </p>
                     <p class="quote-block__text">域名只支持 https(request、uploadFile、downloadFile) 和 wss(connectSocket) 协议，不支持 IP 地址、localhost 及端口号（特殊协议除外），小程序上线后不可使用 http 请求。</p>
                   </div>
-                </div>
+                </details>
 
                 <div class="acard__src">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--text-3);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;color:var(--text-3);flex-shrink:0" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>
                   <span class="acard__src-url">developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html</span>
-                  <button class="src-open-btn" onclick="window.open('https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html','_blank','noopener')">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  <a class="src-open-btn" href="https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#external-link"></use></svg>
                     打开实时官方页核对 →
-                  </button>
+                  </a>
                 </div>
 
                 <div class="acard__freshness">
                   <span class="fresh-pill fresh-pill--ok">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
                     10 天前核验
                   </span>
                   <span class="fresh-when">last_verified · 2026-06-13</span>
@@ -695,15 +679,15 @@
 
                 <div class="acard__foot">
                   <span class="badge badge--ok">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
                     已核验规则
                   </span>
                   <div class="acard__foot-r">
                     <button class="feedback-btn" data-feedback="domain.https-wss-only" aria-label="对此条结论提交反馈">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#message-square"></use></svg>
                       这条不对？反馈
                     </button>
-                    <span class="feedback-toast" id="toast-domain.https-wss-only">已记录，感谢反馈</span>
+                    <span class="feedback-toast" id="toast-domain.https-wss-only">反馈尚未发送</span>
                   </div>
                 </div>
               </div>
@@ -711,12 +695,11 @@
 
           </div>
           <!-- /audit-list -->
+          <nav class="journey-actions" aria-label="处理路径"><a class="chip chip--accent" href="diff-review.html?from=audit.html">审阅声明改动示例</a><a class="chip" href="guided-step.html">核对域名配置</a><a class="chip" href="explain.html">查看拒因处理</a></nav>
 
           <!-- ④ 底部责任边界 -->
           <div class="audit-guard" role="note" aria-label="责任边界声明">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>
-            </svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#shield"></use></svg>
             <span>
               船友只给待你确认的导航整理——以官方来源整理，不构成合规担保，不代表"已合规 / 保证过审"。
               官方提交、认证、备案、发布等所有官方动作均需<strong style="color:var(--text-2);font-weight:500">你本人</strong>完成；一切以你打开的官方实时文档为准。
@@ -729,37 +712,8 @@
     </div>
   </div>
 
-<script>
-/* ── 深浅模式切换 ── */
-const themeBtn = document.getElementById('themeBtn');
-themeBtn.addEventListener('click', () => {
-  const dark = document.body.getAttribute('data-theme') === 'dark';
-  document.body.setAttribute('data-theme', dark ? 'light' : 'dark');
-  themeBtn.textContent = dark ? '深色' : '浅色';
-});
-
-/* ── 引用块折叠展开 ── */
-document.querySelectorAll('.quote-toggle').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const expanded = btn.getAttribute('aria-expanded') === 'true';
-    btn.setAttribute('aria-expanded', String(!expanded));
-    const target = document.getElementById(btn.dataset.target);
-    if (target) target.classList.toggle('open', !expanded);
-  });
-});
-
-/* ── 反馈按钮轻提示 ── */
-document.querySelectorAll('.feedback-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const id   = btn.dataset.feedback;
-    const toast = document.getElementById('toast-' + id);
-    if (!toast) return;
-    toast.classList.add('show');
-    btn.disabled = true;
-    btn.style.opacity = '.5';
-    setTimeout(() => { toast.classList.remove('show'); }, 2200);
-  });
-});
-</script>
+<script type="module" src="audit.js"></script>
+<script src="preview.js"></script>
+<script src="responsive.js"></script>
 </body>
 </html>

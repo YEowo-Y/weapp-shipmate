@@ -49,10 +49,14 @@ export function runGuide(inputs = {}, { includeDrafts = false } = {}) {
   const items = [];
   const selfCheck = []; // 内容相关、需用户按业务自查的规则（不计入确定阻断概览）
   const skipped = [];
+  const unknown = [];
 
   for (const stage of flow) {
     // flow.yaml 已按顺序排列；applies_when 决定是否适用
-    if (!evalExpr(stage.applies_when, inputs)) {
+    const missingFact = stage.applies_when && [...stage.applies_when.matchAll(/([A-Za-z_]\w*)\s*(?:==|!=)/g)]
+      .some((match) => inputs[match[1]] == null);
+    if (missingFact) unknown.push(stage.stage);
+    if (!missingFact && !evalExpr(stage.applies_when, inputs)) {
       skipped.push(stage.stage);
       continue;
     }
@@ -93,6 +97,11 @@ export function runGuide(inputs = {}, { includeDrafts = false } = {}) {
   }
 
   const notes = [];
+  if (unknown.length) notes.push(`事实尚未确认，保留待核对阶段：${unknown.join("、")}；未知不等于不适用。`);
+  if (inputs.has_payment != null) notes.push(inputs.has_payment
+    ? "已记录涉及支付：请核对『可能适用』中的支付与类目线索；此输入不代表已开通支付，也不能判定实物或虚拟支付资格。"
+    : "已记录不涉及支付：未据此移除业务自查规则；如实际业务包含充值、会员或付费内容，请重新核对支付要求。");
+  if (inputs.business_type != null) notes.push("已接收实际业务描述，仅用于人工核对类目线索；不会自动选定官方服务类目，未匹配也不代表无需资质。");
   if (skipped.length) notes.push(`按你的输入跳过阶段：${skipped.join("、")}`);
   if (selfCheck.length)
     notes.push(`另有 ${selfCheck.length} 条规则是否适用取决于你的具体功能，已列入『可能适用 · 请按业务自查』。`);

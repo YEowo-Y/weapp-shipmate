@@ -1,0 +1,23 @@
+.agent-review { color: var(--text); font-size: 13px; line-height: 1.65; }
+.agent-review__header { display: flex; align-items: center; gap: 12px; padding: 14px 16px 4px; }
+.agent-review__header strong { font-size: 14px; font-weight: 550; }
+.agent-review__count { margin-left: auto; color: var(--ok); font: 12px/1.5 var(--font-mono); }
+.agent-review__caption { margin: 0; padding: 0 16px 12px; color: var(--text-2); font-size: 12px; }
+.agent-review__diff { border-block: 1px solid var(--border); padding-block: 8px; overflow: auto; }
+.agent-review__line { display: grid; grid-template-columns: 24px minmax(0,1fr); padding: 4px 12px 4px 6px; }
+.agent-review__line code { font: 12px/1.75 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent-review__line[data-change="added"] { background: var(--ok-bg, color-mix(in srgb,var(--ok) 9%,transparent)); color: var(--ok); }
+.agent-review__marker { text-align: center; font: 12px/1.75 var(--font-mono); color: var(--text-3); user-select: none; }
+.agent-review__actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 8px; }
+.agent-review__button { appearance: none; display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 6px 10px; border: 1px solid var(--border-2); border-radius: 8px; background: transparent; color: var(--text-2); font: inherit; font-size: 12px; text-decoration: none; cursor: pointer; transition: background .16s, border-color .16s; }
+.agent-review__button:hover:not(:disabled) { background: var(--bg); border-color: var(--text-3); }
+.agent-review__button.approve { background: var(--text); border-color: var(--text); color: var(--surface); }
+.agent-review__button.approve:hover:not(:disabled) { background: var(--text-2); border-color: var(--text-2); }
+.agent-review__button:focus-visible { outline: 2px solid var(--text-2); outline-offset: 3px; }
+.agent-review__button:disabled { opacity: .45; cursor: not-allowed; }
+.agent-review__status { margin: 4px 16px 16px; padding-left: 10px; border-left: 2px solid var(--border-2); font-size: 12px; color: var(--text-2); }
+.agent-review[data-review-state="accepted"] .agent-review__status { border-color: var(--ok); }
+.agent-review__reset { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); color: var(--text-2); font-size: 12px; }
+.agent-review__reset .roll { margin-left: auto; min-height: 36px; border: 0; background: transparent; padding-inline: 4px; }
+@media (max-width: 700px) { .agent-review__button, .agent-review__reset .roll { min-height: 40px; } }
+@media (prefers-reduced-motion: reduce) { .agent-review__button { transition: none; } }

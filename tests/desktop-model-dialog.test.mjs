@@ -1,0 +1,532 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { setImmediate } from 'node:timers/promises';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+const requireDesktop = createRequire(new URL('../desktop/package.json', import.meta.url));
+let ts;
+try { ts = requireDesktop('typescript'); } catch { /* Optional desktop dependencies. */ }
+const desktopTest = (name, fn) => test(name, { skip: !ts && 'Install desktop dependencies' }, fn);
+const settle = () => setImmediate();
+function harness(snapshot, selection = null, options = {}) {
+  const nodes = new Map(), timers = [];
+  let doc;
+  class Element {
+    constructor(tag = 'div') { this.tagName = tag.toUpperCase(); this.style = {}; this.dataset = {}; this.children = []; this.events = {}; this.value = ''; this.attributes = {}; this.classList = { toggle() {}, add() {} }; }
+    set id(value) { this._id = value; nodes.set(`#${value}`, this); }
+    get id() { return this._id; }
+    setAttribute(k,v) { this.attributes[k] = v; if (k.startsWith('data-')) nodes.set(`[${k}]`, this); }
+    append(...children) { this.children.push(...children); }
+    prepend(...children) { this.children.unshift(...children); }
+    replaceChildren(...children) { this.children = children; }
+    addEventListener(k,f) { this.events[k] = f; }
+    removeEventListener() {}
+    querySelector(s) { if (!nodes.has(s)) { const node = new Element(); if (s === '#desktop-provider-key') node.type = 'password'; nodes.set(s, node); } return nodes.get(s); }
+    querySelectorAll() { return this.children; }
+    contains(node) { return this.children.includes(node); }
+    focus() { doc.activeElement = this; }
+    showModal() { this.open = true; }
+    close() { this.open = false; this.events.close?.(); }
+    remove() {}
+  }
+  doc = { body: new Element(), createElement: tag => new Element(tag), createTextNode: () => new Element(), addEventListener() {}, removeEventListener() {}, activeElement: null };
+  const client = { snapshot, ready: true, async load() { return this.snapshot; }, async mutate() {}, dispose() {} };
+  const source = readFileSync(new URL('../desktop/src/model-connection.ts', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
+  const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+  const quickPicker = { open() { this.opened = true; }, close() { this.opened = false; }, destroy() {} };
+  const context = { mountModelPicker: options => { quickPicker.options = options; options.anchor.addEventListener('click', () => quickPicker.open()); return quickPicker; }, document: doc, HTMLElement: Element, createConnectionClient: () => client, desktopModelFetch() {}, createIcon: () => new Element(), createProviderIcon: () => new Element(), openUrl: async () => {}, setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout() {} };
+  const actionSource = readFileSync(new URL('../desktop/design-previews/components/ui-kit.js', import.meta.url), 'utf8').match(/^export function createActionButton[^]*?^}/m)[0].replace('export ', '');
+  vm.runInNewContext(actionSource, context);
+  vm.runInNewContext(script, context);
+  const picker = new Element(), button = new Element();
+  const app = context.mountModelConnections({ button, picker, select: () => true, getSelection: () => selection, isBusy: () => false, ...options });
+  return { app, nodes, timers, client, doc, context, picker, button, quickPicker };
+}
+desktopTest('model controller mounts without a global button and delegates management without loading credentials', async () => {
+  let managed = 0;
+  const app = harness({ connections: [] }, null, { button: undefined, onManage: () => { managed++; } });
+  let loaded = 0; app.client.load = async () => { loaded++; return app.client.snapshot; };
+  app.quickPicker.options.manage(); await settle();
+  assert.equal(managed, 1);
+  assert.equal(loaded, 0);
+  assert.equal(app.doc.body.children[0].open, undefined);
+  app.app.destroy();
+});
+
+desktopTest('explicit settings origin takes priority over current focus and survives dialog closure', async () => {
+  const app = harness({ connections: [] }, null, { button: undefined });
+  app.picker.focus();
+  app.app.open(app.button); await settle();
+  app.doc.body.children[0].close();
+  assert.equal(app.doc.activeElement, app.button);
+  app.doc.activeElement = null;
+  app.app.open(); await settle(); app.doc.body.children[0].close();
+  assert.equal(app.doc.activeElement, app.picker, 'composer is the available fallback when no global button exists');
+});
+for (const [providerId, authMethod] of [['openai', 'api-key'], ['openrouter', 'oauth']]) {
+  desktopTest(`native model dialog retains refresh and disconnect after ${authMethod} catalog failure`, async () => {
+    const app = harness({ connections: [{ providerId, status: 'connected', hasCredential: true, authMethod, models: [] }] }, { providerId, model: 'saved', label: 'Saved' });
+    app.app.open(); await settle();
+    assert.equal(app.nodes.get('#desktop-provider-refresh').hidden, false);
+    app.client.snapshot.connections[0].status = 'error';
+    app.client.snapshot.connections[0].error = { message: 'Catalog unavailable' };
+    app.app.open(); await settle();
+    assert.equal(app.nodes.get('#desktop-provider-refresh').hidden, false);
+    assert.equal(app.nodes.get('#desktop-provider-disconnect').hidden, false);
+    assert.equal(app.nodes.get('#desktop-provider-status').textContent, 'Catalog unavailable');
+  });
+}
+desktopTest('OAuth polling keeps model nodes and focused controls stable without disabling providers', async () => {
+  const app = harness({ oauth: { status: 'waiting' }, connections: [{ providerId: 'openai', status: 'connected', hasCredential: true, models: [{ id: 'saved', name: 'Saved' }] }] }, { providerId: 'openai', model: 'saved', label: 'Saved' });
+  app.app.open(); await settle();
+  const model = app.nodes.get('.desktop-model-list').children[0]; model.focus();
+  assert.equal(model.attributes['aria-pressed'], 'true');
+  app.timers.at(-1)();
+  assert.ok(app.nodes.get('nav').children.every(b => !b.disabled));
+  await settle();
+  assert.equal(app.nodes.get('.desktop-model-list').children[0], model);
+  assert.equal(app.doc.activeElement, model);
+});
+desktopTest('unavailable native service explains bundled runtime recovery', async () => {
+  const app = harness({ connections: [] });
+  app.client.load = async () => { throw Error('unavailable'); };
+  app.app.open(); await settle();
+  assert.match(app.nodes.get('#desktop-provider-status').textContent, /重启应用或修复安装/);
+});
+desktopTest('connection action reflects the actual provider state without replacing retry actions', async () => {
+  const app = harness({ connections: [{ providerId: 'ollama', status: 'connected', authMethod: 'local', models: [] }] }, { providerId: 'ollama', model: 'saved', label: 'Saved' });
+  app.app.open(); await settle();
+  assert.equal(app.nodes.get('#desktop-provider-connect').textContent, '重新连接');
+  assert.equal(app.nodes.get('#desktop-provider-refresh').hidden, false);
+  app.client.snapshot.connections[0].status = 'disconnected';
+  app.app.open(); await settle();
+  assert.equal(app.nodes.get('#desktop-provider-connect').textContent, '连接本机 Ollama');
+});
+desktopTest('failed refresh is presented as an error even when a connected snapshot is retained', async () => {
+  const app = harness({ connections: [{ providerId: 'openai', status: 'connected', hasCredential: true, models: [{ id: 'saved', name: 'Saved' }] }] });
+  app.app.open(); await settle();
+  assert.equal(app.nodes.get('#desktop-provider-status').dataset.tone, 'success');
+  app.client.mutate = async () => { throw Error('transport unavailable'); };
+  app.nodes.get('#desktop-provider-refresh').events.click(); await settle();
+  assert.match(app.nodes.get('#desktop-provider-status').textContent, /连接操作失败/);
+  assert.equal(app.nodes.get('#desktop-provider-status').dataset.tone, 'error');
+  assert.equal(app.client.snapshot.connections[0].status, 'connected');
+  assert.equal(app.nodes.get('#desktop-provider-disconnect').hidden, false);
+});
+desktopTest('failed OS browser launch refreshes authoritative OAuth state and leaves cancel available', async () => {
+  const app = harness({ connections: [] }, { providerId: 'openrouter', model: 'saved', label: 'Saved' });
+  app.app.open(); await settle();
+  app.context.openUrl = async () => { throw Error('OS launch failed'); };
+  let started = false;
+  app.client.mutate = async () => { started = true; return { authorizationUrl: 'https://openrouter.ai/auth' }; };
+  app.client.load = async () => { if (started) app.client.snapshot = { connections: [], oauth: { status: 'waiting' } }; return app.client.snapshot; };
+  app.nodes.get('#desktop-provider-oauth').events.click(); await settle();
+  assert.equal(app.nodes.get('#desktop-provider-oauth-cancel').hidden, false);
+  assert.match(app.nodes.get('#desktop-provider-status').textContent, /在浏览器中打开授权页面/);
+  assert.ok(app.timers.length > 0);
+});
+
+
+desktopTest('composer opens quick selection while header retains credential settings', async () => {
+  const app = harness({ connections: [] });
+  app.picker.events.click();
+  assert.equal(app.quickPicker.opened, true);
+  assert.equal(app.doc.body.children[0].open, undefined);
+  app.button.events.click(); await settle();
+  assert.equal(app.doc.body.children[0].open, true);
+  assert.equal(app.quickPicker.opened, false);
+  assert.equal(app.doc.activeElement, app.nodes.get('#desktop-provider-key'));
+});
+
+desktopTest('connected settings focus model search and local settings explain no-key connection', async () => {
+  const app = harness({ connections: [{ providerId: 'ollama', status: 'connected', models: [] }] }, { providerId: 'ollama', model: 'saved', label: 'Saved' });
+  app.app.open(); await settle();
+  assert.equal(app.doc.activeElement, app.nodes.get('#desktop-model-search'));
+  assert.match(app.nodes.get('.desktop-model-note').textContent, /无需 API 密钥/);
+  app.client.snapshot.connections[0].status = 'disconnected';
+  app.app.open(); await settle();
+  assert.equal(app.doc.activeElement, app.nodes.get('#desktop-provider-connect'));
+});
+
+desktopTest('late settings load does not steal focus from a control the user chose', async () => {
+  const app = harness({ connections: [] });
+  let resolve;
+  app.client.load = () => new Promise(done => { resolve = done; });
+  app.app.open();
+  const close = app.nodes.get('[data-close]'); close.focus();
+  resolve(); await settle();
+  assert.equal(app.doc.activeElement, close);
+});
+
+desktopTest('background catalog removal restores model search focus without focusing a closed dialog', async () => {
+  const app = harness({ oauth: { status: 'waiting' }, connections: [{ providerId: 'openai', status: 'connected', models: [{ id: 'saved', name: 'Saved' }] }] });
+  app.app.open(); await settle();
+  app.nodes.get('.desktop-model-list').children[0].focus();
+  app.client.snapshot.connections[0].models = [];
+  app.timers.at(-1)(); await settle();
+  assert.equal(app.doc.activeElement, app.nodes.get('#desktop-model-search'));
+
+  app.client.snapshot.connections[0].models = [{ id: 'next', name: 'Next' }];
+  app.timers.at(-1)(); await settle();
+  app.nodes.get('.desktop-model-list').children[0].focus();
+  app.doc.body.children[0].close();
+  app.button.focus();
+  app.client.snapshot.connections[0].models = [];
+  app.timers.at(-1)(); await settle();
+  assert.equal(app.doc.activeElement, app.button);
+});
+
+desktopTest('credential actions use the open-source control and block empty or repeated submissions', async () => {
+  const app = harness({ connections: [] });
+  app.app.open(); await settle();
+  const connect = app.nodes.get('#desktop-provider-connect'), key = app.nodes.get('#desktop-provider-key');
+  assert.equal(connect.tagName, 'WA-BUTTON');
+  assert.equal(connect.type, 'submit');
+  assert.equal(connect.disabled, true);
+  const calls = [];
+  let finish;
+  app.client.mutate = (path, payload) => { calls.push([path, payload]); return new Promise(resolve => { finish = resolve; }); };
+  const submit = () => app.nodes.get('form').events.submit({ preventDefault() {} });
+  submit();
+  assert.equal(calls.length, 0);
+  key.value = 'test-only-credential'; key.events.input();
+  assert.equal(connect.disabled, false);
+  submit(); submit();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], '/openai/connect');
+  assert.equal(key.value, '');
+  assert.equal(connect.disabled, true);
+  finish(); await settle();
+  assert.equal(connect.disabled, true, 'cleared credential must be entered again before reconnect');
+});
+
+desktopTest('manual OAuth resumes, blocks conflicting actions and clears submitted codes', async () => {
+  const auth = { status: 'waiting', mode: 'manual', flowId: 'flow-test', authorizationUrl: 'https://openrouter.ai/auth', expiresAt: Date.now() + 60000 };
+  const app = harness({ connections: [], oauth: auth }, { providerId: 'openrouter', model: 'saved', label: 'Saved' });
+  app.app.open(); await settle();
+  const code = app.nodes.get('#desktop-oauth-code');
+  assert.equal(app.nodes.get('#desktop-oauth-code-form').hidden, false);
+  assert.equal(app.doc.activeElement, code);
+  assert.equal(app.nodes.get('#desktop-provider-key').disabled, true);
+  assert.equal(app.nodes.get('#desktop-provider-connect').disabled, true);
+  assert.equal(app.nodes.get('form').hidden, true);
+  assert.equal(app.nodes.get('#desktop-provider-status').hidden, true);
+  assert.doesNotMatch(app.nodes.get('.desktop-oauth-panel > .desktop-field-hint').textContent, /上方/);
+  const opened = [], calls = [];
+  app.context.openUrl = async url => opened.push(url);
+  app.client.mutate = async (path, payload) => { calls.push([path, payload]); app.client.snapshot.oauth = { status: 'connected' }; };
+  app.nodes.get('#desktop-provider-oauth-reopen').events.click(); await settle();
+  assert.deepEqual(opened, [auth.authorizationUrl]);
+  app.nodes.get('#desktop-provider-refresh').events.click();
+  app.nodes.get('#desktop-provider-key').value = 'must-not-submit';
+  app.nodes.get('form').events.submit({ preventDefault() {} });
+  assert.equal(calls.length, 0);
+  code.value = 'manual-code-fixture'; code.events.input();
+  assert.equal(app.nodes.get('#desktop-provider-oauth-complete').disabled, false);
+  app.nodes.get('#desktop-oauth-code-form').events.submit({ preventDefault() {} });
+  assert.equal(code.value, '');
+  await settle();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], '/openrouter/oauth/complete');
+  assert.equal(calls[0][1].flowId, 'flow-test');
+  assert.equal(calls[0][1].code, 'manual-code-fixture');
+  assert.equal(app.nodes.get('#desktop-provider-oauth-reopen').hidden, true);
+  assert.equal(app.nodes.get('#desktop-oauth-code-form').hidden, true);
+  assert.equal(app.nodes.get('form').hidden, false);
+  assert.equal(app.nodes.get('#desktop-provider-status').hidden, false);
+});
+
+desktopTest('manual OAuth clears code on close and expiry without claiming a connection', async () => {
+  const app = harness({ connections: [], oauth: { status: 'waiting', mode: 'manual', flowId: 'flow-test' } }, { providerId: 'openrouter', model: 'saved', label: 'Saved' });
+  app.app.open(); await settle();
+  const code = app.nodes.get('#desktop-oauth-code');
+  code.value = 'discard-on-close';
+  app.nodes.get('[data-close]').events.click();
+  assert.equal(code.value, '');
+  app.app.open(); await settle(); code.value = 'discard-on-expiry';
+  app.client.snapshot.oauth = { status: 'expired' };
+  app.timers.at(-1)(); await settle();
+  assert.equal(code.value, '');
+  assert.equal(app.nodes.get('#desktop-oauth-code-form').hidden, true);
+  assert.match(app.nodes.get('#desktop-oauth-progress').textContent, /过期/);
+  assert.equal(app.doc.body.children[0].dataset.connectionState, 'disconnected');
+  assert.equal(app.doc.activeElement, app.nodes.get('#desktop-provider-oauth-manual'));
+});
+
+desktopTest('cancelling pending authorization restores focus to an available authorization action', async () => {
+  const app = harness({ connections: [], oauth: { status: 'waiting', mode: 'callback' } }, { providerId: 'openrouter', model: 'saved', label: 'Saved' });
+  app.app.open(); await settle();
+  const cancel = app.nodes.get('#desktop-provider-oauth-cancel');
+  assert.equal(app.doc.activeElement, cancel);
+  app.client.mutate = async () => { app.client.snapshot.oauth = { status: 'cancelled' }; };
+  cancel.events.click(); await settle();
+  assert.equal(app.nodes.get('form').hidden, false);
+  assert.equal(cancel.hidden, true);
+  assert.equal(app.doc.activeElement, app.nodes.get('#desktop-provider-oauth-manual'));
+});
+
+desktopTest('narrow OAuth actions wrap within the responsive dialog without a duplicate password control', () => {
+  const styles = readFileSync(new URL('../desktop/src/styles.css', import.meta.url), 'utf8');
+  assert.match(styles, /\.desktop-model-actions\s*\{[^}]*flex-wrap:wrap/s);
+  assert.match(styles, /\.desktop-model-actions wa-button\s*\{[^}]*max-width:100%/s);
+  assert.match(styles, /\.desktop-model-actions wa-button::part\(button\)\s*\{[^}]*white-space:normal/s);
+  assert.match(styles, /#desktop-oauth-code::-ms-reveal\s*\{\s*display:none;/);
+});
+
+desktopTest('failed code exchange reloads terminal state and allows a new authorization', async () => {
+  const app = harness({ connections: [], oauth: { status: 'waiting', mode: 'manual', flowId: 'flow-test' } }, { providerId: 'openrouter', model: 'saved', label: 'Saved' });
+  app.app.open(); await settle();
+  app.client.mutate = async () => { throw Error('exchange rejected'); };
+  app.client.load = async () => { app.client.snapshot.oauth = { status: 'error', message: '授权码已失效，请重新授权。' }; return app.client.snapshot; };
+  const code = app.nodes.get('#desktop-oauth-code');
+  code.value = 'rejected-code';
+  app.nodes.get('#desktop-oauth-code-form').events.submit({ preventDefault() {} }); await settle();
+  assert.equal(code.value, '');
+  assert.equal(app.nodes.get('#desktop-oauth-code-form').hidden, true);
+  assert.equal(app.nodes.get('#desktop-provider-oauth-manual').hidden, false);
+  assert.equal(app.nodes.get('#desktop-provider-oauth-manual').disabled, false);
+  assert.match(app.nodes.get('#desktop-oauth-progress').textContent, /已失效/);
+});
+
+desktopTest('manual start requests its mode and waits for an explicit browser action', async () => {
+  const app = harness({ connections: [] }, { providerId: 'openrouter', model: 'saved', label: 'Saved' });
+  app.app.open(); await settle();
+  let payload;
+  app.client.mutate = async (path, value) => {
+    assert.equal(path, '/openrouter/oauth/start'); payload = value;
+    app.client.snapshot.oauth = { status: 'waiting', mode: 'manual', flowId: 'flow-test', authorizationUrl: 'https://openrouter.ai/auth' };
+    return { authorizationUrl: 'https://openrouter.ai/auth' };
+  };
+  let opened = 0;
+  app.context.openUrl = async () => { opened++; throw Error('cannot open'); };
+  app.nodes.get('#desktop-provider-oauth-manual').events.click(); await settle();
+  assert.equal(payload.mode, 'manual');
+  assert.equal(app.nodes.get('#desktop-provider-oauth-reopen').hidden, false);
+  assert.equal(app.nodes.get('#desktop-provider-oauth-cancel').hidden, false);
+  assert.equal(app.nodes.get('#desktop-oauth-code-form').hidden, false);
+  assert.equal(opened, 0);
+  assert.equal(app.doc.activeElement, app.nodes.get('#desktop-provider-oauth-reopen'));
+  app.nodes.get('#desktop-provider-oauth-reopen').events.click(); await settle();
+  assert.equal(opened, 1);
+  assert.equal(app.nodes.get('#desktop-provider-oauth-reopen').hidden, false);
+  assert.match(app.nodes.get('#desktop-provider-status').textContent, /系统浏览器/);
+});
+
+desktopTest('revealed credentials are cleared and masked on close and provider change', async () => {
+  const app = harness({ connections: [] });
+  app.app.open(); await settle();
+  const key = app.nodes.get('#desktop-provider-key'), reveal = app.nodes.get('#desktop-provider-reveal');
+  key.value = 'test-only-credential'; reveal.events.click();
+  assert.equal(key.type, 'text');
+  assert.equal(reveal.children.map(node => node.textContent).join(''), '隐藏密钥');
+  assert.equal(reveal.children[1].className, 'sr-only');
+  assert.equal(reveal.attributes['aria-pressed'], undefined);
+  assert.equal(reveal.attributes['aria-label'], undefined);
+  app.nodes.get('nav').children.find(node => node.dataset.providerId === 'google').events.click();
+  assert.equal(key.value, ''); assert.equal(key.type, 'password');
+  key.value = 'another-test-only-credential'; reveal.events.click();
+  app.nodes.get('[data-close]').events.click();
+  assert.equal(key.value, ''); assert.equal(key.type, 'password');
+  assert.equal(reveal.children.map(node => node.textContent).join(''), '显示密钥');
+});
+
+desktopTest('OAuth polling clears recovered read errors without resetting pending authorization', async () => {
+  const app = harness({ connections: [], oauth: { status: 'waiting', mode: 'callback' } }, { providerId: 'openrouter', model: 'saved', label: 'Saved' });
+  app.app.open(); await settle();
+  app.client.load = async () => { throw Error('temporary outage'); };
+  app.timers.at(-1)(); await settle();
+  assert.match(app.nodes.get('#desktop-provider-status').textContent, /桌面模型服务不可用/);
+  assert.equal(app.nodes.get('#desktop-provider-status').hidden, false);
+  app.client.load = async () => app.client.snapshot;
+  app.timers.at(-1)(); await settle();
+  assert.doesNotMatch(app.nodes.get('#desktop-provider-status').textContent, /桌面模型服务不可用/);
+  assert.equal(app.nodes.get('#desktop-provider-status').hidden, true);
+  assert.equal(app.nodes.get('#desktop-provider-oauth-cancel').hidden, false);
+});
+
+desktopTest('successful OAuth polls preserve an unresolved system-browser action error', async () => {
+  const app = harness({ connections: [], oauth: { status: 'waiting', mode: 'callback', authorizationUrl: 'https://openrouter.ai/auth' } }, { providerId: 'openrouter', model: 'saved', label: 'Saved' });
+  app.app.open(); await settle();
+  app.context.openUrl = async () => { throw Error('OS launch failed'); };
+  app.nodes.get('#desktop-provider-oauth-reopen').events.click(); await settle();
+  app.client.load = async () => { throw Error('temporary outage'); };
+  app.timers.at(-1)(); await settle();
+  app.client.load = async () => app.client.snapshot;
+  app.timers.at(-1)(); await settle();
+  assert.match(app.nodes.get('#desktop-provider-status').textContent, /系统浏览器/);
+  assert.equal(app.nodes.get('#desktop-provider-status').hidden, false);
+  assert.equal(app.nodes.get('#desktop-provider-status').dataset.tone, 'error');
+});
+
+desktopTest('catalog distinguishes disconnected, empty and filtered states as search is cleared', async () => {
+  const app = harness({ connections: [] });
+  app.app.open(); await settle();
+  const list = app.nodes.get('.desktop-model-list'), search = app.nodes.get('#desktop-model-search');
+  assert.match(list.children[0].textContent, /连接成功后/);
+  app.client.snapshot.connections = [{ providerId: 'openai', status: 'connected', models: [] }];
+  app.app.open(); await settle();
+  assert.match(list.children[0].textContent, /已连接.*未返回.*刷新目录/);
+  assert.doesNotMatch(list.children[0].textContent, /关键词/);
+  app.client.snapshot.connections[0].models = [{ id: 'alpha', name: 'Alpha' }];
+  search.value = 'missing'; search.events.input();
+  assert.match(list.children[0].textContent, /没有匹配.*关键词/);
+  app.client.snapshot.connections[0].models = [];
+  search.value = ''; search.events.input();
+  assert.match(list.children[0].textContent, /已连接.*未返回.*刷新目录/);
+});
+
+desktopTest('empty connected Ollama catalog explains downloading models before refresh', async () => {
+  const app = harness({ connections: [{ providerId: 'ollama', status: 'connected', authMethod: 'local', models: [] }] }, { providerId: 'ollama', model: 'saved', label: 'Saved' });
+  app.app.open(); await settle();
+  assert.match(app.nodes.get('.desktop-model-list').children[0].textContent, /下载模型.*刷新目录/);
+  assert.equal(app.nodes.get('#desktop-provider-refresh').hidden, false);
+});
+
+desktopTest('explicit service retry restores OAuth polling after a failed read clears the client snapshot', async () => {
+  const snapshot = { connections: [], oauth: { status: 'waiting', mode: 'callback', authorizationUrl: 'https://openrouter.ai/auth' } };
+  const app = harness(snapshot, { providerId: 'openrouter', model: 'saved', label: 'Saved' });
+  app.app.open(); await settle();
+  const scheduled = app.timers.length;
+  app.client.load = async () => {
+    app.client.snapshot = null;
+    app.client.ready = false;
+    throw Error('local service unavailable');
+  };
+  app.timers.at(-1)(); await settle();
+  const retry = app.nodes.get('#desktop-provider-retry');
+  assert.equal(retry.hidden, false);
+  assert.equal(retry.disabled, false);
+  assert.match(app.nodes.get('#desktop-provider-status').textContent, /桌面模型服务不可用/);
+  assert.equal(app.timers.length, scheduled, 'cleared OAuth state must not schedule another poll');
+  let reads = 0;
+  app.client.load = async () => {
+    reads++;
+    app.client.snapshot = snapshot;
+    app.client.ready = true;
+    return snapshot;
+  };
+  retry.events.click(); await settle();
+  assert.equal(reads, 1);
+  assert.equal(retry.hidden, true);
+  assert.doesNotMatch(app.nodes.get('#desktop-provider-status').textContent, /桌面模型服务不可用/);
+  assert.equal(app.nodes.get('#desktop-provider-status').hidden, true);
+  assert.equal(app.nodes.get('#desktop-provider-oauth-cancel').hidden, false);
+  assert.equal(app.timers.length, scheduled + 1, 'authoritative pending OAuth state resumes polling');
+  app.timers.at(-1)(); await settle();
+  assert.equal(reads, 2);
+  assert.equal(app.timers.length, scheduled + 2);
+});
+
+desktopTest('system storage is opt-in and saved credentials reconnect without key readback or inference', async () => {
+  const app = harness({ storage: 'system', connections: [{ providerId: 'openai', status: 'disconnected', credentialStorage: 'system', hasCredential: true, models: [] }] });
+  const calls = []; app.client.mutate = async (path, payload) => { calls.push({ path, payload }); };
+  app.app.open(); await settle();
+  assert.equal(app.nodes.get('#desktop-provider-storage').value, 'memory');
+  assert.equal(app.nodes.get('#desktop-provider-key').value, '');
+  assert.match(app.nodes.get('#desktop-provider-status').textContent, /已保存.*重新连接/);
+  assert.equal(calls.length, 0);
+  app.nodes.get('#desktop-provider-refresh').events.click(); await settle();
+  assert.deepEqual(calls.map(c => c.path), ['/openai/refresh']);
+  assert.match(app.nodes.get('#desktop-provider-disconnect').textContent, /删除保存的凭据/);
+});
+
+desktopTest('custom connections submit explicit endpoint and storage while inference is separate', async () => {
+  const app = harness({ storage: 'system', connections: [] });
+  app.app.open(); await settle();
+  app.nodes.get('nav').children.find(n => n.dataset.providerId === 'custom').events.click();
+  app.nodes.get('#desktop-provider-key').value = 'test-only';
+  app.nodes.get('#desktop-provider-storage').value = 'system';
+  app.nodes.get('#desktop-provider-endpoint').value = 'https://models.example/v1';
+  app.nodes.get('#desktop-provider-local-http').checked = false;
+  const calls = []; app.client.mutate = async (path, payload) => { calls.push({ path, payload }); };
+  app.nodes.get('form').events.submit({ preventDefault() {} }); await settle();
+  assert.equal(calls[0].path, '/custom/connect');
+  assert.equal(calls[0].payload.storage, 'system');
+  assert.equal(calls[0].payload.endpoint.baseUrl, 'https://models.example/v1');
+  assert.equal(calls[0].payload.endpoint.allowLocalHttp, false);
+  assert.equal(app.nodes.get('#desktop-provider-key').value, '');
+  assert.equal(calls.length, 1);
+});
+
+desktopTest('inference test is explicit, uses the selected model and is never retried after failure', async () => {
+  const app = harness({ storage: 'system', connections: [{ providerId: 'openai', status: 'connected', hasCredential: true, models: [{ id: 'alpha', name: 'Alpha' }], inference: { status: 'unverified' } }] }, { providerId: 'openai', model: 'alpha', label: 'Alpha' });
+  const calls = []; app.client.mutate = async (path, payload) => { calls.push({ path, payload }); throw Error('timed out'); };
+  app.app.open(); await settle();
+  assert.equal(calls.length, 0);
+  const verify = app.nodes.get('#desktop-provider-verify'); assert.equal(verify.disabled, false);
+  verify.events.click(); await settle();
+  assert.equal(calls.length, 1); assert.equal(calls[0].path, '/openai/verify'); assert.equal(calls[0].payload.model, 'alpha');
+  assert.match(app.nodes.get('#desktop-provider-status').textContent, /不会自动重试/);
+  assert.equal(app.client.snapshot.connections[0].inference.status, 'unverified');
+});
+
+desktopTest('memory-only broker cannot submit a system persistence choice', async () => {
+  const app = harness({ storage: 'memory', connections: [] }); app.app.open(); await settle();
+  assert.equal(app.nodes.get('#desktop-provider-storage').disabled, true);
+  assert.equal(app.nodes.get('#desktop-provider-storage').value, 'memory');
+  assert.match(app.nodes.get('#desktop-storage-hint').textContent, /仅支持临时/);
+});
+
+desktopTest('failed vault restoration keeps deletion recovery available without pretending credentials loaded', async () => {
+  const connection = { providerId: 'openai', status: 'error', hasCredential: false, authMethod: null, models: [], error: { code: 'credential_store_failed', message: '无法读取系统凭据，请删除此连接后重新设置。' } };
+  const app = harness({ storage: 'system', connections: [connection] });
+  app.app.open(); await settle();
+  const disconnect = app.nodes.get('#desktop-provider-disconnect');
+  assert.equal(disconnect.hidden, false); assert.equal(disconnect.disabled, false);
+  assert.equal(app.nodes.get('#desktop-provider-refresh').hidden, false);
+  assert.equal(app.nodes.get('#desktop-provider-refresh').textContent, '重新读取系统凭据');
+  assert.match(app.nodes.get('#desktop-storage-hint').textContent, /未确认.*删除/);
+  const calls = []; app.client.mutate = async path => { calls.push(path); };
+  app.client.load = async () => { calls.push('GET'); app.client.snapshot.connections = [{ providerId: 'openai', status: 'disconnected', hasCredential: false, models: [] }]; return app.client.snapshot; };
+  disconnect.events.click(); await settle();
+  assert.deepEqual(calls, ['/openai/disconnect', 'GET']);
+  assert.equal(disconnect.hidden, true);
+});
+
+desktopTest('vault read retry uses refresh without new credentials or automatic inference', async () => {
+  const app = harness({ storage: 'system', connections: [{ providerId: 'openai', status: 'error', hasCredential: false, authMethod: null, models: [], error: { code: 'credential_store_failed', message: '读取失败' } }] });
+  app.app.open(); await settle();
+  const calls = []; app.client.mutate = async (path, payload) => { calls.push({ path, payload }); };
+  app.nodes.get('#desktop-provider-refresh').events.click(); await settle();
+  assert.equal(calls.length, 1); assert.equal(calls[0].path, '/openai/refresh');
+  assert.deepEqual(Object.keys(calls[0].payload), []);
+});
+
+desktopTest('connected settings prioritize catalog and collapse replacement credentials until explicitly expanded', async () => {
+  const app = harness({ storage: 'system', connections: [{ providerId: 'openrouter', status: 'connected', hasCredential: true, models: [{ id: 'alpha', name: 'Alpha' }] }] }, { providerId: 'openrouter', model: 'alpha', label: 'Alpha' });
+  app.app.open(); await settle();
+  const details = app.nodes.get('#desktop-connection-editor');
+  assert.equal(details.open, false);
+  assert.equal(app.nodes.get('.desktop-model-catalog').hidden, false);
+  assert.equal(app.nodes.get('#desktop-provider-refresh').hidden, false);
+  details.open = true; details.events.toggle();
+  app.nodes.get('#desktop-provider-key').value = 'temporary-key';
+  details.open = false; details.events.toggle();
+  assert.equal(app.nodes.get('#desktop-provider-key').value, '');
+  app.client.snapshot.oauth = { status: 'waiting', mode: 'callback' };
+  app.app.open(); await settle();
+  assert.equal(details.open, true);
+  assert.equal(app.nodes.get('#desktop-provider-oauth-cancel').hidden, false);
+});
+
+desktopTest('provider changes and reopening reset detail scroll while initial setup remains expanded', async () => {
+  const app = harness({ storage: 'memory', connections: [] });
+  app.app.open(); await settle();
+  assert.equal(app.nodes.get('#desktop-connection-editor').open, true);
+  const detail = app.nodes.get('.desktop-model-detail'); detail.scrollTop = 400;
+  app.nodes.get('nav').children.find(n => n.dataset.providerId === 'google').events.click();
+  assert.equal(detail.scrollTop, 0);
+  detail.scrollTop = 300; app.nodes.get('[data-close]').events.click(); app.app.open(); await settle();
+  assert.equal(detail.scrollTop, 0);
+});
+
+desktopTest('collapsing credential editor clears secrets and returns keyboard focus to its native summary', async () => {
+  const app = harness({ connections: [{ providerId: 'openai', status: 'connected', hasCredential: true, models: [] }] });
+  app.app.open(); await settle();
+  const editor = app.nodes.get('#desktop-connection-editor'), key = app.nodes.get('#desktop-provider-key');
+  editor.children.push(key); editor.open = true; key.value = 'test-key'; key.focus();
+  editor.open = false; editor.events.toggle();
+  assert.equal(key.value, '');
+  assert.equal(app.doc.activeElement, app.nodes.get('#desktop-connection-editor-toggle'));
+});

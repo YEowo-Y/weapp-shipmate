@@ -1,3 +1,39 @@
 fn main() {
-    tauri_build::build()
+    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
+        tauri_build::AppManifest::new().commands(&[
+            "project_snapshot",
+            "project_save",
+            "project_select",
+            "project_artifact",
+            "project_export",
+            "project_run",
+            "project_facts_save",
+            "project_workflow",
+            "project_stage_confirm",
+            "project_compare",
+            "project_context_file",
+            "project_context_report",
+            "project_memory_snapshot",
+            "project_memory_save",
+            "project_memory_delete",
+            "project_memory_context",
+            "project_maintenance_sync",
+            "project_maintenance_snapshot",
+            "project_maintenance_save",
+            "project_maintenance_retry",
+            "project_maintenance_read",
+            "project_maintenance_stop",
+            "source_freshness_snapshot",
+            "source_freshness_check",
+            "system_notifications_snapshot",
+            "system_notifications_save",
+            "system_notifications_test",
+            "run_check",
+            "run_guide",
+            "run_cancel",
+            "model_request",
+            "model_cancel",
+        ]),
+    ))
+    .expect("failed to build desktop permissions");
 }

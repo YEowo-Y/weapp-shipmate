@@ -7,22 +7,22 @@ stages:
   - stage: registration
     title: "注册小程序账号"
     next: certification
-    official_url: "https://developers.weixin.qq.com/community/develop/article/doc/0006c437da87b885b7900de966c013"
-    last_verified: "2026-06-13"
+    official_url: "https://developers.weixin.qq.com/miniprogram/introduction/"
+    last_verified: "2026-10-22"
 
   - stage: certification
-    title: "主体认证 / 实名核验"
+    title: "主体身份核验"
     requires_stage: [registration]
     next: filing
-    official_url: "https://developers.weixin.qq.com/community/develop/article/doc/0006c437da87b885b7900de966c013"
-    last_verified: "2026-06-13"
+    official_url: "https://developers.weixin.qq.com/miniprogram/introduction/"
+    last_verified: "2026-10-22"
 
   - stage: filing
     title: "ICP 备案"
-    requires_stage: [certification]   # 未完成主体认证不进入备案
+    requires_stage: [certification]   # 此处为主体身份核验，不代表所有主体必须付费微信认证
     next: category
-    official_url: "https://developers.weixin.qq.com/miniprogram/product/record_guidelines.html"
-    last_verified: "2026-06-13"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/record/record_guidelines.html"
+    last_verified: "2026-10-22"
 
   - stage: category
     title: "选择服务类目"
@@ -54,4 +54,5 @@ stages:
     title: "发布上线"
     requires_stage: [review]
     next: null            # 终点：唯一 next: null 的阶段
-    last_verified: "2026-06-13"
+    official_url: "https://developers.weixin.qq.com/miniprogram/introduction/"
+    last_verified: "2026-10-22"

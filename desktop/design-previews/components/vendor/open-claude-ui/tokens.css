@@ -1,0 +1,76 @@
+/*!
+ * MIT License
+ * 
+ * Copyright (c) 2026 Caho1
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+/*!
+ * Adapted from Caho1/open-claude-ui, MIT, Copyright (c) 2026 Caho1.
+ * Source: c1f923ae0051a871941b98a0e2e3183a545e6a85.
+ * See LICENSE and README.md beside this file for source ranges and adaptations.
+ * Deliberately scoped: no global reset, React runtime or unused animation pack.
+ */
+.desktop-app {
+  --cds-radius-composer: 20px;
+  --cds-composer-padding: 14px;
+  --cds-composer-gap: 8px;
+  --cds-composer-input-min: 48px;
+  --cds-message-bubble-measure: 85%;
+  --cds-personal-bubble-radius: 18px;
+  --cds-message-bubble-pad-x: 16px;
+  --cds-message-bubble-pad-y: 12px;
+  --cds-assistant-message-text-inset: 4px;
+  --cds-button-icon-size: 32px;
+  --cds-ease-swift: cubic-bezier(.16, 1, .3, 1);
+  --cds-dur-fast: 60ms;
+  --cds-dur-base: .2s;
+}
+.desktop-app[data-theme="light"] {
+  --cds-surface-0: #f9f9f7;
+  --cds-surface-1: #fcfcfb;
+  --cds-surface-2: #fff;
+  --cds-surface-3: #fff;
+  --cds-fill-ghost-hover: hsla(0, 0%, 8%, .05);
+  --cds-fill-ghost-selected: hsla(0, 0%, 8%, .10);
+  --cds-border: hsla(0, 0%, 8%, .10);
+  --cds-border-strong: hsla(0, 0%, 8%, .20);
+  --cds-text-primary: #151515;
+  --cds-text-secondary: #525252;
+  --cds-bg-user-message-personal: #f0f4f8;
+  --cds-shadow-composer: 0 4px 20px rgb(0 0 0 / .035), inset 0 0 0 1px var(--cds-border);
+  --cds-shadow-composer-hover: 0 4px 24px rgb(0 0 0 / .06), inset 0 0 0 1px var(--cds-border-strong);
+  --cds-shadow-composer-focus: 0 4px 24px rgb(0 0 0 / .08), inset 0 0 0 1px var(--cds-border-strong), 0 0 0 1px var(--cds-border-strong);
+}
+.desktop-app[data-theme="dark"] {
+  --cds-surface-0: #0b0b0b;
+  --cds-surface-1: #151515;
+  --cds-surface-2: #1a1a19;
+  --cds-surface-3: #20201f;
+  --cds-fill-ghost-hover: rgb(255 255 255 / .05);
+  --cds-fill-ghost-selected: rgb(255 255 255 / .09);
+  --cds-border: rgb(255 255 255 / .09);
+  --cds-border-strong: rgb(255 255 255 / .18);
+  --cds-text-primary: #f5f5f5;
+  --cds-text-secondary: #a3a3a3;
+  --cds-bg-user-message-personal: rgb(255 255 255 / .06);
+  --cds-shadow-composer: 0 4px 20px rgb(0 0 0 / .4), inset 0 0 0 1px var(--cds-border);
+  --cds-shadow-composer-hover: 0 4px 24px rgb(0 0 0 / .55), inset 0 0 0 1px var(--cds-border-strong);
+  --cds-shadow-composer-focus: 0 4px 24px rgb(0 0 0 / .65), inset 0 0 0 1px rgb(255 255 255 / .22), 0 0 0 1px rgb(255 255 255 / .22);
+}

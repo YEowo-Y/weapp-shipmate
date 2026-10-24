@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-system-notifications-snapshot"
+description = "Enables the system_notifications_snapshot command without any pre-configured scope."
+commands.allow = ["system_notifications_snapshot"]
+
+[[permission]]
+identifier = "deny-system-notifications-snapshot"
+description = "Denies the system_notifications_snapshot command without any pre-configured scope."
+commands.deny = ["system_notifications_snapshot"]

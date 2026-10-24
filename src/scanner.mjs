@@ -2,7 +2,8 @@
 // 安全：默认 local-only；忽略密钥/证照/私有配置；只输出 API 名、域名 host、配置键、文件路径，
 //       绝不回显文件内容、Token、手机号、身份证号等（见 SECURITY.md）。
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, basename, extname, relative } from "node:path";
+import { join, basename, extname, relative, resolve } from "node:path";
+import { createHash } from "node:crypto";
 
 // 目录忽略
 const IGNORE_DIRS = new Set([
@@ -37,6 +38,17 @@ const SCAN_EXT = new Set([
 
 const ignored = (name) => IGNORE_FILE.some((re) => re.test(name));
 
+// Shared watcher eligibility only; walk keeps its existing traversal and accounting.
+export function isScanPathEligible(parts, kind = "file") {
+  if (!Array.isArray(parts) || !parts.length || parts.some((part) =>
+    typeof part !== "string" || !part || part === "." || part === ".." || /[\\/:\0]/.test(part))) return false;
+  const directories = kind === "directory" || kind === "missing" ? parts : parts.slice(0, -1);
+  if (directories.some((part, index) => IGNORE_DIRS.has(part) || (index === 0 && ROOT_ONLY_IGNORE.has(part)))) return false;
+  if (kind === "directory") return true;
+  const name = parts.at(-1);
+  return !ignored(name) && (kind === "missing" || SCAN_EXT.has(extname(name)));
+}
+
 // B2：资源上限——单文件超限视为构建产物/数据文件跳过并计数，遍历目录项超限截断；两者都在报告注记显性化。
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 export const MAX_WALK_ENTRIES = 20000;
@@ -52,7 +64,7 @@ function* walk(dir, depth = 0, stats = null) {
     // B3：嵌套子目录拒权（EPERM 等）只跳过该目录，不再让整个扫描崩掉；
     // 跳过必须计数（阶段3复核 MINOR）——静默跳过会让"没扫到"伪装成"没问题"。
     if (depth === 0) throw e;
-    if (stats) stats.skippedDirs++;
+    if (stats) { stats.skippedDirs++; stats.readErrors++; }
     return;
   }
   for (const e of entries) {
@@ -66,7 +78,7 @@ function* walk(dir, depth = 0, stats = null) {
     const full = join(dir, e.name);
     // B1（FX-12）：不跟符号链接/junction（Windows junction 的 dirent 同样报 isSymbolicLink，已实测）——
     // 链接指向项目外会把外部代码的 API/域名带进合规报告；自环会让 filesScanned 无限膨胀直至路径长度崩溃。
-    if (e.isSymbolicLink()) continue;
+    if (e.isSymbolicLink()) { if (stats) stats.skippedLinks++; continue; }
     if (e.isDirectory()) {
       if (IGNORE_DIRS.has(e.name)) continue;
       if (depth === 0 && ROOT_ONLY_IGNORE.has(e.name)) continue; // B4：歧义名仅根层忽略
@@ -74,7 +86,7 @@ function* walk(dir, depth = 0, stats = null) {
       if (stats?.truncated) return;
     } else if (e.isFile() && SCAN_EXT.has(extname(e.name)) && !ignored(e.name)) {
       let st;
-      try { st = statSync(full); } catch { continue; }
+      try { st = statSync(full); } catch { if (stats) stats.readErrors++; continue; }
       yield { file: full, size: st.size };
     }
   }
@@ -462,7 +474,10 @@ export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES } = {}) {
   };
   let filesScanned = 0;
   let skippedLargeFiles = 0;
+  const scannedFiles = [];
   const walkStats = {
+    readErrors: 0,
+    skippedLinks: 0,
     skippedDirs: 0, // B3：拒权跳过的子目录数——未覆盖面必须可见
     entriesVisited: 0,
     maxEntries: Math.min(maxEntries, MAX_WALK_ENTRIES),
@@ -477,11 +492,13 @@ export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES } = {}) {
     let text;
     try { text = readFileSync(file, "utf-8"); }
     catch {
+      walkStats.readErrors++;
       if (isConfigCarrier(basename(file)))
         facts.configErrors.push({ file: relSafe(file), reason: "读取失败" });
       continue;
     }
     filesScanned++;
+    scannedFiles.push(relative(dir, file).replace(/\\/g, "/"));
     const rel = relSafe(file);
     const code = extractFacts(file, text, rel, facts);
     parseAppConfig(basename(file), code, rel, facts);
@@ -489,6 +506,14 @@ export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES } = {}) {
 
   return {
     filesScanned,
+    readErrors: walkStats.readErrors,
+    skippedLinks: walkStats.skippedLinks,
+    scope: {
+      root: resolve(dir),
+      policyVersion: "shipmate-static-v1",
+      filesHash: createHash("sha256").update(JSON.stringify(scannedFiles.sort())).digest("hex"),
+      complete: filesScanned > 0 && !skippedLargeFiles && !walkStats.skippedDirs && !walkStats.readErrors && !walkStats.skippedLinks && !walkStats.truncated && !facts.configErrors.length,
+    },
     skippedLargeFiles,
     skippedDirs: walkStats.skippedDirs,
     truncated: walkStats.truncated,

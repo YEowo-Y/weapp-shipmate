@@ -5,47 +5,8 @@
 //   node scripts/rule-rot.mjs --report-only# 永远 exit 0（只报告不报警）
 // 环境变量：WEAPP_SHIPMATE_TODAY=YYYY-MM-DD（确定性覆盖今天）、WEAPP_SHIPMATE_STALE_DAYS（默认 180）。
 import { loadData } from "../src/data.mjs";
-import { crossChecks, CROSSCHECK_RULE_IDS, CROSSCHECK_ALL_HIT_SCAN } from "../src/crosscheck.mjs";
+import { loadSourceReferences } from "../src/source-catalog.mjs";
 import { staleness, uniqueUrls, classifyUrlHealth, isActionableHealth } from "../src/rot.mjs";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-import yaml from "js-yaml";
-
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-
-// R5：三类载体此前逃逸监控——crosscheck 的 5 条内联规则、flow 阶段、rejections 条目
-// 都带 last_verified/official_url，却只有 rules/*.yaml 被盯。项目核心命题是"政策会腐烂，
-// 监控对抗腐烂"，逃逸即命题失效。
-// 内联规则用共享的全命中合成 scan 现场收割元数据；收割结果与 CROSSCHECK_RULE_IDS 对账——
-// 缺一即抛（阶段4复核 MINOR-2）：否则未来第 6 条交叉核验若不被合成 scan 触发，会再次静默逃逸监控。
-function crosscheckItems() {
-  const items = crossChecks(CROSSCHECK_ALL_HIT_SCAN).map((r) => ({
-    id: r.ruleId,
-    _file: "src/crosscheck.mjs",
-    last_verified: r.last_verified,
-    official_url: r.official_url,
-  }));
-  const got = new Set(items.map((i) => i.id));
-  const missing = CROSSCHECK_RULE_IDS.filter((id) => !got.has(id));
-  if (missing.length)
-    throw new Error(`交叉核验规则逃逸腐烂监控（全命中合成 scan 未触发）：${missing.join("、")}——请更新 CROSSCHECK_ALL_HIT_SCAN`);
-  return items;
-}
-
-function flowAndRejectionItems() {
-  const flow = yaml.load(readFileSync(join(ROOT, "flow.yaml"), "utf-8"));
-  const rejections = yaml.load(readFileSync(join(ROOT, "rejections.yaml"), "utf-8"));
-  return [
-    ...(flow.stages ?? []).map((s) => ({
-      id: `flow:${s.stage}`, _file: "flow.yaml", last_verified: s.last_verified, official_url: s.official_url,
-    })),
-    ...(rejections.rejections ?? []).map((rj) => ({
-      id: `rejections:${rj.id}`, _file: "rejections.yaml", last_verified: rj.last_verified, official_url: rj.official_url, draft: rj.draft,
-    })),
-  ];
-}
-
 const args = process.argv.slice(2);
 const checkLinks = args.includes("--links");
 const reportOnly = args.includes("--report-only");
@@ -57,7 +18,7 @@ const log = (m) => process.stdout.write(m + "\n");
 
 // 监控覆盖全部规则（含 draft）——draft 也会过期；R5 起并入 crosscheck 内联规则 + flow 阶段 + rejections 条目。
 const { rules } = loadData({ includeDrafts: true });
-const monitored = [...rules, ...crosscheckItems(), ...flowAndRejectionItems()];
+const monitored = loadSourceReferences();
 
 // 1) 时效
 const st = staleness(monitored, { today, staleDays });

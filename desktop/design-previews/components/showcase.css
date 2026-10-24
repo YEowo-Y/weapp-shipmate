@@ -1,0 +1,53 @@
+.showcase-nav { display: flex; justify-content: space-between; align-items: center; gap: 24px; max-width: 1360px; margin: auto; padding: 24px 36px; border-bottom: 1px solid var(--border-2); }
+.showcase-nav a { color: var(--text-2); text-decoration: none; font-size: 12px; }
+.showcase-nav a:hover { color: var(--accent); }
+.showcase-nav .showcase-brand { color: var(--text); font-size: 14px; font-weight: 600; }
+.showcase-brand span { margin-left: 8px; font-weight: 400; color: var(--text-3); }
+.showcase-nav nav { display: flex; align-items: center; gap: 22px; }
+.showcase-nav button { padding: 7px 12px; border: 1px solid var(--border-2); border-radius: var(--r); color: var(--text-2); background: var(--surface); cursor: pointer; font-size: 12px; }
+.showcase { max-width: 1360px; margin: auto; padding: 48px 36px 64px; }
+.showcase-intro { margin-bottom: 32px; max-width: 720px; }
+.showcase-eyebrow { margin: 0 0 14px; font: 10px/1.5 var(--font-mono); letter-spacing: .12em; color: var(--accent); }
+.showcase h1 { margin: 0 0 14px; font-size: clamp(24px, 3vw, 36px); font-weight: 550; letter-spacing: -.035em; line-height: 1.25; }
+.showcase-intro > p:last-child { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.8; max-width: 640px; }
+.showcase-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+.showcase-stack { display: grid; gap: 18px; min-width: 0; }
+.showcase-panel { min-width: 0; overflow: hidden; border: 1px solid var(--border-2); border-radius: var(--r-xl); background: var(--surface); }
+.showcase-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.showcase-panel-head > div { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.showcase-number { font: 10px/1 var(--font-mono); color: var(--text-3); }
+.showcase h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.showcase-select { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: 11px; }
+.showcase-select select { max-width: 120px; padding: 6px 24px 6px 9px; border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--text-2); background: var(--bg); font-size: 11px; }
+.showcase-tag { color: var(--text-3); font-size: 10px; }
+.showcase-panel-body { padding: 16px 20px; }
+.showcase-panel-body [data-component="tool"] { margin-bottom: 0; }
+.showcase-panel-body [data-component="result"] { margin: 0; }
+.showcase-segments { display: flex; gap: 4px; width: fit-content; max-width: 100%; padding: 3px; border-radius: var(--r); background: var(--bg); }
+.showcase-segments button { border: 1px solid transparent; border-radius: var(--r-xs); padding: 6px 10px; color: var(--text-3); background: transparent; cursor: pointer; font-size: 11px; }
+.showcase-segments button[aria-pressed="true"] { color: var(--text); border-color: var(--border); background: var(--surface); }
+.showcase-segments button:hover { color: var(--text); }
+.showcase-chat .conversation-shell { height: 660px; }
+.showcase-chat .conversation-scroll { padding: 24px; }
+.showcase-run-status { margin: 0; min-height: 32px; padding: 8px 24px; color: var(--text-3); font-size: 11px; line-height: 1.5; }
+.showcase-chat [data-composer-host] { padding: 0; }
+.showcase-latest { align-self: center; margin: 0 0 8px; padding: 7px 13px; border: 1px solid var(--border-2); border-radius: 20px; background: var(--surface); color: var(--text-2); font-size: 11px; cursor: pointer; }
+.showcase-footnote { padding: 12px 20px; margin: 0; color: var(--text-3); font-size: 10.5px; line-height: 1.6; border-top: 1px solid var(--border); }
+@media (max-width: 900px) { .showcase-grid { grid-template-columns: 1fr; } .showcase-chat .conversation-shell { height: 580px; } .showcase-intro { max-width: 620px; } }
+@media (max-width: 540px) {
+  .showcase-nav { padding: 14px 16px; flex-wrap: wrap; gap: 12px; }
+  .showcase-nav nav { gap: 20px; width: 100%; }
+  .showcase-nav nav a, .showcase-nav button { min-height: 40px; display: inline-flex; align-items: center; }
+  .showcase-nav button { margin-left: auto; }
+  .showcase { padding: 28px 12px 36px; }
+  .showcase-intro { padding: 0 4px; margin-bottom: 24px; }
+  .showcase-panel-head { padding: 12px; gap: 8px; }
+  .showcase-panel-head > div { gap: 6px; }
+  .showcase-panel-body { padding: 12px; }
+  .showcase-select { gap: 5px; }
+  .showcase-select select { min-height: 40px; max-width: 100px; }
+  .showcase-segments button { min-height: 40px; padding-inline: 11px; }
+  .showcase-chat .conversation-scroll { padding: 20px 14px; }
+  .showcase-run-status { padding-inline: 14px; }
+  .showcase-chat .conversation-shell { height: 570px; }
+}

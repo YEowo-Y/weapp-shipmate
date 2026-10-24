@@ -1,0 +1,50 @@
+# 人工办理导航；源码扫描和本机确认都不能代替公众平台办理结果。
+schema_version: 1
+rules:
+  - id: registration.account-details
+    title: "激活注册邮箱并完善主体与管理员信息"
+    kind: navigation
+    stage: registration
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: info
+    confidence: high
+    requires:
+      - "在微信公众平台注册小程序，按邮件激活链接继续注册。"
+      - "核对实际主体类型，完善主体信息和管理员信息；在官方后台确认注册结果后，再记录本机阶段确认。"
+    why: "填写本机项目资料不等于已经完成公众平台注册。"
+    official_url: "https://developers.weixin.qq.com/miniprogram/introduction/"
+    source_quote: "请选择主体类型选择，完善主体信息和管理员信息。"
+    last_verified: "2026-10-22"
+    manual_required: true
+
+  - id: certification.enterprise-verification
+    title: "核对企业主体身份验证与所需能力"
+    kind: navigation
+    stage: certification
+    subject_type: ["enterprise"]
+    severity: info
+    confidence: high
+    requires:
+      - "按注册后台提供的方式完成企业主体身份验证；主体核验与申请微信认证不是同一个完成条件。"
+      - "是否申请微信认证须结合实际能力要求核对官方指引；支付等特殊能力另有要求，不将付费认证作为全部企业提审的统一前提。"
+    why: "企业认证成功并非普遍的提审前提，不能把未申请微信认证误判为无法上线；具体能力须人工核对。"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/renzheng.html"
+    source_quote: "认证成功不作为提交发布审核的前提，但支付功能等腾讯有特别规定的除外。"
+    last_verified: "2026-10-22"
+    manual_required: true
+
+  - id: release.manual-publish
+    title: "审核通过后在官方后台手动发布"
+    kind: navigation
+    stage: release
+    subject_type: ["personal", "individual_business", "enterprise"]
+    severity: info
+    confidence: high
+    requires:
+      - "先在公众平台核对目标版本的审核结果；审核通过后由开发者在官方后台手动发布。"
+      - "核对线上版本后再记录本机发布阶段确认；工具预检通过、审核通过或点击本机确认都不会代为发布。"
+    why: "审核与正式发布是两个独立步骤，本工具不执行发布操作。"
+    official_url: "https://developers.weixin.qq.com/miniprogram/introduction/"
+    source_quote: "代码审核通过，需要开发者手动点击发布，小程序才会发布到线上提供服务。"
+    last_verified: "2026-10-22"
+    manual_required: true

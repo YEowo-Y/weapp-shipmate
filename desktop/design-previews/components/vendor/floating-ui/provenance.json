@@ -1,0 +1,74 @@
+[
+  {
+    "package": "@floating-ui/dom",
+    "version": "1.8.0",
+    "metadataUrl": "https://registry.npmjs.org/@floating-ui/dom/1.8.0",
+    "tarballUrl": "https://registry.npmjs.org/@floating-ui/dom/-/dom-1.8.0.tgz",
+    "integrity": "sha512-yXSrzeHZBTZadLOlfyhCkJHNeLJnHRnRInwdZ40L7ZiaAtrBwoYlsDrX3v5zB1Utk7CLfzcOVnVVWoXEky7Ceg==",
+    "license": "MIT",
+    "assets": [
+      {
+        "file": "dom-LICENSE",
+        "originalPath": "package/LICENSE",
+        "originalSha256": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce",
+        "localSha256": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce"
+      },
+      {
+        "file": "floating-ui.dom.mjs",
+        "originalPath": "package/dist/floating-ui.dom.mjs",
+        "originalSha256": "a1c916ed18ed8bb2c586079f7946d35797b45bc79eafae1d99ec6f812672ef54",
+        "localSha256": "c73676516afe4a2c0b779d00e3d95cba65747871f07ee8af18c65ad375bc9167"
+      }
+    ]
+  },
+  {
+    "package": "@floating-ui/core",
+    "version": "1.8.0",
+    "metadataUrl": "https://registry.npmjs.org/@floating-ui/core/1.8.0",
+    "tarballUrl": "https://registry.npmjs.org/@floating-ui/core/-/core-1.8.0.tgz",
+    "integrity": "sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==",
+    "license": "MIT",
+    "assets": [
+      {
+        "file": "core-LICENSE",
+        "originalPath": "package/LICENSE",
+        "originalSha256": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce",
+        "localSha256": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce"
+      },
+      {
+        "file": "floating-ui.core.mjs",
+        "originalPath": "package/dist/floating-ui.core.mjs",
+        "originalSha256": "c6c359d91fbc6636f6143aae9ff47105eeacea869b14afe7d54e120444ab8f37",
+        "localSha256": "dccf391d2cbd179897c40f25f9944751ebd71ffca2a104748f6e5a70f5483e14"
+      }
+    ]
+  },
+  {
+    "package": "@floating-ui/utils",
+    "version": "0.2.12",
+    "metadataUrl": "https://registry.npmjs.org/@floating-ui/utils/0.2.12",
+    "tarballUrl": "https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.12.tgz",
+    "integrity": "sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==",
+    "license": "MIT",
+    "assets": [
+      {
+        "file": "utils-LICENSE",
+        "originalPath": "package/LICENSE",
+        "originalSha256": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce",
+        "localSha256": "0e4c9a9b6c71019cbbea3bdc20b01223110a9035700f9c960c8fcbf78c2325ce"
+      },
+      {
+        "file": "floating-ui.utils.dom.mjs",
+        "originalPath": "package/dist/floating-ui.utils.dom.mjs",
+        "originalSha256": "b6658b1eac47e2917e6d10ebbeefb9c4ac9a166f0052bed6e08c871ed848b680",
+        "localSha256": "b6658b1eac47e2917e6d10ebbeefb9c4ac9a166f0052bed6e08c871ed848b680"
+      },
+      {
+        "file": "floating-ui.utils.mjs",
+        "originalPath": "package/dist/floating-ui.utils.mjs",
+        "originalSha256": "f53b3ea1eec15af77ca9def295b8f40f6d65706acfc5aaac4801ca3ca21ef7bd",
+        "localSha256": "f53b3ea1eec15af77ca9def295b8f40f6d65706acfc5aaac4801ca3ca21ef7bd"
+      }
+    ]
+  }
+]

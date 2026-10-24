@@ -1,45 +1,64 @@
-// 上线船友 · 桌面外壳（P2.0 薄外壳）。
-// 验证「外壳 / 大脑解耦」这条主链路：把极简依赖的 Node 规则大脑当 sidecar 进程调起，
-// 渲染上线预检（check）/ 流程导航（guide）报告。无终端 / 无 BYO-key / 无 agent——那些是 P2.1+。
-use std::path::{Path, PathBuf};
-use std::process::Command;
+mod agent_tools;
+mod credential_store;
+mod model_bridge;
+mod project_context;
+mod project_maintenance;
+mod project_memory;
+mod project_store;
+mod runtime;
+mod source_freshness;
+mod system_notifications;
+mod tool_runner;
+use tauri::Manager;
 
-/// 规则大脑 CLI 路径（仓库内 bin/weapp-shipmate.mjs）。
-/// P2.0 用编译期相对路径定位（仅本机开发）；打包分发时改为随包 sidecar（P2.1+）。
-fn brain_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../bin/weapp-shipmate.mjs")
-}
-
-/// 调起 Node 大脑并取回标准输出。check 命中阻断时 CLI 返回非零退出码属正常，
-/// 故以「stdout 是否有内容」判定成败，而非退出码。
-fn run_brain(args: &[&str]) -> Result<String, String> {
-    let out = Command::new("node")
-        .arg(brain_path())
-        .args(args)
-        .output()
-        .map_err(|e| format!("无法启动 node（请确认已安装 Node ≥ 20 且在 PATH 中）：{e}"))?;
-    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-    if stdout.trim().is_empty() {
-        Err(format!(
-            "规则大脑无输出。\nstderr：{}",
-            String::from_utf8_lossy(&out.stderr)
-        ))
-    } else {
-        Ok(stdout)
-    }
+#[tauri::command]
+async fn run_check(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, tool_runner::ToolRunner>,
+    dir: String,
+    subject: String,
+    run_id: String,
+) -> Result<String, String> {
+    runtime::authorize(&window)?;
+    tool_runner::subject(&subject)?;
+    let dir = tool_runner::directory(&dir)?;
+    let mut command = runtime::node_command(&app, "bin/weapp-shipmate.mjs", false)?;
+    command.arg("check").arg(dir).arg("--subject").arg(subject);
+    let runner = state.inner().clone();
+    runner.reserve(&run_id)?;
+    tauri::async_runtime::spawn_blocking(move || runner.run_reserved(command, run_id, true))
+        .await
+        .map_err(|_| "本地工具任务意外退出。".to_string())?
 }
 
 #[tauri::command]
-fn run_check(dir: String, subject: String) -> Result<String, String> {
-    if dir.trim().is_empty() {
-        return Err("请先选择小程序项目文件夹".into());
-    }
-    run_brain(&["check", &dir, "--subject", &subject])
+async fn run_guide(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, tool_runner::ToolRunner>,
+    subject: String,
+    run_id: String,
+) -> Result<String, String> {
+    runtime::authorize(&window)?;
+    tool_runner::subject(&subject)?;
+    let mut command = runtime::node_command(&app, "bin/weapp-shipmate.mjs", false)?;
+    command.arg("guide").arg("--subject").arg(subject);
+    let runner = state.inner().clone();
+    runner.reserve(&run_id)?;
+    tauri::async_runtime::spawn_blocking(move || runner.run_reserved(command, run_id, false))
+        .await
+        .map_err(|_| "本地工具任务意外退出。".to_string())?
 }
 
 #[tauri::command]
-fn run_guide(subject: String) -> Result<String, String> {
-    run_brain(&["guide", "--subject", &subject])
+fn run_cancel(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, tool_runner::ToolRunner>,
+    run_id: String,
+) -> Result<(), String> {
+    runtime::authorize(&window)?;
+    state.cancel(&run_id)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -47,7 +66,54 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![run_check, run_guide])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .plugin(tauri_plugin_notification::init())
+        .manage(model_bridge::ModelBridge::default())
+        .manage(tool_runner::ToolRunner::default())
+        .manage(project_store::ProjectStore::default())
+        .manage(project_maintenance::ProjectMaintenance::default())
+        .manage(system_notifications::SystemNotifications::default())
+        .invoke_handler(tauri::generate_handler![
+            project_store::project_snapshot,
+            project_store::project_save,
+            project_store::project_select,
+            project_store::project_artifact,
+            project_store::project_export,
+            project_store::project_run,
+            project_store::project_facts_save,
+            project_store::project_workflow,
+            project_store::project_stage_confirm,
+            project_store::project_compare,
+            project_context::project_context_file,
+            project_context::project_context_report,
+            project_memory::project_memory_snapshot,
+            project_memory::project_memory_save,
+            project_memory::project_memory_delete,
+            project_memory::project_memory_context,
+            project_maintenance::project_maintenance_sync,
+            project_maintenance::project_maintenance_snapshot,
+            project_maintenance::project_maintenance_save,
+            project_maintenance::project_maintenance_retry,
+            project_maintenance::project_maintenance_read,
+            project_maintenance::project_maintenance_stop,
+            source_freshness::source_freshness_snapshot,
+            source_freshness::source_freshness_check,
+            system_notifications::system_notifications_snapshot,
+            system_notifications::system_notifications_save,
+            system_notifications::system_notifications_test,
+            run_check,
+            run_guide,
+            run_cancel,
+            model_bridge::model_request,
+            model_bridge::model_cancel
+        ])
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                app.state::<project_maintenance::ProjectMaintenance>()
+                    .shutdown(app);
+                app.state::<tool_runner::ToolRunner>().shutdown();
+                app.state::<model_bridge::ModelBridge>().shutdown();
+            }
+        });
 }

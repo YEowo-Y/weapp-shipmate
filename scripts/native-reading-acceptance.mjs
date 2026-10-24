@@ -1,0 +1,281 @@
+import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { promisify } from 'node:util';
+import { createHandoff } from '../desktop/design-previews/repair-handoff.js';
+
+const execFileAsync = promisify(execFile);
+async function readWindowsClipboard() {
+  try {
+    const { stdout } = await execFileAsync(resolve(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe'), [
+      '-NoLogo', '-NoProfile', '-NonInteractive', '-STA', '-Command',
+      '$ErrorActionPreference="Stop"; [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); $value=Get-Clipboard -Raw; ConvertTo-Json -Compress -InputObject $value',
+    ], { windowsHide: true, timeout: 10000, maxBuffer: 2 * 1024 * 1024, encoding: 'utf8' });
+    // Trim only the JSON transport framing; preserve the decoded clipboard text.
+    const value = JSON.parse(stdout.replace(/^\uFEFF/, '').trim());
+    if (typeof value !== 'string') throw new Error('Clipboard did not contain text');
+    return value;
+  } catch {
+    // Do not expose stdout/stderr or clipboard contents in native failure logs.
+    throw new Error('Could not read Windows clipboard text within the acceptance timeout.');
+  }
+}
+
+// Real SQLite, bundled tools and native WebView2; never replaces invoke or tools.
+// Presentation stress styles affect only this isolated document and are removed.
+export async function checkReadingFlows({ run, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, quit, launch, refresh, requests }) {
+  const projectId = 'reading-project', directory = resolve(run, '报告阅读真实工具夹具');
+  const files = {
+    'app.json': JSON.stringify({ pages: ['pages/index/index'], requiredPrivateInfos: ['getLocation'] }),
+    'project.config.json': JSON.stringify({ appid: 'touristappid', miniprogramRoot: './' }),
+    'app.js': 'wx.getLocation({type:"wgs84"});\nwx.request({url:"http://reading-fixture.example.com/data"});\n',
+  };
+  await mkdir(directory);
+  for (const [name, content] of Object.entries(files)) await writeFile(resolve(directory, name), content);
+  const snapshot = () => projectInvoke('project_snapshot');
+  const visuals = [], interactions = [], artifacts = {};
+  const readerReady = () => until(() => inspect('return document.querySelector("#desktop-report-reader")?.open && document.querySelector("#report-reader-dismiss").checkVisibility()'), 'report reader open');
+  const closeReader = async () => { await press('\uE00C'); await until(() => inspect('return !document.querySelector("#desktop-report-reader").open'), 'reader closed'); };
+  const closeTools = async () => { if (await inspect('return document.querySelector("#desktop-tools").open')) await click('#desktop-tools-close'); };
+  const shape = selector => inspect(`
+    const node=document.querySelector(arguments[0]),r=node.getBoundingClientRect(),body=node.closest('.report-reader-body,.context-body'),b=body?.getBoundingClientRect();
+    const hit=document.elementFromPoint((r.left+r.right)/2,(r.top+r.bottom)/2);
+    return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height,scrollTop:body?.scrollTop??null,
+      hit:hit?{tag:hit.tagName,id:hit.id}:null,visible:r.width>0&&r.height>0&&!node.disabled&&r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&(!b||r.top>=b.top&&r.bottom<=b.bottom)&&(hit===node||node.contains(hit))};
+  `, [selector]);
+  const activate = async selector => {
+    const entry = { selector, before: await shape(selector), after: null }; interactions.push(entry);
+    await inspect('document.querySelector(arguments[0]).scrollIntoView({block:"center",inline:"nearest",behavior:"instant"})', [selector]);
+    try { await until(async () => { entry.after = await shape(selector); return entry.after.visible; }, `visible native click target ${selector}`, 3000); }
+    finally { await writeFile(resolve(run, 'reading-interactions.json'), JSON.stringify(interactions, null, 2)); }
+    await click(selector);
+  };
+  const openMenu = async () => { await click('#desktop-more'); await click('#desktop-actions wa-dropdown-item[value="report"]'); await readerReady(); };
+  const fromHistory = async artifact => {
+    await closeTools(); await projectDialog(); await click('#project-retry');
+    await until(() => inspect('return !document.querySelector("#project-retry").disabled && !document.querySelector("#desktop-project-select").disabled'), 'project history refreshed');
+    const rows = (await snapshot()).runs.filter(item => item.projectId === projectId), index = rows.findIndex(item => item.id === artifact.runId);
+    assert.ok(index >= 0, 'saved run remains in real project history');
+    await activate(`#project-history .project-run:nth-child(${index + 1}) > button`);
+    await until(() => inspect('return !document.querySelector("#desktop-projects").open && document.querySelector("#desktop-tools").open && !document.querySelector("#read-report").disabled'), 'saved report loaded through history');
+    await activate('#read-report'); await readerReady();
+    assert.equal(await text('#report-reader-title'), artifact.title);
+    assert.equal(await inspect('return document.querySelector(".report-reader-body").scrollTop'), 0, 'each opened report starts at its overview, not a previous reading position');
+    assert.equal(await inspect('return document.querySelector("#report-reader-outline").scrollTop'), 0, 'each report starts with the beginning of its own outline');
+  };
+  const verifyContent = async artifact => {
+    const pack = createHandoff(artifact), expected = pack.items;
+    const counts = ['blocker', 'warning', 'info'].map(severity => expected.filter(item => !item.conditional && item.rule.severity === severity).length);
+    assert.equal(await text('#report-reader-summary'), `${expected.length} 个核对项 · 阻断 ${counts[0]} · 警告 ${counts[1]} · 提示 ${counts[2]} · 条件自查 ${expected.filter(item => item.conditional).length}`);
+    const rows = await inspect(`return [...document.querySelectorAll('#report-reader-content article[data-reader-item]')].map(article=>({
+      heading:article.querySelector('h3').textContent,headingId:article.querySelector('h3').id,text:article.textContent,
+      requirements:[...article.querySelectorAll(':scope > ul > li')].map(n=>n.textContent),
+      visibleRequirements:[...article.querySelectorAll(':scope > ul > li')].every(n=>n.checkVisibility()),
+      visibleParagraphs:[...article.querySelectorAll(':scope > p')].filter(n=>n.checkVisibility()).map(n=>n.textContent),
+      links:[...article.querySelectorAll(':scope > a')].map(n=>({href:n.href,target:n.target,rel:n.rel})),
+      metadata:article.querySelector('.report-reader-meta').textContent,evidenceOpen:article.querySelector('details').open
+    }));`);
+    assert.equal(rows.length, expected.length);
+    for (const [index, item] of expected.entries()) {
+      const row = rows[index], rule = item.rule;
+      assert.equal(row.heading, `${index + 1}. ${rule.title}`); assert.equal(row.headingId, `reader-item-${index}`);
+      assert.deepEqual(row.requirements, rule.requires.length ? rule.requires : ['对照官方要求确认适用性与处理方案。']);
+      assert.equal(row.visibleRequirements, true, 'requirements are not hidden inside collapsed evidence');
+      assert.ok(row.metadata.includes(rule.ruleId)); assert.equal(row.metadata.includes('条件自查'), item.conditional);
+      assert.equal(row.evidenceOpen, false);
+      if (item.conditional) {
+        const signals = artifact.data.result.selfCheck.find(entry => entry.ruleId === rule.ruleId).signal;
+        assert.ok(row.visibleParagraphs.some(value => value.includes(`业务自查线索：${signals.join('、')}`)), 'conditional signals remain in visible article text');
+      }
+      if (rule.note) assert.ok(row.visibleParagraphs.some(value => value.includes(rule.note)), 'rule notes are not hidden in evidence');
+      if (rule.manual_required) assert.match(row.text, /需要本人在官方后台核验/);
+      if (item.rejectSummary) assert.ok(row.text.includes(item.rejectSummary));
+      assert.deepEqual(row.links.map(link => link.href), rule.official_url ? [new URL(rule.official_url).href] : []);
+      for (const link of row.links) { assert.match(link.href, /^https:\/\//); assert.equal(link.target, '_blank'); assert.match(link.rel, /noopener/); assert.match(link.rel, /noreferrer/); }
+    }
+    assert.match(await text('#report-reader-warning'), /历史快照.*未重新扫描.*未实时核验/);
+    const context = await inspect('const n=document.querySelector("#report-reader-context");return {visible:n.checkVisibility(),summary:n.querySelector(":scope > p")?.textContent,notes:[...n.querySelectorAll(":scope > ul > li")].map(n=>n.textContent),visibleNotes:[...n.querySelectorAll(":scope > ul > li")].every(n=>n.checkVisibility())}');
+    assert.equal(context.visible, true); assert.equal(context.visibleNotes, true);
+    assert.equal(context.summary, artifact.data.result.meta.summary); assert.deepEqual(context.notes, artifact.data.result.notes);
+    assert.equal(await inspect('return document.querySelector("#report-reader-warning").checkVisibility()'), true);
+    assert.match(await text('#report-reader-provenance'), /保存于/);
+    const versionText = await text('#report-reader-versions');
+    for (const value of [artifact.id, artifact.runId, artifact.toolVersion, artifact.rulesVersion]) assert.ok(versionText.includes(value));
+    assert.equal(await inspect('return document.querySelector("#report-reader-versions").open'), false);
+    assert.equal(await inspect('return document.querySelector("#report-reader-original").open'), false);
+    assert.equal(await inspect(`return document.querySelectorAll('#report-reader-outline a[href^="#reader-item-"]').length`), expected.length);
+    return pack;
+  };
+  const geometry = async label => {
+    const value = await inspect(`
+      const dialog=document.querySelector('#desktop-report-reader'),body=dialog.querySelector('.report-reader-body');
+      const rect=node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
+      const visible=node=>node.checkVisibility();
+      const blocks=[...dialog.querySelectorAll('h2,h3,h4,p,li,summary,a,wa-button')].filter(visible);
+      const clipped=blocks.filter(node=>{const c=getComputedStyle(node);return (/^(hidden|clip)$/.test(c.overflowX)&&node.scrollWidth>node.clientWidth+1)||(/^(hidden|clip)$/.test(c.overflowY)&&node.scrollHeight>node.clientHeight+1);}).map(node=>({tag:node.tagName,id:node.id,text:node.textContent.slice(0,80)}));
+      return {viewport:{width:innerWidth,height:innerHeight},theme:document.body.dataset.theme,messageSize:getComputedStyle(body).fontSize,dialog:rect(dialog),body:rect(body),
+        pageOverflow:document.documentElement.scrollWidth-innerWidth,dialogOverflow:dialog.scrollWidth-dialog.clientWidth,bodyOverflow:body.scrollWidth-body.clientWidth,
+        contentOverflow:document.querySelector('#report-reader-content').scrollWidth-document.querySelector('#report-reader-content').clientWidth,clipped,
+        localScrollers:[...dialog.querySelectorAll('pre,table,#report-reader-outline')].filter(visible).map(node=>({tag:node.tagName,id:node.id,overflowX:getComputedStyle(node).overflowX,scrollWidth:node.scrollWidth,clientWidth:node.clientWidth})),
+        footerControls:[...dialog.querySelectorAll('.report-reader-footer wa-button')].filter(visible).map(node=>({id:node.id,...rect(node)}))};
+    `);
+    visuals.push({ label, ...value }); await writeFile(resolve(run, 'reading-visuals.json'), JSON.stringify(visuals, null, 2));
+    assert.ok(value.dialog.left >= -1 && value.dialog.right <= value.viewport.width + 1 && value.dialog.top >= -1 && value.dialog.bottom <= value.viewport.height + 1, JSON.stringify(value));
+    for (const key of ['pageOverflow', 'dialogOverflow', 'bodyOverflow', 'contentOverflow']) assert.ok(value[key] <= 1, `${label} ${key}: ${value[key]}`);
+    assert.deepEqual(value.clipped, [], `${label}: text blocks must not clip overflow`);
+    for (const control of value.footerControls) assert.ok(control.left >= value.dialog.left && control.right <= value.dialog.right + 1 && control.bottom <= value.dialog.bottom + 1, JSON.stringify(control));
+    for (const scroller of value.localScrollers) if (scroller.scrollWidth > scroller.clientWidth + 1) assert.match(scroller.overflowX, /auto|scroll/, 'wide original content must scroll locally');
+    await screenshot(`reading-${label}`);
+    return value;
+  };
+  const appearance = async theme => {
+    await closeTools();
+    await activate('#desktop-preferences-open');
+    await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'appearance preferences open');
+    await activate(`label:has(#desktop-theme-${theme})`); await activate('label:has(#desktop-message-size-18)'); await activate('label:has(#desktop-motion-reduce)');
+    await click('#preferences-done'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'appearance saved');
+    assert.equal(await inspect('return document.body.dataset.theme'), theme);
+  };
+  const clearStress = () => inspect(`document.querySelector('#reading-spacing-override')?.remove();for(const [node,style] of window.__readingTextStyles||[]){if(style===null)node.removeAttribute('style');else node.setAttribute('style',style);}delete window.__readingTextStyles;`);
+  const stress = async ({ doubleText, spacing }) => {
+    await clearStress();
+    if (doubleText) await inspect(`const nodes=[...document.querySelectorAll('#desktop-report-reader,#desktop-report-reader *')].filter(n=>n.namespaceURI==='http://www.w3.org/1999/xhtml');const sizes=nodes.map(n=>parseFloat(getComputedStyle(n).fontSize));window.__readingTextStyles=nodes.map(n=>[n,n.getAttribute('style')]);nodes.forEach((n,i)=>n.style.setProperty('font-size',sizes[i]*2+'px','important'));`);
+    if (spacing) await inspect(`const style=document.createElement('style');style.id='reading-spacing-override';style.textContent='#desktop-report-reader,#desktop-report-reader *{line-height:1.5!important;letter-spacing:.12em!important;word-spacing:.16em!important}#desktop-report-reader p{margin-block-end:2em!important}';document.head.append(style);`);
+  };
+
+  await checked('Reading starts with truthful empty state and disabled report entry points', async () => {
+    await command('POST', '/window/rect', { width: 1200, height: 850 });
+    const initial = await snapshot(); assert.equal(initial.projects.length, 0); assert.equal(initial.artifacts.length, 0); assert.equal(initial.runs.length, 0);
+    assert.equal(await inspect('return document.querySelector("#home-report").disabled'), true);
+    await click('#desktop-tools-toggle'); assert.equal(await inspect('return document.querySelector("#read-report").disabled'), true);
+    assert.match(await text('#report'), /报告将显示|尚未/); await screenshot('reading-empty'); await closeTools();
+  });
+  await checked('Actual bundled preflight opens structured reading from the tool toolbar', async () => {
+    await projectInvoke('project_save', { project: { id: projectId, name: '报告阅读验收项目', directory, subject: 'personal' } });
+    await projectDialog(); await click('#project-retry');
+    await until(() => inspect('return document.querySelector("#desktop-project-select").options.length===2 && !document.querySelector("#project-retry").disabled'), 'reading fixture project registered');
+    await closeProjects(); await selectProject(projectId); await click('#desktop-tools-toggle'); await click('#check-btn');
+    await until(() => inspect('return document.querySelector("#status").classList.contains("ok") && !document.querySelector("#check-btn").disabled'), 'actual preflight saved', 30000);
+    const saved = await snapshot(); assert.equal(saved.runs.length, 1); assert.equal(saved.runs[0].state, 'succeeded');
+    artifacts.check = await projectInvoke('project_artifact', { artifactId: saved.artifacts[0].id });
+    assert.ok(artifacts.check.data.result.items.length >= 3);
+    await activate('#read-report'); await readerReady(); await verifyContent(artifacts.check); await geometry('check-wide');
+  });
+  await checked('Reading path labels are guidance; native outline links focus the actual headings', async () => {
+    assert.equal(await inspect('return document.querySelector(".report-reader-steps").getAttribute("aria-label")'), '建议阅读路径，不代表执行状态');
+    assert.deepEqual(await inspect('return [...document.querySelectorAll(".report-reader-steps li")].map(n=>n.textContent)'), ['阅读发现', '核对官方依据', '处理后复查']);
+    assert.equal(await inspect('return document.querySelectorAll(".report-reader-steps [role=progressbar],.report-reader-steps [aria-current=step],.report-reader-steps input[type=checkbox]").length'), 0);
+    const count = createHandoff(artifacts.check).items.length;
+    await activate(`#report-reader-outline a[href="#reader-item-${count - 1}"]`);
+    assert.equal(await inspect('return document.activeElement.id'), `reader-item-${count - 1}`);
+    await activate('#report-reader-outline a[href="#reader-item-0"]'); assert.equal(await inspect('return document.activeElement.id'), 'reader-item-0');
+    await inspect(`document.querySelector('#report-reader-outline a[href="#reader-item-0"]').focus()`); await press('\uE007');
+    assert.equal(await inspect('return document.activeElement.id'), 'reader-item-0', 'keyboard Enter follows the outline and focuses its heading');
+    await press('\uE004'); assert.equal(await inspect('return document.querySelector("#desktop-report-reader").contains(document.activeElement)'), true);
+    await activate('#report-reader-content article:first-child .report-reader-evidence > summary');
+    assert.match(await text('#report-reader-content article:first-child .report-reader-evidence'), /资料记录日期.*未实时核验/);
+    await closeReader(); assert.equal(await inspect('return document.activeElement.checkVisibility()'), true); await closeTools();
+    await activate('#home-report'); await readerReady(); await closeReader();
+    assert.equal(await inspect('return document.activeElement.id'), 'home-report');
+    await openMenu(); await closeReader(); assert.equal(await inspect('return document.activeElement.id'), 'desktop-more');
+  });
+  await checked('Complete original report remains expandable and actual copy retains its Markdown', async () => {
+    await fromHistory(artifacts.check); await activate('#report-reader-original > summary');
+    assert.equal(await inspect('return document.querySelector("#report-reader-original").open'), true);
+    assert.equal((await text('#report-reader-original .report-markdown')).replace(/\s+/g, ' ').trim(), (await text('#report')).replace(/\s+/g, ' ').trim());
+    await geometry('original-report'); await closeReader();
+    if (!await inspect('return document.querySelector("#desktop-tools").open')) await click('#desktop-tools-toggle');
+    await activate('#copy-report'); await until(async () => /已复制报告/.test(await text('#copy-status')), 'real original report copy completed');
+    const clipboard = await readWindowsClipboard();
+    const newlineStats = value => ({ length: value.length, crlf: (value.match(/\r\n/g) || []).length, bareLf: (value.match(/(?<!\r)\n/g) || []).length, bareCr: (value.match(/\r(?!\n)/g) || []).length });
+    const diagnostics = {
+      expected: newlineStats(artifacts.check.markdown), actual: newlineStats(clipboard), exactEqual: clipboard === artifacts.check.markdown,
+      // Windows Clipboard converts LF to CRLF. Preserve every other character,
+      // including trailing newlines, spaces and any standalone carriage return.
+      crlfToLfOnlyEqual: clipboard.replace(/\r\n/g, '\n') === artifacts.check.markdown.replace(/\r\n/g, '\n'),
+    };
+    await writeFile(resolve(run, 'reading-clipboard.json'), JSON.stringify(diagnostics, null, 2));
+    assert.equal(diagnostics.crlfToLfOnlyEqual, true, 'Windows clipboard must match fixture Markdown after CRLF-to-LF conversion only; contents are intentionally omitted');
+    await closeTools();
+  });
+  for (const kind of ['guide', 'explain']) await checked(`Actual ${kind} artifact reopens from history with all structured requirements`, async () => {
+    artifacts[kind] = await projectInvoke('project_run', { projectId, kind, runId: `reading-${kind}`, ...(kind === 'guide' ? { subject: 'personal' } : { query: '隐私' }) });
+    assert.ok(createHandoff(artifacts[kind]).items.length > 0);
+    if (kind === 'guide') assert.ok(artifacts.guide.data.result.selfCheck.length > 0, 'real guide includes conditional applicability');
+    await fromHistory(artifacts[kind]); await verifyContent(artifacts[kind]); await geometry(`${kind}-wide`); await closeReader(); await closeTools();
+  });
+  await checked('Reader hands off the same persisted artifact and returns to a visible entry', async () => {
+    await appearance('light');
+    await fromHistory(artifacts.guide); await activate('#report-reader-handoff');
+    await until(() => inspect('return !document.querySelector("#desktop-report-reader").open && document.querySelector("#desktop-handoff").open'), 'reader transitions to handoff');
+    assert.ok((await text('#handoff-source')).includes(artifacts.guide.id));
+    assert.equal(await inspect('return getComputedStyle(document.querySelector("#handoff-content")).fontSize'), '18px', 'handoff keeps the chosen reading text size');
+    assert.equal(await inspect('return document.querySelectorAll("dialog:modal").length'), 1);
+    await press('\uE00C'); await until(() => inspect('return !document.querySelector("#desktop-handoff").open && document.activeElement.checkVisibility() && document.activeElement!==document.body'), 'handoff closes to visible product entry');
+    await closeTools();
+  });
+  await checked('Toolbar reader retains top-layer focus when shrinking across the tools breakpoint', async () => {
+    await command('POST', '/window/rect', { width: 1000, height: 850 }); await fromHistory(artifacts.check);
+    await command('POST', '/window/rect', { width: 390, height: 850 });
+    await until(() => inspect('const d=document.querySelector("#desktop-report-reader"),b=document.querySelector("#report-reader-dismiss"),r=b.getBoundingClientRect(),hit=document.elementFromPoint((r.left+r.right)/2,(r.top+r.bottom)/2);return d.open && d.matches(":modal") && d.contains(document.activeElement) && (hit===b||b.contains(hit))'), 'reader stays active above the responsive tools drawer');
+    await geometry('toolbar-reader-resize'); await closeReader();
+    assert.equal(await inspect('return document.activeElement!==document.body && document.activeElement.checkVisibility()'), true);
+    await closeTools(); await command('POST', '/window/rect', { width: 1200, height: 850 });
+  });
+  await checked('Refresh and native restart retain all real reports without running tools again', async () => {
+    const before = await snapshot(); await refresh();
+    assert.deepEqual((await snapshot()).artifacts, before.artifacts); assert.deepEqual((await snapshot()).runs, before.runs);
+    await fromHistory(artifacts.check); await verifyContent(artifacts.check); await closeReader(); await closeTools();
+    await quit(); await launch(); assert.deepEqual((await snapshot()).artifacts, before.artifacts); assert.deepEqual((await snapshot()).runs, before.runs);
+    await fromHistory(artifacts.guide); await verifyContent(artifacts.guide);
+    assert.equal(await inspect('return getComputedStyle(document.querySelector(".report-reader-body")).fontSize'), '18px', 'reading preference survives native restart');
+    await closeReader(); await closeTools();
+  });
+  await checked('Changed project revision remains an explicitly historical reading snapshot', async () => {
+    await projectDialog(); await fill('#project-name', '报告阅读验收项目 · 已改名'); await click('#project-save');
+    await until(async () => (await snapshot()).projects.find(item => item.id === projectId).revision > artifacts.check.projectRevision, 'project metadata revision saved');
+    await closeProjects(); await fromHistory(artifacts.check);
+    assert.match(await text('#report-reader-warning'), /项目版本已变化/); await geometry('historical-warning'); await closeReader(); await closeTools();
+  });
+  for (const theme of ['light', 'dark']) await checked(`Reading ${theme} appearance respects 18px text at 320, 390, 1000 and 1440px`, async () => {
+    await command('POST', '/window/rect', { width: 1200, height: 900 }); await appearance(theme); await fromHistory(artifacts.guide);
+    for (const width of [320, 390, 1000, 1440]) {
+      await command('POST', '/window/rect', { width, height: 900 });
+      await inspect('document.querySelector(".report-reader-body").scrollTop=0;document.querySelector("#report-reader-dismiss").focus()');
+      const value = await geometry(`${theme}-${width}`); assert.equal(value.messageSize, '18px'); assert.equal(value.theme, theme);
+      for (let index = 0; index < 8; index++) { await press('\uE004'); assert.equal(await inspect('return document.querySelector("#desktop-report-reader").contains(document.activeElement)'), true); }
+    }
+    await closeReader(); assert.equal(await inspect('return document.activeElement!==document.body && document.activeElement.checkVisibility()'), true); await closeTools();
+  });
+  await checked('Reading survives 200 percent text and user text-spacing overrides without page overflow', async () => {
+    await fromHistory(artifacts.guide);
+    try {
+      for (const scenario of [{ width: 320, doubleText: true, spacing: false }, { width: 390, doubleText: false, spacing: true }, { width: 1000, doubleText: true, spacing: true }, { width: 1440, doubleText: true, spacing: true }]) {
+        await command('POST', '/window/rect', { width: scenario.width, height: 1000 }); await stress(scenario);
+        await inspect('document.querySelector(".report-reader-body").scrollTop=0;document.querySelector("#report-reader-dismiss").focus()');
+        const value = await geometry(`stress-${scenario.width}-${scenario.doubleText ? '200percent' : 'normal'}-${scenario.spacing ? 'spacing' : 'default'}`);
+        assert.equal(value.messageSize, scenario.doubleText ? '36px' : '18px');
+        await activate('#report-reader-original > summary');
+        assert.equal(await inspect('return document.querySelector("#report-reader-original").open'), true);
+        await geometry(`stress-original-${scenario.width}`); await activate('#report-reader-original > summary');
+      }
+    } finally { await clearStress(); }
+    await closeReader(); await closeTools(); await command('POST', '/window/rect', { width: 1200, height: 850 });
+  });
+  await checked('Reading leaves files, persisted artifacts and tool counts unchanged with no model requests', async () => {
+    assert.deepEqual((await readdir(directory)).sort(), Object.keys(files).sort());
+    for (const [name, content] of Object.entries(files)) assert.equal(await readFile(resolve(directory, name), 'utf8'), content);
+    for (const artifact of Object.values(artifacts)) assert.deepEqual(await projectInvoke('project_artifact', { artifactId: artifact.id }), artifact);
+    const final = await snapshot(); assert.equal(final.runs.length, 3); assert.equal(final.artifacts.length, 3); assert.ok(final.runs.every(item => item.state === 'succeeded'));
+    assert.equal(requests.length, 0); assert.deepEqual(await inspect('return window.__readingAcceptanceErrors'), []);
+    await writeFile(resolve(run, 'reading-evidence.json'), JSON.stringify({
+      artifacts: Object.values(artifacts).map(({ id, runId, kind, projectRevision }) => ({ id, runId, kind, projectRevision })),
+      toolsExecuted: final.runs.map(({ id, kind, state }) => ({ id, kind, state })), modelRequests: requests.length,
+      officialLinks: 'Verified URL and accessible link metadata only; no external page opened.',
+      clipboard: 'Actual report-toolbar Clipboard API write followed by Windows PowerShell -STA Get-Clipboard -Raw. JSON decoded, CRLF converted to LF only, then exact fixture comparison; all other characters preserved. Only length/newline statistics and equality results logged. No API mock or external paste.',
+      textStress: 'DOM-only 200% computed font-size and line-height 1.5, paragraph spacing 2em, letter .12em, word .16em overrides; restored after assertions.',
+      limits: 'Bounded report-reader checks, not a whole-product WCAG conformance or installed-release acceptance claim. Invalid/legacy structured data fallback is covered separately by unit tests.',
+    }, null, 2));
+  });
+}

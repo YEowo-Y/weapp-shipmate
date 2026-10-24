@@ -1,5 +1,11 @@
 # 08 · 产品愿景:从上线工具到全生命周期上线 copilot
 
+> **当前实现与历史方案的边界（2026-10-22 P0）**：本文保留 2026-06 的产品探索记录；下文的「✅ 已定」、阶段编号和架构图不代表已经交付，也不是当前依赖安装清单。当前事实以[功能台账](12-current-capabilities.md)为准，实施顺序见[总体计划](../.omx/plans/project-completion-plan-20261022.md)。
+>
+> 当前桌面为 **Vanilla TypeScript / Vite / Tauri 2 / Web Awesome**，复用 Node 模型 broker 和 IndexedDB 会话存储。React、Zustand、SQLite、系统凭据库、PTY、自动修复和持久任务执行器尚未作为本文所述架构落地。后续项目模型拟支持一个项目关联多个会话、运行和成果，替代「一项目=一会话」；迁移前保留未归属的旧会话。
+>
+> 安全口径更正：合法规则 ID 只能说明引用存在，不能给整段 AI 解释授予「已核验」状态；提示词与 XML 分隔符不是权限边界。工具字段须经过契约校验，模型解释仍标注为 AI 建议。本次文档整理不代表浏览器、真实账号或安装版验收通过。
+
 > 本文涉及的规则数/统计以 `npm run validate` 实测为准,历史快照不再逐处回填。
 >
 > 状态:**愿景施工图(2026-06-22,四轮调研已沉淀)**,驱动 P2.1+ 实施。本文是决策 #8(自建桌面 agent 终态)在**产品层**的展开;技术底座见 [`docs/07`](07-desktop-agent-tech-research.md)。
@@ -45,7 +51,7 @@
 ### 3.1 必备(table-stakes,做到位即止)
 - 8 阶段引导清单作为产品脊柱(`flow.yaml` 驱动,done-state 归规则引擎、永不归 LLM,锁定靠 `requires_stage`)。
 - 5 问平白访谈 → 填 docs/02 导航输入(LLM 解析模糊自由文本为 enum,写回确定性状态,给"接受/编辑"门)。
-- 流式 markdown 对话 + 左栏会话=项目列表(一项目=一会话=一文件夹),本地 SQLite 持久化。
+- 流式 markdown 对话与会话历史已存在。原「一项目=一会话=一文件夹 + SQLite」为历史提议，已由多会话项目规划替代；当前会话实际存于 IndexedDB，持久项目与报告存储待实施。
 - `check` 接真实项目文件夹(扫请求域名 + 隐私 API + 交叉核验;变量 baseURL 出 `manual_only`,绝不 LLM 猜)。
 - 每阶段交接闸门(材料清单 + 时间炸弹 + 官方深链 + "我已完成"勾选,工具永不提交)。
 - BYO-key 设置(provider → 粘 key → 可改 Base URL → "测试连接"绿/红 → 启用;一个 OpenAI 兼容自定义槽给国内网关;key 只进 OS 钥匙串)。
@@ -163,7 +169,9 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 
 > 📐 本节是组件级骨架;**记忆/提示词/持久化的工程级规范(注入分层 + 生命周期 + 存储引擎 + 完整 SQL DDL)见 [`docs/09`](09-memory-context-architecture.md)**,它把 §5/§7.1/§11.3 的草图回填成可单测工件与确定性 schema。
 
-### 7.1 组件图(Rust 核拥逻辑,webview 拥 UI)
+### 7.1 历史候选组件图（未按此图实施）
+
+下图保留方案演变背景，不作为当前实现或依赖清单；本轮继续复用现有 Vanilla TypeScript 前端与 Node broker，不另建 Rust 模型运行时。
 ```
 [Webview: React+Vite+Zustand+shadcn] 对话 / 项目+阶段侧栏 / 设置 / xterm.js 终端 / diff 面板
    <-> Tauri IPC (ipc::Channel<ChatDelta>) <->
@@ -180,16 +188,13 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 ### 7.2 大脑当内置 MCP ✅(关键决定)
 把 `bin/weapp-shipmate-mcp.mjs`(已是合规·极简依赖 stdio JSON-RPC server,仅 js-yaml)当 Node sidecar,`mcp_servers` 表种一行 `builtin=true` 不可删,McpClient 启动自动拉起。check/guide/explain 成为 AgentRuntime 看到的同一工具注册表里的 3 个工具,经与任何用户 MCP server **完全相同**的调用路径派发。大脑字节级不变(决策 #8 零返工),同文件同时服务独立 `.mcpb`。**这保证规则永远是事实源**:LLM 拿到的是结构化工具结果,必须引用、不能编。
 
-### 7.3 BYO-key ✅(broker 模式 = 行业最强姿态)
-设置 → 模型与密钥:provider(OpenAI/Anthropic/Gemini/Ollama/**OpenAI 兼容自定义**)→ key → 可改 Base URL → 选模型 → 测试连接 → 启用。
+### 7.3 模型连接与凭据（现状及后续边界）
 
-**broker 模式(R2,我们比对标都强)**:几乎所有纯桌面 AI 客户端(Cherry Studio/Chatbox/Jan/Open WebUI/Continue)都**明文存 key**;只有蹭 VS Code SecretStorage 的 IDE 扩展用 keychain。我们:
-```
-[WebView] invoke("chat",{messages})        ← 载荷里没有 key
-[Rust 核] 1.keyring 取 key 2.拼 Authorization 头 3.reqwest 调 LLM 4.只回 {content}
-[WebView] 只拿到 {content}                   ← key 永不过 IPC、永不进 webview/日志/后端
-```
-即使 webview 被 XSS,也没有任何 command 会返回 key。`keyring-rs`(macOS Keychain / Windows Credential Manager / Linux Secret Service;Linux 用 `sync-secret-service`+`crypto-rust` features 避 OpenSSL 依赖)。**不用 Stronghold**(官方将弃用 + 口令 UX 差)。**确定性流无 key 也能跑**,key 只解锁 AI 辅助(无后端,零运行成本结构性成立)。
+当前支持 OpenAI、Anthropic、Google、OpenRouter、Ollama 的文本聊天适配；OAuth 只接入 OpenRouter PKCE。自定义 Base URL、系统凭据保存及通用订阅账号登录尚未完成。连接目录成功不等于推理调用成功，真实外部账号须单独验收。
+
+当前凭据由本机 Node broker 在活动会话内持有；不能把计划中的 OS 钥匙串描述为已经实现。API key 在用户输入及提交连接时会经过界面和相应传输边界，因此撤回「key 永不进 WebView/IPC/后端」的绝对表述。后续系统凭据方案需分别验证录入、保存、使用、注销和错误恢复，普通状态响应不应回传密钥。
+
+原文关于竞品普遍明文保存密钥的概括没有逐产品、逐版本证据，予以撤回。2026-10-22 调研未找到 [Tauri 官方 Stronghold 文档](https://v2.tauri.app/plugin/stronghold/)的弃用声明，不再以「官方将弃用」作为选型理由。系统凭据库是待验证的集成方向，不代表已证明所有替代方案不安全。确定性规则工具无密钥可用，AI 辅助另行连接模型服务。
 
 ---
 
@@ -199,6 +204,7 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 **"engineered calm" + 专业版 Claude 桌面的暖,Linear 的结构清晰——清晰第一。** 颜色只承载意义不做装饰:整屏中性灰白,只有三种带意义的色。船友"航程"品牌张力收敛为"清楚的阶段脊柱",不花哨。
 
 ### 8.2 栈与 token(提议)
+> 以下为历史视觉与技术候选，React 迁移建议已被「优先复用现有组件」取代；当前依赖见[功能台账](12-current-capabilities.md)。
 - 栈:React + Vite + Zustand + Tailwind + Radix + shadcn/ui(源码内置、离线本地、无 CDN),CSS 变量主题化;xterm.js 终端;react-markdown + 代码高亮;字体本地打包。**P2.1 脚手架可起于 `dannysmith/tauri-template`**(R1:Tauri v2 + React 19 + shadcn/ui v4 + Tailwind v4,MIT,且内置 Claude Code 集成)。
 - 配色(暖色友好,跟 host/Claude 同系、自动适配明暗):中性灰白为底 + 一抹赭橙(`#c15f3c`)只给"当前/主操作";语义 绿=已核验/通过、黄=警告、红=阻断。深度靠表面阶梯不靠阴影。
 - 字体:Inter(UI)+ JetBrains/Geist Mono(终端/规则 id/路径/已核验输出——mono 是"可信工程工具"最便宜的信号,也把"已核验规则"和"AI 散文"在视觉上分开)。
