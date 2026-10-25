@@ -1,6 +1,6 @@
 # 14 · 首跑、验包与五人试用
 
-更新：2026-10-25。用户已确认“暂未准备，先完成可交付候选与试用材料”。本轮验收范围是候选交付件及试用材料；可信签名和五人真实执行待用户安排，不伪造完成，也不阻止本轮材料交接。Windows候选安装包正在构建验收，实际产物和hash由维护者确认后记录；当前不提供未验证的下载地址，不表示已签名、公开分发或完成五人验证。
+更新：2026-10-25。用户已确认“暂未准备，先完成可交付候选与试用材料”。本轮验收范围是候选交付件及试用材料；可信签名和五人真实执行待用户安排，不伪造完成，也不阻止本轮材料交接。Windows候选安装包已构建、验包，并在本机完成安装、7项原生运行验收和卸载。下文记录实际文件和hash；这不是干净Windows环境或真人试用，不表示已签名或公开分发。
 
 ## 当前分发事实
 
@@ -35,10 +35,32 @@ Claude Desktop自带Node，可免用户单独安装，但仍须满足包和宿�
 在依赖已按现有锁文件安装、Windows原生构建工具链可用且其他原生构建结束后，从仓库根目录执行候选命令：
 
 ```powershell
-npm --prefix desktop run tauri -- build --bundles nsis
+npm --prefix desktop run tauri -- build --bundles nsis --config .omx/artifacts/windows-candidate-20261025/tauri.candidate.conf.json
 ```
 
-**该命令截至本次文档编写尚未执行**；它是经配置核对的本地打包路径，不是成功记录。构建可能下载工具及运行时，耗时并占用Cargo target锁；不要与其他原生任务争用同一个target目录。以前的`--debug --no-bundle`及隔离identifier验证不等于安装器构建。以实际构建日志报告的路径定位`-setup.exe`，不要把旧目录残留当成新产物。
+该命令已于2026-10-25执行成功，生成一个NSIS x64安装器。候选配置仅覆盖名称与数据目录：
+
+```json
+{"productName":"Weapp Shipmate Candidate","identifier":"com.weappshipmate.candidate.20261025"}
+```
+
+源码为`3b2660e1cc5556d5ab900e687a81aaf7f1acbfe9`，构建时工作树干净；配置SHA256为`4722107efa518cd85b84a58a3aa33ac6107a99307a234852463c47bd1d6621a3`。程序版本0.1.0，随包CLI 0.2.0-rc.3。最终文件均放在本机`.omx/artifacts/windows-candidate-20261025/`，不提交二进制到Git，也未发布Release。
+
+| 产物 | 大小 | SHA256 |
+| --- | --- | --- |
+| `Weapp-Shipmate-Candidate-0.1.0-x64-setup.exe` | 28,217,292 bytes | `f43f85a46bc532cccb28e096019f0f3e9f70de275abb562378849ad28fe31401` |
+| `weapp-shipmate-trial-kit-final.zip` | 11,475 bytes；14个文件、5份空记录 | `297b26c07f9f62d2c378964b827e7efe67bc4eaf3e9b9b1425baf77a09ef6808` |
+| `Weapp-Shipmate-Candidate-20261025.zip`（安装器、试用ZIP、说明、验包/来源、配置、截图与校验表） | 28,522,050 bytes；9个文件 | `69c5ec9d089024eaf116ccc2d610cba6489e0c5aee3c6cbab05074695ed2f050` |
+
+Windows Authenticode返回`NotSigned`，无签名者。验包脚本核验容器、大小、哈希和签名；源码来源另由构建记录及lock/config哈希记录，不能由签名脚本自行证明。
+
+本机安装/卸载均退出0。实际安装目录运行的二进制SHA256为`27299350ab8651664ebd31b796b90e354e4b386912ecda3c50736504d4be2fcd`。7项原生验收通过：真实清单、拒因查询、模型目录及空密钥校验、外部页面不能调用原生工具、broker进程身份与关闭、重启。PATH仅保留Windows目录，无Node/Git开发命令；无模型请求或测试preload。证据：`.omx/artifacts/desktop-model-native/run-2026-10-25T16-38-32-355Z/results.json`。
+
+首次安装验收发现旧脚本在拒因短进程退出后提前要求常驻broker；修正为实际打开模型目录后检查。只调整验收时序，未换包或弱化文件身份/父PID/路径核验。失败证据保留于`run-2026-10-25T16-36-01-523Z`。安装包中的EXE与target/release原文件仅3字节不同，内容为Tauri打包标识`UNK`→`NSS`，分别记录哈希。
+
+使用该安装器自己的卸载程序移除了独立候选目录；应用数据保留，不能声称卸载抹除了数据。这是已有WebView2的Windows开发机上的自动化，未验证干净首装、网络下载失败、SmartScreen信誉或真人安装体验。安装脚本使用官方[NSIS静默参数](https://nsis.sourceforge.io/Docs/Chapter3.html#installerusagecommon)，未关闭系统防护。
+
+[源码CI六组矩阵](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/40212177223)全部通过：Ubuntu/Windows × Node20/22/24。日志、安装记录、只读验包和来源清单保存在同一本机候选目录。
 
 当前默认WebView2策略在运行时缺失时下载bootstrapper，因此可能需要网络；本地exe不意味着离线即用。[Tauri Windows官方安装器文档](https://v2.tauri.app/distribute/windows-installer/#webview2-installation-options)
 
@@ -50,7 +72,7 @@ npm --prefix desktop run tauri -- build --bundles nsis
 
 写入使用独占持锁的非原子方式，本机保存明文备份与修复日志。撤销通过哈希CAS核对当前文件，发生中断需用户显式恢复；不能覆盖用户后续改动或将独占锁描述为原子写入。复检必须以真实执行回执为依据，不能仅凭修改成功或模型解释声称问题已解决。
 
-**普通项目导出不含修复日志、修复备份或项目源文件。** 备份导入恢复与修复恢复分别验收。首跑五人练习不要求使用此功能，也不应为了测试写入而强迫参与者确认本不存在的业务需要。该候选说明不改变安装包仍待本轮构建验收的状态。
+**普通项目导出不含修复日志、修复备份或项目源文件。** 备份导入恢复与修复恢复分别验收。首跑五人练习不要求使用此功能，也不应为了测试写入而强迫参与者确认本不存在的业务需要。安装包的已验证范围与限制见上文，不能由代码修复验收替代。
 
 ## 只读验包合同
 
@@ -146,7 +168,7 @@ MCPB可用已安装且记录版本的官方CLI运行`mcpb verify <实际路径>`
 | --- | --- | --- |
 | 签名身份 | 合法发布者与可用签名服务/证书 | 最终产物验签及真实告警观察 |
 | 可达渠道 | 已授权的目标用户入口 | 无维护者凭据下载成功、hash一致 |
-| 当前安装器 | 打包成功及准确源码来源 | 构建日志、hash、干净环境首跑 |
+| 干净环境首装 | 独立Windows环境与目标用户获取渠道 | 当前安装器已通过开发机安装/运行/卸载；仍需干净环境首跑 |
 | 五位真实用户 | 自愿参与的目标用户 | 五份匿名记录；未执行不得当通过 |
 
-不读取证书秘密，不改变仓库可见性，不发布Release/npm，不代发邀请。本文的完成只表示试用材料就绪；产品发布判定必须依据真实交付和用户证据。
+不读取证书秘密，不改变仓库可见性，不发布Release/npm，不代发邀请。本轮候选与试用材料已就绪；正式发布判定仍须补齐签名、可达渠道及真实用户证据。

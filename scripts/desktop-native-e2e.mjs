@@ -1065,16 +1065,19 @@ try {
       assert.equal(await inspect('return Boolean(document.querySelector("#report h1") && document.querySelector("#report li"))'), true);
       await screenshot('release-guide'); await click('#desktop-tools-close');
     });
-    await checked('Installed release broker returns actual bundled rejection rules', async () => {
+    await checked('Installed release native project tool returns actual bundled rejection rules', async () => {
       await click('#start-explain'); await fill('#rjInput', '诱导分享'); await click('#rjBtn');
       await until(() => inspect('return document.querySelector("#rjStatus").dataset.state === "matched"'), 'installed rejection lookup');
       assert.ok(await inspect('return document.querySelectorAll("#rjResultItems .rj-rule").length > 0'));
-      assert.ok((await ownedRuntimeProcesses()).length > 0, 'broker runs from exact installed runtime path');
       await screenshot('release-explain'); await press('\uE00C');
     });
     await checked('Installed release model provider catalog and credential validation need no account or paid request', async () => {
       await openModelSettings();
       await until(() => inspect('return document.querySelector("#desktop-model-dialog").open && !document.querySelector("[data-provider-id=openai]").disabled'), 'installed provider catalog');
+      // Rejection lookup now uses a short-lived project CLI. The model settings
+      // GET starts the lazy broker; verify its installed file identity here,
+      // keeping the exact-path/parent-PID checks and no-Node-on-PATH environment.
+      await until(async () => (await ownedRuntimeProcesses()).length > 0, 'broker runs from exact installed runtime path');
       for (const provider of ['openai', 'anthropic', 'google', 'openrouter', 'ollama']) {
         assert.equal(await inspect('return Boolean(document.querySelector(arguments[0]))', [`[data-provider-id="${provider}"]`]), true);
       }

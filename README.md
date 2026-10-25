@@ -6,7 +6,7 @@
 
 ## 先从桌面候选开始
 
-本轮先交付**Windows 桌面候选和试用材料**。安装包正在构建与验收，尚无可提供的公开下载地址；当前没有可信签名证书，不能将候选称为已签名正式版。产物、SHA256和实际验收记录由维护者完成后登记在[首跑与试用说明](docs/14-first-run-and-trial.md)。
+本轮先交付**Windows 桌面候选和试用材料**。NSIS安装包已完成本机安装、运行与卸载验收，尚无公开下载地址；当前没有可信签名证书，不能将候选称为已签名正式版。产物、SHA256和实际验收记录见[首跑与试用说明](docs/14-first-run-and-trial.md)。
 
 2026-10-25核查：GitHub仓库仍为私有，rc.3 Release仍是草稿，npm确切包名未发布。已有tgz/mcpb资产不等于普通用户可获取的桌面安装器。获得候选后，先核对版本和SHA256，再按首跑说明安装；系统告警、WebView2网络要求和安装失败都应记录，不能省略为“下载即用”。
 
@@ -28,7 +28,7 @@
 | 想让AI解释报告 | OpenAI、Anthropic、Google的只读工具路径使用相同权限边界 | 模型质量需另验；只读不等于有权任意读取或分享 |
 | 想修改问题 | 可导出修复交接；原生`app.json`完全缺少`requiredPrivateInfos`时，受限修复候选已通过本轮原生验收 | 须明确确认真实业务需要并预览原文；不能任意修改代码，原生验收不等于已签名分发 |
 
-当前规则集有**66条默认规则，另有5条跨项核验规则（不是draft）**，另有24条拒因记录。默认输出非草案规则；核验日期用于追溯，不表示当天重新核对过官方政策。处理动作区分代码修改、后台配置、材料准备和人工确认：例如AppSecret暴露或不安全HTTP调用中的本机代码问题应归为代码项，域名后台配置也可能同时需要处理。
+当前有**66条默认数据规则和5条跨项核验规则**，以及24条拒因记录；跨项核验规则不是draft。默认输出非草案规则；核验日期用于追溯，不表示当天重新核对过官方政策。处理动作区分代码修改、后台配置、材料准备和人工确认：例如AppSecret暴露或不安全HTTP调用中的本机代码问题应归为代码项，域名后台配置也可能同时需要处理。
 
 `--payment` / `--business`目前提供说明与核对线索，不参与规则筛选或排序，也不自动判定支付资格、官方类目；明确“不支付”也不会删除全部条件自查。无待办项不等于检查完整。完整能力和历史证据见[能力台账](docs/12-current-capabilities.md)。
 
@@ -113,7 +113,7 @@ MCPB是安装到兼容宿主（例如Claude Desktop）的扩展，**不是独立
 
 weapp-shipmate helps WeChat Mini Program developers inspect local projects, understand review feedback, and decide what to prepare next. It provides a desktop interface plus CLI and MCP tools. Deterministic checks run locally; optional model connections require explicit choices about project reading and context sharing.
 
-The Windows candidate is being built and verified. There is no public installer URL or trusted signing certificate yet. The repository is private, the rc.3 release is a draft, and the npm package is unavailable as checked on 2026-10-25. MCPB requires a compatible host; it is not a standalone desktop app. The narrowly scoped app.json repair candidate passed this batch's native acceptance; it uses non-atomic locked writes with local plaintext backups and is not a general code editor. Native acceptance does not establish signed distribution, real-account model quality, or real-user trial completion.
+The Windows NSIS candidate has passed local install, native smoke and uninstall checks on a development machine. There is no public installer URL or trusted signing certificate yet. The repository is private, the rc.3 release is a draft, and the npm package is unavailable as checked on 2026-10-25. MCPB requires a compatible host; it is not a standalone desktop app. The narrowly scoped app.json repair candidate passed this batch's native acceptance; it uses non-atomic locked writes with local plaintext backups and is not a general code editor. Native acceptance does not establish signed distribution, real-account model quality, or real-user trial completion.
 
 ## License
 
