@@ -1,0 +1,55 @@
+name: glib-backport
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-regression:
+    runs-on: ubuntu-24.04
+    env:
+      # Avoid a rustc 1.94.1 narrow-terminal diagnostic renderer panic.
+      # This changes formatting only, not optimization or warning levels.
+      RUSTFLAGS: --diagnostic-width=200
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - run: rustup toolchain install 1.94.1 --profile minimal
+      - name: Install Tauri Linux prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev build-essential pkg-config libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      - name: Verify exact upstream backport and original-version advisories
+        run: |
+          node scripts/verify-glib-backport.mjs
+          node --test tests/glib-backport.test.mjs tests/glib-advisories.test.mjs
+          node scripts/check-glib-advisories.mjs
+      - name: Exercise real GLib in debug and optimized builds
+        run: |
+          cargo +1.94.1 test --manifest-path desktop/security/glib-variant-iter/Cargo.toml --locked
+          cargo +1.94.1 test --manifest-path desktop/security/glib-variant-iter/Cargo.toml --locked --release
+      - run: npm ci --prefix desktop
+      - run: npm --prefix desktop run build
+      - name: Compile the locked Tauri Linux dependency graph
+        run: cargo +1.94.1 check --manifest-path desktop/src-tauri/Cargo.toml --locked
+
+  windows-compatibility:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - run: rustup toolchain install 1.94.1 --profile minimal
+      - run: npm ci --prefix desktop
+      - run: npm --prefix desktop run build
+      - run: cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked
+      - name: Build the Windows desktop with production assets
+        run: cargo +1.94.1 build --manifest-path desktop/src-tauri/Cargo.toml --locked --features tauri/custom-protocol
