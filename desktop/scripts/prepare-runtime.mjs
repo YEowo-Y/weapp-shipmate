@@ -113,6 +113,8 @@ export async function prepareRuntime({ root = ROOT, output = join(root, 'desktop
     const sdkFiles = {
       ai: ['dist', 'LICENSE'],
       '@ai-sdk/openai': ['dist', 'LICENSE'],
+      '@ai-sdk/anthropic': ['dist', 'LICENSE'],
+      '@ai-sdk/google': ['dist', 'LICENSE'],
       '@ai-sdk/provider': ['dist', 'LICENSE'],
       '@ai-sdk/provider-utils': ['dist'],
       '@ai-sdk/gateway': ['dist', 'LICENSE'],

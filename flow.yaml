@@ -8,14 +8,14 @@ stages:
     title: "注册小程序账号"
     next: certification
     official_url: "https://developers.weixin.qq.com/miniprogram/introduction/"
-    last_verified: "2026-10-22"
+    last_verified: "2026-10-25"
 
   - stage: certification
     title: "主体身份核验"
     requires_stage: [registration]
     next: filing
     official_url: "https://developers.weixin.qq.com/miniprogram/introduction/"
-    last_verified: "2026-10-22"
+    last_verified: "2026-10-25"
 
   - stage: filing
     title: "ICP 备案"
@@ -55,4 +55,4 @@ stages:
     requires_stage: [review]
     next: null            # 终点：唯一 next: null 的阶段
     official_url: "https://developers.weixin.qq.com/miniprogram/introduction/"
-    last_verified: "2026-10-22"
+    last_verified: "2026-10-25"

@@ -5,6 +5,7 @@
 schema_version: 1
 rules:
   - id: data.collection-consent
+    action_categories: ["code", "manual_check"]
     title: "收集用户数据须告知用途并取得同意"
     kind: navigation
     stage: review
@@ -22,6 +23,7 @@ rules:
     manual_required: true
 
   - id: data.delete-on-request
+    action_categories: ["code", "manual_check"]
     title: "须提供用户数据删除方式"
     kind: navigation
     stage: review
@@ -39,6 +41,7 @@ rules:
     manual_required: true
 
   - id: data.security-measures
+    action_categories: ["code", "manual_check"]
     title: "收集用户数据须采取安全保护措施"
     kind: navigation
     stage: review

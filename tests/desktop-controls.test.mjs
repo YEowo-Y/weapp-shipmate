@@ -15,7 +15,7 @@ function harness({ open = async () => null, invoke = async () => 'report', write
   if (sessions && !sessions.isTemporary) sessions.isTemporary = () => false;
   const nodes = new Map();
   const document = { activeElement: null, querySelector: selector => nodes.get(selector), querySelectorAll: () => [] };
-  for (const id of ['stop-tool', 'pick-btn', 'check-btn', 'guide-btn', 'subject', 'status', 'dir', 'report', 'report-title', 'report-note', 'copy-report', 'copy-status', 'handoff-report', 'read-report', 'save-report', 'start-check', 'start-guide', 'start-explain', 'home-report', 'home-report-summary', 'desktop-menu-report', 'home-project-name', 'home-project-summary', 'home-project-manage', 'desktop-preferences-open', 'home-sources']) {
+  for (const id of ['stop-tool', 'pick-btn', 'check-btn', 'guide-btn', 'subject', 'status', 'dir', 'report', 'report-title', 'report-note', 'copy-report', 'copy-status', 'handoff-report', 'read-report', 'repair-report', 'desktop-repair-history', 'save-report', 'start-check', 'start-guide', 'start-explain', 'home-report', 'home-report-summary', 'desktop-menu-report', 'home-project-name', 'home-project-summary', 'home-project-manage', 'desktop-preferences-open', 'home-sources']) {
     nodes.set(`#${id}`, Object.assign(id === 'report' ? createPreviewDocument().createElement('div') : {}, {
       disabled: id === 'check-btn', value: 'personal', textContent: '', className: '',
       scrollTop: 0, scrollLeft: 0, attributes: {}, listeners: {},
@@ -31,8 +31,8 @@ function harness({ open = async () => null, invoke = async () => 'report', write
   const source = readFileSync(new URL('../desktop/src/main.ts', import.meta.url), 'utf8')
     .replace(/^import .*;\r?\n/gm, '');
   const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
-  let project = null, projectOptions, maintenanceOptions, preferencesOptions, readerOptions;
-  const integration = { selects: 0, refreshes: 0, healthClosed: 0, sourceOpens: 0, readerOpens: [], readerCloses: 0, projectOpens: 0, preferenceOpens: [] };
+  let project = null, projectOptions, maintenanceOptions, preferencesOptions, readerOptions, repairOptions;
+  const integration = { selects: 0, refreshes: 0, healthClosed: 0, sourceOpens: 0, readerOpens: [], readerCloses: 0, repairOpens: [], repairSyncs: 0, projectOpens: 0, preferenceOpens: [] };
   const maintenance = { element: null, select: async () => { integration.selects++; }, refresh: async () => {}, destroy() {} };
   const projects = {
     ready: Promise.resolve(), isReady: () => projectReady, getActive: () => project, getActiveId: () => project?.id ?? null, getRulesVersion: () => rulesVersion,
@@ -56,8 +56,8 @@ function harness({ open = async () => null, invoke = async () => 'report', write
     return { id: args.runId, runId: args.runId, projectId: args.projectId, kind: args.kind, title: args.kind === 'check' ? '代码预检' : '流程导航', markdown: result, createdAt: Date.now(), projectRevision: project?.revision ?? null, toolVersion: 'test', rulesVersion: '{}', inputSummary: '本地测试' };
   };
   if (!explain.reset) explain.reset = () => {};
-  vm.runInNewContext(script, { crypto: { randomUUID: () => 'test-run-' + (++harness.runSequence) }, document, open, openUrl() {}, mountSystemNotifications: () => ({ element: null, open() {}, close() {}, destroy() {} }), invoke: nativeInvoke, renderMessageText, mountProjects: options => { projectOptions = options; return projects; }, createProjectExplain: () => ({ query() {} }), mountProjectMaintenance: options => { maintenanceOptions = options; return maintenance; }, mountPreferences: options => { preferencesOptions = options; return { open(anchor) { integration.preferenceOpens.push(anchor); }, destroy() {} }; }, mountSourceFreshness: () => ({ open() { integration.sourceOpens++; }, close() {}, destroy() {} }), mountProjectHealth: () => ({ open() {}, close() { integration.healthClosed++; }, refresh() {}, destroy() {} }), mountReportReader: options => { readerOptions = options; return { open(anchor) { integration.readerOpens.push({ anchor, artifact: options.getArtifact() }); }, close() { integration.readerCloses++; }, destroy() {} }; }, mountRepairHandoff: () => ({ open() {}, refresh() {}, destroy() {} }), mountWorkflow: () => ({ refresh() {}, setBusy() {}, destroy() {}, open() {} }), mountExplainDialog: () => explain, mountToolsPanel: () => tools, mountDesktopSessions: async () => sessions, navigator: { clipboard: { writeText } }, window: { __TAURI_INTERNALS__: bridgeAvailable ? { invoke } : undefined, matchMedia: () => media, addEventListener: (event, ready) => { if (event === "DOMContentLoaded") ready(); } } });
-  return { selectProject(value) { project = value; projectOptions.onChange(value); }, integration, readerOptions: () => readerOptions, maintenanceOptions: () => maintenanceOptions, preferencesOptions: () => preferencesOptions, node: id => nodes.get(`#${id}`), click: id => nodes.get(`#${id}`).listeners.click(), document, navControl, projectOptions: () => projectOptions, setModal(value, sidebar = true) { const selector = sidebar ? ".session-workspace-dialog[data-kind]:modal, #desktop-model-dialog:modal" : "dialog:modal"; if (value) nodes.set(selector, value); else nodes.delete(selector); }, resizeNavigation(narrow) { media.matches = narrow; media.listener(); } };
+  vm.runInNewContext(script, { crypto: { randomUUID: () => 'test-run-' + (++harness.runSequence) }, document, open, openUrl() {}, mountSystemNotifications: () => ({ element: null, open() {}, close() {}, destroy() {} }), mountScrollFades: () => () => {}, invoke: nativeInvoke, renderMessageText, mountProjects: options => { projectOptions = options; return projects; }, createProjectExplain: () => ({ query() {} }), mountProjectMaintenance: options => { maintenanceOptions = options; return maintenance; }, mountPreferences: options => { preferencesOptions = options; return { open(anchor) { integration.preferenceOpens.push(anchor); }, destroy() {} }; }, mountSourceFreshness: () => ({ open() { integration.sourceOpens++; }, close() {}, destroy() {} }), mountProjectHealth: () => ({ open() {}, close() { integration.healthClosed++; }, refresh() {}, destroy() {} }), mountReportReader: options => { readerOptions = options; return { open(anchor) { integration.readerOpens.push({ anchor, artifact: options.getArtifact() }); }, close() { integration.readerCloses++; }, destroy() {} }; }, mountProjectRepair: options => { repairOptions = options; return { openForArtifact(artifact, anchor) { integration.repairOpens.push({ artifact, anchor }); }, openHistory() {}, sync() { integration.repairSyncs++; }, destroy() {} }; }, mountRepairHandoff: () => ({ open() {}, refresh() {}, destroy() {} }), mountWorkflow: () => ({ refresh() {}, setBusy() {}, destroy() {}, open() {} }), mountExplainDialog: () => explain, mountToolsPanel: () => tools, mountDesktopSessions: async () => sessions, navigator: { clipboard: { writeText } }, window: { __TAURI_INTERNALS__: bridgeAvailable ? { invoke } : undefined, matchMedia: () => media, addEventListener: (event, ready) => { if (event === "DOMContentLoaded") ready(); } } });
+  return { selectProject(value) { project = value; projectOptions.onChange(value); }, integration, repairOptions: () => repairOptions, readerOptions: () => readerOptions, maintenanceOptions: () => maintenanceOptions, preferencesOptions: () => preferencesOptions, node: id => nodes.get(`#${id}`), click: id => nodes.get(`#${id}`).listeners.click(), document, navControl, projectOptions: () => projectOptions, setModal(value, sidebar = true) { const selector = sidebar ? ".session-workspace-dialog[data-kind]:modal, #desktop-model-dialog:modal" : "dialog:modal"; if (value) nodes.set(selector, value); else nodes.delete(selector); }, resizeNavigation(narrow) { media.matches = narrow; media.listener(); } };
 }
 
 desktopTest('desktop selection enables checks and passes the selected directory and subject', async () => {
@@ -77,6 +77,41 @@ desktopTest('desktop guide remains usable without selecting a folder and renders
   await app.click('guide-btn');
   assert.equal(app.node('report').textContent, '<script>untrusted output</script>');
   assert.equal(app.node('check-btn').disabled, true);
+});
+
+desktopTest('repair entry passes the successful check and recheck returns a fresh matching artifact', async () => {
+  const app = harness({ open: async () => 'C:/project', invoke: async () => 'check result' });
+  assert.equal(app.node('repair-report').disabled, true);
+  await app.click('pick-btn');
+  await app.click('check-btn');
+  assert.equal(app.node('repair-report').disabled, false);
+  await app.click('repair-report');
+  const first = app.integration.repairOpens[0];
+  assert.equal(first.artifact.projectId, 'C:/project');
+  assert.equal(first.artifact.kind, 'check');
+  assert.equal(first.anchor, app.node('repair-report'));
+  const checked = await app.repairOptions().onRecheck('C:/project');
+  assert.equal(checked.projectId, 'C:/project');
+  assert.equal(checked.kind, 'check');
+  assert.notEqual(checked.id, first.artifact.id);
+  await app.readerOptions().onRepair();
+  assert.equal(app.integration.repairOpens[1].artifact.id, checked.id);
+  await app.click('guide-btn');
+  assert.equal(app.node('repair-report').disabled, true);
+});
+
+desktopTest('repair recheck rejects failures and changed projects instead of returning an older success', async () => {
+  let failed = false;
+  const app = harness({ open: async () => 'C:/project', invoke: async () => {
+    if (failed) throw new Error('read failed');
+    return 'previous success';
+  } });
+  await app.click('pick-btn');
+  await app.click('check-btn');
+  failed = true;
+  await assert.rejects(app.repairOptions().onRecheck('C:/project'), /复检未完成/);
+  assert.equal(app.node('report').textContent, 'previous success');
+  await assert.rejects(app.repairOptions().onRecheck('C:/other'), /当前项目已改变/);
 });
 
 desktopTest('historical reports distinguish changed and unavailable current rules without hiding content', async () => {

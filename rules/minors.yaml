@@ -3,6 +3,7 @@
 schema_version: 1
 rules:
   - id: minor.protect
+    action_categories: ["code", "manual_check"]
     title: "未成年人保护：不宜内容须提醒/处理"
     kind: navigation
     stage: review

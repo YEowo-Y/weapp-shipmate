@@ -43,7 +43,7 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
     markdown.disabled = json.disabled = loading || !pack;
     openFile.disabled = loading;
     provenance.textContent = !pack ? '打开此前导出的 JSON，或从执行报告中创建交接。'
-      : `${external ? '外部文件 · 来源未核验' : '本机已保存报告'} · ${pack.items.length} 个核对项 · ${new Date(pack.source.createdAt).toLocaleString('zh-CN', { hour12: false })}`;
+      : `${external ? '外部文件 · 来源未核验' : pack.source.provenance === 'imported' ? '外部导入报告 · 来源未核验' : '本机已保存报告'} · ${pack.items.length} 个核对项 · ${new Date(pack.source.createdAt).toLocaleString('zh-CN', { hour12: false })}`;
     warning.textContent = pack ? [...(external ? ['外部文件仅供阅读，不写入本机成果，也不授予任何操作权限。'] : []), ...handoffWarnings(pack, options.getProject(), options.getRulesVersion())].join(' ') : '';
     warning.hidden = !warning.textContent;
   }

@@ -1,0 +1,23 @@
+/* Settings pilot only: prefixed utilities, explicit sources, no global Preflight. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme) prefix(tw);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(tw) source(none);
+@source "./";
+@source "../components/ui";
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--text-2);
+  --color-accent: var(--ds-hover);
+  --color-accent-foreground: var(--text);
+  --color-primary: var(--text);
+  --color-primary-foreground: var(--bg);
+  --color-border: var(--border);
+  --color-input: var(--border-2);
+  --color-ring: var(--ds-focus, var(--text-2));
+  --radius-sm: var(--ds-radius-sm, 6px);
+  --radius-md: var(--ds-radius-md, 8px);
+  --font-sans: var(--ds-font-sans);
+}

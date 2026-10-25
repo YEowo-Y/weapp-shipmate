@@ -1,0 +1,138 @@
+/*
+ * Shipmate Desktop Design System · tokens (v1, 2026-10-24)
+ * Spec: desktop/design-previews/DESIGN-SYSTEM.md
+ * References: Codex desktop, Claude desktop (via Caho1/open-claude-ui MIT tokens), OpenClaw control UI.
+ * Rules: tokens only. No component selectors here. Components consume --ds-* names;
+ * legacy names (--text, --surface, --r ...) stay valid and are mapped below.
+ */
+.desktop-app[data-theme] {
+  /* Type ramp — 4 UI sizes + 2 reading + 3 headings. CJK-first stack, Latin falls back to Segoe UI Variable. */
+  --ds-font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
+  --ds-font-display: "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+  --ds-font-mono: "Cascadia Code", "Cascadia Mono", ui-monospace, "SFMono-Regular", Consolas, "Microsoft YaHei UI", monospace;
+  --ds-text-caption: 11px;   /* timestamps, counters, legal */
+  --ds-text-meta: 12px;      /* hints, section labels, badges */
+  --ds-text-ui: 13px;        /* nav, buttons, menus, fields */
+  --ds-text-ui-strong: 14px; /* card titles, list primary */
+  --ds-text-input: 15px;     /* composer */
+  --ds-text-body: var(--message-font-size, 16px); /* reading: user preference 14/16/18 */
+  --ds-text-h3: 16px;
+  --ds-text-h2: 18px;
+  --ds-text-h1: 22px;
+  --ds-text-display: clamp(24px, 2.4vw, 28px);
+  --ds-leading-tight: 1.3;   /* headings */
+  --ds-leading-ui: 1.45;     /* controls */
+  --ds-leading-body: 1.72;   /* reading */
+  --ds-tracking-display: -.022em;
+  --ds-tracking-heading: -.012em;
+  --ds-weight-regular: 400;
+  --ds-weight-medium: 500;
+  --ds-weight-strong: 600;
+  --ds-measure: 704px;       /* reading column, equals --conversation-reading-width */
+
+  /* 4px spacing grid */
+  --ds-space-1: 4px; --ds-space-2: 8px; --ds-space-3: 12px; --ds-space-4: 16px;
+  --ds-space-5: 20px; --ds-space-6: 24px; --ds-space-8: 32px; --ds-space-10: 40px; --ds-space-12: 48px;
+
+  /* Radius ladder (open-claude-ui: controls 6/8, panels 10-12, dialog 16, composer 20) */
+  --ds-radius-xs: 4px; --ds-radius-sm: 6px; --ds-radius-md: 8px; --ds-radius-lg: 12px;
+  --ds-radius-xl: 16px; --ds-radius-composer: var(--cds-radius-composer, 20px); --ds-radius-pill: 999px;
+
+  /* Control heights: desktop pointer 32, comfortable 36, touch 44 */
+  --ds-control-xs: 28px; --ds-control-sm: 32px; --ds-control-md: 36px; --ds-control-touch: 44px;
+  --ds-icon-sm: 14px; --ds-icon-md: 16px; --ds-icon-lg: 18px;
+
+  /* Layout */
+  --ds-sidebar-width: 248px;
+  --ds-header-height: 52px;
+  --ds-panel-width: 340px;
+  --ds-scroll-fade-size: 28px; /* open-claude-ui --cds-scroll-fade-size */
+
+  /* Motion (70ms tap, 140ms state, 240ms surface) */
+  --ds-ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ds-ease-standard: cubic-bezier(.2, .6, .2, 1);
+  --ds-dur-tap: 70ms; --ds-dur-state: 140ms; --ds-dur-surface: 240ms;
+}
+
+.desktop-app[data-theme="light"] {
+  --ds-canvas: var(--cds-surface-1, #fcfcfb);
+  --ds-sidebar: #f6f5f2;
+  --ds-raised: #ffffff;
+  --ds-sunken: #f4f3f0;
+  --ds-hover: hsla(30, 10%, 10%, .045);
+  --ds-selected: hsla(30, 10%, 10%, .075);
+  --ds-hairline: hsla(30, 8%, 10%, .09);
+  --ds-hairline-strong: hsla(30, 8%, 10%, .17);
+  --ds-ink-1: #1f1e1c;  /* primary text, 16.2:1 on canvas */
+  --ds-ink-2: #56554f;  /* secondary, 7.3:1 */
+  --ds-ink-3: #6f6e68;  /* tertiary/meta, 5.0:1 (AA) */
+  --ds-accent: #b4552f; /* clay, 4.9:1 with white */
+  --ds-accent-hover: #9e4826;
+  --ds-accent-soft: #f7ebe4;
+  --ds-accent-ink: #ffffff;
+  --ds-success: #237047; --ds-success-soft: #e7f2ea;
+  --ds-warning: #835c00; --ds-warning-soft: #f8f0d9;
+  --ds-danger: #b8382a;  --ds-danger-soft: #fbeae6;
+  --ds-info: #2f5f8f;    --ds-info-soft: #e8f0f8;
+  --ds-shadow-card: 0 1px 2px rgb(20 16 10 / .04), 0 0 0 1px var(--ds-hairline);
+  --ds-shadow-card-hover: 0 4px 14px rgb(20 16 10 / .06), 0 0 0 1px var(--ds-hairline-strong);
+  --ds-shadow-popover: 0 12px 32px -8px rgb(20 16 10 / .16), 0 2px 6px rgb(20 16 10 / .05), 0 0 0 1px var(--ds-hairline);
+  --ds-shadow-dialog: 0 24px 64px -16px rgb(20 16 10 / .22), 0 4px 12px rgb(20 16 10 / .05), 0 0 0 1px var(--ds-hairline);
+  --ds-backdrop: rgb(24 20 16 / .32);
+  --ds-focus: color-mix(in srgb, var(--ds-accent) 70%, transparent);
+  --ds-selection: color-mix(in srgb, var(--ds-accent) 20%, transparent);
+  --ds-scrollbar: hsla(30, 8%, 10%, .18);
+}
+
+.desktop-app[data-theme="dark"] {
+  --ds-canvas: var(--cds-surface-1, #151515);
+  --ds-sidebar: #111110;
+  --ds-raised: #1d1d1c;
+  --ds-sunken: #1a1a19;
+  --ds-hover: rgb(255 255 255 / .05);
+  --ds-selected: rgb(255 255 255 / .085);
+  --ds-hairline: rgb(255 255 255 / .085);
+  --ds-hairline-strong: rgb(255 255 255 / .16);
+  --ds-ink-1: #ecebe8;
+  --ds-ink-2: #b4b2ac;
+  --ds-ink-3: #9a9892; /* 6.3:1 on canvas; upstream #666 rejected for contrast */
+  --ds-accent: #e08158;
+  --ds-accent-hover: #ea9471;
+  --ds-accent-soft: #3a241a;
+  --ds-accent-ink: #1a110c;
+  --ds-success: #62bd88; --ds-success-soft: #15271c;
+  --ds-warning: #e1b851; --ds-warning-soft: #2a220f;
+  --ds-danger: #ec7764;  --ds-danger-soft: #2e1713;
+  --ds-info: #86b4e3;    --ds-info-soft: #16222f;
+  --ds-shadow-card: 0 0 0 1px var(--ds-hairline);
+  --ds-shadow-card-hover: 0 6px 18px rgb(0 0 0 / .32), 0 0 0 1px var(--ds-hairline-strong);
+  --ds-shadow-popover: 0 16px 40px -8px rgb(0 0 0 / .6), 0 0 0 1px var(--ds-hairline-strong);
+  --ds-shadow-dialog: 0 28px 72px -16px rgb(0 0 0 / .7), 0 0 0 1px var(--ds-hairline-strong);
+  --ds-backdrop: rgb(0 0 0 / .56);
+  --ds-focus: color-mix(in srgb, var(--ds-accent) 75%, transparent);
+  --ds-selection: color-mix(in srgb, var(--ds-accent) 30%, transparent);
+  --ds-scrollbar: rgb(255 255 255 / .16);
+}
+
+/* Map design-system tokens onto the existing semantic names so every shared surface follows. */
+.desktop-app[data-theme] {
+  --font-ui: var(--ds-font-sans);
+  --font-mono: var(--ds-font-mono);
+  --text: var(--ds-ink-1);
+  --text-2: var(--ds-ink-2);
+  --text-3: var(--ds-ink-3);
+  --accent: var(--ds-accent);
+  --accent-2: var(--ds-accent-hover);
+  --accent-soft: var(--ds-accent-soft);
+  --accent-ink: var(--ds-accent-ink);
+  --ok: var(--ds-success); --ok-soft: var(--ds-success-soft);
+  --warn: var(--ds-warning); --warn-soft: var(--ds-warning-soft);
+  --block: var(--ds-danger); --block-soft: var(--ds-danger-soft);
+  --r-xs: var(--ds-radius-xs); --r-sm: var(--ds-radius-sm); --r: var(--ds-radius-md);
+  --r-lg: 10px; --r-xl: 14px; --r-panel: var(--ds-radius-lg); --r-dialog: var(--ds-radius-xl);
+  --shadow: var(--ds-shadow-popover);
+  --shadow-dialog: var(--ds-shadow-dialog);
+  --backdrop-dialog: var(--ds-backdrop);
+  --conversation-reading-width: var(--ds-measure);
+  --wa-color-focus: var(--ds-accent);
+}

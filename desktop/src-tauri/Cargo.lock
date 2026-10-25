@@ -699,12 +699,14 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
  "windows-native-keyring-store",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

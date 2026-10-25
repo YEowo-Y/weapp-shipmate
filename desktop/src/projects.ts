@@ -1,12 +1,13 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { mountProjectBackup } from './project-backup';
 
 export type ProjectFacts = { businessType: string; hasPayment: boolean | null; collectsSensitive: boolean | null; hasServerDomain: boolean | null };
 export type Project = { id: string; name: string; directory: string; subject: string; revision: number; createdAt: number; updatedAt: number; directoryAvailable: boolean; facts?: ProjectFacts; contextRevision?: number };
-export type Run = { id: string; projectId: string | null; kind: 'check' | 'guide' | 'explain'; state: 'running' | 'succeeded' | 'failed' | 'canceled' | 'interrupted'; startedAt: number; finishedAt: number | null; error: string | null; projectRevision: number | null; contextRevision?: number | null; toolVersion: string; rulesVersion: string; inputSummary: string };
-export type Artifact = { id: string; runId: string; projectId: string | null; kind: 'check' | 'guide' | 'explain'; title: string; markdown: string; data?: { schemaVersion: 1; kind: 'check' | 'guide' | 'explain'; result: unknown; scope: unknown } | null; createdAt: number; projectRevision: number | null; contextRevision?: number | null; toolVersion: string; rulesVersion: string; inputSummary: string };
+export type Run = { id: string; projectId: string | null; kind: 'check' | 'guide' | 'explain'; state: 'running' | 'succeeded' | 'failed' | 'canceled' | 'interrupted'; startedAt: number; finishedAt: number | null; error: string | null; projectRevision: number | null; contextRevision?: number | null; toolVersion: string; rulesVersion: string; inputSummary: string; provenance?: 'imported'; sourceState?: string };
+export type Artifact = { id: string; runId: string; projectId: string | null; kind: 'check' | 'guide' | 'explain'; title: string; markdown: string; data?: { schemaVersion: 1; kind: 'check' | 'guide' | 'explain'; result: unknown; scope: unknown } | null; createdAt: number; projectRevision: number | null; contextRevision?: number | null; toolVersion: string; rulesVersion: string; inputSummary: string; provenance?: 'imported' };
 export type ProjectSnapshot = { rulesVersion?: string | null; projects: Project[]; activeProjectId: string | null; runs: Run[]; artifacts: Omit<Artifact, 'markdown' | 'data'>[] };
-type Options = { onRegistry(ids: string[]): void; beforeSelect(id: string | null): Promise<boolean>; onChange(project: Project | null): void; onSnapshot?(snapshot: ProjectSnapshot): void; onArtifact(artifact: Artifact, reveal?: boolean): void; isBusy(): boolean; associateSession(id: string | null): Promise<boolean>; onPending?(value: boolean): void };
+type Options = { onRegistry(ids: string[]): void | Promise<void>; beforeSelect(id: string | null): Promise<boolean>; onChange(project: Project | null): void; onSnapshot?(snapshot: ProjectSnapshot): void; onArtifact(artifact: Artifact, reveal?: boolean): void; isBusy(): boolean; associateSession(id: string | null): Promise<boolean>; onPending?(value: boolean): void };
 const stateLabels = { running: '执行中', succeeded: '已完成', failed: '失败', canceled: '已取消', interrupted: '意外中断' };
 const date = (value: number) => new Date(value).toLocaleString('zh-CN', { hour12: false });
 
@@ -26,6 +27,7 @@ export function mountProjects(options: Options) {
   let snapshot: ProjectSnapshot = { projects: [], activeProjectId: null, runs: [], artifacts: [] };
   let ready = false, pending = false, externalBusy = false, destroyed = false, pendingLatestRestore = false;
   let editing: Project | null = null, opener: HTMLElement | null = null;
+  let backup: ReturnType<typeof mountProjectBackup> | undefined;
   const listeners: (() => void)[] = [];
   const downloads = new Map<string, ReturnType<typeof setTimeout>>();
   function listen(node: HTMLElement, event: string, handler: EventListener) {
@@ -44,11 +46,12 @@ export function mountProjects(options: Options) {
       (el(id) as HTMLButtonElement).disabled = disabled;
     }
     el<HTMLButtonElement>('project-export').disabled = disabled || !active();
-    el<HTMLButtonElement>('project-compare').disabled = disabled || !active() || snapshot.artifacts.filter(a => a.projectId === snapshot.activeProjectId && a.kind === 'check').length < 2;
+    el<HTMLButtonElement>('project-compare').disabled = disabled || !active() || snapshot.artifacts.filter(a => a.projectId === snapshot.activeProjectId && a.kind === 'check' && a.provenance !== 'imported').length < 2;
     for (const id of ['project-compare-before', 'project-compare-after']) el<HTMLSelectElement>(id).disabled = disabled;
     el<HTMLButtonElement>('project-retry').disabled = pending || externalBusy || options.isBusy();
     for (const button of history.querySelectorAll<HTMLButtonElement>('button')) button.disabled = disabled;
     dialog.setAttribute('aria-busy', String(pending));
+    backup?.sync();
   }
   async function operation(action: () => Promise<void>, allowUnready = false) {
     if (pending || externalBusy || options.isBusy() || destroyed || (!ready && !allowUnready)) return false;
@@ -81,14 +84,15 @@ export function mountProjects(options: Options) {
     if (!rows.length) { const empty = document.createElement('p'); empty.className = 'desktop-field-hint'; empty.textContent = '暂无已保存结果。运行预检或生成清单后，成果会自动保存在此处。'; history.append(empty); }
     for (const run of rows) {
       const row = document.createElement('li'); row.className = 'project-run';
-      const heading = document.createElement('strong'); heading.textContent = `${({ check: '项目预检', guide: '上线清单', explain: '拒因反查' })[run.kind]} · ${stateLabels[run.state]}`;
+      const heading = document.createElement('strong'); heading.textContent = `${({ check: '项目预检', guide: '上线清单', explain: '拒因反查' })[run.kind]} · ${run.provenance === 'imported' ? '导入历史 · 未在本机核验' : stateLabels[run.state]}`;
       const time = document.createElement('time'); time.dateTime = new Date(run.startedAt).toISOString(); time.textContent = date(run.startedAt);
       row.append(heading, time);
+      if (run.provenance === 'imported' && run.sourceState) { const source = document.createElement('p'); source.textContent = `备份记录状态：${stateLabels[run.sourceState as keyof typeof stateLabels] ?? '未知'}。此状态不代表已在本机重新执行。`; row.append(source); }
       if (run.error) { const error = document.createElement('p'); error.textContent = run.error; error.className = 'project-run-error'; row.append(error); }
       const artifact = snapshot.artifacts.find(item => item.runId === run.id);
       if (artifact) {
         const details = document.createElement('details'); details.className = 'project-run-basis';
-        const summary = document.createElement('summary'); summary.textContent = '查看执行依据';
+        const summary = document.createElement('summary'); summary.textContent = artifact.provenance === 'imported' ? '查看备份中的原始依据' : '查看执行依据';
         const input = document.createElement('p'); input.textContent = artifact.inputSummary;
         const version = document.createElement('p'); version.textContent = `工具 ${artifact.toolVersion} · 项目修订 ${artifact.projectRevision ?? '未归属'}`;
         const rules = document.createElement('p');
@@ -105,7 +109,7 @@ export function mountProjects(options: Options) {
     for (const id of ['project-compare-before', 'project-compare-after']) {
       const select = el<HTMLSelectElement>(id); select.textContent = '';
       // Native snapshots use descending insertion order, including equal timestamps.
-      const reports = snapshot.artifacts.filter(a => a.projectId === snapshot.activeProjectId && a.kind === 'check').reverse();
+      const reports = snapshot.artifacts.filter(a => a.projectId === snapshot.activeProjectId && a.kind === 'check' && a.provenance !== 'imported').reverse();
       for (const [index, report] of reports.entries()) { const option = document.createElement('option'); option.value = report.id; option.textContent = `报告 ${index + 1} · ${date(report.createdAt)} · ${report.title}`; select.append(option); }
       if (reports.length) select.value = reports[id.endsWith('before') ? Math.max(0, reports.length - 2) : reports.length - 1].id;
     }
@@ -121,7 +125,7 @@ export function mountProjects(options: Options) {
     }
   }
   async function showLatest() {
-    const latest = snapshot.artifacts.filter(item => item.projectId === snapshot.activeProjectId).sort((a, b) => b.createdAt - a.createdAt)[0];
+    const latest = snapshot.artifacts.filter(item => item.projectId === snapshot.activeProjectId && item.provenance !== 'imported').sort((a, b) => b.createdAt - a.createdAt)[0];
     pendingLatestRestore = true;
     if (latest) await showArtifact(latest.id);
     pendingLatestRestore = false;
@@ -142,10 +146,14 @@ export function mountProjects(options: Options) {
   async function load() {
     const next = await invoke<ProjectSnapshot>('project_snapshot');
     if (destroyed) return;
-    options.onRegistry(next.projects.map(project => project.id));
+    const registryChanged = next.projects.length !== snapshot.projects.length || next.projects.some(project => !snapshot.projects.some(previous => previous.id === project.id));
+    await options.onRegistry(next.projects.map(project => project.id));
+    if (destroyed) return;
     const nextActive = next.projects.find(project => project.id === next.activeProjectId);
     const changed = !ready || next.activeProjectId !== snapshot.activeProjectId || nextActive?.revision !== active()?.revision || nextActive?.directoryAvailable !== active()?.directoryAvailable;
-    if (changed && !await options.beforeSelect(next.activeProjectId)) { ready = false; throw new Error('会话尚未保存，无法恢复项目。请重试。'); }
+    // Removing an inactive project can orphan saved sessions even when the current
+    // project stays null. Reconcile against the trusted registry through the same CAS path.
+    if ((changed || registryChanged) && !await options.beforeSelect(next.activeProjectId)) { ready = false; throw new Error('会话尚未保存或项目归属未能同步。请先处理会话保存提示，再重新加载项目。'); }
     // Run/history refreshes must not replace an open draft or reset a new-project editor.
     const preserveEditor = dialog.open && next.activeProjectId === snapshot.activeProjectId
       && nextActive?.revision === active()?.revision && nextActive?.contextRevision === active()?.contextRevision
@@ -153,11 +161,13 @@ export function mountProjects(options: Options) {
     snapshot = next; ready = true; render(preserveEditor); message('');
     if (changed) options.onChange(active());
     if (changed || pendingLatestRestore) await showLatest();
+    void backup?.refreshStorage();
   }
   function openEditor() {
     opener = document.activeElement as HTMLElement | null;
     if (!dialog.open) dialog.showModal();
     fill(active()); name.focus();
+    void backup?.refreshStorage();
   }
   listen(el('desktop-project-manage'), 'click', () => openEditor());
   listen(el('project-close'), 'click', () => dialog.close());
@@ -204,6 +214,18 @@ export function mountProjects(options: Options) {
     try { document.body.append(link); link.click(); message('已请求保存项目数据；会话和密钥不包含在此文件中。'); }
     finally { link.remove(); downloads.set(url, setTimeout(() => { URL.revokeObjectURL(url); downloads.delete(url); }, 30000)); }
   }); });
+  backup = mountProjectBackup({ getProject: active, isBusy: blocked, operation, refresh: load,
+    async archive(projectId, token) {
+      if (snapshot.activeProjectId !== projectId) throw Error('当前项目已改变，请重新准备归档。');
+      // Existing selection saves the outgoing draft before a project can be removed.
+      try { await select(null); return await invoke<{ backupPath: string }>('project_archive_commit', { projectId, token }); }
+      catch (error) {
+        try { if (snapshot.activeProjectId !== projectId) await select(projectId); }
+        catch { ready = false; throw Error('归档结果或项目选择暂时无法确认。请重新加载项目数据，并核对归档恢复文件。'); }
+        throw error;
+      }
+    },
+  });
   const controller = {
     ready: operation(load, true), getSnapshot: () => ready && !destroyed ? snapshot : null, getActive: active, getRulesVersion: () => snapshot.rulesVersion ?? null, getActiveId: () => snapshot.activeProjectId, isReady: () => ready && !destroyed,
     refresh: () => operation(load, true),
@@ -222,7 +244,7 @@ export function mountProjects(options: Options) {
       }); return saved;
     },
     setBusy(value: boolean) { externalBusy = value; controls(); },
-    destroy() { destroyed = true; listeners.forEach(remove => remove()); for (const [url, timer] of downloads) { clearTimeout(timer); URL.revokeObjectURL(url); } downloads.clear(); if (dialog.open) dialog.close(); },
+    destroy() { destroyed = true; backup?.destroy(); listeners.forEach(remove => remove()); for (const [url, timer] of downloads) { clearTimeout(timer); URL.revokeObjectURL(url); } downloads.clear(); if (dialog.open) dialog.close(); },
   };
   return controller;
 }

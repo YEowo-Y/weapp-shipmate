@@ -314,7 +314,7 @@ pub fn project_stage_confirm(
         if p.revision != expected_revision { return Err("项目已改变，请重新核对。".into()); }
         validate_stage(&tx, &p, &trusted_catalog, &rules, &stage_id, &state)?;
         let count: u32 = tx.query_row("SELECT count(*) FROM stage_confirmations",[],|r|r.get(0)).map_err(db_error)?;
-        if count >= 10000 { return Err("确认历史已达上限，请导出整理。".into()); }
+        if count >= 10000 { return Err("确认历史已达上限，请在项目管理中备份并归档旧项目后重试。".into()); }
         let record = serde_json::json!({"stageId":stage_id,"state":state,"note":note,"recordedAt":now(),"contextRevision":p.context_revision,"rulesVersion":rules});
         tx.execute("INSERT INTO stage_confirmations(project_id,data) VALUES(?,?)",params![project_id,encode(&record)?]).map_err(db_error)?;
         persist_project(&tx,&mut p)?;
@@ -344,6 +344,7 @@ pub(crate) fn compare_artifacts(
         let a = artifact(c,before_artifact_id)?;
         let b = artifact(c,after_artifact_id)?;
         let no = |reason: &str| serde_json::json!({"comparable":false,"reason":reason,"added":[],"remaining":[],"notDetected":[]});
+        if a.provenance.as_deref()==Some("imported") || b.provenance.as_deref()==Some("imported") { return Ok(no("导入历史未经本机执行，请重新预检后再比较。")); }
         if a.project_id.as_deref()!=Some(project_id) || b.project_id!=a.project_id || a.kind!="check" || b.kind!="check" || a.id==b.id || a.created_at>b.created_at { return Ok(no("请选择同项目按时间排列的两份预检。")); }
         let ordinal = |id: &str| c.query_row("SELECT rowid FROM artifacts WHERE id=?",[id],|r|r.get::<_,i64>(0)).map_err(db_error);
         if ordinal(&a.id)? >= ordinal(&b.id)? { return Ok(no("报告顺序无效，请选择更早的基线。")); }

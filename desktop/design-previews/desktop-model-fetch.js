@@ -1,4 +1,5 @@
 /* global Headers, Response, ReadableStream, TextEncoder, DOMException */
+import { AGENT_PROVIDERS } from './agent-contract.js';
 const BASE = '/api/model-connections';
 const ROUTE = /^\/api\/model-connections\/(openai|anthropic|google|openrouter|ollama|custom)\/(connect|refresh|disconnect|chat|verify)$/;
 const OAUTH = /^\/api\/model-connections\/openrouter\/oauth\/(start|cancel|complete)$/;
@@ -10,7 +11,7 @@ export function createDesktopModelFetch({ invoke, createChannel, makeId = () => 
   const active = new Set();
   const fetcher = (path, init = {}) => {
     const method = (init.method || 'GET').toUpperCase();
-    if (typeof path !== 'string' || !(method === 'GET' && path === BASE || method === 'POST' && (ROUTE.test(path) || OAUTH.test(path) || path === `${BASE}/openai/agent` || path === `${BASE}/tools/explain`))) {
+    if (typeof path !== 'string' || !(method === 'GET' && path === BASE || method === 'POST' && (ROUTE.test(path) || OAUTH.test(path) || AGENT_PROVIDERS.some(provider => path === `${BASE}/${provider}/agent`) || path === `${BASE}/tools/explain`))) {
       return Promise.reject(new Error('桌面模型请求不受支持。'));
     }
     if (init.body !== undefined && (typeof init.body !== 'string' || new TextEncoder().encode(init.body).length > 65536)) {

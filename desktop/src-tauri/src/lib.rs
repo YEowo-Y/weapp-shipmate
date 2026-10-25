@@ -4,6 +4,8 @@ mod model_bridge;
 mod project_context;
 mod project_maintenance;
 mod project_memory;
+mod project_repair;
+mod repair_writer;
 mod project_store;
 mod runtime;
 mod source_freshness;
@@ -70,6 +72,8 @@ pub fn run() {
         .manage(model_bridge::ModelBridge::default())
         .manage(tool_runner::ToolRunner::default())
         .manage(project_store::ProjectStore::default())
+        .manage(project_store::ProjectArchives::default())
+        .manage(project_repair::ProjectRepairs::default())
         .manage(project_maintenance::ProjectMaintenance::default())
         .manage(system_notifications::SystemNotifications::default())
         .invoke_handler(tauri::generate_handler![
@@ -78,7 +82,19 @@ pub fn run() {
             project_store::project_select,
             project_store::project_artifact,
             project_store::project_export,
+            project_store::project_storage_status,
+            project_store::project_import_preview,
+            project_store::project_import,
+            project_store::project_archive_prepare,
+            project_store::project_archive_commit,
             project_store::project_run,
+            project_repair::project_repair_prepare,
+            project_repair::project_repair_apply,
+            project_repair::project_repair_undo_prepare,
+            project_repair::project_repair_undo,
+            project_repair::project_repair_recovery_prepare,
+            project_repair::project_repair_snapshot,
+            project_repair::project_repair_record_recheck,
             project_store::project_facts_save,
             project_store::project_workflow,
             project_store::project_stage_confirm,

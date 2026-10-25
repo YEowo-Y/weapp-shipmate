@@ -2,6 +2,7 @@
 schema_version: 1
 rules:
   - id: registration.account-details
+    action_categories: ["console", "manual_check"]
     title: "激活注册邮箱并完善主体与管理员信息"
     kind: navigation
     stage: registration
@@ -18,6 +19,7 @@ rules:
     manual_required: true
 
   - id: certification.enterprise-verification
+    action_categories: ["console", "manual_check"]
     title: "核对企业主体身份验证与所需能力"
     kind: navigation
     stage: certification
@@ -34,6 +36,7 @@ rules:
     manual_required: true
 
   - id: release.manual-publish
+    action_categories: ["console", "manual_check"]
     title: "审核通过后在官方后台手动发布"
     kind: navigation
     stage: release

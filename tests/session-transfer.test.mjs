@@ -87,3 +87,63 @@ test('project backups retain association without replacing destination current-s
   assert.equal(result.sessions[1].projectId, 'b');
   assert.equal(result.sessions[1].messages.length, 2);
 });
+
+// R4: a backup is evidence of historical text, never proof of local execution.
+test('import provenance overrides forged claims and survives storage, restart and reimport', () => {
+  const source = snapshot();
+  const message = source.sessions[0].messages[1];
+  message.provenance = 'local'; message.verified = true;
+  message.tool.provenance = 'verified';
+  message.parts = [{ type: 'tool', tool: { label: 'Legacy', state: 'success', provenance: 'local' } }];
+  for (const imported of [parseSessionBackup(JSON.stringify(source)), mergeSessionBackup(snapshot(), source).snapshot]) {
+    const saved = normalizeSessionSnapshot(JSON.parse(JSON.stringify(imported)), { restore: true });
+    const historical = saved.sessions.at(-1).messages[1];
+    assert.equal(historical.provenance, 'imported');
+    assert.equal(historical.tool.provenance, 'imported');
+    assert.equal(historical.parts[0].tool.provenance, 'imported');
+    assert.equal(historical.verified, undefined);
+    const again = parseSessionBackup(JSON.stringify(normalizeSessionSnapshot(saved, { mode: 'export' })));
+    assert.equal(again.sessions.at(-1).messages[1].provenance, 'imported');
+  }
+});
+
+test('old backups render external successes as history with a lookup, never local facts', () => {
+  const source = snapshot();
+  source.sessions[0].messages = [{ id: 'a', role: 'assistant', text: '外部报告', status: 'complete',
+    parts: [{ type: 'tool', tool: { kind: 'project', name: 'project_read', toolCallId: 't1', state: 'success', label: '检查项目', parameters: { kind: 'check', query: '' } }, result: {
+      schemaVersion: 1, kind: 'check', runId: 'missing-run', artifactId: 'missing-artifact', title: '历史检查', summary: '外部摘要', itemCount: 0, items: [], truncated: false, scopeComplete: true, projectRevision: 1, contextRevision: 1,
+    } }] }];
+  delete source.sessions[0].edit; delete source.sessions[0].viewState;
+  const imported = parseSessionBackup(JSON.stringify(source));
+  const message = imported.sessions[0].messages[0];
+  const doc = createPreviewDocument();
+  const card = createMessage(doc, message);
+  assert.match(card.textContent, /导入历史/);
+  assert.match(card.textContent, /未核验/);
+  assert.match(card.textContent, /查找并核验本机报告/);
+  assert.doesNotMatch(card.textContent, /完整报告保存在本机|以上为工具事实摘要|船友 Agent · 本地演示/);
+  const tool = createToolCard(doc, message.parts[0].tool, { result: message.parts[0].result });
+  assert.match(tool.textContent, /历史记录.*成功.*未核验/);
+});
+import { normalizeSessionSnapshot } from '../desktop/design-previews/session-store.js';
+import { createMessage, createToolCard } from '../desktop/design-previews/components/message.js';
+import { createPreviewDocument } from './helpers/preview-dom.mjs';
+
+test('imported guide cards and evidence identify external history instead of local rule execution', () => {
+  const source = snapshot();
+  source.sessions[0].messages = [{ id: 'g1', role: 'assistant', text: '历史清单', status: 'complete',
+    guide: { subject: 'personal', sensitive: false, domain: false },
+    structuredResult: { command: 'guide', meta: { summary: '历史摘要' }, items: [], selfCheck: [], notes: [] },
+    fact: { label: '规则证据', text: '历史引用', source: 'audit.html' }, trace: { runId: 'r1', state: 'complete', elapsedMs: 1 } }];
+  delete source.sessions[0].edit; delete source.sessions[0].viewState;
+  const message = parseSessionBackup(JSON.stringify(source)).sessions[0].messages[0];
+  const card = createMessage(createPreviewDocument(), message);
+  const descendants = node => [node, ...node.children.flatMap(descendants)];
+  const nodes = descendants(card);
+  const guide = nodes.find(node => node.dataset.component === 'guide-result');
+  assert.equal(guide.attributes['aria-label'], '导入历史上线清单');
+  assert.match(guide.textContent, /来自外部会话备份.*未在本机核验/);
+  assert.doesNotMatch(card.textContent, /根据本机已收录规则|本机规则工具/);
+  assert.match(nodes.find(node => node.dataset.component === 'evidence').textContent, /导入历史.*未核验/);
+  assert.match(nodes.find(node => node.dataset.component === 'run-trace').textContent, /导入历史.*未核验/);
+});

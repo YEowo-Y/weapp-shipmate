@@ -69,6 +69,6 @@ test('agent route carries current explicit grants separately from model messages
   await streamChat(args, { fetcher });
   assert.equal(calls[1].path, '/api/model-connections/openai/agent');
   assert.deepEqual(JSON.parse(calls[1].init.body), { model: args.model, messages: args.messages, agent });
-  await assert.rejects(streamChat({ ...args, providerId: 'anthropic' }, { fetcher }), /授权/);
+  await assert.rejects(streamChat({ ...args, providerId: 'custom' }, { fetcher }), /授权/);
   assert.equal(calls.length, 2, 'unsupported agent provider must not send a request');
 });

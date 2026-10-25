@@ -1,4 +1,4 @@
-import { createHandoff, handoffWarnings, type RepairHandoff } from '../design-previews/repair-handoff.js';
+import { createHandoff, handoffWarnings, formatRuleActions, type RepairHandoff } from '../design-previews/repair-handoff.js';
 import { createActionButton } from '../design-previews/components/ui-kit.js';
 import { createIcon } from '../design-previews/components/icons.js';
 import { renderMessageText } from '../design-previews/components/message-markdown.js';
@@ -7,8 +7,8 @@ import './context.css';
 import './report-reader.css';
 
 // createHandoff validates these fields before this presentation-only narrowing.
-type ReadingItem = { conditional: boolean; rejectSummary: string | null; rule: { ruleId: string; title: string; severity: 'blocker' | 'warning' | 'info'; why?: string | null; requires: string[]; official_url?: string | null; source_quote?: string | null; last_verified?: string | null; manual_required: boolean; warn?: string | null; note?: string | null } };
-type Options = { getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(): void; onOpenSource?(url: string): Promise<unknown>; returnFocus?(): HTMLElement | null };
+type ReadingItem = { conditional: boolean; rejectSummary: string | null; relevance?: 'direct' | 'possible'; matchEvidence?: { aliases: string[]; codes: string[]; partialAliases: string[] }; rule: { ruleId: string; title: string; severity: 'blocker' | 'warning' | 'info'; why?: string | null; requires: string[]; official_url?: string | null; source_quote?: string | null; last_verified?: string | null; manual_required: boolean; warn?: string | null; note?: string | null; action_categories?: string[] } };
+type Options = { getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(): void; onRepair?(): void; onOpenSource?(url: string): Promise<unknown>; returnFocus?(): HTMLElement | null };
 
 // The export contract intentionally omits run notes and business signals. Validate
 // only these additional reading fields; never derive execution state from prose.
@@ -62,9 +62,10 @@ export function mountReportReader(options: Options) {
   const originalContent = node('div'); originalContent.className = 'report-markdown'; original.append(originalContent);
   column.append(content, original, versions); layout.append(outline, column); body.append(description, summary, provenance, warning, context, linkStatus, steps, layout);
   const footer = node('footer'); footer.className = 'report-reader-footer';
-  const handoff = button('准备修复交接', 'report-reader-handoff'), done = button('完成阅读', 'report-reader-done'); footer.append(handoff, done);
+  const repair = button('检查可用修复', 'report-reader-repair');
+  const handoff = button('准备修复交接', 'report-reader-handoff'), done = button('完成阅读', 'report-reader-done'); footer.append(repair, handoff, done);
   dialog.append(header, body, footer); document.body.append(dialog);
-  let trigger: HTMLElement | null = null, disposed = false, pendingHandoff = false, snapshotId: string | null = null, epoch = 0;
+  let trigger: HTMLElement | null = null, disposed = false, pendingHandoff = false, pendingRepair = false, snapshotId: string | null = null, epoch = 0;
   const visible = (element: HTMLElement | null | undefined): element is HTMLElement => !!element?.isConnected && element.getClientRects().length > 0;
   function render() {
     const artifact = options.getArtifact();
@@ -73,8 +74,8 @@ export function mountReportReader(options: Options) {
     warning.removeAttribute('role');
     content.replaceChildren(); nav.replaceChildren(); originalContent.replaceChildren(); context.replaceChildren(); context.hidden = true;
     title.textContent = artifact?.title || '报告阅读'; original.hidden = !artifact; original.open = false; outline.hidden = true;
-    handoff.hidden = true; steps.hidden = !artifact;
-    warning.textContent = artifact ? '历史快照：打开时读取已保存内容，未重新扫描当前项目；官方依据未实时核验。' : '';
+    handoff.hidden = true; repair.hidden = true; steps.hidden = !artifact;
+    warning.textContent = artifact ? artifact.provenance === 'imported' ? '外部导入报告：内容与执行情况未在本机核验，不能作为本机已完成检查的证据。' : '历史快照：打开时读取已保存内容，未重新扫描当前项目；官方依据未实时核验。' : '';
     warning.hidden = !artifact;
     if (!artifact) { summary.textContent = '尚未选择已保存报告。'; content.append(node('p', '尚无报告可供阅读。运行项目预检、生成上线清单，或从项目历史打开报告。')); return; }
     renderMessageText(originalContent, artifact.markdown, { copyCode: false });
@@ -100,6 +101,7 @@ export function mountReportReader(options: Options) {
     const counts = (Object.keys(labels) as (keyof typeof labels)[]).map(key => `${labels[key]} ${items.filter(item => item.rule.severity === key && !item.conditional).length}`);
     summary.textContent = `${items.length} 个核对项 · ${counts.join(' · ')} · 条件自查 ${items.filter(item => item.conditional).length}`;
     handoff.hidden = !options.onHandoff;
+    repair.hidden = !options.onRepair || artifact.kind !== 'check' || artifact.provenance === 'imported' || !artifact.projectId;
     if (!items.length) content.append(node('p', '本次报告没有结构化核对项。这不代表审核通过或项目不存在问题，请确认扫描范围与业务事实。'));
     outline.hidden = !items.length;
     const list = node('ol'); nav.append(list);
@@ -114,9 +116,11 @@ export function mountReportReader(options: Options) {
         article.append(node('p', signal?.length ? `业务自查线索：${signal.join('、')}。这些线索不代表已在项目中发现相关功能。` : '业务自查线索未提供或未能验证，请结合完整原报告人工判断适用性。'));
       }
       if (item.rejectSummary) article.append(node('p', `匹配拒因：${item.rejectSummary}`));
+      if (item.relevance && item.matchEvidence) article.append(node('p', `${item.relevance === 'direct' ? '直接相关' : '可能相关'} · 匹配依据：${[...item.matchEvidence.aliases, ...item.matchEvidence.codes, ...item.matchEvidence.partialAliases].join('、')}。相关性不表示已确认违规。`));
+      article.append(node('p', `操作类型：${formatRuleActions(r)}`));
       article.append(node('h4', '需要核对'));
       const requirements = node('ul'); for (const text of r.requires.length ? r.requires : ['对照官方要求确认适用性与处理方案。']) requirements.append(node('li', text)); article.append(requirements);
-      if (r.manual_required) article.append(node('p', '需要本人在官方后台核验，并记录结果与证据。'));
+      if (r.manual_required) article.append(node('p', '按操作类型处理后核对实际结果，并记录验证依据。'));
       if (r.warn) article.append(node('p', `注意：${r.warn}`));
       if (r.note && r.note !== r.warn) article.append(node('p', `补充核对：${r.note}`));
       if (r.official_url) { const link = node('a', '查看官方依据（在浏览器中打开）'); link.href = r.official_url; link.target = '_blank'; link.rel = 'noopener noreferrer'; article.append(link); }
@@ -148,6 +152,14 @@ export function mountReportReader(options: Options) {
     });
   });
   dismiss.addEventListener('click', close); done.addEventListener('click', close);
+  repair.addEventListener('click', () => {
+    if (!dialog.open || repair.hidden || disposed) return;
+    if (options.getArtifact()?.id !== snapshotId) {
+      warning.textContent = '当前选中的报告已经变化，请重新打开本机预检报告再检查可用修复。';
+      warning.hidden = false; warning.setAttribute('role', 'status'); warning.tabIndex = -1; warning.focus(); return;
+    }
+    pendingRepair = true; close();
+  });
   handoff.addEventListener('click', () => {
     if (!dialog.open || handoff.hidden || disposed) return;
     if (options.getArtifact()?.id !== snapshotId) {
@@ -163,11 +175,12 @@ export function mountReportReader(options: Options) {
     if (disposed) return;
     const target = visible(trigger) ? trigger : options.returnFocus?.(); if (visible(target)) target.focus();
     if (pendingHandoff) { pendingHandoff = false; options.onHandoff?.(); }
+    if (pendingRepair) { pendingRepair = false; options.onRepair?.(); }
   });
   return {
     open(anchor: HTMLElement | null) {
       if (disposed || dialog.open) return;
-      epoch++; trigger = anchor; pendingHandoff = false; render(); dialog.showModal();
+      epoch++; trigger = anchor; pendingHandoff = false; pendingRepair = false; render(); dialog.showModal();
       // A hidden dialog has no scroll box: reset after it participates in layout.
       body.scrollTop = 0; outline.scrollTop = 0;
       trigger?.setAttribute('aria-expanded', 'true'); dismiss.focus();

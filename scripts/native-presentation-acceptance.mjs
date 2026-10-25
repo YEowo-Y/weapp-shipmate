@@ -71,9 +71,9 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     const value = await inspect(`const root=document.querySelector(arguments[0]),modal=root.tagName==='DIALOG';
       const rect=node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
       const visible=node=>node.checkVisibility();
-      const blocks=[...root.querySelectorAll('h1,h2,h3,h4,p,li,legend,summary,label,small')].filter(visible);
+      const blocks=[...root.querySelectorAll('h1,h2,h3,h4,p,li,legend,summary,label,small')].filter(visible).filter(n=>!n.classList.contains('preferences-sr-only'));
       const clipped=blocks.filter(n=>{const c=getComputedStyle(n);return (/^(hidden|clip)$/.test(c.overflowX)&&n.scrollWidth>n.clientWidth+1)||(/^(hidden|clip)$/.test(c.overflowY)&&n.scrollHeight>n.clientHeight+1);}).map(n=>({tag:n.tagName,id:n.id,text:n.textContent.slice(0,100)}));
-      const scrollContainers=[root,...root.querySelectorAll('.context-body,.session-workspace-dialog__body,.workflow-stage,.preferences-section,.preferences-field')].filter(visible);
+      const scrollContainers=[root,...root.querySelectorAll('.context-body,.session-workspace-dialog__body,.workflow-stage,.preferences-section,.preferences-field,.preferences-sidebar,.preferences-main,#preferences-body')].filter(visible);
       return {viewport:{width:innerWidth,height:innerHeight},root:rect(root),modal,theme:document.body.dataset.theme,
         pageOverflow:document.documentElement.scrollWidth-innerWidth,rootOverflow:root.scrollWidth-root.clientWidth,
         contentOverflow:scrollContainers.map(n=>({id:n.id,className:n.className,value:n.scrollWidth-n.clientWidth})),clipped,
@@ -96,9 +96,29 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
       for (const body of value.scrollBodies) assert.ok(body.height >= 80 && body.top >= 0 && body.bottom <= value.viewport.height, `${label}: scrollable reading area remains visible ${JSON.stringify(body)}`);
     }
   };
+  const settingsWorkspace = async label => {
+    const value = await inspect(`const root=document.querySelector('#desktop-preferences');
+      const rect=selector=>{const n=root.querySelector(selector),r=n.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
+      const r=root.getBoundingClientRect();
+      return {viewport:{width:innerWidth,height:innerHeight},root:{left:r.left,top:r.top,width:r.width,height:r.height},
+        sidebar:rect('.preferences-sidebar'),main:rect('.preferences-main'),body:rect('#preferences-body'),footer:rect('.preferences-footer'),
+        panel:rect('#preferences-'+root.dataset.section),headingSize:getComputedStyle(root.querySelector('#preferences-'+root.dataset.section+' h3')).fontSize};`);
+    visuals.push({ label: `${label}-workspace`, ...value });
+    await writeFile(resolve(run, 'presentation-visuals.json'), JSON.stringify(visuals, null, 2));
+    assert.ok(Math.abs(value.root.left) <= 1 && Math.abs(value.root.top) <= 1, `${label}: settings starts at the viewport origin`);
+    assert.ok(Math.abs(value.root.width - value.viewport.width) <= 1 && Math.abs(value.root.height - value.viewport.height) <= 1, `${label}: settings occupies the full workspace`);
+    assert.ok(value.body.height >= 80 && value.body.bottom <= value.footer.top + 1, `${label}: scrolling content stays above persistent footer`);
+    assert.ok(value.footer.bottom <= value.viewport.height + 1, `${label}: feedback and Done stay in the viewport`);
+    assert.equal(value.headingSize, value.viewport.width <= 520 ? '22px' : '24px', `${label}: every section uses the same heading hierarchy`);
+    if (value.viewport.width >= 1000) {
+      assert.ok(value.sidebar.width >= 160 && value.sidebar.width <= 320, `${label}: desktop has a readable navigation column`);
+      assert.ok(value.sidebar.right <= value.main.left + 1 && value.main.width > value.sidebar.width, `${label}: main content sits beside the sidebar`);
+      assert.ok(value.panel.width <= 900, `${label}: settings rows retain a limited reading width`);
+    }
+  };
   const appearance = async theme => {
-    await openPreferences(); await activate(`label:has(#desktop-theme-${theme})`);
-    await activate('label:has(#desktop-message-size-18)'); await activate('label:has(#desktop-motion-reduce)');
+    await openPreferences(); await activate(`#desktop-theme-${theme}`);
+    await activate('#desktop-message-size-18'); await activate('#desktop-motion-reduce');
     assert.match(await text('#preferences-status'), /保存/);
     await activate('#preferences-done');
     assert.equal(await inspect('return document.body.dataset.theme'), theme);
@@ -247,19 +267,30 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     const saved = await workflow(); assert.ok(saved.confirmations.some(item => item.stageId === stageId && item.state === 'confirmed'));
     await checkProjection(); await screenshot('presentation-workflow-confirmed'); await close('#desktop-workflow');
   });
-  await checked('Preferences use labelled native selection groups and immediately persist appearance', async () => {
+  await checked('React settings use named Base UI radio groups, keyboard navigation and persisted appearance', async () => {
     await openPreferences();
-    assert.equal(await inspect('return [...document.querySelectorAll("#desktop-preferences input[type=radio]")].every(n=>n.closest("fieldset")?.querySelector("legend")?.textContent && n.labels.length>0)'), true);
-    await activate('label:has(#desktop-theme-dark)'); await activate('label:has(#desktop-message-size-18)'); await activate('label:has(#desktop-motion-reduce)');
+    assert.equal(await inspect('return document.querySelectorAll("#desktop-preferences [role=radiogroup]").length'), 3);
+    assert.equal(await inspect('const radios=[...document.querySelectorAll("#desktop-preferences button[role=radio]")];return radios.length===8&&radios.every(n=>n.getAttribute("aria-label")&&n.closest("fieldset")?.querySelector("legend")?.textContent)'), true);
+    await activate('#desktop-theme-system'); await press('\uE014');
+    await until(() => inspect('return document.activeElement.id==="desktop-theme-light"&&document.activeElement.getAttribute("aria-checked")==="true"'), 'arrow key selects and focuses the next theme');
+    await activate('#desktop-theme-dark'); await activate('#desktop-message-size-18'); await activate('#desktop-motion-reduce');
     assert.equal(await inspect('return document.body.dataset.theme'), 'dark'); assert.equal(await inspect('return document.body.dataset.motion'), 'reduce');
     assert.equal(await inspect('return getComputedStyle(document.querySelector(".preferences-sample")).fontSize'), '18px');
+    for (const [selector, size] of [['#desktop-preferences', '14px'], ['.preferences-field-copy p', '14px'], ['.preferences-choice', '13px'], ['#preferences-status', '13px']]) {
+      assert.equal(await inspect('return getComputedStyle(document.querySelector(arguments[0])).fontSize', [selector]), size, `${selector}: reading size does not enlarge settings UI`);
+    }
     assert.match(await text('#preferences-status'), /保存/);
     assert.equal(await inspect('return document.querySelector("#system-notifications-enabled").checked'), false, 'viewing settings never enables system notifications');
     for (const [nav, target] of [['#preferences-nav-notifications', 'preferences-notifications'], ['#preferences-nav-connections', 'preferences-links-heading'], ['#preferences-nav-appearance', 'preferences-appearance-title']]) {
       await activate(nav); await section(nav.replace('#preferences-nav-', '')); assert.equal(await inspect('return document.activeElement.id'), target, 'section navigation focuses its readable destination');
     }
     await activate('#preferences-done'); assert.equal(await inspect('return document.activeElement.id'), 'desktop-preferences-open');
-    await openPreferences(); assert.equal(await inspect('return document.querySelector("#preferences-body").scrollTop'), 0, 'reopening settings starts at its overview'); await close('#desktop-preferences');
+    await openPreferences(); assert.equal(await inspect('return document.querySelector("#preferences-body").scrollTop'), 0, 'reopening settings starts at its overview');
+    assert.match(await text('#preferences-dismiss'), /返回应用/);
+    await activate('#preferences-dismiss');
+    assert.equal(await inspect('return document.querySelector("#desktop-preferences").open'), false);
+    assert.equal(await inspect('return document.activeElement.id'), 'desktop-preferences-open', 'return to app restores the original trigger');
+    assert.equal(await inspect('return JSON.parse(localStorage.getItem("shipmate-desktop-preferences")).messageSize'), 18, 'returning preserves saved reading preferences');
   });
   await checked('Manual progress and actual appearance survive WebView refresh and process restart', async () => {
     const before = await workflow(); await refresh(); await home();
@@ -269,7 +300,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     assert.equal(await text('#home-project-name'), name);
     await openWorkflow(); await checkProjection(); await close('#desktop-workflow');
     await openPreferences();
-    assert.equal(await inspect('return document.querySelector("#desktop-theme-dark").checked && document.querySelector("#desktop-message-size-18").checked && document.querySelector("#desktop-motion-reduce").checked'), true);
+    assert.equal(await inspect('return ["desktop-theme-dark","desktop-message-size-18","desktop-motion-reduce"].every(id=>document.getElementById(id).getAttribute("aria-checked")==="true")'), true);
     await close('#desktop-preferences'); assert.equal((await snapshot()).runs.length, 0);
   });
   await checked('Settings destinations replace the modal and return keyboard focus to the persistent settings entry', async () => {
@@ -287,7 +318,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     assert.match(await text('#preferences-status'), /损坏|不受支持/); assert.equal(await inspect('return document.querySelector("#preferences-retry").checkVisibility()'), true);
     await geometry('preferences-error-recovery', '#desktop-preferences');
     await activate('#preferences-reset'); assert.match(await text('#preferences-status'), /恢复.*默认/);
-    assert.equal(await inspect('return document.querySelector("#desktop-theme-system").checked && document.querySelector("#desktop-message-size-16").checked && document.querySelector("#desktop-motion-system").checked'), true);
+    assert.equal(await inspect('return ["desktop-theme-system","desktop-message-size-16","desktop-motion-system"].every(id=>document.getElementById(id).getAttribute("aria-checked")==="true")'), true);
     await close('#desktop-preferences'); const after = await workflow(); assert.deepEqual(after.project.facts, before.project.facts); assert.deepEqual(after.confirmations, before.confirmations);
   });
   for (const theme of ['light', 'dark']) {
@@ -300,11 +331,20 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
         for (const selected of ['appearance', 'notifications', 'connections']) {
           await activate(`#preferences-nav-${selected}`); await section(selected);
           await geometry(`${theme}-${width}-preferences-${selected}`, '#desktop-preferences');
+          await settingsWorkspace(`${theme}-${width}-preferences-${selected}`);
+          if (selected === 'appearance') {
+            const previews = await inspect(`return [...document.querySelectorAll('.preferences-theme-preview')].map(n=>({width:n.getBoundingClientRect().width,ink:n.lastElementChild.getBoundingClientRect().width}))`);
+            assert.ok(previews.every(n => n.width >= 45 && n.ink >= 12), 'theme miniatures retain a readable canvas and message lines in every mode');
+          }
         }
         await inspect('document.querySelector("#preferences-dismiss").focus()'); await press('\uE004');
         assert.equal(await inspect('return document.querySelector("#desktop-preferences").contains(document.activeElement)'), true, 'keyboard remains inside the modal');
         await close('#desktop-preferences'); assert.equal(await inspect('return document.activeElement.checkVisibility()'), true);
       }
+      await command('POST', '/window/rect', { width:1000, height:720 }); await openPreferences();
+      await geometry(`${theme}-1000x720-preferences-appearance`, '#desktop-preferences');
+      await settingsWorkspace(`${theme}-1000x720-preferences-appearance`);
+      await activate('#preferences-reset'); await activate('#preferences-dismiss');
     });
   }
   await checked('Reading surfaces tolerate 200% text and user spacing without clipped content', async () => {

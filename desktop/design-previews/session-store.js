@@ -52,7 +52,10 @@ function sessionSchema(exporting) {
     try { const url = new URL(value); if (url.protocol === 'https:' && !url.username && !url.password) return value; } catch { /* invalid source */ }
     return invalid();
   }
+  // Only the restrictive historical marker is persisted; local/verified claims grant nothing.
+  const provenance = value => value === 'imported' ? 'imported' : undefined;
   const tool = value => fields(value, {
+    provenance,
     label: text, state: nullable(choice(['running', 'success', 'fail', 'canceled'])), name: id, kind: choice(['guide', 'project']), toolCallId: id, summary: strings,
     parameters: parameters => { if (value.kind === 'project') { if (!validateAgentInput(parameters).ok) invalid(); return { ...parameters }; } return fields(parameters, { subject: text, sensitive: boolean, domain: boolean, source: text, readOnly: boolean }); },
   });
@@ -65,7 +68,7 @@ function sessionSchema(exporting) {
     return output;
   };
   const message = value => fields(value, {
-    id, role: choice(['user', 'assistant']), text, status: choice(runStates), sourceUserId: id, branchNote: text,
+    provenance, id, role: choice(['user', 'assistant']), text, status: choice(runStates), sourceUserId: id, branchNote: text,
     record: value => fields(value, { kind: choice(['note', 'report']), label: value => text(value, 4096) }, ['kind', 'label']),
     references: strings, live: nullable(live), guide: nullable(guide), tool: nullable(tool), parts: value => list(value, part, 4000),
     structuredResult: nullable(resultData), fact: nullable(value => fields(value, { label: text, text, source })),

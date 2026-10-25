@@ -32,11 +32,38 @@ function evalComparison(c, ctx) {
  *          collects_sensitive?:boolean, has_server_domain?:boolean}} inputs
  * @param {{includeDrafts?:boolean}} opts
  */
-/** 规则是否「内容相关」：带 signal 表示其适用与否取决于小程序具体功能。
- *  导航看不到源码、无法替用户判定，故这类规则归入自查区而非「确定适用」清单——
- *  否则一个天气小工具的 guide 会把医疗类目等当成确定阻断（假阳性）。 */
+/** signal 依赖业务事实，match 依赖源码事实；guide 均未确认这些条件。
+ *  无条件规则保留为通用导航；preflight-only 仍由 check 处理。 */
 function isContentDependent(r) {
-  return Array.isArray(r.signal) && r.signal.length > 0;
+  return !!r.signal?.length || Object.keys(r.match || {}).length > 0;
+}
+
+// 人工导航操作提示，不是新增政策规则或已完成事实。
+// 依据官方 introduction/ 与 product/renzheng.html；核验记录见
+// .omx/plans/guide-stage-guidance-20261025.md。具体材料和验证方式以后台为准。
+const ONBOARDING_STEPS = {
+  "registration.account-details": [
+    "官方入口：https://mp.weixin.qq.com/ 。已有账号先登录核对主体与管理员；尚未注册时选择小程序注册，按邮箱激活和信息登记指引继续。",
+    "完成条件：能登录目标小程序后台，已核对登记的主体类型、主体信息和管理员；如后台仍提示补充信息或验证，继续处理，暂不记录本阶段完成。",
+  ],
+  "release.manual-publish": [
+    "官方入口：https://mp.weixin.qq.com/ 。登录目标小程序的版本管理页面，核对准备发布的版本与审核结果，再按后台提示手动发布。",
+    "完成条件：在官方后台确认目标版本已发布到线上，并用微信打开线上版本核对关键页面；审核通过、体验版可访问或本机确认均不等于正式发布完成。",
+  ],
+};
+
+function identityVerificationSteps(subjectType) {
+  const identity = subjectType === "personal"
+    ? "个人主体：核对后台登记的个人身份与管理员信息，按页面提示完成所需身份验证；所需身份资料只在官方后台提交。"
+    : subjectType === "individual_business"
+      ? "个体工商户：核对营业执照登记信息与后台主体记录；按后台显示的验证方式办理。若申请微信认证，按官方材料要求准备营业执照，不将企业的对公验证方式直接套用到个体。"
+      : "主体类型尚未确认：先查看官方后台的主体登记信息，确认是个人、个体工商户还是其他主体；无法确认时保留待核对，不代选主体或标记完成。";
+  return [
+    "官方入口：https://mp.weixin.qq.com/ 。登录目标小程序，查看主体、管理员和待处理的身份验证提示。",
+    identity,
+    "如需申请微信认证或开通业务能力，另行核对官方说明：https://developers.weixin.qq.com/miniprogram/product/renzheng.html 。本阶段身份核验不代表微信认证已通过或支付资格已具备。",
+    "完成条件：已确认真实主体和管理员信息，并在官方后台核对所要求的身份验证已完成；仍有待验证、信息不符或主体不明时，保留本阶段待处理。",
+  ];
 }
 
 export function runGuide(inputs = {}, { includeDrafts = false } = {}) {
@@ -69,12 +96,15 @@ export function runGuide(inputs = {}, { includeDrafts = false } = {}) {
       const item = ruleToItem(r);
       if (item.warn) item.note = item.warn;
       item.conditional = true; // 标记：取决于业务内容
-      item.signal = r.signal; // 自查关键词，供渲染提示
+      item.signal = r.signal || [...(r.match?.api || []), ...(r.match?.config_key || [])];
+      if (Object.keys(r.match || {}).length > 0)
+        item.why = "尚未确认相关源码条件；请先检查是否使用这些接口、组件或配置。仅在条件成立时，按本条要求处理。";
       selfCheck.push(item);
     }
     for (const r of confirmed) {
       const item = ruleToItem(r);
       if (item.warn) item.note = item.warn;
+      if (ONBOARDING_STEPS[r.id]) item.requires.push(...ONBOARDING_STEPS[r.id]);
       items.push(item);
     }
     // 没有「确定适用」的细化规则时，给一个阶段占位，保证导航顺序完整可见。
@@ -88,7 +118,7 @@ export function runGuide(inputs = {}, { includeDrafts = false } = {}) {
         stage: stage.stage,
         severity: "info",
         why: null,
-        requires: [note],
+        requires: stage.stage === "certification" ? identityVerificationSteps(subjectType) : [note],
         official_url: stage.official_url || null,
         last_verified: stage.last_verified || null,
         manual_required: true,

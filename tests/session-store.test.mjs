@@ -247,3 +247,24 @@ test('project metadata preserves legacy snapshots and validates remembered scope
   value.projectCurrentSessions[0].projectId = 'project-b';
   assert.throws(() => normalizeSessionSnapshot(value), code('invalid'));
 });
+
+test('import provenance persists through committed storage reopen and export/import without restoring grants', async () => {
+  const db = fakeIDB(), store = createSessionStore({ indexedDB: db });
+  const source = snapshot();
+  source.sessions[0].messages.push({ id: 'a1', role: 'assistant', text: '外部说明', provenance: 'verified',
+    tool: { label: '历史工具', state: 'success', provenance: 'local' }, review: { state: 'accepted' },
+    agent: { allowRead: true }, attachment: { text: 'private-attachment' } });
+  const imported = mergeSessionBackup(snapshot(), parseSessionBackup(JSON.stringify(source))).snapshot;
+  await store.save(imported, 0); store.close();
+  const reopened = createSessionStore({ indexedDB: db });
+  const restored = (await reopened.load()).snapshot;
+  const historical = restored.sessions.at(-1).messages.at(-1);
+  assert.equal(historical.provenance, 'imported');
+  assert.equal(historical.tool.provenance, 'imported');
+  assert.equal(historical.review.state, 'stale');
+  assert.equal(restored.sessions[0].messages[0].provenance, undefined, 'existing local messages stay local');
+  const exported = JSON.stringify(normalizeSessionSnapshot(restored, { mode: 'export' }));
+  assert.doesNotMatch(exported, /allowRead|private-attachment/);
+  assert.equal(parseSessionBackup(exported).sessions.at(-1).messages.at(-1).provenance, 'imported');
+  reopened.close();
+});

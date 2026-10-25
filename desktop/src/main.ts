@@ -8,6 +8,7 @@ import { createProjectExplain } from "./project-explain";
 import { mountWorkflow } from "./workflow";
 import { mountRepairHandoff } from "./repair-handoff";
 import { mountReportReader } from "./report-reader";
+import { mountProjectRepair } from "./project-repair";
 import { mountProjectHealth } from "./project-health";
 import { mountProjectMaintenance } from "./maintenance";
 import { mountPreferences } from "./preferences";
@@ -16,6 +17,9 @@ import { mountSystemNotifications } from "./system-notifications";
 import { createIcon } from '../design-previews/components/icons.js';
 import { renderMessageText } from '../design-previews/components/message-markdown.js';
 import { bindActionMenu } from '../design-previews/components/ui-kit.js';
+import { mountScrollFades } from '../design-previews/components/scroll-fade.js';
+// Product polish must evaluate after every feature stylesheet imported above.
+import "./product-polish.css";
 
 let sessions: Awaited<ReturnType<typeof mountDesktopSessions>> = null;
 let projects: ReturnType<typeof mountProjects> | null = null;
@@ -23,6 +27,7 @@ let workflow: ReturnType<typeof mountWorkflow> | null = null;
 let explainPanel: ReturnType<typeof mountExplainDialog> | null = null;
 let handoff: ReturnType<typeof mountRepairHandoff> | null = null;
 let reader: ReturnType<typeof mountReportReader> | null = null;
+let repair: ReturnType<typeof mountProjectRepair> | null = null;
 let health: ReturnType<typeof mountProjectHealth> | null = null;
 let maintenance: ReturnType<typeof mountProjectMaintenance> | null = null;
 let preferences: ReturnType<typeof mountPreferences> | null = null;
@@ -55,6 +60,7 @@ function setBusy(value: boolean) {
   $<HTMLButtonElement>("#check-btn").disabled = value || !dir || projects?.getActive()?.directoryAvailable === false;
   updateStopControl();
   updateCopyControl();
+  repair?.sync();
 }
 
 function updateStopControl() {
@@ -90,6 +96,8 @@ function updateCopyControl() {
   $<HTMLButtonElement>("#copy-report").disabled = busy || copying || !lastSuccessful;
   $<HTMLButtonElement>("#save-report").disabled = busy || !lastSuccessful || !sessions;
   $<HTMLButtonElement>("#handoff-report").disabled = busy || !lastSuccessful;
+  $<HTMLButtonElement>("#repair-report").disabled = busy || !lastSuccessful || lastSuccessful.artifact.kind !== 'check' || lastSuccessful.artifact.provenance === 'imported';
+  $<HTMLButtonElement>("#desktop-repair-history").disabled = busy || !projects?.getActiveId();
   handoff?.refresh();
   for (const id of ["read-report", "home-report", "desktop-menu-report"]) {
     const control = $<HTMLButtonElement>(`#${id}`);
@@ -188,6 +196,7 @@ function showArtifact(artifact: Artifact) {
   resetCopy();
   $("#report-title").textContent = type;
   $("#report-note").textContent = `保存于 ${new Date(artifact.createdAt).toLocaleString('zh-CN', { hour12: false })} · 工具 ${artifact.toolVersion} · 项目版本 ${artifact.projectRevision ?? "未归属"}。这是历史执行快照，未重新检查当前文件。`;
+  if (artifact.provenance === 'imported') $("#report-note").textContent = `外部导入报告 · 内容与执行情况未在本机核验。${$("#report-note").textContent}`;
   const currentContext = projects?.getActive()?.contextRevision;
   if (artifact.contextRevision != null && currentContext != null && artifact.contextRevision !== currentContext)
     $("#report-note").textContent += " 项目事实已变化，请重新运行工具。";
@@ -203,15 +212,15 @@ function showArtifact(artifact: Artifact) {
   report.scrollLeft = 0;
 }
 
-async function run(cmd: "run_check" | "run_guide") {
-  if (busy || !requireDesktopBridge()) return;
+async function run(cmd: "run_check" | "run_guide"): Promise<Artifact | null> {
+  if (busy || !requireDesktopBridge()) return null;
   if (!projects?.isReady()) {
     setStatus("项目存储尚未就绪，请在项目管理中重试加载后再运行。", "error");
-    return;
+    return null;
   }
   if (cmd === "run_check" && !dir) {
     setStatus("请先选择小程序项目文件夹。", "error");
-    return;
+    return null;
   }
   const subject = ($("#subject") as HTMLSelectElement).value;
   const projectId = projects.getActiveId();
@@ -234,19 +243,21 @@ async function run(cmd: "run_check" | "run_guide") {
   try {
     const artifact = await invoke<Artifact>("project_run", { projectId, kind, subject, runId: currentRun.id });
     currentRun.settled = true;
-    if (currentRun.canceled) return;
+    if (currentRun.canceled) return null;
     if (artifact?.runId !== currentRun.id || artifact.projectId !== projectId || artifact.kind !== kind
       || projectId !== projects.getActiveId()) throw new Error("返回成果与当前项目或运行不匹配，请从历史成果重新查看。");
     showArtifact(artifact);
     completed = true;
     setStatus(`${type}完成，报告已保存到本机。报告仅供参考，不构成合规担保。`, "ok");
+    return artifact;
   } catch (e) {
-    if (currentRun.canceled) return;
+    if (currentRun.canceled) return null;
     if (!lastSuccessful) report.textContent = "未生成报告。请检查错误提示后重试。";
     $("#report-note").textContent = lastSuccessful
       ? `本次${type}失败；下方保留上次成功的${lastSuccessful.type}报告，并非本次结果。`
       : `本次${type}失败，尚无可用报告。`;
     setStatus(`${type}失败：${String(e)}`, "error");
+    return null;
   } finally {
     currentRun.settled = true;
     updateStopControl();
@@ -275,8 +286,20 @@ window.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll<HTMLElement>('[data-icon]').forEach(node => {
     node.replaceChildren(createIcon(document, node.dataset.icon!));
   });
+  // Fade only scroll edges that hide content (open-claude-ui ScrollFadeContainer).
+  mountScrollFades(document.body);
   const tools = mountToolsPanel();
   handoff = mountRepairHandoff({ getArtifact: () => lastSuccessful?.artifact ?? null, getProject: () => projects?.getActive() ?? null, getRulesVersion: () => projects?.getRulesVersion() ?? null, isBusy: () => busy });
+  repair = mountProjectRepair({
+    getProjectId: () => projects?.getActiveId() ?? null,
+    isBusy: () => busy,
+    onRecheck: async projectId => {
+      if (busy || projects?.getActiveId() !== projectId) throw new Error('当前项目已改变或正在运行，请返回原项目后重新预检。');
+      const artifact = await run('run_check');
+      if (!artifact || artifact.kind !== 'check' || artifact.projectId !== projectId) throw new Error('源码复检未完成。文件写入状态不受影响，可稍后重新预检。');
+      return artifact;
+    },
+  });
   reader = mountReportReader({
     getArtifact: () => lastSuccessful?.artifact ?? null,
     getProject: () => projects?.getActive() ?? null,
@@ -286,10 +309,12 @@ window.addEventListener("DOMContentLoaded", () => {
       const readButton = $("#read-report");
       handoff?.open(readButton.getClientRects().length ? readButton : $("#desktop-more"), true);
     },
+    onRepair: () => { if (lastSuccessful) repair?.openForArtifact(lastSuccessful.artifact, $("#read-report")); },
     returnFocus: () => $("#desktop-more"),
   });
   $("#handoff-report").addEventListener('click', () => handoff?.open($("#handoff-report"), true));
-  window.addEventListener('pagehide', () => { reader?.destroy(); handoff?.destroy(); }, { once: true });
+  $("#repair-report").addEventListener('click', () => { if (lastSuccessful) repair?.openForArtifact(lastSuccessful.artifact, $("#repair-report")); });
+  window.addEventListener('pagehide', () => { reader?.destroy(); handoff?.destroy(); repair?.destroy(); }, { once: true });
   const nativeExplain = createProjectExplain({
     invoke, getProjectId: () => projects?.getActiveId() ?? null,
     isReady: () => Boolean(projects?.isReady()), isBusy: () => busy, setBusy,
@@ -329,6 +354,7 @@ window.addEventListener("DOMContentLoaded", () => {
     if (value === "archived") sessions?.openHistory($("#desktop-more"), "archived");
     if (value === "report") showReport($("#desktop-more"));
     if (value === "handoff") handoff?.open($("#desktop-more"));
+    if (value === "repairs") repair?.openHistory($("#desktop-more"));
     if (value === "health") health?.open($("#desktop-more"));
     if (value === "sources") sources?.open($("#desktop-more"));
     if (value === "memory") sessions?.openMemory($("#desktop-more"));
@@ -367,7 +393,7 @@ window.addEventListener("DOMContentLoaded", () => {
   projects = mountProjects({
     isBusy: () => busy,
     onPending: setBusy,
-    onRegistry: ids => { void sessionsReady.then(value => value?.setKnownProjects(ids)); },
+    onRegistry: ids => sessionsReady.then(value => { value?.setKnownProjects(ids); }),
     beforeSelect: async projectId => {
       const workspace = await sessionsReady;
       // Native project tools remain available if the independent conversation store failed.

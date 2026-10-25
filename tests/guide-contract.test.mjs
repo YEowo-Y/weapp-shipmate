@@ -25,3 +25,27 @@ test('guide preserves stage and conditional-section meaning with unique rule ide
     const value = JSON.parse(JSON.stringify(original)); mutate(value); assert.equal(validateGuideResult(value).ok, false);
   }
 });
+
+
+test('guide 三态事实与未知主体结果保持桌面输出契约', () => {
+  for (const subject_type of [undefined, ...Object.keys(GUIDE_SUBJECTS)])
+    for (const collects_sensitive of [undefined, false, true])
+      for (const has_server_domain of [undefined, false, true])
+        assert.deepEqual(validateGuideResult(runGuide({ subject_type, collects_sensitive, has_server_domain })), { ok: true });
+});
+
+test('guide action categories are optional bounded unique enums, not execution instructions', () => {
+  const original = runGuide({subject_type:'personal'});
+  assert.equal(validateGuideResult(original).ok,true);
+  const legacy = JSON.parse(JSON.stringify(original));
+  for (const item of [...legacy.items,...legacy.selfCheck]) delete item.action_categories;
+  assert.equal(validateGuideResult(legacy).ok,true);
+  for (const value of [null,[], 'code', ['code','code'],['unknown'],['code','console','materials','manual_check','code']]) {
+    const result = JSON.parse(JSON.stringify(original));
+    result.items[0].action_categories = value;
+    assert.equal(validateGuideResult(result).ok,false);
+  }
+  const complete = JSON.parse(JSON.stringify(original));
+  complete.items[0].action_categories = ['code','console','materials','manual_check'];
+  assert.equal(validateGuideResult(complete).ok,true);
+});

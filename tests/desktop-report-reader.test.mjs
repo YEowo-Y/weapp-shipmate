@@ -46,6 +46,14 @@ test('reader is passive until opened and holds a validated snapshot with visible
   const before = h.node('report-reader-content').textContent; h.artifact.title = 'changed';
   assert.equal(h.node('report-reader-content').textContent, before); assert.equal(h.reads, 1);
 });
+
+test('reader labels imported project results and preserves specific action categories', () => {
+  const h = harness(); h.artifact.provenance = 'imported'; h.app.open(h.trigger);
+  assert.match(h.node('report-reader-warning').textContent, /导入|外部/);
+  assert.match(h.node('report-reader-warning').textContent, /未.*核验/);
+  assert.match(h.node('report-reader-content').textContent, /操作类型/);
+  assert.doesNotMatch(h.node('report-reader-content').textContent, /需要本人在官方后台核验/);
+});
 test('reader falls back to complete original for malformed structured data without inventing a summary', () => {
   const h = harness(); h.artifact = { ...h.artifact, data: null, markdown: '# 历史原文\n保留所有内容' }; h.app.open(h.trigger);
   assert.match(h.node('report-reader-summary').textContent, /未提供.*结构化/);
@@ -73,6 +81,21 @@ test('reader zero item partial scan remains a warning rather than a pass', () =>
   const h = harness(); h.artifact = { ...h.artifact, kind: 'check', data: { schemaVersion: 1, kind: 'check', result: { command: 'check', items: [], meta: { scan: { filesScanned: 0, scope: { complete: false } } } } } };
   h.app.open(h.trigger); assert.match(h.node('report-reader-warning').textContent, /扫描不完整/);
   assert.match(h.node('report-reader-content').textContent, /不代表.*通过/);
+});
+test('reader exposes explicit repair only for local project checks and rejects a changed reading snapshot', () => {
+  let repairs = 0;
+  const h = harness({ onRepair: () => { assert.equal(h.node('desktop-report-reader').open, false); repairs++; } });
+  h.artifact = { ...h.artifact, projectId: 'p', projectRevision: 1, kind: 'check', data: { schemaVersion: 1, kind: 'check', result: { command: 'check', items: [], meta: { scan: { filesScanned: 1, scope: { complete: true } } } } } };
+  h.app.open(h.trigger);
+  assert.equal(h.node('report-reader-repair').hidden, false);
+  h.artifact = { ...h.artifact, id: 'changed' };
+  h.node('report-reader-repair').listeners.click();
+  assert.equal(repairs, 0); assert.equal(h.node('desktop-report-reader').open, true);
+  h.app.close(); h.app.open(h.trigger); h.node('report-reader-repair').listeners.click();
+  assert.equal(repairs, 1);
+  h.artifact = { ...h.artifact, provenance: 'imported' }; h.app.open(h.trigger);
+  assert.equal(h.node('report-reader-repair').hidden, true);
+  h.node('report-reader-repair').listeners.click(); assert.equal(repairs, 1);
 });
 test('reader stops a handoff when the selected report changes while reading', () => {
   const h = harness(); h.app.open(h.trigger); h.artifact = { ...h.artifact, id: 'another-report' };

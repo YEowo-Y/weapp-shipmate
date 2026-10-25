@@ -1,0 +1,15 @@
+{
+  "version": "rejection-retrieval-20261025-v1",
+  "cases": [
+    {"query":"手机号","kind":"typical","expected":["privacy.getPhoneNumber"],"excluded":["privacy.getUserProfile","privacy.getLocation"]},
+    {"query":"getPhoneNumber","kind":"typical","expected":["privacy.getPhoneNumber"],"excluded":["privacy.getUserProfile","privacy.getLocation"]},
+    {"query":"页面空白，功能无法体验","kind":"synonym","expected":["review.must-be-finished"]},
+    {"query":"功能无法体验","kind":"synonym","expected":["review.must-be-finished"]},
+    {"query":"白屏","kind":"typical","expected":["review.must-be-finished"]},
+    {"query":"您的小程序存在营销广告用途","kind":"typical","expected":["review.not-mainly-ads"]},
+    {"query":"测试","kind":"broad","expected":["review.must-be-finished","review.test-account"],"onlyPossible":true},
+    {"query":"隐私","kind":"broad","expected":["privacy.getPhoneNumber"],"onlyPossible":true},
+    {"query":"xyz-unrecognized-789","kind":"unmatched","expected":[],"empty":true},
+    {"query":"","kind":"unmatched","expected":[],"empty":true}
+  ]
+}

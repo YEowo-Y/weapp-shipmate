@@ -1594,3 +1594,97 @@ test('project artifact open failure remains recoverable and tool summaries are i
   assert.doesNotMatch(app.status.textContent, /private failure/);
   assert.equal(app.view.getMessages()[0].parts[0].tool.state, 'success');
 });
+
+
+test('imported legacy tool lookup passes the schema-validated run association without claiming verification', async () => {
+  const result = { schemaVersion: 1, kind: 'check', runId: 'run-1', artifactId: 'artifact-1', title: '报告', summary: '历史摘要', itemCount: 0, items: [], truncated: false, scopeComplete: true, projectRevision: 1, contextRevision: 2 };
+  const message = { id: 'import-a', role: 'assistant', text: '历史说明', status: 'complete', provenance: 'imported',
+    tool: { kind: 'project', name: 'project_read', toolCallId: 'one', state: 'success', label: '检查项目', parameters: { kind: 'check', query: '' }, provenance: 'imported' }, structuredResult: result };
+  const opened = [];
+  const app = harness([message], { onOpenArtifact: (...args) => opened.push(args) });
+  assert.match(app.list.textContent, /导入历史/);
+  assert.match(app.list.textContent, /查找并核验本机报告/);
+  app.action('open-artifact', message.id); await flushLive();
+  assert.deepEqual(opened, [['artifact-1', { runId: 'run-1', kind: 'check', projectRevision: 1, contextRevision: 2 }]]);
+  assert.equal(app.view.getMessages()[0].provenance, 'imported');
+  assert.doesNotMatch(app.list.textContent, /完整报告保存在本机|以上为工具事实摘要/);
+  app.view.destroy();
+});
+
+test('artifact actions replace a completed run announcement before host lookup settles', async () => {
+  const result = { schemaVersion: 1, kind: 'check', runId: 'run-1', artifactId: 'artifact-1', title: '报告', summary: '摘要', itemCount: 0, items: [], truncated: false, scopeComplete: true, projectRevision: 1, contextRevision: 0 };
+  let finish;
+  const message = { id: 'local', role: 'assistant', text: '', status: 'complete', tool: { kind: 'project', name: 'project_read', state: 'success', label: '检查项目' }, structuredResult: result };
+  const app = harness([message], { onOpenArtifact: () => new Promise(resolve => { finish = resolve; }) });
+  app.status.dataset.state = 'complete'; app.status.dataset.announcement = 'run';
+  app.action('open-artifact', message.id);
+  assert.equal(app.status.dataset.announcement, 'action', 'host lookup feedback must not inherit the visually hidden run announcement');
+  assert.match(app.status.textContent, /核验/);
+  await flushLive(); finish(); await flushLive();
+  app.view.destroy();
+});
+
+test('jump control stays above the reader boundary when recovery feedback changes height', () => {
+  let observer;
+  class ResizeObserver {
+    constructor(callback) { observer = this; this.callback = callback; }
+    observe() {}
+    disconnect() {}
+  }
+  const app = harness(turns(), { documentView: { ResizeObserver } });
+  const offsets = [];
+  const shell = { getBoundingClientRect: () => ({ bottom: 850 }), style: { setProperty: (_, value) => offsets.push(value) } };
+  app.scroll.closest = () => shell;
+  app.scroll.getBoundingClientRect = () => ({ top: 80, bottom: 610 });
+  observer.callback([{ target: app.scroll, contentRect: { width: 700, height: 530 } }]);
+  assert.equal(offsets.at(-1), '254px');
+  app.scroll.getBoundingClientRect = () => ({ top: 80, bottom: 550 });
+  observer.callback([{ target: app.scroll, contentRect: { width: 700, height: 470 } }]);
+  assert.equal(offsets.at(-1), '314px');
+  app.view.destroy();
+});
+
+test('observer-driven textarea resizing coalesces outside the notification and cancels on disposal', () => {
+  let observer, sequence = 0;
+  const frames = new Map();
+  class ResizeObserver {
+    constructor(callback) { observer = this; this.callback = callback; }
+    observe() {}
+    disconnect() {}
+  }
+  const app = harness([], { documentView: { ResizeObserver,
+    requestAnimationFrame(callback) { const id = ++sequence; frames.set(id, callback); return id; },
+    cancelAnimationFrame(id) { frames.delete(id); },
+  } });
+  const before = app.input.style.height;
+  app.input.scrollHeight = 110;
+  observer.callback([{ target: app.input, contentRect: { width: 700 } }]);
+  assert.equal(app.input.style.height, before, 'do not change observed geometry during notification delivery');
+  observer.callback([{ target: app.input, contentRect: { width: 500 } }]);
+  assert.equal(frames.size, 1, 'coalesce width changes in one frame');
+  const draw = [...frames.values()][0]; frames.clear(); draw();
+  assert.equal(app.input.style.height, '110px');
+  observer.callback([{ target: app.input, contentRect: { width: 400 } }]);
+  assert.equal(frames.size, 1);
+  app.view.destroy();
+  assert.equal(frames.size, 0);
+});
+
+test('imported guide copy and both download formats preserve the provenance warning', async () => {
+  const copied = [], downloads = [];
+  await withClipboard(async text => { copied.push(text); }, async () => {
+    const message = { ...guideMessage(), provenance: 'imported' };
+    const app = harness([message], { artifactDownloader: { download(artifact) { downloads.push(artifact); return true; }, dispose() {} } });
+    app.action('copy', message.id); await flushCopy();
+    app.action('copy-guide', message.id); await flushCopy();
+    app.action('download-guide-markdown', message.id);
+    app.action('download-guide-json', message.id);
+    for (const text of [...copied, downloads[0].text]) {
+      assert.match(text, /导入历史.*未在本机核验/);
+      assert.doesNotMatch(text, /本清单依据仓库收录规则生成/);
+    }
+    assert.equal(copied.length, 2);
+    assert.match(JSON.parse(downloads[1].text).notes[0], /导入历史.*未在本机核验/);
+    app.view.destroy();
+  });
+});

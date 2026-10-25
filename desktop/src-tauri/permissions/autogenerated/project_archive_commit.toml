@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-project-archive-commit"
+description = "Enables the project_archive_commit command without any pre-configured scope."
+commands.allow = ["project_archive_commit"]
+
+[[permission]]
+identifier = "deny-project-archive-commit"
+description = "Denies the project_archive_commit command without any pre-configured scope."
+commands.deny = ["project_archive_commit"]

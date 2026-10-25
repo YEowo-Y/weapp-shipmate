@@ -94,3 +94,75 @@ test("draft 门禁：默认集不含 draft 规则，--include-drafts 为其超�
   const defIds = new Set(def.rules.map((r) => r.id));
   for (const r of all.rules) if (!defIds.has(r.id)) assert.ok(r.draft, `多出的 ${r.id} 必为 draft`);
 });
+
+test("guide 所有源码匹配条件均为自查，通用导航仍为确定条目", () => {
+  const result = runGuide({ subject_type: "personal", collects_sensitive: true, has_server_domain: true });
+  const { rules } = loadData();
+  for (const rule of rules.filter(r => ["both", "navigation"].includes(r.kind) && r.subject_type.includes("personal"))) {
+    const conditional = !!rule.signal?.length || !!Object.keys(rule.match || {}).length;
+    const target = conditional ? result.selfCheck : result.items;
+    assert.ok(target.some(item => item.ruleId === rule.id), `${rule.id}: conditional=${conditional}`);
+  }
+  const webview = result.selfCheck.find(item => item.ruleId === "domain.web-view-personal");
+  assert.equal(webview.conditional, true);
+  assert.match(webview.why, /尚未确认/);
+  assert.doesNotMatch(webview.why, /代码使用了/);
+});
+
+// 真实临时源码验证同一规则的未知、扫描未使用、扫描命中三种证据状态。
+test("web-view 未扫描只提示条件；扫描无组件不命中，有组件才确定命中", async () => {
+  const { mkdtempSync, writeFileSync, unlinkSync, rmdirSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { runCheck } = await import("../src/check.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "shipmate-guide-evidence-"));
+  const file = join(dir, "App.vue");
+  try {
+    const guidance = runGuide({ subject_type: "personal", has_server_domain: true });
+    assert.ok(guidance.selfCheck.some(item => item.ruleId === "domain.web-view-personal"));
+    writeFileSync(file, '<template><view>Hello</view></template>');
+    const absent = runCheck(dir, { subjectType: "personal" });
+    assert.equal(absent.meta.scan.filesScanned, 1, "跨框架项目不需要 app.json");
+    assert.ok(!absent.items.some(item => item.ruleId === "domain.web-view-personal"));
+    writeFileSync(file, '<template><web-view src="https://example.com" /></template>');
+    const present = runCheck(dir, { subjectType: "personal" });
+    const finding = present.items.find(item => item.ruleId === "domain.web-view-personal");
+    assert.ok(finding);
+    assert.match(finding.why, /代码使用了/);
+    assert.equal(finding.conditional, undefined);
+  } finally {
+    unlinkSync(file);
+    rmdirSync(dir);
+  }
+});
+
+test("注册、身份核验与发布对个人、个体、未知主体均有入口和完成条件", () => {
+  for (const subject_type of ["personal", "individual_business", undefined]) {
+    const result = runGuide({ subject_type });
+    for (const stage of ["registration", "certification", "release"]) {
+      const entries = result.items.filter(item => item.stage === stage);
+      assert.equal(entries.length, 1, `${subject_type}/${stage} 不重复新增导航项`);
+      const item = entries[0];
+      assert.equal(item.severity, "info");
+      assert.ok(item.official_url?.startsWith("https://developers.weixin.qq.com/"));
+      const steps = item.requires.join("\n");
+      assert.match(steps, /https:\/\/mp.weixin.qq.com\//);
+      assert.match(steps, /完成条件：/);
+      assert.doesNotMatch(steps, /暂无细化规则/);
+      assert.ok(item.requires.length >= 3);
+    }
+  }
+});
+
+test("身份核验区分个人、个体与未知，不把材料核对当资格保证", () => {
+  const get = subject_type => runGuide({ subject_type }).items.find(item => item.stage === "certification");
+  assert.match(get("personal").requires.join("\n"), /个人.*管理员/);
+  assert.match(get("individual_business").requires.join("\n"), /营业执照/);
+  assert.match(get(undefined).requires.join("\n"), /主体类型尚未确认/);
+  for (const subject of ["personal", "individual_business", undefined]) {
+    const item = get(subject);
+    assert.match(item.requires.join("\n"), /不代表.*认证.*支付/);
+    assert.equal(item.source_quote, undefined, "人工导航不伪造规则摘录");
+    assert.equal(item.manual_required, true);
+  }
+});

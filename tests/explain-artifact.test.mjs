@@ -35,6 +35,19 @@ test('empty matches retain query, notes and explicit empty state', () => {
   assert.ok(artifact.text.includes(result.notes[0]));
 });
 
+test('explain exports separate direct and possible matches with actionable categories', () => {
+  const query = '手机号';
+  const result = runExplain(query);
+  const { text } = createExplainArtifact(query, result);
+  assert.match(text, /直接相关/);
+  assert.match(text, /匹配依据/);
+  assert.match(text, /操作类型/);
+  assert.doesNotMatch(text, /需由你本人完成要求与官方后台操作/);
+  assert.doesNotMatch(text, /获取地理位置|头像昵称/);
+  const broad = createExplainArtifact('测试', runExplain('测试')).text;
+  assert.match(broad, /可能相关/);
+});
+
 test('invalid, oversized, mismatched and unsafe source results fail without leaking input', () => {
   const result = runExplain('隐私');
   for (const query of ['', ' ', null, 42, 'x'.repeat(4097), 'another query']) {

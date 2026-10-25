@@ -4,6 +4,7 @@
 schema_version: 1
 rules:
   - id: privacy.getUserProfile
+    action_categories: ["console"]
     title: "用户信息隐私声明"
     kind: both
     stage: privacy
@@ -23,6 +24,7 @@ rules:
     manual_required: true
 
   - id: privacy.upp-required
+    action_categories: ["console"]
     title: "处理用户个人信息须配置《用户隐私保护指引》"
     kind: navigation
     stage: privacy
@@ -40,6 +42,7 @@ rules:
     manual_required: true
 
   - id: privacy.auth-mechanism-enabled
+    action_categories: ["code", "console", "manual_check"]
     title: "隐私授权机制自 2023-10-17 起强制启用"
     kind: navigation
     stage: privacy
@@ -57,6 +60,7 @@ rules:
     manual_required: true
 
   - id: privacy.getLocation
+    action_categories: ["code", "console", "manual_check"]
     title: "地理位置隐私声明"
     kind: both
     stage: privacy
@@ -78,6 +82,7 @@ rules:
     manual_required: true
 
   - id: privacy.getPhoneNumber
+    action_categories: ["console"]
     title: "手机号隐私声明"
     kind: both
     stage: privacy
@@ -99,6 +104,7 @@ rules:
   # 以下 4 条 confidence=high：官方《用户隐私保护指引内容介绍》(miniprogram-intro.html)
   # 逐项列出"信息类型 ↔ 接口"映射，故 API→声明项不再是推断，而是官方明文。
   - id: privacy.clipboard
+    action_categories: ["console"]
     title: "剪贴板隐私声明"
     kind: both
     stage: privacy
@@ -117,6 +123,7 @@ rules:
     manual_required: true
 
   - id: privacy.record
+    action_categories: ["console"]
     title: "麦克风隐私声明"
     kind: both
     stage: privacy
@@ -136,6 +143,7 @@ rules:
     manual_required: true
 
   - id: privacy.camera
+    action_categories: ["console"]
     title: "摄像头隐私声明"
     kind: both
     stage: privacy
@@ -155,6 +163,7 @@ rules:
     manual_required: true
 
   - id: privacy.writePhotosAlbum
+    action_categories: ["console"]
     title: "相册（写入）隐私声明"
     kind: both
     stage: privacy
@@ -173,6 +182,7 @@ rules:
     manual_required: true
 
   - id: privacy.choosePhotoVideo
+    action_categories: ["console"]
     title: "照片/视频隐私声明"
     kind: both
     stage: privacy
@@ -191,6 +201,7 @@ rules:
     manual_required: true
 
   - id: privacy.chooseLocation
+    action_categories: ["console"]
     title: "选择位置隐私声明"
     kind: both
     stage: privacy
@@ -209,6 +220,7 @@ rules:
     manual_required: true
 
   - id: privacy.chooseAddress
+    action_categories: ["console"]
     title: "地址隐私声明"
     kind: both
     stage: privacy
@@ -227,6 +239,7 @@ rules:
     manual_required: true
 
   - id: privacy.chooseInvoice
+    action_categories: ["console"]
     title: "发票信息隐私声明"
     kind: both
     stage: privacy
@@ -245,6 +258,7 @@ rules:
     manual_required: true
 
   - id: privacy.bluetooth
+    action_categories: ["console"]
     title: "蓝牙隐私声明"
     kind: both
     stage: privacy
@@ -263,6 +277,7 @@ rules:
     manual_required: true
 
   - id: privacy.addPhoneContact
+    action_categories: ["console"]
     title: "通讯录（写入）隐私声明"
     kind: both
     stage: privacy
@@ -281,6 +296,7 @@ rules:
     manual_required: true
 
   - id: privacy.addPhoneCalendar
+    action_categories: ["console"]
     title: "日历（写入）隐私声明"
     kind: both
     stage: privacy
@@ -299,6 +315,7 @@ rules:
     manual_required: true
 
   - id: privacy.chooseFile
+    action_categories: ["console"]
     title: "文件隐私声明"
     kind: both
     stage: privacy
@@ -317,6 +334,7 @@ rules:
     manual_required: true
 
   - id: privacy.chooseLicensePlate
+    action_categories: ["console"]
     title: "车牌号隐私声明"
     kind: both
     stage: privacy
@@ -335,6 +353,7 @@ rules:
     manual_required: true
 
   - id: privacy.werun
+    action_categories: ["console"]
     title: "微信运动步数隐私声明"
     kind: both
     stage: privacy
@@ -353,6 +372,7 @@ rules:
     manual_required: true
 
   - id: privacy.accelerometer
+    action_categories: ["console"]
     title: "加速传感器隐私声明"
     kind: both
     stage: privacy
@@ -371,6 +391,7 @@ rules:
     manual_required: true
 
   - id: privacy.compass
+    action_categories: ["console"]
     title: "磁场传感器隐私声明"
     kind: both
     stage: privacy
@@ -389,6 +410,7 @@ rules:
     manual_required: true
 
   - id: privacy.deviceMotion
+    action_categories: ["console"]
     title: "方向传感器隐私声明"
     kind: both
     stage: privacy
@@ -407,6 +429,7 @@ rules:
     manual_required: true
 
   - id: privacy.gyroscope
+    action_categories: ["console"]
     title: "陀螺仪隐私声明"
     kind: both
     stage: privacy

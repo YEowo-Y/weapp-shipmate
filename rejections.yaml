@@ -24,10 +24,10 @@ rejections:
 
   - id: reject.unfinished
     summary: "小程序为测试版 / 无法正常打开运行（非完成品）"
-    aliases: ["测试版", "无法打开", "闪退", "崩溃", "白屏", "空白页", "半成品", "完成品", "无法运行"]
+    aliases: ["测试版", "无法打开", "闪退", "崩溃", "白屏", "页面空白", "功能无法体验", "无法体验功能", "空白页", "半成品", "完成品", "无法运行"]
     codes: []
     rules: ["review.must-be-finished"]
-    last_verified: "2026-06-17"
+    last_verified: "2026-10-25"
 
   - id: reject.no-test-account
     summary: "存在账号体系但未提供可体验全部功能的测试号"
@@ -66,10 +66,10 @@ rejections:
 
   - id: reject.privacy-guideline
     summary: "调用隐私接口收集个人信息但未配置 / 声明《用户隐私保护指引》"
-    aliases: ["隐私保护指引", "用户隐私", "隐私协议", "隐私授权", "收集个人信息", "未声明隐私", "getUserProfile", "getPhoneNumber", "手机号"]
+    aliases: ["隐私保护指引", "用户隐私", "隐私协议", "隐私授权", "收集个人信息", "未声明隐私"]
     codes: []
     rules: ["privacy.getUserProfile", "privacy.getPhoneNumber", "privacy.getLocation"]
-    last_verified: "2026-06-17"
+    last_verified: "2026-10-25"
 
   - id: reject.recommend-others
     summary: "未经授权展示 / 推荐其他小程序或公众号、或诱导跳转外部应用"
@@ -154,3 +154,24 @@ rejections:
     codes: []
     rules: ["privacy.record"]
     last_verified: "2026-06-17"
+
+  - id: reject.privacy-phone
+    summary: "手机号收集与隐私声明核对"
+    aliases: ["手机号", "手机号码", "getPhoneNumber"]
+    codes: []
+    rules: ["privacy.getPhoneNumber"]
+    last_verified: "2026-10-25"
+
+  - id: reject.privacy-profile
+    summary: "头像昵称收集与隐私声明核对"
+    aliases: ["getUserProfile", "用户头像", "用户昵称"]
+    codes: []
+    rules: ["privacy.getUserProfile"]
+    last_verified: "2026-10-25"
+
+  - id: reject.privacy-location
+    summary: "地理位置收集与隐私声明核对"
+    aliases: ["getLocation", "地理位置", "位置信息"]
+    codes: []
+    rules: ["privacy.getLocation"]
+    last_verified: "2026-10-25"

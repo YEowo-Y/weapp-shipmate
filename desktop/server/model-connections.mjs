@@ -346,8 +346,7 @@ export function createModelConnectionHandler({ fetchImpl = globalThis.fetch, now
       }
       if (!IDS.includes(id)) throw new ConnectionError('unknown_provider', '不支持此模型服务商。', 404);
       if (action === 'agent' && route.length === 2) {
-        if (id !== 'openai') throw new ConnectionError('unknown_agent_provider', '当前项目工具试验仅支持 OpenAI。', 400);
-        validateAgentRequest(body);
+        validateAgentRequest(body, id);
         const requestId = req.headers['x-shipmate-request-id'];
         if (typeof projectToolRunner !== 'function' || typeof requestId !== 'string' || !/^[\w-]{1,80}$/.test(requestId)) throw new ConnectionError('agent_unavailable', '请在桌面端选择当前项目并开启只读工具。', 409);
         const connection = session.connections.get(id);
@@ -358,7 +357,7 @@ export function createModelConnectionHandler({ fetchImpl = globalThis.fetch, now
         session.chat = run;
         const closed = () => run.controller.abort();
         res.once('close', closed);
-        try { await streamAgentResponse(res, session.credentials.get(id).key, body, { fetchImpl, requestId, projectToolRunner, signal: run.controller.signal, timeoutMs: chatTimeoutMs }); }
+        try { await streamAgentResponse(res, session.credentials.get(id).key, body, { providerId: id, fetchImpl, requestId, projectToolRunner, signal: run.controller.signal, timeoutMs: chatTimeoutMs }); }
         finally { res.removeListener('close', closed); if (session.chat === run) session.chat = null; }
         return true;
       }

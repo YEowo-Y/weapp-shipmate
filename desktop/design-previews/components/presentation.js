@@ -28,6 +28,15 @@ function lookup(table, state, kind) {
 }
 export const getReviewPresentation = state => lookup(reviews, state, 'review');
 export const getToolPresentation = state => lookup(tools, state, 'tool');
+// Three visual phases (open-claude-ui McpToolDecisionCard): running → success | error.
+// A user stop settles as a quiet error-phase card, like upstream `user_denied`.
+const toolPhases = Object.freeze({
+  running: Object.freeze({ phase: 'running', settle: 'pending' }),
+  success: Object.freeze({ phase: 'success', settle: 'completed' }),
+  fail: Object.freeze({ phase: 'error', settle: 'failed' }),
+  canceled: Object.freeze({ phase: 'error', settle: 'canceled' }),
+});
+export const getToolPhase = state => lookup(toolPhases, state, 'tool');
 export function getToolOutputPresentation(state, { result, error, kind } = {}) {
   getToolPresentation(state);
   if (state === 'running') return { kind: 'empty', text: '等待工具返回结果…' };

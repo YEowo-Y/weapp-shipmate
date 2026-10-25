@@ -1,8 +1,9 @@
 import { validateAgentResult } from '../agent-contract.js';
 import { STAGES } from '../stages.js';
 import { validateGuideResult } from '../guide-contract.js';
+import { formatRuleActions } from '../guide-artifact.js';
 import { validateDemoResult } from '../demo-result.js';
-import { getReviewPresentation, getToolPresentation, getToolOutputPresentation, getRunPresentation, formatTraceLabel } from './presentation.js';
+import { getReviewPresentation, getToolPresentation, getToolPhase, getToolOutputPresentation, getRunPresentation, formatTraceLabel } from './presentation.js';
 import { createIcon } from './icons.js';
 import { renderMessageText } from './message-markdown.js';
 
@@ -18,6 +19,19 @@ function action(doc, label, name, messageId) {
   node.dataset.action = name;
   node.dataset.messageId = messageId;
   return node;
+}
+// Tool cards expose one of three visual phases plus why they settled.
+function applyToolPhase(card, state) {
+  const { phase, settle } = getToolPhase(state);
+  card.dataset.toolPhase = phase;
+  card.dataset.settle = settle;
+}
+function toolIndicator(doc, state) {
+  const iconName = { success: 'check', fail: 'circle-alert', canceled: 'square' }[state];
+  if (iconName) return createIcon(doc, iconName, 'tool-details__icon');
+  const pulse = element(doc, 'span', 'tool-details__pulse');
+  pulse.setAttribute('aria-hidden', 'true');
+  return pulse;
 }
 function badge(doc, presentation) {
   const node = element(doc, 'span', 'component-status', presentation.label);
@@ -43,18 +57,19 @@ export function updateMessageState(article, message) {
 
 export function createToolCard(doc, tool, context = {}) {
   if (tool.kind === 'project') return createProjectToolCard(doc, tool, context);
-  const view = getToolPresentation(tool.state);
+  const imported = tool.provenance === 'imported' || context.provenance === 'imported';
+  const view = imported ? { label: `历史记录：${getToolPresentation(tool.state).label} · 未核验`, tone: 'neutral' } : getToolPresentation(tool.state);
   const card = element(doc, 'details', 'tool-details');
   card.dataset.component = 'tool';
   card.dataset.toolState = tool.state;
   card.dataset.state = tool.state;
+  applyToolPhase(card, tool.state);
   card.open = tool.state === 'fail';
   const header = element(doc, 'summary', 'tool-details__header');
-  const iconName = { success: 'check', fail: 'circle-alert', canceled: 'square' }[tool.state];
-  if (iconName) header.append(createIcon(doc, iconName, 'tool-details__icon'));
+  header.append(toolIndicator(doc, tool.state));
   header.append(element(doc, 'span', 'tool-details__title', tool.label), badge(doc, view));
   const body = element(doc, 'div', 'tool-details__body');
-  body.append(element(doc, 'p', 'tool-identity', `${tool.name || 'demo_preflight'} · ${tool.kind === 'guide' ? '本机已收录规则 · 未扫描项目' : '只读本地演示'}`));
+  body.append(element(doc, 'p', 'tool-identity', imported ? '导入历史 · 工具输出未在本机核验' : `${tool.name || 'demo_preflight'} · ${tool.kind === 'guide' ? '本机已收录规则 · 未扫描项目' : '只读本地演示'}`));
   const raw = element(doc, 'details', 'tool-details__raw');
   raw.dataset.component = 'tool-raw';
   raw.append(element(doc, 'summary', '', '原始数据'));
@@ -75,7 +90,7 @@ export function createToolCard(doc, tool, context = {}) {
     const resultPre = element(doc, 'pre', 'tool-result-json');
     resultPre.tabIndex = 0;
     resultPre.setAttribute('role', 'region');
-    resultPre.setAttribute('aria-label', '已校验的工具结果，可滚动');
+    resultPre.setAttribute('aria-label', imported ? '导入的工具结果，仅校验格式，可滚动' : '已校验的工具结果，可滚动');
     resultPre.append(element(doc, 'code', '', outputView.text));
     raw.append(resultPre);
   } else {
@@ -98,16 +113,17 @@ export function createToolCard(doc, tool, context = {}) {
 }
 
 function createProjectToolCard(doc, tool, context) {
+  const imported = tool.provenance === 'imported' || context.provenance === 'imported';
   const card = element(doc, 'details', 'tool-details');
   card.dataset.component = `project-tool-${tool.toolCallId}`;
   card.dataset.toolState = tool.state; card.dataset.state = tool.state;
+  applyToolPhase(card, tool.state);
   card.open = tool.state === 'fail';
   const header = element(doc, 'summary', 'tool-details__header');
-  const iconName = { success: 'check', fail: 'circle-alert', canceled: 'square' }[tool.state];
-  if (iconName) header.append(createIcon(doc, iconName, 'tool-details__icon'));
-  header.append(element(doc, 'span', 'tool-details__title', tool.label), badge(doc, tool.state === 'running' ? { label: '请求本机执行', tone: 'neutral' } : getToolPresentation(tool.state)));
+  header.append(toolIndicator(doc, tool.state));
+  header.append(element(doc, 'span', 'tool-details__title', tool.label), badge(doc, imported ? { label: `历史记录：${getToolPresentation(tool.state).label} · 未核验`, tone: 'neutral' } : tool.state === 'running' ? { label: '请求本机执行', tone: 'neutral' } : getToolPresentation(tool.state)));
   const body = element(doc, 'div', 'tool-details__body');
-  body.append(element(doc, 'p', 'tool-identity', '项目只读工具 · 完整报告保存在本机'));
+  body.append(element(doc, 'p', 'tool-identity', imported ? '导入历史 · 尚未核验本机报告' : '项目只读工具 · 打开报告前将核验本机记录'));
   const result = context.result;
   if (tool.state === 'success' && validateAgentResult(result).ok) {
     body.append(element(doc, 'strong', '', result.title), element(doc, 'p', 'tool-output-message', result.summary));
@@ -123,9 +139,9 @@ function createProjectToolCard(doc, tool, context) {
       items.append(row);
     }
     body.append(items);
-    const open = action(doc, '打开本机完整报告', 'open-artifact', context.messageId || '');
+    const open = action(doc, '查找并核验本机报告', 'open-artifact', context.messageId || '');
     open.dataset.artifactId = result.artifactId; body.append(open);
-    body.append(element(doc, 'p', 'component-caption', '以上为工具事实摘要；模型说明单独展示，不能替代人工核对。'));
+    body.append(element(doc, 'p', 'component-caption', imported ? '以上为备份中的历史摘要，不证明本机已执行或报告仍存在。会话备份不包含完整本机成果；如无法找到，请在原设备导出报告，或关联项目后重新检查。' : '以上为工具返回的摘要；本机成果关联将在打开时核验，不能替代人工核对。'));
   } else body.append(element(doc, 'p', 'tool-output-message', context.error?.message || (tool.state === 'canceled' ? '已停止；未完成的工具不会自动重试。' : tool.state === 'fail' ? '工具未完成，请查看执行错误。' : '等待本机工具返回结果…')));
   card.append(header, body); return card;
 }
@@ -194,8 +210,9 @@ export function createGuideResultCard(doc, result, context = {}) {
   card.dataset.messageId = context.messageId || '';
   const view = { query: '', stages: [], baseline: new Map(), total: result.items.length + result.selfCheck.length };
   guideViews.set(card, view);
-  card.setAttribute('aria-label', '本机规则上线清单');
-  card.append(element(doc, 'h3', '', '上线清单'), element(doc, 'p', '', '根据本机已收录规则整理；未扫描项目、未调用模型、未实时核验，不代表合规通过。'));
+  const imported = context.provenance === 'imported';
+  card.setAttribute('aria-label', imported ? '导入历史上线清单' : '本机规则上线清单');
+  card.append(element(doc, 'h3', '', '上线清单'), element(doc, 'p', '', imported ? '本清单来自外部会话备份；规则内容、来源和执行情况未在本机核验，不证明使用了本机当前规则，不代表合规通过。' : '根据本机已收录规则整理；未扫描项目、未调用模型、未实时核验，不代表合规通过。'));
   const toolbar = element(doc, 'div', 'guide-result__actions');
   toolbar.setAttribute('role', 'group'); toolbar.setAttribute('aria-label', '完整清单操作');
   for (const [label, name] of [['复制完整清单', 'copy-guide'], ['下载 Markdown', 'download-guide-markdown'], ['导出 JSON', 'download-guide-json']]) toolbar.append(action(doc, label, name, context.messageId || ''));
@@ -224,7 +241,7 @@ export function createGuideResultCard(doc, result, context = {}) {
       for (const item of entries) {
         const row = element(doc, 'li', 'guide-result__item');
         stageView.rows.push({ row, text: [item.title, item.ruleId, stageTitle, item.why, item.warn, item.note, ...item.requires, item.source_quote].filter(Boolean).join(' ').toLocaleLowerCase() });
-        row.append(element(doc, 'strong', '', item.title), element(doc, 'small', 'component-caption', `${item.ruleId} · ${item.manual_required ? '需要人工确认' : '请核对适用性'}`));
+        row.append(element(doc, 'strong', '', item.title), element(doc, 'small', 'component-caption', `${item.ruleId} · 操作类型：${formatRuleActions(item)}`));
         for (const value of [item.why, item.warn, item.note]) if (value) row.append(element(doc, 'p', '', value));
         const requirements = element(doc, 'ul');
         for (const requirement of item.requires) requirements.append(element(doc, 'li', '', requirement));
@@ -234,7 +251,7 @@ export function createGuideResultCard(doc, result, context = {}) {
           const link = element(doc, 'a', '', '查看官方来源');
           link.href = item.official_url; link.target = '_blank'; link.rel = 'noopener noreferrer'; row.append(link);
         } else row.append(element(doc, 'span', 'component-caption', '尚无可展示的官方来源'));
-        row.append(element(doc, 'small', 'component-caption', `规则收录的核验日期：${item.last_verified || '未记录'} · 非本次实时核验`));
+        row.append(element(doc, 'small', 'component-caption', `${imported ? '备份记录的核验日期' : '规则收录的核验日期'}：${item.last_verified || '未记录'} · 非本次实时核验`));
         list.append(row);
       }
       detail.append(list); section.append(detail);
@@ -263,14 +280,54 @@ export function createApprovalCard(doc, review, { messageId = '' } = {}) {
   return card;
 }
 
-export function createRunTrace(doc, trace, live) {
+// Process accordion adapted from open-claude-ui ThinkingAccordion (MIT): while the run
+// is live it stays open and cannot be collapsed (no viewport jumps); once settled it
+// folds back and the user owns the toggle. It lists only public execution steps —
+// private model reasoning is intentionally never published to the UI.
+const LIVE_RUN_STATES = new Set(['working', 'streaming']);
+const TOOL_STATES = new Set(['running', 'success', 'fail', 'canceled']);
+export function isLiveRun(state) { return LIVE_RUN_STATES.has(state); }
+export function getTraceSteps(message) {
+  const live = isLiveRun(message.status);
+  const parts = message.parts || (message.tool ? [{ type: 'tool', tool: message.tool }] : []);
+  const steps = [{ label: '已接收请求', phase: 'success' }];
+  for (const part of parts) {
+    if (part.type !== 'tool' || !part.tool || !TOOL_STATES.has(part.tool.state)) continue;
+    steps.push({ label: `${part.tool.label || '工具'} · ${getToolPresentation(part.tool.state).label}`, phase: getToolPhase(part.tool.state).phase });
+  }
+  const hasText = parts.some(part => part.type === 'text' && typeof part.text === 'string' && part.text.trim()) || Boolean(message.text?.trim());
+  if (live) steps.push({ label: hasText ? '正在撰写回答' : '正在准备', phase: 'running' });
+  else if (hasText) steps.push({ label: '已生成回答', phase: 'success' });
+  if (message.status === 'stopped') steps.push({ label: '已停止', phase: 'error' });
+  if (message.status === 'error' || message.error) steps.push({ label: '本次执行未完成', phase: 'error' });
+  return steps;
+}
+export function createRunTrace(doc, trace, live, steps = [], imported = false) {
   const card = element(doc, 'details', 'run-trace');
+  const running = isLiveRun(trace.state);
   card.dataset.component = 'run-trace';
   card.dataset.state = trace.state;
   card.dataset.tone = getRunPresentation(trace.state).tone;
+  card.dataset.live = String(running);
+  card.open = running;
   const summary = element(doc, 'summary');
-  summary.append(createIcon(doc, 'chevron-right', 'run-trace__chevron'), element(doc, 'span', '', formatTraceLabel(trace)));
-  card.append(summary, element(doc, 'p', '', `运行 #${trace.runId} · ${live ? `真实模型 · ${live.providerId} · ${live.label || live.model}` : trace.kind === 'guide' ? '本机规则工具' : trace.kind === 'model' ? '真实模型' : '本地演示'} · 会话记录，不含可恢复的执行检查点`));
+  const indicator = element(doc, 'span', 'run-trace__indicator');
+  indicator.setAttribute('aria-hidden', 'true');
+  indicator.append(element(doc, 'span'), element(doc, 'span'), element(doc, 'span'));
+  summary.append(indicator, element(doc, 'span', 'run-trace__label', formatTraceLabel(trace)), createIcon(doc, 'chevron-right', 'run-trace__chevron'));
+  const body = element(doc, 'div', 'run-trace__body');
+  if (steps.length) {
+    const list = element(doc, 'ol', 'run-trace__steps');
+    list.setAttribute('aria-label', '公开执行步骤');
+    for (const step of steps) {
+      const item = element(doc, 'li', 'run-trace__step', step.label);
+      item.dataset.phase = step.phase;
+      list.append(item);
+    }
+    body.append(list);
+  }
+  card.append(summary, body);
+  body.append(element(doc, 'p', 'run-trace__source', `运行 #${trace.runId} · ${imported ? '导入历史 · 未核验' : live ? `真实模型 · ${live.providerId} · ${live.label || live.model}` : trace.kind === 'guide' ? '本机规则工具' : trace.kind === 'model' ? '真实模型' : '本地演示'} · 会话记录，不含可恢复的执行检查点`));
   return card;
 }
 
@@ -297,9 +354,10 @@ export function createMessage(doc, message, { canRegenerate = false } = {}) {
   article.dataset.component = 'message';
   article.dataset.messageId = message.id;
   article.dataset.state = message.status || 'complete';
+  const imported = message.provenance === 'imported';
   const report = message.record?.kind === 'report';
   const recordLabel = report ? message.record.label.replace(/^桌面工具 · /, '') : message.record?.label;
-  article.append(element(doc, 'div', 'msg__meta', message.record ? (report ? `本机工具 · ${recordLabel}` : `你 · ${recordLabel}`) : message.role === 'user' ? '你' : message.guide ? '船友 · 本机规则工具' : message.live ? `真实模型 · ${message.live.providerId} · ${message.live.label || message.live.model}` : '船友 Agent · 本地演示'));
+  article.append(element(doc, 'div', 'msg__meta', imported ? '导入历史 · 内容与工具结果未在本机核验' : message.record ? (report ? `本机工具 · ${recordLabel}` : `你 · ${recordLabel}`) : message.role === 'user' ? '你' : message.guide ? '船友 · 本机规则工具' : message.live ? `真实模型 · ${message.live.providerId} · ${message.live.label || message.live.model}` : '船友 Agent · 本地演示'));
   if (message.branchNote) article.append(element(doc, 'p', 'branch-note', message.branchNote));
   if (report) article.append(createMessageActions(doc, message, { canRegenerate }));
   if (message.role === 'user' && Array.isArray(message.references)) {
@@ -329,7 +387,7 @@ export function createMessage(doc, message, { canRegenerate = false } = {}) {
       node.dataset.partIndex = String(index);
       updateMessageText(node, part.text);
     } else if (part.type === 'tool') {
-      node = createToolCard(doc, part.tool, { result: part.result, error: part.error, messageId: message.id });
+      node = createToolCard(doc, part.tool, { result: part.result, error: part.error, messageId: message.id, provenance: message.provenance });
     }
     if (node) {
       node.dataset.partIndex = String(index);
@@ -345,15 +403,15 @@ export function createMessage(doc, message, { canRegenerate = false } = {}) {
     article.append(progress);
   }
   if (message.status === 'stopped') article.append(element(doc, 'p', 'branch-note', message.text ? '已停止 · 已保留生成内容' : '已在输出前停止'));
-  if (message.status === 'complete' && message.guide && validateGuideResult(message.structuredResult).ok) article.append(createGuideResultCard(doc, message.structuredResult, { messageId: message.id, input: message.guide }));
+  if (message.status === 'complete' && message.guide && validateGuideResult(message.structuredResult).ok) article.append(createGuideResultCard(doc, message.structuredResult, { messageId: message.id, input: message.guide, provenance: message.provenance }));
   if (!message.guide && message.status === 'complete' && message.structuredResult && validateDemoResult(message.structuredResult).ok) article.append(createResultCard(doc, message.structuredResult));
   if (message.fact) {
     const fact = element(doc, 'details', 'fact-block');
     fact.dataset.component = 'evidence';
-    fact.dataset.verification = 'example';
-    fact.append(element(doc, 'summary', '', message.fact.label || '规则示例'), element(doc, 'p', '', message.fact.text || ''));
+    fact.dataset.verification = imported ? 'imported' : 'example';
+    fact.append(element(doc, 'summary', '', imported ? '导入历史引用 · 未核验' : message.fact.label || '规则示例'), element(doc, 'p', '', message.fact.text || ''));
     if (typeof message.fact.source === 'string' && /^(?:[a-z0-9-]+\.html)(?:#[a-z0-9_-]+)?$/i.test(message.fact.source)) {
-      const source = element(doc, 'a', '', '查看规则示例来源');
+      const source = element(doc, 'a', '', imported ? '查看备份记录的示例链接（未核验）' : '查看规则示例来源');
       source.href = message.fact.source;
       fact.append(source);
     }
@@ -373,7 +431,7 @@ export function createMessage(doc, message, { canRegenerate = false } = {}) {
     if (!message.record && message.error.retryable) error.append(action(doc, '重试本次请求', 'retry', message.id));
     article.append(error);
   }
-  if (message.trace) article.append(createRunTrace(doc, { ...message.trace, kind: message.guide ? 'guide' : message.live ? 'model' : message.trace.kind }, message.live));
+  if (message.trace) article.append(createRunTrace(doc, { ...message.trace, kind: message.guide ? 'guide' : message.live ? 'model' : message.trace.kind }, message.live, getTraceSteps(message), imported));
   if (!report) article.append(createMessageActions(doc, message, { canRegenerate }));
   return article;
 }

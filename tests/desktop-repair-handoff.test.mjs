@@ -44,6 +44,17 @@ desktopTest('handoff replaces the empty state and does not duplicate content on 
   assert.equal(h.node('handoff-content').textContent, text);
   assert.equal(h.node('handoff-basis').open, false);
 });
+
+desktopTest('restored project report retains imported provenance in reading and exported handoff', () => {
+  const h = harness(); h.artifact.provenance = 'imported';
+  h.app.open(h.trigger, true);
+  assert.match(h.node('handoff-provenance').textContent, /外部|导入/);
+  assert.match(h.node('handoff-warning').textContent, /未.*核验/);
+  const pack = contract.createHandoff(h.artifact);
+  assert.equal(pack.source.provenance, 'imported');
+  assert.match(contract.exportHandoff(pack, 'markdown').text, /外部.*未.*核验/);
+  assert.equal(contract.parseHandoff(contract.exportHandoff(pack, 'json').text).source.provenance, 'imported');
+});
 desktopTest('late file read cannot replace a newer report after close and reopen', async () => {
   const h = harness(); h.app.open(h.trigger, true);
   let finish;

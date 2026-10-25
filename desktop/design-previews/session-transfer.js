@@ -18,6 +18,16 @@ function validateReferences(snapshot) {
   return snapshot;
 }
 
+// Provenance comes from this boundary, never from a claim inside the backup.
+function importedHistory(snapshot) {
+  for (const session of snapshot.sessions) for (const message of session.messages) {
+    message.provenance = 'imported';
+    if (message.tool) message.tool.provenance = 'imported';
+    for (const part of message.parts || []) if (part.tool) part.tool.provenance = 'imported';
+  }
+  return snapshot;
+}
+
 /** Only Shipmate session snapshots are accepted; imported execution is never resumed. */
 export function parseSessionBackup(text) {
   if (typeof text !== 'string') throw failure('invalid', '请选择有效的会话 JSON 备份。');
@@ -27,13 +37,13 @@ export function parseSessionBackup(text) {
   let source;
   try { source = JSON.parse(text); }
   catch { throw failure('invalid', '无法解析会话备份，请选择有效的 JSON 文件。'); }
-  return validateReferences(normalizeSessionSnapshot(source, { restore: true }));
+  return importedHistory(validateReferences(normalizeSessionSnapshot(source, { restore: true })));
 }
 
 /** Append independent copies; current drafts, active session and approval state stay intact. */
 export function mergeSessionBackup(current, importedSnapshot) {
   const snapshot = normalizeSessionSnapshot(current);
-  const imported = validateReferences(normalizeSessionSnapshot(importedSnapshot, { restore: true }));
+  const imported = importedHistory(validateReferences(normalizeSessionSnapshot(importedSnapshot, { restore: true })));
   const sessionIds = new Set(snapshot.sessions.map(session => session.id));
   const messageIds = new Set(snapshot.sessions.flatMap(session => session.messages.map(message => message.id)));
   let messageCount = 0;

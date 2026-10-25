@@ -1,6 +1,7 @@
 // Typed integration boundary for shared JavaScript components.
 declare module '*repair-handoff.js' {
-  export type RepairHandoff = { format: 'shipmate-repair-handoff'; version: 1; source: { artifactId: string; runId: string; projectId: string | null; projectRevision: number | null; contextRevision: number | null; kind: 'check' | 'guide' | 'explain'; title: string; createdAt: number; toolVersion: string; rulesVersion: string }; scan: { complete: boolean; filesScanned: number } | null; items: unknown[] };
+  export type RepairHandoff = { format: 'shipmate-repair-handoff'; version: 1; source: { artifactId: string; runId: string; projectId: string | null; projectRevision: number | null; contextRevision: number | null; kind: 'check' | 'guide' | 'explain'; title: string; createdAt: number; toolVersion: string; rulesVersion: string; provenance?: 'imported' }; scan: { complete: boolean; filesScanned: number } | null; items: unknown[] };
+  export function formatRuleActions(item: { action_categories?: string[] }): string;
   export const MAX_HANDOFF_BYTES: number;
   export function createHandoff(artifact: unknown): RepairHandoff;
   export function parseHandoff(text: string): RepairHandoff;
@@ -82,7 +83,7 @@ declare module '*session-workspace.js' {
   export function mountSessionWorkspace(options: {
     projectScoped?: boolean; layout?: 'sidebar'; host: HTMLElement; input: HTMLTextAreaElement; sendButton: HTMLButtonElement;
     scroll: HTMLElement; list: HTMLElement; status: HTMLElement; jumpButton: HTMLElement;
-    workspace: string; storageLabel: string; conversationOptions: { requireModel: boolean; allowRecords: boolean; transport: (args: import('*chat-transport.js').ChatArgs) => Promise<void>; onModelRequired: () => void; onOpenArtifact?: (artifactId: string) => void | Promise<void> };
+    workspace: string; storageLabel: string; conversationOptions: { requireModel: boolean; allowRecords: boolean; transport: (args: import('*chat-transport.js').ChatArgs) => Promise<void>; onModelRequired: () => void; onOpenArtifact?: (artifactId: string, expected: { runId: string; kind: 'check' | 'guide' | 'explain'; projectRevision: number; contextRevision: number }) => void | Promise<void> };
     onSessionChange: (session: { id: string; title: string; projectId?: string | null; messages: unknown[] }) => void;
     onEvent: (event: { type: string; toolEvent?: { type: string } }) => void;
   }): Promise<{ isTemporary(): boolean; selectProject(projectId: string | null): Promise<boolean>; associateCurrentSession(projectId: string | null): Promise<boolean>; setKnownProjects(ids: string[]): void; getCurrentSession(): { id: string; title: string; projectId?: string | null; messages: unknown[] }; conversation: { appendRecord: (record: { text: string; label: string }) => { ok: boolean; reason?: string }; getMessages(): { text: string; record?: { kind: string; label: string } }[]; getModelSelection(): { providerId: string; model: string; label: string } | null; setModelSelection(value: { providerId: string; model: string; label: string }): boolean }; openHistory: (trigger?: HTMLElement, filter?: 'active' | 'archived' | 'all') => void; openData: (trigger?: HTMLElement) => void; flush: () => Promise<boolean>; destroy: () => void }>;
@@ -91,6 +92,13 @@ declare module '*session-workspace.js' {
 
 declare module '*components/floating-surface.js' {
   export function attachFloatingSurface(anchor: HTMLElement, surface: HTMLElement, options?: { placement?: string; onError?: () => void }): () => void;
+}
+declare module '*components/scroll-fade.js' {
+  export type ScrollFadeOrientation = 'x' | 'y' | 'both';
+  export const SCROLL_FADE_SELECTORS: ReadonlyArray<readonly [string, ScrollFadeOrientation]>;
+  export function getScrollFadeEdges(metrics: { scrollTop: number; scrollLeft?: number; clientHeight: number; clientWidth: number; scrollHeight: number; scrollWidth: number }, orientation?: ScrollFadeOrientation): { top: boolean; bottom: boolean; left: boolean; right: boolean };
+  export function updateScrollFade(element: HTMLElement): void;
+  export function mountScrollFades(root: HTMLElement, selectors?: ReadonlyArray<readonly [string, ScrollFadeOrientation]>): () => void;
 }
 declare module '*components/message-markdown.js' {
   export function renderMessageText(host: HTMLElement, value: string, options?: { copyCode?: boolean }): void;

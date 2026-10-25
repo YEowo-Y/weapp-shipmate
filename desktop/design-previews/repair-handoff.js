@@ -1,12 +1,15 @@
 import { validateGuideItem } from './guide-contract.js';
-import { escapeMarkdown as escape } from './guide-artifact.js';
+import { escapeMarkdown as escape, formatRuleActions } from './guide-artifact.js';
+import { validateMatchEvidence } from './explain-contract.js';
+export { formatRuleActions };
 
 export const MAX_HANDOFF_BYTES = 512 * 1024;
 const kinds = { check: '代码预检发现', guide: '上线要求核对', explain: '拒因规则匹配' };
-const ruleKeys = ['ruleId', 'title', 'stage', 'severity', 'why', 'requires', 'warn', 'official_url', 'source_quote', 'last_verified', 'manual_required', 'note'];
+const ruleKeys = ['ruleId', 'title', 'stage', 'severity', 'why', 'requires', 'warn', 'official_url', 'source_quote', 'last_verified', 'manual_required', 'note', 'action_categories'];
 const sourceKeys = ['artifactId', 'runId', 'projectId', 'projectRevision', 'contextRevision', 'kind', 'title', 'createdAt', 'toolVersion', 'rulesVersion'];
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 const keys = (value, names) => record(value) && Object.keys(value).length === names.length && names.every(key => Object.hasOwn(value, key));
+const optionalKeys = (value, required, optional) => record(value) && required.every(key => Object.hasOwn(value, key)) && Object.keys(value).every(key => required.includes(key) || optional.includes(key));
 const text = (value, max = 512) => typeof value === 'string' && value.trim().length > 0 && value.length <= max;
 const revision = value => value === null || (Number.isSafeInteger(value) && value >= 0);
 const error = () => new Error('交接文件格式不受支持或内容不完整，请选择有效的 Shipmate 修复交接 JSON。');
@@ -14,7 +17,7 @@ const error = () => new Error('交接文件格式不受支持或内容不完整�
 function validate(pack) {
   if (!keys(pack, ['format', 'version', 'source', 'scan', 'items']) || pack.format !== 'shipmate-repair-handoff' || pack.version !== 1) throw error();
   const s = pack.source;
-  if (!keys(s, sourceKeys) || !['artifactId', 'runId', 'title', 'toolVersion', 'rulesVersion'].every(key => text(s[key], key === 'rulesVersion' ? 16384 : 512))
+  if (!optionalKeys(s, sourceKeys, ['provenance']) || (Object.hasOwn(s, 'provenance') && s.provenance !== 'imported') || !['artifactId', 'runId', 'title', 'toolVersion', 'rulesVersion'].every(key => text(s[key], key === 'rulesVersion' ? 16384 : 512))
     || !(s.projectId === null || text(s.projectId, 128)) || !revision(s.projectRevision) || !revision(s.contextRevision)
     || typeof s.kind !== 'string' || !Object.hasOwn(kinds, s.kind) || !Number.isSafeInteger(s.createdAt) || s.createdAt <= 0 || s.createdAt > 8640000000000000) throw error();
   if (s.kind === 'check') {
@@ -23,11 +26,11 @@ function validate(pack) {
   if (!Array.isArray(pack.items) || pack.items.length > 500) throw error();
   const seen = new Set();
   for (const item of pack.items) {
-    if (!keys(item, ['rule', 'conditional', 'rejectId', 'rejectSummary']) || !validateGuideItem(item.rule)
+    if (!optionalKeys(item, ['rule', 'conditional', 'rejectId', 'rejectSummary'], ['relevance', 'matchEvidence']) || !validateGuideItem(item.rule) || !validateMatchEvidence(item)
       || Object.keys(item.rule).some(key => !ruleKeys.includes(key)) || typeof item.conditional !== 'boolean'
       || (item.conditional && s.kind !== 'guide') || !(item.rejectId === null || text(item.rejectId))
       || !(item.rejectSummary === null || text(item.rejectSummary, 4096))
-      || (s.kind !== 'explain' && (item.rejectId !== null || item.rejectSummary !== null))) throw error();
+      || (s.kind !== 'explain' && (item.rejectId !== null || item.rejectSummary !== null || Object.hasOwn(item, 'relevance')))) throw error();
     const id = JSON.stringify([item.rule.ruleId, item.rejectId, item.conditional]);
     if (seen.has(id)) throw error();
     seen.add(id);
@@ -42,11 +45,13 @@ export function createHandoff(artifact) {
   if (!record(artifact) || !record(data) || data.schemaVersion !== 1 || data.kind !== artifact.kind || result?.command !== artifact.kind
     || !Array.isArray(result.items) || (artifact.kind === 'guide' && !Array.isArray(result.selfCheck))) throw error();
   const source = Object.fromEntries(sourceKeys.map(key => [key, key === 'artifactId' ? artifact.id : artifact[key]]));
+  if (artifact.provenance === 'imported') source.provenance = 'imported';
   const scan = artifact.kind === 'check' ? { complete: result.meta?.scan?.scope?.complete === true, filesScanned: result.meta?.scan?.filesScanned } : null;
   const rows = [...result.items.map(rule => ({ rule, conditional: false })), ...(result.selfCheck || []).map(rule => ({ rule, conditional: true }))];
   const items = rows.map(({ rule, conditional }) => ({
     rule: Object.fromEntries(ruleKeys.filter(key => Object.hasOwn(rule, key)).map(key => [key, rule[key]])),
     conditional, rejectId: rule.rejectId ?? null, rejectSummary: rule.rejectSummary ?? null,
+    ...(Object.hasOwn(rule, 'relevance') || Object.hasOwn(rule, 'matchEvidence') ? { relevance: rule.relevance, matchEvidence: rule.matchEvidence } : {}),
   }));
   // Detach arrays from the source snapshot; exported data cannot mutate history.
   return validate(JSON.parse(JSON.stringify({ format: 'shipmate-repair-handoff', version: 1, source, scan, items })));
@@ -61,6 +66,7 @@ export function parseHandoff(value) {
 
 export function handoffWarnings(pack, project, rulesVersion) {
   const warnings = [], source = pack.source;
+  if (source.provenance === 'imported') warnings.push('外部导入报告 · 内容与执行情况未在本机核验；不能作为本机检查或修改授权。');
   if (source.projectId !== (project?.id ?? null)) warnings.push('当前项目与来源项目不同，无法核对项目版本。');
   else if (project) {
     if (source.projectRevision !== project.revision) warnings.push('项目版本已变化，请重新运行工具。');
@@ -81,6 +87,7 @@ export function renderHandoffSections(value) {
     `报告时间：${new Date(s.createdAt).toISOString()} · 工具 ${escape(s.toolVersion)}`, '',
     `规则版本：${escape(s.rulesVersion)}`, ''];
   const lines = ['报告未重新扫描当前文件，也未核实具体代码行号。处理前请核对当前项目与规则要求。', ''];
+  if (s.provenance === 'imported') lines.unshift('外部导入报告 · 内容与执行情况未在本机核验。', '');
   if (pack.scan) lines.push(`扫描范围：${pack.scan.filesScanned} 个文件；${pack.scan.complete ? '当次扫描范围完整（不表示已覆盖全部规则）' : '扫描不完整，请处理扫描限制后重新预检'}。`, '');
   if (!pack.items.length) lines.push('没有可交接条目。这不代表审核通过或项目不存在问题；可重新预检、补充业务事实或更换拒因查询。', '');
   for (const [index, item] of pack.items.entries()) {
@@ -88,7 +95,9 @@ export function renderHandoffSections(value) {
     lines.push(`## ${index + 1}. ${escape(r.title)}`, '',
       `问题 / 核对项：${item.conditional ? '条件自查，适用性尚未确认' : kinds[s.kind]} · ${{ blocker: '阻断', warning: '警告', info: '提示' }[r.severity]} · ${escape(r.ruleId)}`, '',
       `依据：${escape(r.why || '未提供具体发现依据，请人工核对适用性。')}`, '');
+    lines.push(`操作类型：${formatRuleActions(r)}`, '');
     if (item.rejectSummary) lines.push(`匹配拒因：${escape(item.rejectSummary)}（${escape(item.rejectId ?? '未记录编号')}）`, '');
+    if (item.relevance) lines.push(`匹配相关性：${item.relevance === 'direct' ? '直接相关' : '可能相关'}（不表示已确认违规）`, '', `匹配依据：${[...item.matchEvidence.aliases, ...item.matchEvidence.codes, ...item.matchEvidence.partialAliases].map(escape).join('、')}`, '');
     if (r.source_quote) lines.push(`规则摘录：${escape(r.source_quote)}`, '');
     if (r.official_url) lines.push(`官方来源：<${new URL(r.official_url).href.replace(/[\s<>]/g, char => encodeURIComponent(char))}>`, '');
     else lines.push('官方来源：未提供，请自行核对。', '');

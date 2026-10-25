@@ -38,6 +38,55 @@ function filteredEmptyMessage(hiddenNonBlockerCount) {
     : null;
 }
 
+// 合并相同诊断，同时保留所有关联规则；不改写引擎返回的事实对象。
+function appendNotes(lines, result) {
+  const notes = new Map();
+  for (const note of result.notes || []) notes.set(note, new Set());
+  for (const item of [...result.items, ...(result.selfCheck || [])]) {
+    if (!item.note) continue;
+    if (!notes.has(item.note)) notes.set(item.note, new Set());
+    if (item.ruleId) notes.get(item.note).add(item.ruleId);
+  }
+  if (!notes.size) return;
+  lines.push("## 备注", "");
+  for (const [note, rules] of notes) {
+    const context = rules.size ? `（相关规则：${[...rules].join("、")}）` : "";
+    lines.push(`- ${note}${context}`);
+  }
+  lines.push("");
+}
+
+function hasUnmatchedAdvice(result) {
+  return result.command === "explain" && !result.items.length &&
+    result.notes?.some((note) => note.startsWith("未匹配到已收录的拒审原因。"));
+}
+
+const ACTION_LABELS = { code: "改代码", console: "后台配置", materials: "材料准备", manual_check: "人工核对" };
+
+function actionLabels(item) {
+  return (item.action_categories || []).map((category) => ACTION_LABELS[category]).filter(Boolean).join(" / ");
+}
+
+function appendActionCategories(lines, item) {
+  const labels = actionLabels(item);
+  if (labels) lines.push(`- 操作类别：${labels}`);
+}
+
+function relevanceLabel(item) {
+  return item.relevance === "direct" ? "直接相关" : item.relevance === "possible" ? "可能相关" : "";
+}
+
+function matchBasis(item) {
+  if (!item.matchEvidence) return "";
+  const { aliases = [], codes = [], partialAliases = [] } = item.matchEvidence;
+  const parts = [];
+  if (codes.length) parts.push(`错误码：${codes.join("、")}`);
+  if (aliases.length) parts.push(`完整关键词：${aliases.join("、")}`);
+  if (partialAliases.length) parts.push(`短词扩展：${partialAliases.join("、")}`);
+  if (item.relevance === "possible") parts.push("需结合完整反馈和实际功能核对");
+  return `匹配依据：${escapeMarkdownInline(parts.join("；"))}`;
+}
+
 export function toMarkdown(result, { hiddenNonBlockerCount = 0 } = {}) {
   const lines = [];
   const title = result.command === "check" ? "上线预检清单" : "上线导航清单";
@@ -67,10 +116,10 @@ export function toMarkdown(result, { hiddenNonBlockerCount = 0 } = {}) {
     const sorted = [...items].sort((a, b) => (SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9));
     for (const it of sorted) {
       lines.push(`### ${SEV_ICON[it.severity] || "•"} ${it.title}  \`${it.ruleId}\``);
+      appendActionCategories(lines, it);
       if (it.why) lines.push(`- 为什么：${it.why}`);
       for (const r of it.requires || []) lines.push(`- [ ] ${r}`);
-      if (it.note) lines.push(`- ⚠️ ${it.note}`);
-      if (it.manual_required) lines.push(`- 👤 需你本人在官方后台完成，工具不代办`);
+      if (it.manual_required) lines.push(`- 👤 需人工确认/处理`);
       if (it.official_url) lines.push(`- 来源：${it.official_url}（最后核验 ${it.last_verified}）`);
       lines.push("");
     }
@@ -97,19 +146,16 @@ export function toMarkdown(result, { hiddenNonBlockerCount = 0 } = {}) {
     for (const it of result.selfCheck) {
       lines.push(`### ${SEV_ICON[it.severity] || "•"} ${it.title}  \`${it.ruleId}\``);
       if (it.signal?.length) lines.push(`- 自查：若你的小程序涉及【${it.signal.join(" / ")}】`);
+      appendActionCategories(lines, it);
       if (it.why) lines.push(`- 为什么：${it.why}`);
       for (const r of it.requires || []) lines.push(`- [ ] ${r}`);
-      if (it.manual_required) lines.push(`- 👤 需你本人在官方后台完成，工具不代办`);
+      if (it.manual_required) lines.push(`- 👤 需人工确认/处理`);
       if (it.official_url) lines.push(`- 来源：${it.official_url}（最后核验 ${it.last_verified}）`);
       lines.push("");
     }
   }
 
-  if (result.notes?.length) {
-    lines.push("## 备注", "");
-    for (const n of result.notes) lines.push(`- ${n}`);
-    lines.push("");
-  }
+  appendNotes(lines, result);
   if (!result.items.length && !result.selfCheck?.length)
     lines.push(filteredEmptyMessage(hiddenNonBlockerCount) || "_未命中任何规则。_", "");
   return lines.join("\n");
@@ -121,6 +167,9 @@ export function toChecklist(result, { hiddenNonBlockerCount = 0 } = {}) {
   const title = result.command === "check" ? "上线预检清单" : "上线导航清单";
   lines.push(`# weapp-shipmate · ${title}（可勾选）`, "");
   lines.push(`> ${DISCLAIMER}`, "");
+
+  if (result.items.some((item) => item.relevance))
+    lines.push("> 相关性表示反馈文字与规则的关联，不代表已确认你的项目违规；可能相关项须人工核对。", "");
 
   const byStage = new Map();
   for (const it of result.items) {
@@ -134,7 +183,9 @@ export function toChecklist(result, { hiddenNonBlockerCount = 0 } = {}) {
     for (const it of sorted) {
       const icon = SEV_ICON[it.severity] || "•";
       const todos = it.requires?.length ? it.requires : it.warn ? [it.warn] : [];
-      for (const t of todos) actions.push(`- [ ] ${icon} ${t}  （${it.ruleId}）`);
+      const labels = [relevanceLabel(it), actionLabels(it)].filter(Boolean).join(" · ");
+      for (const t of todos) actions.push(`- [ ] ${icon} ${t}  （${it.ruleId}${labels ? `；${labels}` : ""}）`);
+      if (matchBasis(it)) actions.push(`  - ${matchBasis(it)}`);
     }
     return actions;
   };
@@ -163,7 +214,7 @@ export function toChecklist(result, { hiddenNonBlockerCount = 0 } = {}) {
       const icon = SEV_ICON[it.severity] || "•";
       const cond = it.signal?.length ? `若涉及【${it.signal.join(" / ")}】：` : "";
       const todos = it.requires?.length ? it.requires : it.warn ? [it.warn] : [];
-      for (const t of todos) actions.push(`- [ ] ${icon} ${cond}${t}  （${it.ruleId}）`);
+      for (const t of todos) actions.push(`- [ ] ${icon} ${cond}${t}  （${it.ruleId}${actionLabels(it) ? `；${actionLabels(it)}` : ""}）`);
     }
     if (actions.length) {
       lines.push("## 可能适用 · 自查（取决于你的业务）", ...actions, "");
@@ -171,10 +222,12 @@ export function toChecklist(result, { hiddenNonBlockerCount = 0 } = {}) {
     }
   }
 
-  if (!total) {
+  appendNotes(lines, result);
+
+  if (!total && !hasUnmatchedAdvice(result)) {
     const filteredEmpty = !result.items.length && !result.selfCheck?.length;
     lines.push(
-      (filteredEmpty && filteredEmptyMessage(hiddenNonBlockerCount)) || "_无可执行清单项。_",
+      (filteredEmpty && filteredEmptyMessage(hiddenNonBlockerCount)) || "_无可执行清单项；不代表已检查完整或检查通过。_",
       "",
     );
   }
@@ -186,34 +239,38 @@ export function toExplain(result, { hiddenNonBlockerCount = 0 } = {}) {
   const lines = [];
   lines.push("# weapp-shipmate · 拒因解读", "");
   lines.push(`> ${DISCLAIMER}`, "");
-  if (result.meta?.summary) lines.push(explainSummaryForMarkdown(result), "");
+  if (hasUnmatchedAdvice(result)) {
+    if (result.meta?.query) lines.push(`查询：「${escapeMarkdownInline(result.meta.query)}」`, "");
+  } else if (result.meta?.summary) lines.push(explainSummaryForMarkdown(result), "");
 
-  // 按 rejectId 分组，保持 items 的命中排序（已按相关度降序）
+  if (result.items.some((item) => item.relevance))
+    lines.push("> 相关性表示反馈文字与规则的关联，不代表已确认你的项目违规；可能相关项须人工核对。", "");
+
+  // 按相关性与 rejectId 分组，保持 items 的命中排序（直接相关优先）
   const byReject = new Map();
   for (const it of result.items) {
-    const key = it.rejectId || "_";
+    const key = `${it.relevance || ""}:${it.rejectId || "_"}`;
     if (!byReject.has(key)) byReject.set(key, { summary: it.rejectSummary, items: [] });
     byReject.get(key).items.push(it);
   }
   for (const { summary, items } of byReject.values()) {
-    lines.push(`## ${summary}`, "");
+    const label = relevanceLabel(items[0]);
+    lines.push(`## ${summary}${label ? ` · ${label}` : ""}`, "");
+    if (matchBasis(items[0])) lines.push(`- ${matchBasis(items[0])}`, "");
     const sorted = [...items].sort((a, b) => (SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9));
     for (const it of sorted) {
       lines.push(`### ${SEV_ICON[it.severity] || "•"} ${it.title}  \`${it.ruleId}\``);
+      appendActionCategories(lines, it);
       if (it.why) lines.push(`- 为什么：${it.why}`);
       for (const r of it.requires || []) lines.push(`- [ ] ${r}`);
-      if (it.manual_required) lines.push(`- 👤 需你本人在官方后台完成，工具不代办`);
+      if (it.manual_required) lines.push(`- 👤 需人工确认/处理`);
       if (it.official_url) lines.push(`- 来源：${it.official_url}（最后核验 ${it.last_verified}）`);
       lines.push("");
     }
   }
 
-  if (result.notes?.length) {
-    lines.push("## 备注", "");
-    for (const n of result.notes) lines.push(`- ${n}`);
-    lines.push("");
-  }
-  if (!result.items.length)
+  appendNotes(lines, result);
+  if (!result.items.length && (hiddenNonBlockerCount > 0 || !hasUnmatchedAdvice(result)))
     lines.push(filteredEmptyMessage(hiddenNonBlockerCount) || "_未匹配到已收录的拒审原因。_", "");
   return lines.join("\n");
 }

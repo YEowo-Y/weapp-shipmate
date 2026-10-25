@@ -38,7 +38,12 @@ test('agent route is desktop-only and private request identity cannot be supplie
   assert.equal((await h.request(`${BASE}/openai/agent`, body, csrf)).status, 409);
   assert.equal(calls, 1);
   assert.equal(validateRequest({ id: 'test', path: `${BASE}/openai/agent`, method: 'POST', headers: { 'x-shipmate-request-id': 'forged' } }), false);
-  assert.equal(validateRequest({ id: 'test', path: `${BASE}/anthropic/agent`, method: 'POST' }), false);
+  for (const provider of ['openai', 'anthropic', 'google']) {
+    assert.equal(validateRequest({ id: 'test', path: `${BASE}/${provider}/agent`, method: 'POST' }), true);
+    assert.equal(validateRequest({ id: 'test', path: `${BASE}/${provider}/agent`, method: 'GET' }), false);
+    assert.equal(validateRequest({ id: 'test', path: `${BASE}/${provider}/agent/extra`, method: 'POST' }), false);
+  }
+  assert.equal(validateRequest({ id: 'test', path: `${BASE}/custom/agent`, method: 'POST' }), false);
 });
 
 test('desktop explain queries real local rules without credentials and rejects malformed input', async t => {

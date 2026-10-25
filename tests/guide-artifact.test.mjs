@@ -52,3 +52,17 @@ test('exports preserve section membership and do not import sample stage complet
   assert.equal(createGuideArtifact(input, empty, 'markdown').text.split('暂无条目。').length - 1, 2);
 });
 
+
+test('imported guide exports retain external provenance without changing local exports or input', () => {
+  const result = resultFor(input), before = JSON.stringify(result);
+  const md = createGuideArtifact(input, result, 'markdown', { provenance: 'imported' });
+  assert.match(md.text, /导入历史.*外部会话备份.*未在本机核验/);
+  assert.doesNotMatch(md.text, /本清单依据仓库收录规则生成|仓库记录的核验日期/);
+  const json = JSON.parse(createGuideArtifact(input, result, 'json', { provenance: 'imported' }).text);
+  assert.match(json.notes[0], /导入历史.*外部会话备份.*未在本机核验/);
+  assert.deepEqual(json.items, result.items);
+  assert.deepEqual(json.notes.slice(1), result.notes);
+  assert.equal(JSON.stringify(result), before);
+  assert.equal(createGuideArtifact(input, result, 'json').text, JSON.stringify(result, null, 2));
+  assert.match(createGuideArtifact(input, result, 'markdown').text, /本清单依据仓库收录规则生成/);
+});

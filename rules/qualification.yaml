@@ -4,6 +4,7 @@
 schema_version: 1
 rules:
   - id: qualification.provide-materials
+    action_categories: ["materials", "manual_check"]
     title: "按要求提供审批/备案等资质材料"
     kind: navigation
     stage: review

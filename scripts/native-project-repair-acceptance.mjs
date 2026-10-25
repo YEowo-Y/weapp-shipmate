@@ -1,0 +1,129 @@
+// Actual native IPC, bundled CLI and filesystem; no mocked repair commands.
+import assert from 'node:assert/strict';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+
+export async function checkProjectRepairFlows(options) {
+  const { checked, click, inspect, text, command, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, quit, launch, run, requests } = options;
+  const projectId = 'native-repair-project', directory = resolve(run, '受限修复项目'), file = resolve(directory, 'app.json');
+  const original = Buffer.from('{\r\n  "pages": [],\r\n  "window": { "navigationBarTitleText": "修复验收" }\r\n}\r\n');
+  const beforeRequests = requests.length, errors = [];
+  const monitor = () => inspect('window.__repairErrors=[];window.addEventListener("error",e=>window.__repairErrors.push(e.message));window.addEventListener("unhandledrejection",e=>window.__repairErrors.push(String(e.reason?.message||e.reason)));');
+  const snapshot = () => projectInvoke('project_snapshot');
+  const repairSnapshot = () => projectInvoke('project_repair_snapshot', { projectId });
+  let serial = 0, operationId;
+  async function reloadProjects() {
+    await projectDialog(); await click('#project-retry');
+    await until(() => inspect('return !document.querySelector("#project-retry").disabled'), 'project registry refreshed');
+    await closeProjects();
+  }
+  async function closeRepair() { await click('#repair-done'); await until(() => inspect('return !document.querySelector("#desktop-repair").open'), 'repair closed'); }
+  async function closeReport() { if (await inspect('return document.querySelector("#desktop-tools").open')) await click('#desktop-tools-close'); }
+  async function openReport() {
+    await projectDialog(); await click('#project-retry');
+    await until(() => inspect('return !document.querySelector("#project-retry").disabled && !!document.querySelector("#project-history .project-run button")'), 'saved report ready');
+    await click('#project-history .project-run button');
+    await until(() => inspect('return document.querySelector("#desktop-tools").open'), 'report open');
+  }
+  async function prepare() {
+    await openReport(); await click('#repair-report');
+    await until(() => inspect('return document.querySelector("#desktop-repair").open && document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'repair prepared');
+    assert.equal(await inspect('return document.querySelector("#repair-preview").hidden'), false, await text('#repair-status'));
+  }
+  async function scan() {
+    return projectInvoke('project_run', { projectId, kind: 'check', subject: 'personal', runId: `native-repair-scan-${++serial}` });
+  }
+  async function apply() {
+    await click('#repair-business-confirm'); await click('#repair-confirm');
+    await until(async () => /复检已完成/.test(await text('#repair-recheck-status')) && await inspect('return document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'write and actual CLI recheck', 30_000);
+    assert.match(await text('#repair-result'), /已写入/);
+  }
+  async function history() {
+    await click('#desktop-more');
+    await click('#desktop-repair-history');
+    await until(() => inspect('return document.querySelector("#desktop-repair").open && document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'repair history ready');
+  }
+  await monitor(); await command('POST', '/window/rect', { width: 1200, height: 850 });
+  await checked('Repair fixture is an actual local single-root project with static privacy API evidence', async () => {
+    await mkdir(directory, { recursive: true }); await writeFile(file, original);
+    await writeFile(resolve(directory, 'app.js'), 'App({ onLaunch() { wx.getLocation({ type: "wgs84", success() {} }); } });\n');
+    await writeFile(resolve(directory, 'project.config.json'), JSON.stringify({ appid: 'touristappid', projectname: 'Native repair fixture', compileType: 'miniprogram', miniprogramRoot: './' }));
+    await projectInvoke('project_save', { project: { id: projectId, name: '受限修复验收', directory, subject: 'personal' } });
+    const report = await scan(); assert.equal(report.kind, 'check');
+    await reloadProjects(); await selectProject(projectId);
+  });
+  await checked('Repair preview shows complete before/after and requires explicit business confirmation', async () => {
+    await prepare();
+    assert.equal(await text('#repair-before'), original.toString());
+    assert.ok(JSON.parse(await text('#repair-after')).requiredPrivateInfos.includes('getLocation'));
+    assert.match(await text('#repair-evidence'), /app.js.*getLocation/);
+    assert.equal(await inspect('return document.querySelector("#repair-confirm").disabled'), true);
+    assert.deepEqual(await readFile(file), original);
+    await screenshot('repair-full-preview');
+    await command('POST', '/window/rect', { width: 390, height: 844 });
+    assert.equal(await inspect('const d=document.querySelector("#desktop-repair");return document.documentElement.scrollWidth<=innerWidth+1 && d.scrollWidth<=d.clientWidth+1'), true);
+    assert.equal(await inspect('const b=document.querySelector("#desktop-repair .context-body");return b.scrollWidth<=b.clientWidth+1'), true, 'only source code panes may scroll horizontally, never the whole repair form');
+    await screenshot('repair-preview-narrow'); await command('POST', '/window/rect', { width: 1200, height: 850 });
+  });
+  await checked('Approved repair writes only app.json, saves backup and completes a real follow-up check', async () => {
+    const runs = (await snapshot()).runs.length; await apply();
+    assert.ok(JSON.parse(await readFile(file, 'utf8')).requiredPrivateInfos.includes('getLocation'));
+    assert.ok((await snapshot()).runs.length > runs);
+    const applied = (await repairSnapshot()).operations.find(item => item.writeState === 'applied');
+    assert.ok(applied?.undoAvailable); operationId = applied.operationId;
+    assert.equal(applied.recheckState, 'completed'); assert.ok(applied.recheckArtifactId);
+    assert.deepEqual(await readFile(applied.backupPath), original);
+    await screenshot('repair-applied-rechecked');
+  });
+  await checked('Undo requires another preview and restores original bytes including CRLF', async () => {
+    await click(`[data-repair-action="undo-preview"][data-operation-id="${operationId}"]`);
+    await until(async () => /确认撤销/.test(await text('#repair-preview-title')) && await inspect('return !document.querySelector("#repair-confirm").disabled'), 'undo preview');
+    assert.equal(await text('#repair-after'), original.toString()); await screenshot('repair-undo-preview');
+    await click('#repair-confirm');
+    await until(async () => /复检已完成/.test(await text('#repair-recheck-status')) && await inspect('return document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'undo rechecked', 30_000);
+    assert.deepEqual(await readFile(file), original); assert.match(await text('#repair-result'), /已恢复原文件/);
+    await closeRepair(); await closeReport();
+  });
+  await checked('A file changed after preview invalidates the plan and is never overwritten', async () => {
+    await scan(); await prepare();
+    const edited = Buffer.from('{"pages":[],"window":{"navigationBarTitleText":"预览后手动修改"}}\n'); await writeFile(file, edited);
+    await click('#repair-business-confirm'); await click('#repair-confirm');
+    await until(() => inspect('return document.querySelector("#repair-status").dataset.error==="true" && document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'stale plan rejected');
+    assert.equal(await inspect('return document.querySelector("#repair-confirm").disabled'), true);
+    assert.deepEqual(await readFile(file), edited); await screenshot('repair-stale-plan');
+    await closeRepair(); await closeReport(); await writeFile(file, original);
+  });
+  await checked('Repair history survives native restart and later edits block undo', async () => {
+    await scan(); await prepare(); await apply();
+    operationId = (await repairSnapshot()).operations.find(item => item.writeState === 'applied' && item.undoAvailable).operationId;
+    await closeRepair(); await closeReport();
+    errors.push(...await inspect('return window.__repairErrors')); await quit(); await launch(); await monitor();
+    assert.equal((await snapshot()).activeProjectId, projectId);
+    assert.ok((await repairSnapshot()).operations.some(item => item.operationId === operationId && item.recheckState === 'completed'));
+    await history(); assert.match(await text('#repair-history'), /已写入 app.json/); await screenshot('repair-history-restarted');
+    const edited = Buffer.from('{"pages":[],"requiredPrivateInfos":["getLocation"],"window":{"navigationBarTitleText":"后续编辑"}}\n'); await writeFile(file, edited);
+    await click(`[data-repair-action="undo-preview"][data-operation-id="${operationId}"]`);
+    await until(() => inspect('return document.querySelector("#repair-status").dataset.error==="true" && document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'changed file undo refused');
+    assert.equal(await inspect('return document.querySelector("#repair-confirm").disabled'), true);
+    assert.deepEqual(await readFile(file), edited); await screenshot('repair-undo-after-edit-refused'); await closeRepair(); await closeReport();
+  });
+  await checked('Imported historical reports cannot grant native file repair authority', async () => {
+    const backupJson = await projectInvoke('project_export', { projectId });
+    const imported = await projectInvoke('project_import', { backupJson, directory, requestId: 'native-repair-import' });
+    const importedId = imported.projectId;
+    assert.ok(importedId && importedId !== projectId); await reloadProjects(); await selectProject(importedId);
+    const artifact = (await snapshot()).artifacts.find(item => item.projectId === importedId && item.kind === 'check');
+    assert.equal(artifact.provenance, 'imported');
+    const bytes = await readFile(file);
+    await assert.rejects(() => projectInvoke('project_repair_prepare', { projectId: importedId, artifactId: artifact.id }));
+    await openReport();
+    if (await inspect('return !document.querySelector("#repair-report").disabled')) {
+      await click('#repair-report'); await until(() => inspect('return document.querySelector("#repair-status").dataset.error==="true"'), 'imported report blocked');
+      assert.equal(await inspect('return document.querySelector("#repair-confirm").disabled'), true); await screenshot('repair-imported-rejected'); await closeRepair();
+    } else await screenshot('repair-imported-disabled');
+    assert.deepEqual(await readFile(file), bytes); await closeReport();
+  });
+  errors.push(...await inspect('return window.__repairErrors')); assert.deepEqual(errors, []);
+  assert.equal(requests.length, beforeRequests, 'Repair must not invoke any model provider');
+  await writeFile(resolve(run, 'repair-evidence.json'), JSON.stringify({ projectId, operationId, actualNativeCommands: true, byteExactUndoVerified: true, modelRequestsAdded: 0, errors }, null, 2));
+}

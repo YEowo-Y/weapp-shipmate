@@ -6,7 +6,7 @@ import { mountModelConnections } from './model-connection';
 import { mountChatContext } from './context';
 import { mountAgentTools } from './agent-tools';
 import { invoke } from '@tauri-apps/api/core';
-import type { Artifact } from './projects';
+import type { Artifact, ProjectSnapshot } from './projects';
 
 export async function mountDesktopSessions(options: { onOpenArtifact?: (artifact: Artifact) => void; onToolResults?: () => Promise<void>; onOpenSettings?: (anchor?: HTMLElement | null) => void } = {}) {
   const node = <T extends HTMLElement>(selector: string) => document.querySelector(selector) as T;
@@ -40,15 +40,26 @@ export async function mountDesktopSessions(options: { onOpenArtifact?: (artifact
           return streamChat(agentTools.prepare(request), { fetcher: desktopModelFetch });
         },
         onModelRequired: () => openSettings(input),
-        async onOpenArtifact(artifactId: string) {
+        async onOpenArtifact(artifactId: string, expected: { runId: string; kind: Artifact['kind']; projectRevision: number; contextRevision: number }) {
           const projectId = activeProjectId, revision = selectionRevision;
-          if (!projectId || disposed) return;
+          if (disposed) return;
+          if (!projectId) {
+            status.textContent = '此会话尚未关联项目，无法核验本机报告。请在项目管理中关联对应项目后重试；会话备份不包含完整成果，可在原设备导出报告或在本机重新检查。';
+            return;
+          }
+          status.textContent = '正在查找并核验本机报告…';
           try {
             const artifact = await invoke<Artifact>('project_artifact', { artifactId });
             if (disposed || revision !== selectionRevision) return;
-            if (artifact.projectId !== projectId || artifact.id !== artifactId) throw Error('报告不属于当前项目。');
-            options.onOpenArtifact?.(artifact);
-          } catch { if (!disposed && revision === selectionRevision) status.textContent = '无法打开此项目报告，请在项目历史中重试。'; }
+            if (!expected || artifact.provenance === 'imported' || artifact.projectId !== projectId || artifact.id !== artifactId || artifact.runId !== expected.runId || artifact.kind !== expected.kind || artifact.projectRevision !== expected.projectRevision || artifact.contextRevision !== expected.contextRevision) throw Error('报告关联不匹配或属于外部导入历史。');
+            const snapshot = await invoke<ProjectSnapshot>('project_snapshot');
+            if (disposed || revision !== selectionRevision) return;
+            const run = snapshot.runs.find(item => item.id === expected.runId);
+            if (!snapshot.projects.some(item => item.id === projectId) || !run || run.provenance === 'imported' || run.projectId !== projectId || run.state !== 'succeeded' || run.kind !== expected.kind || run.projectRevision !== expected.projectRevision || run.contextRevision !== expected.contextRevision) throw Error('未核验到对应的本机运行。');
+            if (!options.onOpenArtifact) throw Error('报告阅读器不可用。');
+            options.onOpenArtifact(artifact);
+            status.textContent = '已核验并打开本机报告；此核验仅针对本机成果关联，不验证导入的历史摘要或模型说明。';
+          } catch { if (!disposed && revision === selectionRevision) status.textContent = '无法核验或打开此本机报告：成果缺失、关联不匹配或运行不在当前历史范围。请在项目历史中重试，或在原设备导出报告、在本机重新检查。会话备份不会恢复完整成果。'; }
         },
       },
       onSessionChange(session) {

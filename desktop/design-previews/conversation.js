@@ -663,7 +663,7 @@ export function mountConversation(options) {
       announce('仅能导出已完成且有效的上线清单。');
       return null;
     }
-    try { return createGuideArtifact(message.guide, message.structuredResult, format); }
+    try { return createGuideArtifact(message.guide, message.structuredResult, format, { provenance: message.provenance }); }
     catch { announce('清单导出失败，请重试。'); return null; }
   }
 
@@ -722,7 +722,9 @@ export function mountConversation(options) {
     const previousResult = article.querySelector('.tool-result-json');
     const focusedResult = hadFocus && focused === previousResult;
     const resultScroll = previousResult ? { top: previousResult.scrollTop, left: previousResult.scrollLeft } : null;
+    // Live process accordions are force-opened; never persist that as a reader choice.
     const expanded = new Map([...article.querySelectorAll('details[data-component]')]
+      .filter(node => node.dataset.live !== 'true')
       .map(node => [node.dataset.component, node.open]));
     const replacement = renderMessage(message);
     const previousGuide = article.querySelector('[data-component="guide-result"]');
@@ -825,9 +827,15 @@ export function mountConversation(options) {
       const article = [...list.children].find(node => node.dataset.messageId === current.id);
       const summary = article?.querySelector('.run-trace summary');
       if (summary) {
-        summary.textContent = formatTraceLabel(current.trace);
-        summary.parentElement.dataset.state = current.trace.state;
-        summary.parentElement.dataset.tone = getRunPresentation(current.trace.state).tone;
+        const label = summary.querySelector?.('.run-trace__label');
+        (label || summary).textContent = formatTraceLabel(current.trace);
+        const trace = summary.parentElement;
+        trace.dataset.state = current.trace.state;
+        trace.dataset.tone = getRunPresentation(current.trace.state).tone;
+        // A settled run hands the accordion back to the reader, folded.
+        const live = ['working', 'streaming'].includes(current.trace.state);
+        if (trace.dataset.live === 'true' && !live) trace.open = false;
+        trace.dataset.live = String(live);
       }
     }
     if (current && event.type === 'agent-tool') {
@@ -1106,11 +1114,13 @@ export function mountConversation(options) {
     const message = messages.find((item) => item.id === control.dataset.messageId);
     if (!message) return;
     if (control.dataset.action === 'open-artifact') {
-      const part = message.parts?.find(item => item.tool?.kind === 'project' && item.result?.artifactId === control.dataset.artifactId);
+      const parts = message.parts || (message.tool ? [{ tool: message.tool, result: message.structuredResult }] : []);
+      const part = parts.find(item => item.tool?.kind === 'project' && item.result?.artifactId === control.dataset.artifactId);
       if (part && validateAgentResult(part.result).ok) {
+        announce('正在查找并核验本机报告…');
         Promise.resolve().then(() => {
           if (!options.onOpenArtifact) throw new Error('Artifact host unavailable');
-          return options.onOpenArtifact(part.result.artifactId);
+          return options.onOpenArtifact(part.result.artifactId, { runId: part.result.runId, kind: part.result.kind, projectRevision: part.result.projectRevision, contextRevision: part.result.contextRevision });
         }).catch(() => {
           if (!destroyed) announce('无法打开本机报告，请从项目历史中重试。');
         });
@@ -1146,6 +1156,8 @@ export function mountConversation(options) {
   function onDisclosureClick(event) {
     const summary = event.target.closest('summary');
     if (!summary || !list.contains(summary)) return;
+    // While a run is live its process accordion stays open (no viewport jumps).
+    if (summary.parentElement.dataset.live === 'true') { event.preventDefault?.(); return; }
     readingDetails = !summary.parentElement.open;
     readingAnchor = readingDetails ? {
       messageId: summary.closest('[data-message-id]').dataset.messageId,
@@ -1267,13 +1279,27 @@ export function mountConversation(options) {
   for (const [node, type, listener] of bindings) node?.addEventListener(type, listener);
   // Width changes rewrap text; ignore height notifications from autosize itself.
   let observedWidth;
-  const ResizeObserver = documentRef.defaultView?.ResizeObserver;
+  let resizeFrame = null;
+  const view = documentRef.defaultView;
+  const ResizeObserver = view?.ResizeObserver;
   const resizeObserver = ResizeObserver ? new ResizeObserver(entries => {
     if (destroyed) return;
+    const shell = scroll.closest('.conversation-shell');
+    if (shell) {
+      const offset = Math.ceil(shell.getBoundingClientRect().bottom - scroll.getBoundingClientRect().bottom + 14);
+      shell.style.setProperty('--conversation-jump-offset', `${Math.max(14, offset)}px`);
+    }
     const width = entries.find(entry => !entry.target || entry.target === input)?.contentRect.width;
     if (Number.isFinite(width) && width > 0 && width !== observedWidth) {
       observedWidth = width;
-      autosize();
+      // Resizing an observed textarea during delivery can resize its parent
+      // reader again. Coalesce that write into the next frame; direct typing
+      // still autosizes synchronously in the input handler.
+      if (!view?.requestAnimationFrame) autosize();
+      else if (resizeFrame === null) resizeFrame = view.requestAnimationFrame(() => {
+        resizeFrame = null;
+        autosize();
+      });
     }
     settleViewportResize();
   }) : null;
@@ -1377,6 +1403,7 @@ export function mountConversation(options) {
       artifactDownloader.dispose();
       controller.dispose();
       resizeObserver?.disconnect();
+      if (resizeFrame !== null) view?.cancelAnimationFrame?.(resizeFrame);
       for (const [node, type, listener] of bindings) node?.removeEventListener(type, listener);
     },
   };

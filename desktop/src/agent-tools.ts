@@ -48,7 +48,7 @@ export function mountAgentTools(composer: HTMLElement, isBusy: () => boolean) {
     button.title = value.allowRead ? (value.shareResults ? '已允许读取项目并发送结果摘要' : '已允许读取项目，结果留在本机') : '设置当前会话的只读项目工具';
     read.input.checked = value.allowRead; share.input.checked = value.shareResults;
     read.input.disabled = busy || !value.eligible; share.input.disabled = busy || !value.eligible || !value.allowRead;
-    scope.textContent = !value.projectId ? '请先将会话关联到当前项目。' : !value.eligible ? '项目工具目前仅支持 OpenAI，请先连接并选择 OpenAI 模型。' : value.allowRead ? (value.shareResults ? '已开启 · 筛选后的摘要会发送给模型。' : '已开启 · 工具结果仅保存在本机。') : '默认关闭。开启后仅适用于当前项目与会话。';
+    scope.textContent = !value.projectId ? '请先将会话关联到当前项目。' : !value.eligible ? '请连接并选择 OpenAI、Anthropic 或 Google 模型以使用只读项目工具。' : value.allowRead ? (value.shareResults ? '已开启 · 筛选后的摘要会发送给模型。' : '已开启 · 工具结果仅保存在本机。') : '默认关闭。开启后仅适用于当前项目与会话；所选模型需支持工具调用。';
   }
   function update() {
     if (isBusy()) { render(); return; }

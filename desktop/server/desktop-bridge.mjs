@@ -1,5 +1,6 @@
 import { createCredentialRpc } from './credential-rpc.mjs';
 import { createAgentToolRpc } from './agent-tool-rpc.mjs';
+import { AGENT_PROVIDERS } from '../design-previews/agent-contract.js';
 import { TextDecoder } from 'node:util';
 import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -15,7 +16,7 @@ const same = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.
 export function validateRequest(request) {
   if (!request || !validId(request.id)) return false;
   const { path, method, body, headers = {} } = request;
-  if (!(method === 'GET' && path === BASE || method === 'POST' && (ROUTE.test(path) || [`${BASE}/openai/agent`, `${BASE}/openrouter/oauth/start`, `${BASE}/openrouter/oauth/cancel`, `${BASE}/openrouter/oauth/complete`, `${BASE}/tools/explain`].includes(path)))) return false;
+  if (!(method === 'GET' && path === BASE || method === 'POST' && (ROUTE.test(path) || AGENT_PROVIDERS.some(provider => path === `${BASE}/${provider}/agent`) || [`${BASE}/openrouter/oauth/start`, `${BASE}/openrouter/oauth/cancel`, `${BASE}/openrouter/oauth/complete`, `${BASE}/tools/explain`].includes(path)))) return false;
   if (body !== undefined && body !== null && (typeof body !== 'string' || Buffer.byteLength(body) > 65_536)) return false;
   if (method === 'GET' && body) return false;
   return headers && typeof headers === 'object' && !Array.isArray(headers) && Object.entries(headers).every(([key, value]) => ['content-type', 'x-shipmate-csrf', 'accept'].includes(key.toLowerCase()) && typeof value === 'string' && value.length <= 256 && !/[\r\n]/.test(value));

@@ -44,6 +44,10 @@ test('relocated Windows runtime executes local entrypoints with empty PATH', asy
   await assert.rejects(access(join(output, 'stale.txt')));
   assert.deepEqual(await readdir(join(output, 'node_modules')), ['@ai-sdk', '@opentelemetry', '@standard-schema', '@vercel', 'ai', 'argparse', 'eventsource-parser', 'js-yaml', 'json-schema', 'undici', 'zod']);
   assert.equal(first.dependencies.ai, '6.0.313');
+  assert.equal(first.dependencies['@ai-sdk/anthropic'], '3.0.135');
+  assert.equal(first.dependencies['@ai-sdk/google'], '3.0.138');
+  assert.ok(first.files['node_modules/@ai-sdk/anthropic/LICENSE']);
+  assert.ok(first.files['node_modules/@ai-sdk/google/LICENSE']);
   assert.ok(first.files['node_modules/@ai-sdk/provider-utils/LICENSE']);
   assert.ok(first.files['DESKTOP-DEPENDENCIES.txt']);
   assert.ok(!Object.keys(first.files).some(path => /node_modules\/(?:@awesome|@tauri|vite|typescript)\//.test(path)));
@@ -94,7 +98,9 @@ test('relocated Windows runtime executes local entrypoints with empty PATH', asy
     const { createDesktopBridge } = await import(${JSON.stringify(pathToFileURL(join(output, 'desktop/server/desktop-bridge.mjs')).href)});
     const { streamText, jsonSchema, stepCountIs } = await import(${JSON.stringify(pathToFileURL(join(output, 'node_modules/ai/dist/index.mjs')).href)});
     const { createOpenAI } = await import(${JSON.stringify(pathToFileURL(join(output, 'node_modules/@ai-sdk/openai/dist/index.mjs')).href)});
-    if (![streamText, jsonSchema, stepCountIs, createOpenAI].every(value => typeof value === 'function')) throw new Error('SDK dependency closure failed');
+    const { createAnthropic } = await import(${JSON.stringify(pathToFileURL(join(output, 'node_modules/@ai-sdk/anthropic/dist/index.mjs')).href)});
+    const { createGoogleGenerativeAI } = await import(${JSON.stringify(pathToFileURL(join(output, 'node_modules/@ai-sdk/google/dist/index.mjs')).href)});
+    if (![streamText, jsonSchema, stepCountIs, createOpenAI, createAnthropic, createGoogleGenerativeAI].every(value => typeof value === 'function')) throw new Error('SDK dependency closure failed');
     const events = [];
     const bridge = await createDesktopBridge({ emit: value => events.push(value) });
     try {

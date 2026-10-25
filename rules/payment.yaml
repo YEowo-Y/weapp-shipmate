@@ -8,6 +8,7 @@
 schema_version: 1
 rules:
   - id: payment.virtual-must-use-official
+    action_categories: ["code", "manual_check"]
     title: "虚拟商品须用小程序虚拟支付，不得外跳"
     kind: navigation
     stage: review
@@ -25,6 +26,7 @@ rules:
     manual_required: true
 
   - id: payment.requires-merchant
+    action_categories: ["manual_check"]
     title: "微信支付需商户准入资质（个人主体不支持）"
     kind: preflight
     stage: review

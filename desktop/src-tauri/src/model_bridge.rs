@@ -71,6 +71,14 @@ pub struct ModelRequest {
     #[serde(default)]
     headers: HashMap<String, String>,
 }
+fn agent_route(path: &str) -> bool {
+    [
+        "/api/model-connections/openai/agent",
+        "/api/model-connections/anthropic/agent",
+        "/api/model-connections/google/agent",
+    ]
+    .contains(&path)
+}
 fn validate(request: &ModelRequest) -> bool {
     let base = "/api/model-connections";
     let route = request.path.strip_prefix(&format!("{base}/")).unwrap_or("");
@@ -88,8 +96,8 @@ fn validate(request: &ModelRequest) -> bool {
                 ]
                 .contains(&parts[0])
                 && ["connect", "refresh", "disconnect", "chat", "verify"].contains(&parts[1])
+                || agent_route(&request.path)
                 || [
-                    "openai/agent",
                     "tools/explain",
                     "openrouter/oauth/start",
                     "openrouter/oauth/cancel",
@@ -259,7 +267,7 @@ pub fn model_request(
     if !validate(&request) {
         return Err("桌面模型请求格式无效。".into());
     }
-    let permission = if request.path == "/api/model-connections/openai/agent" {
+    let permission = if agent_route(&request.path) {
         Some(crate::agent_tools::permission(request.body.as_deref())?)
     } else {
         None
@@ -370,7 +378,27 @@ mod tests {
         request.path = "/api/model-connections/openai/agent".into();
         assert!(validate(&request));
         request.path = "/api/model-connections/anthropic/agent".into();
-        assert!(!validate(&request));
+        assert!(validate(&request));
+        request.path = "/api/model-connections/google/agent".into();
+        assert!(validate(&request));
+        for provider in ["openai", "anthropic", "google"] {
+            request.path = format!("/api/model-connections/{provider}/agent");
+            assert!(agent_route(&request.path));
+            request.method = "GET".into();
+            assert!(!validate(&request));
+            request.method = "POST".into();
+        }
+        for route in [
+            "/api/model-connections/custom/agent",
+            "/api/model-connections/openrouter/agent",
+            "/api/model-connections/ollama/agent",
+            "/api/model-connections/google/agent/extra",
+            "/api/model-connections/anthropic/agent?scope=all",
+        ] {
+            request.path = route.into();
+            assert!(!validate(&request));
+            assert!(!agent_route(&request.path));
+        }
         request.path = "/api/model-connections/openrouter/oauth/complete".into();
         assert!(validate(&request));
         request.path = "/api/model-connections/tools/explain".into();

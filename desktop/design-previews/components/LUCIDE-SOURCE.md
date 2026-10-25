@@ -2,7 +2,9 @@
 
 Upstream: https://github.com/lucide-icons/lucide/tree/dab294f313897bacaa968b725b3259fa37c17bd1/icons
 
-Commit: `dab294f313897bacaa968b725b3259fa37c17bd1`. Initial subset retrieved 2026-10-13; expanded from the same commit on 2026-10-17. Geometry copied from upstream SVG files without modification; rendering uses 1.75 px stroke. Exact upstream ISC + Feather MIT notices retained in `LUCIDE-LICENSE`. Only the 48 listed entries in `lucide-icons.js` are included; no runtime CDN or package dependency.
+Commit: `dab294f313897bacaa968b725b3259fa37c17bd1`. Initial subset retrieved 2026-10-13; expanded from the same commit on 2026-10-17 and 2026-10-25. Geometry copied from upstream SVG files without modification; rendering uses 1.75 px stroke. Exact upstream ISC + Feather MIT notices retained in `LUCIDE-LICENSE`. Only the 50 listed entries in `lucide-icons.js` are included; no runtime CDN or package dependency.
+
+The settings workspace adds `bell` and `plug` from `icons/bell.svg` and `icons/plug.svg` at that same pinned commit for notification and connection navigation. These are upstream geometry, not custom symbols.
 
 The 16 additional upstream files are `activity`, `arrow-left`, `ban`, `book-open`, `circle-check`, `circle-question-mark`, `circle-x`, `external-link`, `house`, `image`, `info`, `message-square`, `shield`, `trash`, `triangle-alert`, and `wallet` (each under `icons/<name>.svg` at the pinned commit). The pinned tree uses `circle-question-mark` and `trash`, rather than the older aliases `circle-help` and `trash-2`.
 

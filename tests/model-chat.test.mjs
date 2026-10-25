@@ -50,7 +50,9 @@ test('preview rejects agent capability before model inference even with a forged
   await app.post('openai/connect', { apiKey: 'secret' });
   const value = { ...body, agent: { projectId: 'p1', sessionId: 's1', allowRead: true, shareResults: false } };
   assert.equal((await app.post('openai/agent', value, { 'x-shipmate-request-id': 'forged' })).status, 409);
-  assert.equal((await app.post('anthropic/agent', value)).status, 400);
+  assert.equal((await app.post('anthropic/agent', value)).status, 409);
+  assert.equal((await app.post('google/agent', { ...value, model: 'models/test-model' })).status, 409);
+  assert.equal((await app.post('custom/agent', value)).status, 400);
   assert.equal((await app.post('openai/agent', { ...value, agent: { ...value.agent, allowRead: false } })).status, 400);
   assert.equal(calls, 1);
 });

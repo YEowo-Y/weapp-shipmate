@@ -88,6 +88,10 @@ pub struct ProjectInput {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Run {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_state: Option<String>,
     pub id: String,
     pub project_id: Option<String>,
     pub kind: String,
@@ -111,6 +115,8 @@ pub struct Run {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Artifact {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<String>,
     pub id: String,
     pub run_id: String,
     pub project_id: Option<String>,
@@ -399,6 +405,21 @@ impl ProjectStore {
             context_artifact(connection, project_id, artifact_id)
         })
     }
+    pub(crate) fn repair_source(
+        &self,
+        app: &tauri::AppHandle,
+        project_id: &str,
+        artifact_id: &str,
+    ) -> Result<(Project, Artifact, Run), String> {
+        self.access(app, |connection| {
+            let project = project(connection, project_id)?;
+            let artifact = context_artifact(connection, project_id, artifact_id)?;
+            let data: String = connection.query_row("SELECT data FROM runs WHERE id=?", [&artifact.run_id], |row| row.get(0)).map_err(db_error)?;
+            let run: Run = decode(data)?;
+            crate::project_repair::trusted_source(&project, &artifact, &run, &versions(app)?)?;
+            Ok((project, artifact, run))
+        })
+    }
     pub(crate) fn access<T>(
         &self,
         app: &tauri::AppHandle,
@@ -477,7 +498,7 @@ fn save(connection: &mut Connection, input: ProjectInput) -> Result<Project, Str
             .query_row("SELECT count(*) FROM projects", [], |r| r.get(0))
             .map_err(db_error)?;
         if count >= 200 {
-            return Err("项目数量已达 200 个，请先导出整理。".into());
+            return Err("项目数量已达 200 个，请在项目管理中归档不再使用的项目后重试。".into());
         }
         (1, timestamp, ProjectFacts::default(), 0)
     };
@@ -553,7 +574,7 @@ pub(crate) fn artifact(connection: &Connection, artifact_id: &str) -> Result<Art
         .ok_or("成果不存在。")?;
     decode(data)
 }
-fn versions(app: &tauri::AppHandle) -> Result<(String, String), String> {
+pub(crate) fn versions(app: &tauri::AppHandle) -> Result<(String, String), String> {
     let root = app
         .path()
         .resource_dir()
@@ -615,7 +636,7 @@ fn begin(
         .query_row("SELECT count(*) FROM runs", [], |r| r.get(0))
         .map_err(db_error)?;
     if count >= 10000 {
-        return Err("运行历史已达 10000 条，请导出存档后联系维护者整理。".into());
+        return Err("运行历史已达 10000 条，请在项目管理中备份并归档旧项目后重试。".into());
     }
     let value = project_id.as_deref().map(|p| project(&tx, p)).transpose()?;
     if kind == "check" && value.is_none() {
@@ -629,6 +650,8 @@ fn begin(
     crate::tool_runner::subject(&subject)?;
     let directory = value.as_ref().map(|p| p.directory.clone());
     let run = Run {
+        provenance: None,
+        source_state: None,
         agent_request_id: None,
         session_id: None,
         tool_call_id: None,
@@ -683,6 +706,7 @@ fn finish_payload(
         Ok(markdown) => {
             run.state = "succeeded".into();
             let value = Artifact {
+                provenance: None,
                 id: run.id.clone(),
                 run_id: run.id.clone(),
                 project_id: run.project_id.clone(),
@@ -713,7 +737,7 @@ fn finish_payload(
                 )
                 .map_err(db_error)?;
             if bytes + data.len() as i64 > 64 * 1024 * 1024 {
-                return Err("历史成果已达 64 MiB 保存上限，未覆盖旧成果，请导出存档。".into());
+                return Err("历史成果已达 64 MiB 保存上限，未覆盖旧成果；请在项目管理中备份并归档旧项目后重试。".into());
             }
             tx.execute(
                 "INSERT INTO artifacts(id,run_id,project_id,data) VALUES(?,?,?,?)",
@@ -797,24 +821,27 @@ fn select(connection: &Connection, project_id: Option<String>) -> Result<(), Str
 }
 fn export(connection: &mut Connection, project_id: &str) -> Result<String, String> {
     let tx = connection.transaction().map_err(db_error)?;
-    let value = project(&tx, project_id)?;
+    export_snapshot(&tx, project_id)
+}
+fn export_snapshot(connection: &Connection, project_id: &str) -> Result<String, String> {
+    let value = project(connection, project_id)?;
     let runs: Vec<Run> = rows(
-        &tx,
+        connection,
         "SELECT data FROM runs WHERE project_id=? ORDER BY rowid",
         Some(project_id),
     )?;
     let artifacts: Vec<Artifact> = rows(
-        &tx,
+        connection,
         "SELECT data FROM artifacts WHERE project_id=? ORDER BY rowid",
         Some(project_id),
     )?;
     let confirmations: Vec<serde_json::Value> = rows(
-        &tx,
+        connection,
         "SELECT data FROM stage_confirmations WHERE project_id=? ORDER BY id",
         Some(project_id),
     )?;
-    let memory = crate::project_memory::export_document(&tx, project_id)?;
-    let maintenance = crate::project_maintenance::read_settings(&tx, project_id)?;
+    let memory = crate::project_memory::export_document(connection, project_id)?;
+    let maintenance = crate::project_maintenance::read_settings(connection, project_id)?;
     encode(
         &serde_json::json!({ "version": 2, "project": value, "runs": runs, "artifacts": artifacts, "confirmations": confirmations, "memory": memory, "maintenance": maintenance }),
     )
@@ -1098,6 +1125,7 @@ async fn run_internal_guarded(
 }
 
 include!("project_workflow.rs");
+include!("project_backup.rs");
 
 #[cfg(test)]
 mod tests {

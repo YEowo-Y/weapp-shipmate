@@ -4,6 +4,7 @@
 schema_version: 1
 rules:
   - id: outbound.no-recommend-others
+    action_categories: ["code", "manual_check"]
     title: "不得展示/推荐其他小程序或公众号"
     kind: navigation
     stage: review
@@ -21,6 +22,7 @@ rules:
     manual_required: true
 
   - id: outbound.no-induced-app-download
+    action_categories: ["code", "manual_check"]
     title: "不得诱导跳转/下载 App"
     kind: navigation
     stage: review

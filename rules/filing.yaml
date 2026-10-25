@@ -3,6 +3,7 @@
 schema_version: 1
 rules:
   - id: filing.required-before-release
+    action_categories: ["console", "manual_check"]
     title: "上线前需完成小程序备案"
     kind: navigation
     stage: filing
@@ -19,6 +20,7 @@ rules:
     manual_required: true
 
   - id: filing.keep-updated
+    action_categories: ["console", "manual_check"]
     title: "备案信息变更须及时更新 / 主体异常须注销重备"
     kind: navigation
     stage: filing
@@ -36,6 +38,7 @@ rules:
     manual_required: true
 
   - id: filing.individual-id-materials
+    action_categories: ["materials", "manual_check"]
     title: "个人备案需有效身份证件（清晰、有效期 > 1 月）"
     kind: navigation
     stage: filing
@@ -51,6 +54,7 @@ rules:
     manual_required: true
 
   - id: filing.face-verification
+    action_categories: ["manual_check"]
     title: "备案负责人人脸核身环境 / 着装要求"
     kind: navigation
     stage: filing

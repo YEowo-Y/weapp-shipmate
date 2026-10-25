@@ -6,6 +6,7 @@
 schema_version: 1
 rules:
   - id: category.medical-hint
+    action_categories: ["manual_check"]
     title: "医疗相关功能类目资质预警"
     kind: navigation
     stage: category
@@ -23,6 +24,7 @@ rules:
     manual_required: true
 
   - id: category.payment-hint
+    action_categories: ["manual_check"]
     title: "交易/电商功能类目与资质预警"
     kind: navigation
     stage: category
@@ -40,6 +42,7 @@ rules:
     manual_required: true
 
   - id: category.personal-subject-scope
+    action_categories: ["manual_check"]
     title: "个人主体只开放有限服务类目（白名单外不开放）"
     kind: navigation
     stage: category
@@ -57,6 +60,7 @@ rules:
     manual_required: true
 
   - id: category.news-hint
+    action_categories: ["manual_check"]
     title: "新闻 / 资讯类目资质预警"
     kind: navigation
     stage: category
@@ -74,6 +78,7 @@ rules:
     manual_required: true
 
   - id: category.finance-hint
+    action_categories: ["manual_check"]
     title: "金融类目资质预警"
     kind: navigation
     stage: category
@@ -91,6 +96,7 @@ rules:
     manual_required: true
 
   - id: category.live-hint
+    action_categories: ["manual_check"]
     title: "直播类目资质预警"
     kind: navigation
     stage: category
@@ -108,6 +114,7 @@ rules:
     manual_required: true
 
   - id: category.law-hint
+    action_categories: ["manual_check"]
     title: "法律 / 律师类目资质预警"
     kind: navigation
     stage: category
@@ -125,6 +132,7 @@ rules:
     manual_required: true
 
   - id: category.education-hint
+    action_categories: ["manual_check"]
     title: "教育类目：信息展示个人可，课程销售 / 培训需企业资质"
     kind: navigation
     stage: category

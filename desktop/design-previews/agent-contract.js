@@ -2,6 +2,7 @@
 // Fixed project-tool data, shared by the native broker, renderer and session store.
 // These validators never grant permissions or accept paths/identities from the model.
 export const AGENT_TOOL_NAME = 'project_read';
+export const AGENT_PROVIDERS = Object.freeze(['openai', 'anthropic', 'google']);
 export const AGENT_KINDS = Object.freeze(['check', 'guide', 'explain']);
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const exact = (value, keys) => record(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));

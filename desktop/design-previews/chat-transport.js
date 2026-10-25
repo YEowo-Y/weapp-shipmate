@@ -1,6 +1,6 @@
 import { createConnectionClient } from './model-connection-client.js';
 import { readUIMessageStream } from './ui-message-stream.js';
-import { AGENT_TOOL_NAME, validateAgentInput, validateAgentResult } from './agent-contract.js';
+import { AGENT_PROVIDERS, AGENT_TOOL_NAME, validateAgentInput, validateAgentResult } from './agent-contract.js';
 
 export const SUPPORTED_CHAT_PROVIDERS = Object.freeze({ openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', openrouter: 'OpenRouter', ollama: 'Ollama', custom: '自定义兼容服务' });
 class ChatTransportError extends Error {}
@@ -121,7 +121,7 @@ export async function streamChat({ providerId, model, messages, signal, agent, o
   checkAbort(signal);
   if (!Object.hasOwn(SUPPORTED_CHAT_PROVIDERS, providerId)) fail('此服务商尚不支持文本对话。');
   if (typeof model !== 'string' || !model || !Array.isArray(messages) || !messages.length) fail('对话请求格式不正确。');
-  if (agent && (providerId !== 'openai' || agent.allowRead !== true || typeof agent.shareResults !== 'boolean' || !['projectId', 'sessionId'].every(key => typeof agent[key] === 'string' && agent[key].length > 0 && agent[key].length <= 256) || Object.keys(agent).some(key => !['projectId', 'sessionId', 'allowRead', 'shareResults'].includes(key)))) fail('项目工具授权格式无效。');
+  if (agent && (!AGENT_PROVIDERS.includes(providerId) || agent.allowRead !== true || typeof agent.shareResults !== 'boolean' || !['projectId', 'sessionId'].every(key => typeof agent[key] === 'string' && agent[key].length > 0 && agent[key].length <= 256) || Object.keys(agent).some(key => !['projectId', 'sessionId', 'allowRead', 'shareResults'].includes(key)))) fail('项目工具授权格式无效。');
   const controller = new AbortController();
   let timer, interrupt;
   const interrupted = new Promise((_resolve, reject) => { interrupt = reject; });

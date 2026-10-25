@@ -35,6 +35,7 @@ export function checkRequiredPrivateInfos(scan = {}) {
   if (!missing.length) return null;
   return {
     ruleId: "consistency.requiredPrivateInfos",
+    action_categories: ["code", "manual_check"],
     title: "位置接口未在 app.json 声明 requiredPrivateInfos",
     stage: "privacy",
     severity: "blocker",
@@ -67,6 +68,7 @@ export function checkBackendApiInFrontend(scan = {}) {
   if (!hit.length) return null;
   return {
     ruleId: "security.backend-api-in-frontend",
+    action_categories: ["code", "manual_check"],
     title: "前端直连微信服务端 API（AppSecret 泄露风险）",
     stage: "domain",
     severity: "blocker",
@@ -91,6 +93,7 @@ export function checkHardcodedSecrets(scan = {}) {
   const list = hints.map((h) => `${h.file}（${h.key}）`).join("、");
   return {
     ruleId: "security.hardcoded-secret",
+    action_categories: ["code", "manual_check"],
     title: "疑似硬编码密钥（AppSecret/商户密钥）",
     stage: "review",
     severity: "blocker",
@@ -114,6 +117,7 @@ export function checkInsecureRequest(scan = {}) {
   if (!hosts.length) return null;
   return {
     ruleId: "security.insecure-request",
+    action_categories: ["code", "manual_check"],
     title: "明文 http/ws 请求（须改为 https/wss）",
     stage: "domain",
     severity: "warning",
@@ -147,6 +151,7 @@ export function checkIpOrLocalhost(scan = {}) {
   if (!hits.length) return null;
   return {
     ruleId: "domain.ip-or-localhost",
+    action_categories: ["code", "console", "manual_check"],
     title: "请求使用 IP/localhost（不可作合法服务器域名）",
     stage: "domain",
     severity: "warning",

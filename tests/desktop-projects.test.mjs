@@ -5,12 +5,16 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
 import { createPreviewDocument } from './helpers/preview-dom.mjs';
+import { createSessionPersistence } from '../desktop/design-previews/session-persistence.js';
+import { normalizeSessionSnapshot } from '../desktop/design-previews/session-store.js';
+import { createIcon } from '../desktop/design-previews/components/icons.js';
+import { sessionMatch } from '../desktop/design-previews/session-search.js';
 const require = createRequire(new URL('../desktop/package.json', import.meta.url));
 const ts = require('typescript');
 const source = readFileSync(new URL('../desktop/src/projects.ts', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '');
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } }).outputText;
 const project = (id, extra = {}) => ({ id, name: id, directory: `C:/projects/${id}`, subject: 'personal', revision: 1, directoryAvailable: true, ...extra });
-function harness({ projects = [project('a'), project('b')], activeProjectId = 'a', runs = [], artifacts = [], invoke: custom, beforeSelect = async () => true, associateSession = async () => true } = {}) {
+function harness({ projects = [project('a'), project('b')], activeProjectId = 'a', runs = [], artifacts = [], invoke: custom, beforeSelect = async () => true, associateSession = async () => true, onRegistry = () => {} } = {}) {
   const doc = createPreviewDocument();
   const createElement = doc.createElement.bind(doc);
   doc.createElement = tag => Object.assign(createElement(tag), { events: {}, addEventListener(type, fn) { (this.events[type] ??= []).push(fn); } });
@@ -33,10 +37,11 @@ function harness({ projects = [project('a'), project('b')], activeProjectId = 'a
     if (cmd === 'project_select') { current = args.projectId; return null; }
     if (cmd === 'project_artifact') return { ...artifacts.find(a => a.id === args.artifactId), markdown: 'saved source' };
   };
-  const context = { document: doc, invoke, open: async () => 'C:/chosen', crypto: { randomUUID: () => 'new-project' }, setTimeout, clearTimeout, URL, Blob };
+  let backupOptions;
+  const context = { document: doc, invoke, mountProjectBackup: options => { backupOptions = options; return { sync() {}, async refreshStorage() {}, destroy() {} }; }, open: async () => 'C:/chosen', crypto: { randomUUID: () => 'new-project' }, setTimeout, clearTimeout, URL, Blob };
   vm.createContext(context); vm.runInContext(`${script}\nglobalThis.mount = mountProjects;`, context);
-  const controller = context.mount({ beforeSelect, onRegistry: ids => registry.push(ids), onChange: p => changes.push(p), onSnapshot: value => snapshots.push(value), onArtifact: (a, reveal) => { shown.push(a); reveals.push({ reveal, dialogOpen: node('desktop-projects').open }); if (reveal) node('report').focus(); }, isBusy: () => false, onPending: v => pending.push(v), associateSession });
-  return { controller, calls, changes, shown, reveals, registry, pending, snapshots, node, doc, async fire(id, type = 'click') { for (const fn of node(id).events[type] ?? []) fn({ preventDefault() {} }); for (let i = 0; i < 20; i++) await Promise.resolve(); } };
+  const controller = context.mount({ beforeSelect, onRegistry: ids => { registry.push(ids); return onRegistry(ids); }, onChange: p => changes.push(p), onSnapshot: value => snapshots.push(value), onArtifact: (a, reveal) => { shown.push(a); reveals.push({ reveal, dialogOpen: node('desktop-projects').open }); if (reveal) node('report').focus(); }, isBusy: () => false, onPending: v => pending.push(v), associateSession });
+  return { controller, calls, changes, shown, reveals, registry, pending, snapshots, node, doc, backupOptions, async fire(id, type = 'click') { for (const fn of node(id).events[type] ?? []) fn({ preventDefault() {} }); for (let i = 0; i < 20; i++) await Promise.resolve(); } };
 }
 
 test('project snapshot notifies on rules-only refresh; failure is visible without discarding saved content', async () => {
@@ -209,4 +214,88 @@ test('equal-time reports keep native insertion order and distinct readable compa
   assert.match(choices[0].textContent, /^报告 1/);
   assert.match(choices[1].textContent, /^报告 2/);
   assert.notEqual(choices[0].textContent, choices[1].textContent);
+});
+
+test('restored histories are visible as external records but excluded from local comparisons and automatic latest report', async () => {
+  const app = harness({ runs: [{ id: 'import-run', projectId: 'a', kind: 'check', state: 'interrupted', sourceState: 'succeeded', provenance: 'imported', startedAt: 100 }], artifacts: [{ id: 'import-artifact', runId: 'import-run', projectId: 'a', kind: 'check', provenance: 'imported', createdAt: 100, rulesVersion: '{}' }] });
+  await app.controller.ready;
+  assert.match(app.node('project-history').textContent, /导入历史.*未在本机核验/s);
+  assert.match(app.node('project-history').textContent, /备份记录状态：已完成/);
+  assert.equal(app.shown.length, 0); assert.equal(app.node('project-compare').disabled, true);
+  assert.equal(app.node('project-compare-before').children.length, 0);
+  assert.equal(await app.controller.openArtifact('import-artifact'), true, 'explicit history reading remains available');
+});
+
+test('archive saves outgoing session through existing selection before native removal', async () => {
+  const events = [];
+  const app = harness({ beforeSelect: async id => { events.push(`session:${id}`); return true; }, invoke: (cmd, args) => { if (cmd === 'project_archive_commit') { events.push(`archive:${args.projectId}:${args.token}`); return { backupPath: 'C:/backup.json' }; } } });
+  await app.controller.ready; events.length = 0;
+  const result = await app.backupOptions.archive('a', 'bound-token');
+  assert.deepEqual(events, ['session:null', 'archive:a:bound-token']); assert.equal(result.backupPath, 'C:/backup.json');
+  assert.equal(app.controller.getActiveId(), null);
+});
+
+test('archive aborts if outgoing draft cannot save and restores selection after native refusal', async () => {
+  let allow = false;
+  const app = harness({ beforeSelect: async id => id !== null || allow, invoke: cmd => { if (cmd === 'project_archive_commit') throw Error('snapshot changed'); } });
+  await app.controller.ready;
+  await assert.rejects(app.backupOptions.archive('a', 'token'), /尚未保存/);
+  assert.equal(app.calls.some(([cmd]) => cmd === 'project_archive_commit'), false);
+  allow = true; await assert.rejects(app.backupOptions.archive('a', 'token'), /snapshot changed/);
+  assert.equal(app.controller.getActiveId(), 'a');
+});
+
+async function archivedSessionHarness(loaded = null) {
+  const { JSDOM } = require('jsdom'); const dom = new JSDOM('<body><textarea></textarea><main></main></body>');
+  const document = dom.window.document, input = document.querySelector('textarea'), host = document.querySelector('main');
+  let snapshot = loaded, revision = 0, failReconcile = false;
+  const store = { async load() { return { snapshot, revision }; }, async save(value, expectedRevision) {
+    const hasReconciled = value.sessions.some(session => session.draft === '归档前未发送草稿' && session.projectId === null);
+    if (expectedRevision !== revision || failReconcile && hasReconciled) throw Object.assign(Error('other window updated history'), { code: 'conflict' });
+    snapshot = JSON.parse(JSON.stringify(value)); return { revision: ++revision };
+  }, close() {} };
+  const context = vm.createContext({ createSessionStore: () => store, createSessionPersistence, createIcon, sessionMatch,
+    normalizeSessionSnapshot: value => normalizeSessionSnapshot(JSON.parse(JSON.stringify(value))),
+    createActionButton: (doc, label) => Object.assign(doc.createElement('button'), { textContent: label }),
+    mountConversation(options) { let messages = options.initialMessages; return { stop() {}, destroy() {}, getMessages: () => messages, getDraftState: () => ({ draft: input.value }), getViewState: () => null, getModelSelection: () => null,
+      replaceMessages(value) { messages = value; }, setModelSelection() {}, setDraft(value) { input.value = value; }, restoreViewState() {} }; },
+  });
+  const workspaceSource = readFileSync(new URL('../desktop/design-previews/session-workspace.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export \{.*\};\r?\n/gm, '').replace(/export /g, '');
+  vm.runInContext(workspaceSource, context);
+  const element = () => document.createElement('div');
+  const workspace = await context.mountSessionWorkspace({ host, input, sendButton: element(), scroll: element(), list: element(), status: element(), jumpButton: element(), projectScoped: true, layout: 'sidebar' });
+  return { workspace, input, host, get snapshot() { return snapshot; }, failReconcile(value) { failReconcile = value; }, dispose() { workspace.destroy(); dom.window.close(); } };
+}
+
+test('actual archive controller sequence reconciles orphaned history after trusted registry shrinks', async () => {
+  const sessions = await archivedSessionHarness(), projects = [project('p')];
+  const app = harness({ projects, activeProjectId: 'p', onRegistry: async ids => { await Promise.resolve(); sessions.workspace.setKnownProjects(ids); }, beforeSelect: id => sessions.workspace.selectProject(id), invoke: cmd => {
+    if (cmd === 'project_archive_commit') { projects.splice(0); return { backupPath: 'C:/backup.json' }; }
+  } });
+  await app.controller.ready; assert.equal(app.controller.isReady(), true, app.node('project-status').textContent); sessions.input.value = '归档前未发送草稿';
+  const previousSession = sessions.workspace.getCurrentSession().id;
+  await app.backupOptions.archive('p', 'token'); await app.backupOptions.refresh(); await sessions.workspace.flush();
+  const recovered = sessions.snapshot.sessions.find(session => session.id === previousSession);
+  assert.equal(recovered.projectId, null); assert.equal(recovered.draft, '归档前未发送草稿');
+  assert.ok([...sessions.host.querySelectorAll('[data-action="recent-session"]')].some(row => row.dataset.sessionId === previousSession));
+  app.controller.destroy(); sessions.dispose();
+});
+
+test('archive stays committed when session reconciliation conflicts and reloading recovers untouched drafts', async () => {
+  const sessions = await archivedSessionHarness(), projects = [project('p')];
+  let commits = 0;
+  const app = harness({ projects, activeProjectId: 'p', onRegistry: ids => sessions.workspace.setKnownProjects(ids), beforeSelect: id => sessions.workspace.selectProject(id), invoke: cmd => {
+    if (cmd === 'project_archive_commit') { projects.splice(0); commits++; sessions.failReconcile(true); return { backupPath: 'C:/backup.json' }; }
+  } });
+  await app.controller.ready; assert.equal(app.controller.isReady(), true, app.node('project-status').textContent); sessions.input.value = '归档前未发送草稿'; const originalId = sessions.workspace.getCurrentSession().id;
+  await app.backupOptions.archive('p', 'token'); await assert.rejects(app.backupOptions.refresh(), /会话.*保存/);
+  assert.equal(commits, 1); assert.equal(app.controller.isReady(), false);
+  assert.equal(sessions.snapshot.sessions.find(session => session.id === originalId).projectId, 'p');
+  const reopened = await archivedSessionHarness(sessions.snapshot);
+  const retry = harness({ projects: [], activeProjectId: null, onRegistry: ids => reopened.workspace.setKnownProjects(ids), beforeSelect: id => reopened.workspace.selectProject(id) });
+  await retry.controller.ready;
+  assert.equal(retry.controller.isReady(), true);
+  assert.equal(reopened.snapshot.sessions.find(session => session.id === originalId).projectId, null);
+  assert.equal(reopened.snapshot.sessions.find(session => session.id === originalId).draft, '归档前未发送草稿');
+  app.controller.destroy(); retry.controller.destroy(); sessions.dispose(); reopened.dispose();
 });

@@ -4,6 +4,7 @@
 schema_version: 1
 rules:
   - id: content.filter-mechanism
+    action_categories: ["code", "manual_check"]
     title: "UGC 须提供不当内容过滤措施"
     kind: navigation
     stage: review
@@ -21,6 +22,7 @@ rules:
     manual_required: true
 
   - id: content.ugc-consent
+    action_categories: ["code", "manual_check"]
     title: "代用户发布内容前须经授权"
     kind: navigation
     stage: review
@@ -36,6 +38,7 @@ rules:
     manual_required: true
 
   - id: content.no-illegal
+    action_categories: ["manual_check"]
     title: "内容不得违反国家法律法规"
     kind: navigation
     stage: review

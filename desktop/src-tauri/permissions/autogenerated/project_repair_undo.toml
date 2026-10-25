@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-project-repair-undo"
+description = "Enables the project_repair_undo command without any pre-configured scope."
+commands.allow = ["project_repair_undo"]
+
+[[permission]]
+identifier = "deny-project-repair-undo"
+description = "Denies the project_repair_undo command without any pre-configured scope."
+commands.deny = ["project_repair_undo"]

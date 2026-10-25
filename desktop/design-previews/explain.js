@@ -2,6 +2,7 @@ import { queryExplain } from './explain-transport.js';
 import { validateExplainInput, validateExplainResult } from './explain-contract.js';
 import { createIcon } from './components/icons.js';
 import { createExplainArtifact } from './explain-artifact.js';
+import { formatRuleActions } from './guide-artifact.js';
 import { createArtifactDownloader } from './artifact-download.js';
 
 export const REJECTION_SAMPLE = '您的小程序使用了地理位置接口，但未在《用户隐私保护指引》中声明收集"位置信息"的相关条款，请补充后重新提交。';
@@ -21,7 +22,7 @@ function renderResult(root, container, output) {
   for (const item of output.items) {
     if (!groups.has(item.rejectId)) {
       const section = node('section', '', 'rj-group');
-      section.append(node('h3', item.rejectSummary, 'rj-group__title'));
+      section.append(node('h3', `${item.relevance === 'direct' ? '直接相关' : '可能相关'} · ${item.rejectSummary}`, 'rj-group__title'));
       container.append(section); groups.set(item.rejectId, section);
     }
     const article = node('article', '', 'rj-rule');
@@ -30,13 +31,15 @@ function renderResult(root, container, output) {
     const label = { blocker: '需处理', warning: '需核对', info: '参考' }[item.severity];
     head.append(node('h4', item.title), node('span', label, 'rj-rule__level'));
     article.append(head, node('p', item.why || '请结合官方要求核对这条规则。'));
+    article.append(node('p', `操作类型：${formatRuleActions(item)}`, 'rj-rule__meta'));
+    if (item.matchEvidence) article.append(node('p', `匹配依据：${[...item.matchEvidence.aliases, ...item.matchEvidence.codes, ...item.matchEvidence.partialAliases].join('、')}。相关性不表示已确认违规。`, 'rj-rule__note'));
     if (item.requires.length) {
       const list = node('ol', '', 'rj-rule__steps');
       item.requires.forEach(requirement => list.append(node('li', requirement)));
       article.append(list);
     }
     for (const text of [item.warn, item.note]) if (text) article.append(node('p', text, 'rj-rule__note'));
-    if (item.manual_required) article.append(node('p', '相关配置与官方后台操作需你本人确认。', 'rj-rule__note'));
+    if (item.manual_required) article.append(node('p', '按操作类型处理后核对实际结果。', 'rj-rule__note'));
     const evidence = node('details', '', 'rj-evidence');
     const summary = node('summary');
     summary.append(createIcon(root, 'file-text'), node('span', '官方原文与规则依据'));
@@ -54,6 +57,8 @@ function renderResult(root, container, output) {
   if (triage) {
     const filters = [
       { key: 'all', label: '全部', accepts: () => true },
+      { key: 'direct', label: '直接相关', accepts: item => item.relevance === 'direct' },
+      { key: 'possible', label: '可能相关', accepts: item => item.relevance !== 'direct' },
       { key: 'action', label: '需处理', accepts: item => item.severity === 'blocker' },
       { key: 'manual', label: '需本人确认', accepts: item => item.manual_required },
       { key: 'source', label: '缺少官方来源', accepts: item => !item.official_url },

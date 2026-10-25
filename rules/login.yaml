@@ -5,6 +5,7 @@
 schema_version: 1
 rules:
   - id: login.after-experience
+    action_categories: ["code", "manual_check"]
     title: "体验范围开放的小程序不得未体验功能即要求授权登录"
     kind: navigation
     stage: review
@@ -21,6 +22,7 @@ rules:
     manual_required: true
 
   - id: login.cancellable
+    action_categories: ["code", "manual_check"]
     title: "登录须提供可取消/拒绝且有效"
     kind: navigation
     stage: review
@@ -36,6 +38,7 @@ rules:
     manual_required: true
 
   - id: login.no-password-input
+    action_categories: ["code", "manual_check"]
     title: "不得请求/诱导输入微信账号密码"
     kind: navigation
     stage: review
@@ -51,6 +54,7 @@ rules:
     manual_required: true
 
   - id: login.no-unauthorized-userdata
+    action_categories: ["code", "manual_check"]
     title: "不得未经授权显示头像昵称等"
     kind: navigation
     stage: review
@@ -66,6 +70,7 @@ rules:
     manual_required: true
 
   - id: login.clear-data-on-refuse
+    action_categories: ["code", "manual_check"]
     title: "拒绝授权后须清除并停用其数据"
     kind: navigation
     stage: review

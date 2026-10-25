@@ -2,6 +2,8 @@
 
 本目录提供本地预检、上线清单、拒因查询和可选的模型聊天。Tauri 窗口复用现有组件与规则内核，工具和模型服务使用随包运行时；用户运行应用不需要安装 Node 或保留源码目录。
 
+**组件与排版规范 v1（2026-10-24）**：参考 Codex、Claude（经 [open-claude-ui](https://github.com/Caho1/open-claude-ui) MIT 令牌）与 OpenClaw，新增 `src/design-system.css`（字体、字号、间距、圆角、控件高度、墨色三级与语义色、阴影、动效令牌）和最后加载的 `src/product-polish.css`，统一侧栏、头部、首页卡片、消息 Markdown 排版、Composer、弹窗、按钮与表单。业务 DOM、ID 与交互不变，零新增依赖。1300 项测试、构建及 19 项 Windows 原生呈现检查通过，已恢复默认构建。规范见 [DESIGN-SYSTEM.md](design-previews/DESIGN-SYSTEM.md)。
+
 **统一设置入口（2026-10-23）**：侧栏底部常驻“设置”，内部切换外观、通知、连接与数据；首页和更多菜单移除重复设置入口。工作台与上线进度独立呈现，模型选择器的管理和缺模型引导进入同一设置中心，关闭恢复原始触发点。首页任务卡、菜单图标与排版复用现有组件，零新增依赖。1300 项 Node 测试、lint、TypeScript/Vite/Tauri 构建及 19 项 Windows 原生检查通过，已恢复默认构建。真实参考图、文件和边界见[本轮交付记录](design-previews/research/settings-unification-20261023.md)。
 
 **功能页面呈现（2026-10-23）**：首页按当前项目、开始任务和继续处理分层；上线进度增加实际阶段统计、下一步定位、临时草稿保留与冲突恢复；偏好设置增加分组导航、主题预览和常驻保存反馈。复用 Web Awesome、Lucide 与原生组件，零新增依赖或环境变量。1293 项测试、lint、构建和 17 项 Windows 原生检查通过，含浅深色 320/390/1000/1440px 与 200% 文字压力测试。启动仍为 `npm --prefix desktop run tauri -- dev`；未提交的进度草稿仅在本次应用运行期间保留。设计依据见[呈现设计](design-previews/research/feature-presentation-design-20261023.md)，文件、原生截图和验收边界见[交付记录](design-previews/research/feature-presentation-delivery-20261023.md)。
@@ -98,7 +100,7 @@ node desktop/design-previews/_serve.mjs
 随后一轮收紧设置内容宽度，统一历史搜索、重命名与凭据弹窗的层级和图标，补齐清空搜索、键盘选择、行内错误与模型目录更新后的焦点恢复。本轮 798 项测试、18 项原生回归、浏览器行为与浅深色/窄屏截图验收见 [设置与历史细节验收](design-previews/research/settings-history-detail-review.md)；原生回归使用明确标记的上游协议 fixture。
 
 - 外壳：**Tauri 2**（Rust 后端 + WebView 前端），见 `docs/07` 的选型论证（包体/内存/安全模型）。
-- 前端：Vanilla TS + Vite（薄外壳保持最小依赖）。
+- 前端：TypeScript + Vite；设置工作区已使用 React 19、shadcn/ui（Base UI）及 Tailwind 4，其他模块保持现有实现。设置组件源码在 `src/components/ui`，样式限定范围且不加载全局 Preflight。迁移范围、许可及验收见 [设置 React 迁移记录](design-previews/research/settings-react-migration-20261025.md)。
 - 模型调用：Tauri Channel → 受控 Node 子进程 → 既有连接 broker/提供方适配；固定厂商或受限自定义目的地、CSRF、私有系统凭据通道、贯通取消与退出清理。
 - 大脑调用：Rust `std::process::Command` 使用应用资源目录中的 `runtime/node.exe` 和固定脚本；不回退到 PATH Node 或编译期源码路径。
 - 文件夹选择：`@tauri-apps/plugin-dialog`。
@@ -124,7 +126,7 @@ npm run tauri dev      # 编译 Rust 后端并启动桌面窗口（首次编译�
 
 ## Windows 原生自动化
 
-正式桌面的主题层级、输入框与消息气泡使用固定版本 Open Claude UI 的可控 CSS 子集，完整 MIT 许可随样式分发；不新增 React 或重复的组件运行时。采用范围和不采用的演示逻辑见 [源码复核与移植记录](design-previews/research/open-claude-source-adoption-20261023.md)。默认原生验收包含明暗主题、320/390/1000/1440px 聊天布局、真实键盘长草稿、焦点和窄窗发送。
+正式桌面的主题层级、输入框与消息气泡使用固定版本 Open Claude UI 的可控 CSS 子集，完整 MIT 许可随样式分发；该聊天样式移植没有引入其整套运行时。后续设置页单独引入 React 与 Base UI。采用范围和不采用的演示逻辑见 [源码复核与移植记录](design-previews/research/open-claude-source-adoption-20261023.md)。默认原生验收包含明暗主题、320/390/1000/1440px 聊天布局、真实键盘长草稿、焦点和窄窗发送。
 
 从仓库根目录运行（驱动仅安装到忽略的 `.omx/artifacts/desktop-model-native/tools`）：
 
