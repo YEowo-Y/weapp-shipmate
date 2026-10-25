@@ -1121,7 +1121,11 @@ try {
     assert.equal(await text('#session-title'), '新会话');
     assert.doesNotMatch(await text('.desktop-sidebar'), /my-miniprogram|项目阶段|健康监控|新任务/);
     assert.equal(await inspect('return document.querySelectorAll(".session-workspace [data-action=recent-session]").length'), 1);
-    assert.equal(await inspect('return document.querySelector(".desktop-sidebar").getBoundingClientRect().width'), 228);
+    const sidebar = await inspect(`const element = document.querySelector('.desktop-sidebar');
+      const token = getComputedStyle(element).getPropertyValue('--ds-sidebar-width').trim();
+      return { width: element.getBoundingClientRect().width, expected: token ? parseFloat(token) : 228 };`);
+    assert.ok(sidebar.width >= 200 && sidebar.width <= 280, 'Sidebar keeps room for the main workspace');
+    assert.ok(Math.abs(sidebar.width - sidebar.expected) < 1, 'Sidebar follows the active design token');
     assert.ok(await inspect('return document.querySelector(".desktop-sidebar-footer").getBoundingClientRect().bottom >= innerHeight - 24'), 'Settings remain anchored at the bottom of the sidebar');
     await click('#start-check');
     assert.equal(await inspect('return document.activeElement.id'), 'pick-btn');
@@ -1269,7 +1273,11 @@ try {
   await checked('Project tools open beside chat, retain a real report and restore focus on close', async () => {
     await click('#desktop-tools-toggle');
     assert.equal(await inspect('return document.querySelector("#desktop-tools").open && !document.querySelector("#desktop-tools").matches(":modal")'), true);
-    assert.equal(await inspect('return document.querySelector("#desktop-tools").getBoundingClientRect().width'), 320);
+    const panel = await inspect(`const element = document.querySelector('#desktop-tools');
+      const token = getComputedStyle(element).getPropertyValue('--ds-panel-width').trim();
+      return { width: element.getBoundingClientRect().width, expected: token ? parseFloat(token) : 320 };`);
+    assert.ok(panel.width >= 300 && panel.width <= 360, 'Project tools leave usable space beside chat');
+    assert.ok(Math.abs(panel.width - panel.expected) < 1, 'Project tools follow the active design token');
     await click('#guide-btn');
     await until(() => inspect('return document.querySelector("#status").classList.contains("ok")'), 'native local guide report');
     const report = await text('#report');

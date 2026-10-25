@@ -1,5 +1,6 @@
 # 依赖
 node_modules/
+desktop/security/*/target/
 
 # 打包产物（.mcpb 暂存与产出，由 scripts/build-mcpb.mjs 生成）
 build/

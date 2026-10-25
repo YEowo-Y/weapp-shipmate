@@ -9,6 +9,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 # E4：最小权限——CI 只读。
 permissions:

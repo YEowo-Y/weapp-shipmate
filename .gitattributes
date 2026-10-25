@@ -15,3 +15,7 @@ LICENSE    text eol=lf
 *.jpg      binary
 *.p12      binary
 *.pem      binary
+
+# Preserve upstream bytes, including the published license's trailing blank line.
+# Source drift is checked by scripts/verify-glib-backport.mjs.
+desktop/src-tauri/vendor/glib/** -text -whitespace linguist-vendored

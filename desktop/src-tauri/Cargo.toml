@@ -31,3 +31,8 @@ keyring-core = "=1.0.1"
 # Includes upstream cross-process Credential Manager serialization (not in registry 1.1.0).
 windows-native-keyring-store = { git = "https://github.com/open-source-cooperative/windows-native-keyring-store", rev = "493ecaa5442c3cbd445253ad78b58f54382a9049", default-features = false }
 
+# RUSTSEC-2024-0429: exact upstream fix, preserving the GTK 0.18 API.
+# Provenance and removal criteria: ../security/glib-backport/README.md
+[patch.crates-io]
+glib = { path = "vendor/glib" }
+
