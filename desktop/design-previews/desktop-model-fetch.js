@@ -1,7 +1,7 @@
 /* global Headers, Response, ReadableStream, TextEncoder, DOMException */
 import { AGENT_PROVIDERS } from './agent-contract.js';
 const BASE = '/api/model-connections';
-const ROUTE = /^\/api\/model-connections\/(openai|anthropic|google|openrouter|ollama|custom)\/(connect|refresh|disconnect|chat|verify)$/;
+const ROUTE = /^\/api\/model-connections\/(openai|anthropic|google|deepseek|glm|kimi|openrouter|ollama|custom)\/(connect|refresh|disconnect|chat|verify)$/;
 const OAUTH = /^\/api\/model-connections\/openrouter\/oauth\/(start|cancel|complete)$/;
 const unavailable = () => new Error('桌面模型服务暂时不可用。请重启应用或修复安装，然后重试连接。');
 const aborted = () => new DOMException('请求已取消。', 'AbortError');

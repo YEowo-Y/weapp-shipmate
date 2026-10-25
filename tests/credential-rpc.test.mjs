@@ -2,6 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCredentialRpc } from '../desktop/server/credential-rpc.mjs';
 
+test('domestic providers retain separate private credential identities', async () => {
+  const frames = [];
+  const rpc = createCredentialRpc(frame => frames.push(frame));
+  for (const provider of ['deepseek', 'glm', 'kimi']) {
+    const saving = rpc.store.save(provider, { key: `fake-${provider}`, method: 'api-key' });
+    const frame = frames.at(-1);
+    assert.equal(frame.providerId, provider);
+    assert.equal(frame.operation, 'save');
+    rpc.receive({ type: 'credential-result', id: frame.id, ok: true });
+    await saving;
+  }
+  rpc.close();
+});
+
 test('private credential replies are consumed once and never exposed as transport events', async () => {
   const frames = [];
   const rpc = createCredentialRpc(frame => frames.push(frame));

@@ -90,6 +90,9 @@ fn validate(request: &ModelRequest) -> bool {
                     "openai",
                     "anthropic",
                     "google",
+                    "deepseek",
+                    "glm",
+                    "kimi",
                     "openrouter",
                     "ollama",
                     "custom",
@@ -375,6 +378,16 @@ mod tests {
         assert!(validate(&request));
         request.path = "/api/model-connections/custom/verify".into();
         assert!(validate(&request));
+        for provider in ["deepseek", "glm", "kimi"] {
+            for action in ["connect", "refresh", "disconnect", "chat", "verify"] {
+                request.path = format!("/api/model-connections/{provider}/{action}");
+                assert!(validate(&request));
+            }
+            for action in ["agent", "oauth/start"] {
+                request.path = format!("/api/model-connections/{provider}/{action}");
+                assert!(!validate(&request));
+            }
+        }
         request.path = "/api/model-connections/openai/agent".into();
         assert!(validate(&request));
         request.path = "/api/model-connections/anthropic/agent".into();

@@ -1,3 +1,4 @@
+import { isUsableModelConnection } from '../desktop/design-previews/model-connection-client.js';
 import { createActionButton } from './helpers/ui-action.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,7 +23,7 @@ function harness(loader = async () => ({ connections: [] })) {
   const selected = []; composer.dispatchEvent = event => selected.push(event.detail.selection);
   const trigger = new Node('button'); trigger.closest = () => composer;
   const dialogs = []; const notices = []; const window = new Node();
-  const context = vm.createContext({ createActionButton, document, window, AbortController, CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
+  const context = vm.createContext({ isUsableModelConnection, createActionButton, document, window, AbortController, CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
     SUPPORTED_CHAT_PROVIDERS, loadChatConnections: loader,
     createProviderIcon: (_document, provider) => { const node = new Node('span'); node.dataset.provider = provider; return node; },
     createIcon: (_document, name) => { const node = new Node('svg'); node.dataset.icon = name; return node; },

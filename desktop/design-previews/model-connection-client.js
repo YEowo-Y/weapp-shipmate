@@ -1,6 +1,12 @@
 const BASE = '/api/model-connections';
 const UNAVAILABLE = '本地连接服务不可用。请重新启动应用或连接服务后重试。';
-const PROVIDERS = new Set(['openai', 'anthropic', 'google', 'openrouter', 'ollama', 'custom']);
+const PROVIDERS = new Set(['openai', 'anthropic', 'google', 'deepseek', 'glm', 'kimi', 'openrouter', 'ollama', 'custom']);
+// A GLM preset is selectable without claiming that its credential or catalog
+// was verified remotely. Other providers still require live discovery.
+export function isUsableModelConnection(connection) {
+  return connection?.status === 'connected' || (connection?.providerId === 'glm'
+    && connection.status === 'configured' && connection.catalogSource === 'preset' && connection.hasCredential === true);
+}
 const TOKEN = /^[A-Za-z0-9_-]{43}$/u;
 function isAuthorization(value) {
   try {
@@ -23,7 +29,8 @@ function isSnapshot(value) {
   return ['memory', 'system'].includes(value?.storage) && typeof value.csrfToken === 'string' && value.csrfToken.length > 0
     && (!value.oauth?.authorizationUrl || value.oauth.status === 'waiting' && isAuthorization(value.oauth))
     && Array.isArray(value.connections) && value.connections.every(connection => PROVIDERS.has(connection.providerId)
-      && ['disconnected', 'connecting', 'connected', 'error'].includes(connection.status)
+      && (['disconnected', 'connecting', 'connected', 'error'].includes(connection.status)
+        || connection.status === 'configured' && isUsableModelConnection(connection))
       && Array.isArray(connection.models) && connection.models.every(model => typeof model.id === 'string' && typeof model.name === 'string'));
 }
 export function createConnectionClient(fetcher = fetch, { timeoutMs = 20000, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {

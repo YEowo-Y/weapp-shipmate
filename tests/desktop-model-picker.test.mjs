@@ -1,3 +1,4 @@
+import { isUsableModelConnection } from '../desktop/design-previews/model-connection-client.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -32,7 +33,7 @@ function harness() {
     remove() { this.removed = true; }
   }
   doc = { body: new Element(), createElement: tag => new Element(tag), activeElement: null };
-  const context = { document: doc, createProviderIcon: () => new Element(), createIcon: () => new Element(), attachFloatingSurface: () => () => { cleanup++; } };
+  const context = { isUsableModelConnection, document: doc, createProviderIcon: () => new Element(), createIcon: () => new Element(), attachFloatingSurface: () => () => { cleanup++; } };
   const actionSource = readFileSync(new URL('../desktop/design-previews/components/ui-kit.js', import.meta.url), 'utf8').match(/^export function createActionButton[^]*?^}/m)[0].replace('export ', '');
   vm.runInNewContext(actionSource, context);
   const source = readFileSync(new URL('../desktop/src/model-picker.ts', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
@@ -45,6 +46,29 @@ function harness() {
   return { picker, options, loader, anchor, doc, nodes, surface: doc.body.children[0], setBusy: value => { busy = value; }, get selected() { return selected; }, get managed() { return managed; }, get cleanup() { return cleanup; } };
 }
 function key(surface, key) { surface.events.keydown({ key, preventDefault() {}, stopPropagation() {} }); }
+
+desktopTest('GLM presets are selectable and only the individually tested model is marked verified', async () => {
+  const app = harness();
+  const connections = app.options.connections();
+  connections.splice(0, connections.length, { providerId: 'glm', status: 'configured', catalogSource: 'preset', hasCredential: true, inference: { status: 'verified', model: 'glm-5.2' }, models: [{ id: 'glm-5.2', name: 'GLM 5.2' }, { id: 'glm-4.7', name: 'GLM 4.7' }] });
+  app.picker.open(); await setImmediate();
+  const list = app.nodes.get('.desktop-picker-list');
+  assert.equal(list.children.length, 2);
+  assert.match(list.children[0].children[1].children[1].textContent, /推理已验证/);
+  assert.match(list.children[1].children[1].children[1].textContent, /预设，尚未验证/);
+  list.children[1].events.click();
+  assert.equal(app.selected.providerId, 'glm');
+  assert.equal(app.selected.model, 'glm-4.7');
+  app.picker.destroy();
+});
+
+desktopTest('empty Kimi quick picker explains the supported-model boundary', async () => {
+  const app = harness();
+  app.options.connections().splice(0, 2, { providerId: 'kimi', status: 'connected', models: [] });
+  app.picker.open(); await setImmediate();
+  assert.match(app.nodes.get('.desktop-picker-status').textContent, /Kimi K2.6.*暂不兼容/);
+  app.picker.destroy();
+});
 
 desktopTest('quick picker searches only connected models, keeps check state and selects via buttons', async () => {
   const app = harness(); app.picker.open(); await setImmediate();

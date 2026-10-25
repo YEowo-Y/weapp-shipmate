@@ -1,11 +1,21 @@
 import { TextDecoder } from 'node:util';
 import { createCustomEndpointFetch, validateCustomEndpoint } from './custom-endpoint.mjs';
 
+// GLM does not document a model-list API. These are suggestions, not an account
+// catalog or proof of authentication; only an explicit inference tests access.
+export const GLM_CHAT_MODELS = Object.freeze(['glm-5.2', 'glm-4.7']);
+// Newer Kimi reasoning-only models require opaque reasoning history, which this
+// text-only transport intentionally does not persist or send back.
+export const KIMI_CHAT_MODELS = Object.freeze(['kimi-k2.6']);
+
 // Built-ins have fixed destinations; custom uses the separate pinned transport.
 export const PROVIDER_CONFIGS = Object.freeze(Object.fromEntries(Object.entries({
   openai: { endpoint: 'https://api.openai.com/v1/models', requiresKey: true },
   anthropic: { endpoint: 'https://api.anthropic.com/v1/models', requiresKey: true },
   google: { endpoint: 'https://generativelanguage.googleapis.com/v1beta/models', requiresKey: true },
+  deepseek: { endpoint: 'https://api.deepseek.com/models', requiresKey: true },
+  glm: { requiresKey: true },
+  kimi: { endpoint: 'https://api.moonshot.cn/v1/models', requiresKey: true },
   openrouter: { endpoint: 'https://openrouter.ai/api/v1/models', requiresKey: true },
   ollama: { endpoint: 'http://127.0.0.1:11434/api/tags', requiresKey: false },
 }).map(([id, config]) => [id, Object.freeze(config)])));
@@ -111,6 +121,10 @@ export async function discoverModels(providerId, apiKey, options = {}) {
   const provider = custom ? { endpoint: `${custom.baseUrl}/models`, requiresKey: true } : PROVIDER_CONFIGS[providerId];
   if (custom) options = { ...options, fetchImpl: options.customFetchImpl ?? createCustomEndpointFetch(custom) };
   if (provider.requiresKey && !credential(apiKey)) fail('invalid_key', '请输入有效的 API Key。');
+  if (providerId === 'glm') {
+    if (options.signal?.aborted) fail('canceled', '连接已取消。', 409);
+    return { models: GLM_CHAT_MODELS.map(id => ({ id, name: id })), truncated: false, catalogSource: 'preset' };
+  }
   const headers = { Accept: 'application/json' };
   if (providerId === 'anthropic') Object.assign(headers, { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' });
   else if (providerId === 'google') headers['x-goog-api-key'] = apiKey;
@@ -134,6 +148,7 @@ export async function discoverModels(providerId, apiKey, options = {}) {
         const id = providerId === 'google' || providerId === 'ollama' ? row.name : row.id;
         const name = providerId === 'anthropic' ? row.display_name : providerId === 'google' ? row.displayName : providerId === 'openrouter' ? row.name : id;
         if (!text(id) || !text(name ?? id)) malformed();
+        if (providerId === 'kimi' && !KIMI_CHAT_MODELS.includes(id)) continue;
         if (providerId === 'google') {
           if (!isGoogleModelResource(id)) malformed();
           if (row.supportedGenerationMethods !== undefined && (!Array.isArray(row.supportedGenerationMethods) || row.supportedGenerationMethods.some(method => !text(method)))) malformed();

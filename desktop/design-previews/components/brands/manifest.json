@@ -44,6 +44,30 @@
       "rendering": "monochrome"
     },
     {
+      "file": "deepseek.svg",
+      "upstreamPath": "packages/static-svg/icons/deepseek.svg",
+      "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/packages/static-svg/icons/deepseek.svg",
+      "sha256": "8f9443e351b6dacce71871790201b799d92e8bf96a45ef79aeb5e9bf4db423e2",
+      "bytes": 2189,
+      "rendering": "monochrome"
+    },
+    {
+      "file": "zhipu.svg",
+      "upstreamPath": "packages/static-svg/icons/zhipu.svg",
+      "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/packages/static-svg/icons/zhipu.svg",
+      "sha256": "d4c3fe5ff92820b2ae5e3ddaaa30e6fc622cb746b75baad97f4bb2428fa25c5d",
+      "bytes": 3602,
+      "rendering": "monochrome"
+    },
+    {
+      "file": "kimi.svg",
+      "upstreamPath": "packages/static-svg/icons/kimi.svg",
+      "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/packages/static-svg/icons/kimi.svg",
+      "sha256": "ed08131b46acf70e6e2144eceb775e74098b58ea65fa21eaee04be7b05cfe63b",
+      "bytes": 786,
+      "rendering": "monochrome"
+    },
+    {
       "file": "LICENSE",
       "upstreamPath": "LICENSE",
       "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/LICENSE",

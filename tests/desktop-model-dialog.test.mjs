@@ -1,3 +1,4 @@
+import { isUsableModelConnection } from '../desktop/design-previews/model-connection-client.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -35,7 +36,7 @@ function harness(snapshot, selection = null, options = {}) {
   const source = readFileSync(new URL('../desktop/src/model-connection.ts', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
   const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
   const quickPicker = { open() { this.opened = true; }, close() { this.opened = false; }, destroy() {} };
-  const context = { mountModelPicker: options => { quickPicker.options = options; options.anchor.addEventListener('click', () => quickPicker.open()); return quickPicker; }, document: doc, HTMLElement: Element, createConnectionClient: () => client, desktopModelFetch() {}, createIcon: () => new Element(), createProviderIcon: () => new Element(), openUrl: async () => {}, setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout() {} };
+  const context = { isUsableModelConnection, mountModelPicker: options => { quickPicker.options = options; options.anchor.addEventListener('click', () => quickPicker.open()); return quickPicker; }, document: doc, HTMLElement: Element, createConnectionClient: () => client, desktopModelFetch() {}, createIcon: () => new Element(), createProviderIcon: () => new Element(), openUrl: async () => {}, setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout() {} };
   const actionSource = readFileSync(new URL('../desktop/design-previews/components/ui-kit.js', import.meta.url), 'utf8').match(/^export function createActionButton[^]*?^}/m)[0].replace('export ', '');
   vm.runInNewContext(actionSource, context);
   vm.runInNewContext(script, context);
@@ -43,6 +44,63 @@ function harness(snapshot, selection = null, options = {}) {
   const app = context.mountModelConnections({ button, picker, select: () => true, getSelection: () => selection, isBusy: () => false, ...options });
   return { app, nodes, timers, client, doc, context, picker, button, quickPicker };
 }
+
+for (const [providerId, name] of [['deepseek', 'DeepSeek'], ['glm', 'GLM · 智谱'], ['kimi', 'Kimi']]) {
+  desktopTest(`${providerId} opens the native connection form and keeps OAuth exclusive to OpenRouter`, async () => {
+    const app = harness({ connections: [] }, { providerId, model: 'model', label: 'Model' });
+    app.app.open(); await settle();
+    assert.equal(app.nodes.get('h3').textContent, name);
+    assert.equal(app.nodes.get('.desktop-oauth-panel').hidden, true);
+    assert.equal(app.nodes.get('.desktop-endpoint-field').hidden, true);
+    assert.equal(app.nodes.get('#desktop-provider-key').required, true);
+    assert.equal(app.nodes.get('nav').children.some(button => button.dataset.providerId === providerId), true);
+    app.app.destroy();
+  });
+}
+
+desktopTest('GLM presets remain visibly unverified until the exact selected model passes an explicit test', async () => {
+  const connection = { providerId: 'glm', status: 'configured', catalogSource: 'preset', hasCredential: true, models: [{ id: 'glm-5.2', name: 'GLM 5.2' }, { id: 'glm-4.7', name: 'GLM 4.7' }], inference: { status: 'verified', model: 'glm-5.2' } };
+  let selection = { providerId: 'glm', model: 'glm-5.2', label: 'GLM 5.2' };
+  const app = harness({ connections: [connection] }, selection, { getSelection: () => selection });
+  let mutations = 0; app.client.mutate = async () => { mutations++; };
+  app.app.open(); await settle();
+  assert.match(app.nodes.get('#desktop-provider-status').textContent, /配置已保存.*已通过推理测试/);
+  app.doc.body.children[0].close();
+  selection = { providerId: 'glm', model: 'glm-4.7', label: 'GLM 4.7' };
+  app.app.open(); await settle();
+  assert.match(app.nodes.get('#desktop-provider-status').textContent, /配置已保存.*尚未验证/);
+  assert.equal(app.nodes.get('#desktop-inference-status').textContent, '尚未测试 · glm-4.7');
+  assert.equal(app.nodes.get('#desktop-provider-status').dataset.tone, 'neutral');
+  assert.equal(app.nodes.get('#desktop-provider-refresh').textContent, '重新载入预设');
+  assert.equal(app.nodes.get('.desktop-model-catalog > label').textContent, '模型预设（非实时目录）');
+  assert.equal(app.nodes.get('.desktop-model-list').children.length, 2);
+  assert.equal(mutations, 0, 'opening and selecting never spend tokens');
+  assert.equal(app.nodes.get('#desktop-provider-verify').disabled, false);
+  app.app.destroy();
+});
+
+desktopTest('Kimi filtered catalog explains compatibility instead of claiming the provider returned no models', async () => {
+  const app = harness({ connections: [{ providerId: 'kimi', status: 'connected', models: [] }] }, { providerId: 'kimi', model: 'kimi-k2.6', label: 'Kimi K2.6' });
+  app.app.open(); await settle();
+  assert.match(app.nodes.get('.desktop-model-list').children[0].textContent, /Kimi K2.6.*其他模型暂不兼容/);
+  assert.doesNotMatch(app.nodes.get('.desktop-model-list').children[0].textContent, /尚未返回可用模型|刷新目录/);
+  app.app.destroy();
+});
+
+desktopTest('new provider key buttons open only fixed official destinations and explain browser failure', async () => {
+  for (const [providerId, url] of [['deepseek', 'https://platform.deepseek.com/api_keys'], ['glm', 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys'], ['kimi', 'https://platform.kimi.com/console/api-keys']]) {
+    const app = harness({ connections: [] }, { providerId, model: 'model', label: 'Model' });
+    const opened = []; app.context.openUrl = async value => opened.push(value);
+    app.app.open(); await settle();
+    const button = app.nodes.get('#desktop-provider-get-key');
+    assert.equal(button.hidden, false);
+    await button.events.click(); assert.deepEqual(opened, [url]);
+    app.context.openUrl = async () => { throw new Error('raw browser failure'); };
+    await button.events.click();
+    assert.match(app.nodes.get('#desktop-provider-status').textContent, /未能打开服务商密钥页面/);
+    app.app.destroy();
+  }
+});
 desktopTest('model controller mounts without a global button and delegates management without loading credentials', async () => {
   let managed = 0;
   const app = harness({ connections: [] }, null, { button: undefined, onManage: () => { managed++; } });
@@ -529,4 +587,36 @@ desktopTest('collapsing credential editor clears secrets and returns keyboard fo
   editor.open = false; editor.events.toggle();
   assert.equal(key.value, '');
   assert.equal(app.doc.activeElement, app.nodes.get('#desktop-connection-editor-toggle'));
+});
+
+desktopTest('model dialog wraps keyboard boundaries without stealing interior or modified Tab navigation', async () => {
+  const app = harness({ connections: [{ providerId: 'kimi', status: 'connected', hasCredential: true, models: [] }] });
+  app.app.open(); await settle();
+  const dialog = app.doc.body.children[0], first = app.nodes.get('[data-close]');
+  const middle = app.nodes.get('#desktop-model-search'), last = app.nodes.get('#desktop-connection-editor-toggle');
+  const hidden = app.nodes.get('#desktop-provider-key'), disabled = app.nodes.get('#desktop-provider-connect');
+  const controls = [first, middle, last, hidden, disabled];
+  for (const node of controls) {
+    node.tabIndex = node === first ? -1 : 0;
+    node.closest = () => null;
+    node.hasAttribute = name => name === 'disabled' && Boolean(node.disabled);
+    node.matches = selector => selector === 'wa-button' ? node.tagName === 'WA-BUTTON' : Boolean(node.disabled);
+    node.getClientRects = () => [{}];
+  }
+  // Chromium may retain layout boxes inside a closed details element.
+  const editor = app.nodes.get('#desktop-connection-editor');
+  editor.children.push(last, hidden); editor.open = false;
+  disabled.disabled = true;
+  dialog.querySelectorAll = () => controls;
+  app.context.window = { getComputedStyle: () => ({ visibility: 'visible' }) };
+  function tab(node, options = {}) {
+    node.focus(); let prevented = false;
+    dialog.events.keydown?.({ key: 'Tab', target: node, preventDefault() { prevented = true; }, ...options });
+    return prevented;
+  }
+  assert.equal(tab(last), true); assert.equal(app.doc.activeElement, first);
+  assert.equal(tab(first, { shiftKey: true }), true); assert.equal(app.doc.activeElement, last);
+  assert.equal(tab(middle), false); assert.equal(app.doc.activeElement, middle);
+  for (const options of [{ ctrlKey: true }, { altKey: true }, { metaKey: true }, { isComposing: true }, { defaultPrevented: true }]) assert.equal(tab(last, options), false);
+  dialog.close(); assert.equal(tab(last), false);
 });

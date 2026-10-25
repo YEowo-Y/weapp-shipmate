@@ -38,6 +38,19 @@ test('real text uses fresh same-origin CSRF and handles byte-split UTF-8 and CRL
   assert.equal(requests.length, 2);
 });
 
+for (const providerId of ['deepseek', 'glm', 'kimi']) {
+  test(`${providerId} streams from a usable catalog without changing the selected provider`, async () => {
+    const calls = [], chunks = [];
+    const connection = { providerId, status: providerId === 'glm' ? 'configured' : 'connected', catalogSource: providerId === 'glm' ? 'preset' : 'remote', hasCredential: true, models: [{ id: 'test-model', name: 'Test' }] };
+    await streamChat({ ...args, providerId, onDelta: delta => chunks.push(delta) }, { fetcher: async (url, options) => {
+      calls.push(url);
+      return options.method === 'GET' ? Response.json({ ...snapshot, connections: [connection] }) : response(serialize(parts));
+    } });
+    assert.deepEqual(chunks, ['你好']);
+    assert.deepEqual(calls, ['/api/model-connections', `/api/model-connections/${providerId}/chat`]);
+  });
+}
+
 test('missing terminal, malformed frames, mismatched text IDs and empty response never succeed', async () => {
   for (const bad of [parts.slice(0, 3), [...parts.slice(0, 3), '[DONE]'], [parts[0], parts[1], { type: 'text-delta', id: 'other', delta: 'x' }], [parts[0], parts[1], parts[3], parts[4], parts[5]], [{ type: 'finish' }, '[DONE]'], ['not-json']]) {
     await assert.rejects(streamChat(args, { fetcher: fetcherFor(() => response(serialize(bad))) }), /中断|格式|空|完成/);

@@ -6,7 +6,7 @@ export function createCredentialRpc(emit, { timeoutMs = 75_000 } = {}) {
   let closed = false;
   const unavailable = () => new Error('System credential operation unavailable');
   const request = (operation, providerId, record) => new Promise((resolve, reject) => {
-    if (closed || pending.size >= 32 || !['openai', 'anthropic', 'google', 'openrouter', 'ollama', 'custom'].includes(providerId)) { reject(unavailable()); return; }
+    if (closed || pending.size >= 32 || !['openai', 'anthropic', 'google', 'deepseek', 'glm', 'kimi', 'openrouter', 'ollama', 'custom'].includes(providerId)) { reject(unavailable()); return; }
     const id = `credential-${randomUUID()}`;
     const timer = setTimeout(() => { pending.delete(id); reject(unavailable()); }, timeoutMs);
     pending.set(id, { resolve, reject, timer });

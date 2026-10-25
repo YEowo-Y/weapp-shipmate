@@ -2,6 +2,7 @@
 #desktop-model-dialog { width:min(740px,calc(100vw - 32px)); }
 #desktop-model-dialog .desktop-model-detail { min-width:0; }
 #desktop-model-dialog .desktop-model-note { line-height:1.65; text-wrap:pretty; }
+#desktop-model-dialog .desktop-catalog-search input { padding-inline-start:36px; }
 #desktop-model-dialog .desktop-checkbox { display:flex; gap:8px; align-items:center; line-height:1.5; }
 #desktop-model-dialog .desktop-checkbox input { width:16px; height:16px; padding:0; flex:0 0 16px; }
 #desktop-provider-storage { width:100%; min-height:40px; padding:8px 10px; color:var(--text); background:var(--bg); border:1px solid var(--border-2); border-radius:8px; font:inherit; }

@@ -17,6 +17,9 @@
 .provider-brand[data-provider="anthropic"] { --provider-mark: url('./brands/anthropic.svg'); }
 .provider-brand[data-provider="ollama"] { --provider-mark: url('./brands/ollama.svg'); }
 .provider-brand[data-provider="openrouter"] { --provider-mark: url('./brands/openrouter.svg'); }
+.provider-brand[data-provider="deepseek"] { --provider-mark: url('./brands/deepseek.svg'); }
+.provider-brand[data-provider="glm"] { --provider-mark: url('./brands/zhipu.svg'); }
+.provider-brand[data-provider="kimi"] { --provider-mark: url('./brands/kimi.svg'); }
 @media (forced-colors: active) {
   .provider-brand[data-provider]:not([data-provider="google"]) { forced-color-adjust: none; color: CanvasText; }
 }

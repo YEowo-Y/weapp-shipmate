@@ -11,7 +11,7 @@ test('vendored brand assets and license match their pinned upstream manifest', (
   const manifest = JSON.parse(readFileSync(new URL('manifest.json', assetRoot), 'utf8'));
   assert.match(manifest.commit, /^[0-9a-f]{40}$/);
   assert.equal(manifest.license, 'MIT');
-  assert.equal(manifest.files.filter(file => file.rendering !== 'license').length, 5);
+  assert.equal(manifest.files.filter(file => file.rendering !== 'license').length, 8);
   for (const file of manifest.files) {
     assert.match(file.file, /^(?:[a-z-]+\.svg|LICENSE)$/);
     const content = readFileSync(new URL(file.file, assetRoot));

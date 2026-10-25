@@ -1,5 +1,5 @@
 /* global document, window, URLSearchParams */
-import { createConnectionClient } from './model-connection-client.js';
+import { createConnectionClient, isUsableModelConnection } from './model-connection-client.js';
 import { SUPPORTED_CHAT_PROVIDERS } from './chat-transport.js';
 import { createIcon } from './components/icons.js';
 import { createProviderIcon } from './components/provider-icons.js';
@@ -23,7 +23,7 @@ let authorizationForm = null;
 const busyProviders = new Map();
 const catalogScroll = new Map();
 const actionLabels = { connect: '正在连接并读取模型…', refresh: '正在刷新模型目录…', disconnect: '正在断开本机连接…', 'oauth/start': '正在创建授权链接…', 'oauth/cancel': '正在取消授权…', 'oauth/complete': '正在验证授权码…' };
-const keyLinks = { openai: 'https://platform.openai.com/api-keys', anthropic: 'https://platform.claude.com/settings/keys', google: 'https://aistudio.google.com/apikey', openrouter: 'https://openrouter.ai/settings/keys' };
+const keyLinks = { openai: 'https://platform.openai.com/api-keys', anthropic: 'https://platform.claude.com/settings/keys', google: 'https://aistudio.google.com/apikey', deepseek: 'https://platform.deepseek.com/api_keys', glm: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys', kimi: 'https://platform.kimi.com/console/api-keys', openrouter: 'https://openrouter.ai/settings/keys' };
 const modelQueries = new Map();
 const operationErrors = new Map();
 
@@ -65,7 +65,7 @@ export function clearCredentialField(input) { input.value = ''; input.type = 'pa
 async function openCredential(provider, trigger) {
   const ui = await window.shipmateUI?.ready;
   if (!ui || selected !== provider.id || credentialDialog || !connections.ready || busyProviders.has(provider.id) || (provider.id === 'openrouter' && authorizationPending())) return;
-  const dialog = ui.makeDialog({ title: `${provider.name} 密钥`, subtitle: '连接服务商并读取可用模型。此步骤不发起模型推理。', trigger });
+  const dialog = ui.makeDialog({ title: `${provider.name} 密钥`, subtitle: provider.id === 'glm' ? '保存密钥并载入官方文档模型预设。此步骤不验证凭据，也不发起推理。' : '连接服务商并读取可用模型。此步骤不发起模型推理。', trigger });
   dialog.className += ' provider-credential-dialog';
   dialog.querySelector('.shipmate-dialog__title').replaceChildren(createProviderIcon(document, provider.id), element('span', '', `${provider.name} 密钥`));
   credentialDialog = dialog;
@@ -103,7 +103,7 @@ async function openCredential(provider, trigger) {
     dialog.close();
     await runConnection(provider.id, 'connect', { apiKey });
   };
-  const check = button('连接并读取模型', () => {}, 'shipmate-dialog__button--primary');
+  const check = button(provider.id === 'glm' ? '保存配置' : '连接并读取模型', () => {}, 'shipmate-dialog__button--primary');
   check.type = 'submit';
   check.disabled = true;
   input.addEventListener('input', () => { check.disabled = !input.value.trim(); message.textContent = ''; });
@@ -157,7 +157,7 @@ function connectionFor(id) { return connections.snapshot?.connections.find(conne
 function connectionLabel(id) {
   if (busyProviders.has(id)) return actionLabels[busyProviders.get(id)];
   if (id === 'openrouter' && ['waiting', 'exchanging'].includes(connections.snapshot?.oauth?.status)) return connections.snapshot.oauth.status === 'waiting' ? '等待授权' : '正在验证授权';
-  return ({ disconnected: '未连接', connecting: '正在连接', connected: '目录已验证', error: '连接失败' })[connectionFor(id)?.status] || '等待本地服务';
+  return ({ disconnected: '未连接', connecting: '正在连接', connected: '目录已验证', configured: '配置已保存，尚未验证', error: '连接失败' })[connectionFor(id)?.status] || '等待本地服务';
 }
 function stopPolling() { if (polling !== null) clearTimeout(polling); polling = null; }
 function schedulePolling() {
@@ -290,7 +290,7 @@ function renderConnection(provider) {
   address.append(element('strong', '', '服务地址'), element('code', 'provider-fixed-endpoint', provider.endpoint));
   const actions = element('div', 'settings-actions');
   if (provider.requiresKey && !pendingAuthorization) {
-    const key = button(connection?.status === 'connected' ? '更换 API Key' : '使用 API Key 连接', () => openCredential(provider, key), provider.id === 'openrouter' || connection?.status === 'connected' ? '' : 'shipmate-dialog__button--primary');
+    const key = button(isUsableModelConnection(connection) ? '更换 API Key' : provider.id === 'glm' ? '设置 API Key' : '使用 API Key 连接', () => openCredential(provider, key), provider.id === 'openrouter' || connection?.status === 'connected' ? '' : 'shipmate-dialog__button--primary');
     key.disabled = busy || (provider.id === 'openrouter' && ['waiting', 'exchanging'].includes(connections.snapshot.oauth?.status)); actions.append(key);
   } else if (!provider.requiresKey) {
     const local = button('连接本机 Ollama', () => void runConnection(provider.id, 'connect'), connection?.status === 'connected' ? '' : 'shipmate-dialog__button--primary');
@@ -323,7 +323,7 @@ function renderConnection(provider) {
     if (!(pending && oauth.mode === 'manual' && oauth.flowId)) clearAuthorizationForm();
   }
   if ((connection?.hasCredential || connection?.authMethod) && !pendingAuthorization) {
-    const refresh = button('刷新目录', () => void runConnection(provider.id, 'refresh'), '', 'rotate-ccw');
+    const refresh = button(provider.id === 'glm' ? '重新载入预设' : '刷新目录', () => void runConnection(provider.id, 'refresh'), '', 'rotate-ccw');
     const disconnect = button('断开本机连接', () => void runConnection(provider.id, 'disconnect'), 'provider-disconnect');
     refresh.disabled = busy || (provider.id === 'openrouter' && authorizationPending()); disconnect.disabled = refresh.disabled; actions.append(refresh, disconnect);
   }
@@ -339,9 +339,9 @@ function renderConnection(provider) {
   }
   const error = operationErrors.get(provider.id) || (!pendingAuthorization && connection?.error?.message);
   if (error && !(provider.id === 'openrouter' && error === oauth?.message)) { const feedback = element('p', 'settings-feedback', error); feedback.setAttribute('role', 'alert'); root.append(feedback); }
-  if (busy) { const progress = element('p', 'settings-feedback provider-authorization-pending', actionLabels[busyProviders.get(provider.id)]); progress.setAttribute('role', 'status'); root.append(progress); }
+  if (busy) { const progress = element('p', 'settings-feedback provider-authorization-pending', provider.id === 'glm' && ['connect', 'refresh'].includes(busyProviders.get(provider.id)) ? '正在保存配置并载入模型预设…' : actionLabels[busyProviders.get(provider.id)]); progress.setAttribute('role', 'status'); root.append(progress); }
   if (connection?.hasCredential || connection?.authMethod) root.append(element('p', 'settings-muted', '断开仅清除本机内存凭据，不会撤销服务商侧的密钥或授权。'));
-  if (connection?.status === 'connected' && connection.models.length > 0 && Object.hasOwn(SUPPORTED_CHAT_PROVIDERS, provider.id)) {
+  if (isUsableModelConnection(connection) && connection.models.length > 0 && Object.hasOwn(SUPPORTED_CHAT_PROVIDERS, provider.id)) {
     const back = element('a', 'provider-chat-link shipmate-dialog__button shipmate-dialog__button--primary', '返回对话选择模型');
     back.append(createIcon(document, 'arrow-right'));
     const returnHref = document.querySelector('[data-settings-return]')?.getAttribute?.('href');
@@ -349,8 +349,8 @@ function renderConnection(provider) {
     root.append(back);
   }
   const models = connection?.models || [];
-  if (connection?.status === 'connected' || models.length) {
-    const catalog = section('模型目录');
+  if (isUsableModelConnection(connection) || models.length) {
+    const catalog = section(provider.id === 'glm' ? '模型预设（非实时目录）' : '模型目录');
     if (connection.status === 'error') catalog.append(element('p', 'settings-muted provider-catalog-stale', '刷新未完成，以下为上次读取的目录；不代表当前连接可用。'));
     const count = element('p', 'settings-muted provider-catalog-count'); count.setAttribute('role', 'status'); count.setAttribute('aria-live', 'polite');
     const input = element('input', 'inp'); input.id = 'provider-model-search'; input.type = 'search'; input.placeholder = '搜索模型名称或 ID'; input.setAttribute('aria-label', '搜索模型目录'); input.value = modelQueries.get(provider.id) || '';
@@ -365,7 +365,7 @@ function renderConnection(provider) {
       if (!matching.length) {
         const empty = element('div', 'provider-model-empty');
         const copy = element('div');
-        copy.append(element('strong', '', models.length ? '没有匹配的模型' : '服务商返回了空目录'), element('p', '', models.length ? '试试其他名称或模型 ID，也可以清除搜索。' : '请确认服务商已有可用模型，然后刷新目录。'));
+        copy.append(element('strong', '', models.length ? '没有匹配的模型' : provider.id === 'kimi' ? '当前没有兼容的 Kimi 模型' : '服务商返回了空目录'), element('p', '', models.length ? '试试其他名称或模型 ID，也可以清除搜索。' : provider.id === 'kimi' ? '当前账号未返回本应用支持的 Kimi K2.6；其他模型暂不兼容。请前往 Kimi 开放平台确认账号的模型权限。' : '请确认服务商已有可用模型，然后刷新目录。'));
         empty.append(createIcon(document, models.length ? 'search' : 'package'), copy);
         results.append(empty);
       }
@@ -383,10 +383,10 @@ function renderConnection(provider) {
     catalog.append(count, searchRow, results); detail.append(catalog); render();
     results.scrollTop = catalogScroll.get(provider.id) || 0;
   } else {
-    const catalog = section('模型目录');
+    const catalog = section(provider.id === 'glm' ? '模型预设（非实时目录）' : '模型目录');
     const empty = element('div', 'provider-model-empty');
     const copy = element('div');
-    copy.append(element('strong', '', '等待连接服务商'), element('p', '', '连接后将在这里显示服务商返回的模型。'));
+    copy.append(element('strong', '', '等待连接服务商'), element('p', '', provider.id === 'glm' ? '设置密钥后显示官方文档模型预设；不会自动验证凭据或调用模型。' : '连接后将在这里显示服务商返回的模型。'));
     empty.append(createIcon(document, 'package'), copy);
     catalog.append(empty); detail.append(catalog);
   }

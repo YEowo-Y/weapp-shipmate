@@ -12,7 +12,7 @@ import { ConnectionError, discoverModels, exchangeOpenRouterCode } from './model
 
 const BASE = '/api/model-connections';
 const COOKIE = 'shipmate_models';
-const IDS = ['openai', 'anthropic', 'google', 'openrouter', 'ollama', 'custom'];
+const IDS = ['openai', 'anthropic', 'google', 'deepseek', 'glm', 'kimi', 'openrouter', 'ollama', 'custom'];
 const FLOW_TTL = 10 * 60_000;
 const SESSION_TTL = 60 * 60_000;
 const token = () => randomBytes(32).toString('base64url');
@@ -228,7 +228,7 @@ export function createModelConnectionHandler({ fetchImpl = globalThis.fetch, now
     if (!current(session, id, operation)) return false;
     const recoveredCredential = session.credentials.get(id);
     session.credentials.set(id, { key, method, ...(endpoint ? { endpoint } : {}) });
-    Object.assign(session.connections.get(id), { status: 'connected', authMethod: method, models: result.models, truncated: result.truncated, checkedAt: new Date(now()).toISOString(), error: null, hasCredential: true, credentialStorage: session.connections.get(id).credentialStorage || 'memory' });
+    Object.assign(session.connections.get(id), { status: id === 'glm' ? 'configured' : 'connected', authMethod: method, models: result.models, truncated: result.truncated, checkedAt: id === 'glm' ? null : new Date(now()).toISOString(), error: null, hasCredential: true, credentialStorage: session.connections.get(id).credentialStorage || 'memory', ...(id === 'glm' ? { catalogSource: 'preset', inference: empty(id).inference } : {}) });
     if (id === 'openrouter' && method === 'oauth' && session.oauth?.status === 'error' && recoveredCredential && session.oauth.recoveryCredential === recoveredCredential) {
       session.oauth = { status: 'success', deadline: session.oauth.deadline, message: '授权有效，模型目录已更新。' };
     }
@@ -364,7 +364,7 @@ export function createModelConnectionHandler({ fetchImpl = globalThis.fetch, now
       if (action === 'chat' && route.length === 2) {
         validateChatRequest(id, body);
         const connection = session.connections.get(id);
-        if (connection.status !== 'connected' || !session.credentials.has(id)) throw new ConnectionError('connection_required', '请先连接此服务商。', 409);
+        if (!(connection.status === 'connected' || id === 'glm' && connection.status === 'configured') || !session.credentials.has(id)) throw new ConnectionError('connection_required', '请先连接此服务商。', 409);
         if (!connection.models.some(model => model.id === body.model)) throw new ConnectionError('invalid_model', '请选择当前连接目录中的模型。', 400);
         if (session.chat || session.operations.size || ['waiting', 'exchanging'].includes(session.oauth?.status)) throw new ConnectionError('chat_busy', '当前操作尚未结束，请稍后重试。', 409);
         const run = { providerId: id, controller: new AbortController() };
@@ -378,7 +378,7 @@ export function createModelConnectionHandler({ fetchImpl = globalThis.fetch, now
       if (action === 'verify' && route.length === 2) {
         if (Object.keys(body).length !== 1 || typeof body.model !== 'string') throw new ConnectionError('invalid_parameters', '请选择需要测试的模型。', 400);
         const connection = session.connections.get(id), credential = session.credentials.get(id);
-        if (connection.status !== 'connected' || !credential) throw new ConnectionError('connection_required', '请先连接此服务商。', 409);
+        if (!(connection.status === 'connected' || id === 'glm' && connection.status === 'configured') || !credential) throw new ConnectionError('connection_required', '请先连接此服务商。', 409);
         if (!connection.models.some(model => model.id === body.model)) throw new ConnectionError('invalid_model', '请选择当前连接目录中的模型。', 400);
         if (session.chat || session.operations.size || ['waiting', 'exchanging'].includes(session.oauth?.status)) throw new ConnectionError('chat_busy', '当前操作尚未结束，请稍后重试。', 409);
         const run = { providerId: id, controller: new AbortController() };

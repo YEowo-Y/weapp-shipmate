@@ -24,6 +24,85 @@ async function harness(t, options = {}) {
 const sse = events => events.map(value => `data: ${JSON.stringify(value)}\n\n`).join('');
 const completed = sse([{ type: 'response.output_text.delta', delta: '你好' }, { type: 'response.completed', response: { status: 'completed', output: [] } }]);
 
+for (const [provider, model, endpoint] of [
+  ['deepseek', 'deepseek-flash', 'https://api.deepseek.com/chat/completions'],
+  ['kimi', 'kimi-k2.6', 'https://api.moonshot.cn/v1/chat/completions'],
+  ['glm', 'glm-5.2', 'https://open.bigmodel.cn/api/paas/v4/chat/completions'],
+]) {
+  test(`${provider} connects without inference, streams text only, retries failure, and disconnects`, async t => {
+    const requests = [];
+    let rejectNext = false;
+    const app = await harness(t, { fetchImpl: async (url, options) => {
+      assert.equal(options.redirect, 'error');
+      assert.equal(options.headers.Authorization, 'Bearer domestic-fake-secret');
+      if (url.endsWith('/models')) return json({ data: [{ id: model }] });
+      assert.equal(url, endpoint);
+      requests.push(JSON.parse(options.body));
+      if (rejectNext) { rejectNext = false; return new Response('domestic-fake-secret', { status: 401 }); }
+      return fragmented(sse([
+        { choices: [{ delta: { reasoning_content: 'hidden reasoning' }, finish_reason: null }] },
+        { choices: [{ delta: { content: '你好' }, finish_reason: null }] },
+        { choices: [{ delta: {}, finish_reason: 'stop' }] },
+      ]) + 'data: [DONE]\n\n');
+    } });
+    const snapshot = await (await app.post(`${provider}/connect`, { apiKey: 'domestic-fake-secret' })).json();
+    assert.equal(snapshot.connections.find(item => item.providerId === provider).status, provider === 'glm' ? 'configured' : 'connected');
+    assert.equal(requests.length, 0);
+    assert.doesNotMatch(JSON.stringify(snapshot), /domestic-fake-secret/);
+    const request = { ...body, model };
+    assert.equal((await app.post(`${provider}/chat`, { ...request, model: 'unlisted-model' })).status, 400);
+    const reply = await (await app.post(`${provider}/chat`, request)).text();
+    assert.match(reply, /"delta":"你好"/);
+    assert.match(reply, /"type":"finish"/);
+    assert.doesNotMatch(reply, /hidden reasoning|domestic-fake-secret/);
+    assert.equal(requests[0][provider === 'kimi' ? 'max_completion_tokens' : 'max_tokens'], 2048);
+    if (provider === 'kimi') assert.equal(requests[0].max_tokens, undefined);
+    assert.deepEqual(requests[0].thinking, { type: 'disabled' });
+    rejectNext = true;
+    const failed = await (await app.post(`${provider}/chat`, request)).text();
+    assert.match(failed, /"type":"error"/);
+    assert.doesNotMatch(failed, /domestic-fake-secret|"type":"finish"/);
+    assert.match(await (await app.post(`${provider}/chat`, request)).text(), /"type":"finish"/);
+    rejectNext = true;
+    const failedVerification = await (await app.post(`${provider}/verify`, { model })).json();
+    const failedConnection = failedVerification.connections.find(item => item.providerId === provider);
+    assert.equal(failedConnection.inference.status, 'error');
+    assert.equal(failedConnection.status, provider === 'glm' ? 'configured' : 'connected');
+    assert.doesNotMatch(JSON.stringify(failedVerification), /domestic-fake-secret/);
+    const verified = await (await app.post(`${provider}/verify`, { model })).json();
+    assert.equal(verified.connections.find(item => item.providerId === provider).inference.status, 'verified');
+    assert.equal(requests.at(-1)[provider === 'kimi' ? 'max_completion_tokens' : 'max_tokens'], 32);
+    assert.equal((await app.post(`${provider}/agent`, { ...request, agent: { projectId: 'p1', sessionId: 's1', allowRead: true, shareResults: false } })).status, 400);
+    await app.post(`${provider}/disconnect`);
+    assert.equal((await app.post(`${provider}/chat`, request)).status, 409);
+  });
+
+  test(`${provider} cancellation aborts the actual upstream stream`, async t => {
+    let signal, cancelled = false;
+    const app = await harness(t, { fetchImpl: async (url, options) => {
+      if (url.endsWith('/models')) return json({ data: [{ id: model }] });
+      signal = options.signal;
+      return new Response(new ReadableStream({
+        start(controller) { controller.enqueue(Buffer.from(sse([{ choices: [{ delta: { content: 'partial' }, finish_reason: null }] }]))); },
+        cancel() { cancelled = true; },
+      }), { headers: { 'Content-Type': 'text/event-stream' } });
+    } });
+    await app.post(`${provider}/connect`, { apiKey: 'fake-key' });
+    const reader = await firstDelta(await app.post(`${provider}/chat`, { ...body, model }));
+    await app.post(`${provider}/disconnect`);
+    while (!(await reader.read()).done) { /* Drain terminal cancellation. */ }
+    assert.equal(signal.aborted, true);
+    assert.equal(cancelled, true);
+  });
+}
+
+test('direct chat validation rejects unsupported Kimi and GLM models before inference', () => {
+  for (const model of ['kimi-k3.1-pro', 'kimi-k2.7-code', 'moonshot-v1-8k', 'made-up-model']) {
+    assert.throws(() => validateChatRequest('kimi', { ...body, model }), { code: 'invalid_chat' });
+  }
+  assert.throws(() => validateChatRequest('glm', { ...body, model: 'made-up-model' }), { code: 'invalid_chat' });
+});
+
 test('connected OpenAI streams official UI text events over real HTTP', async t => {
   let inference;
   const app = await harness(t, { fetchImpl: async (url, options) => {

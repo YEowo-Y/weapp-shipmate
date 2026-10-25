@@ -1,6 +1,6 @@
 import test from 'node:test';
 import { URLSearchParams } from 'node:url';
-import { createConnectionClient } from '../desktop/design-previews/model-connection-client.js';
+import { createConnectionClient, isUsableModelConnection } from '../desktop/design-previews/model-connection-client.js';
 import { SUPPORTED_CHAT_PROVIDERS } from '../desktop/design-previews/chat-transport.js';
 import { settingsHref } from '../desktop/design-previews/navigation.js';
 import assert from 'node:assert/strict';
@@ -29,6 +29,23 @@ test('provider drafts are isolated and accept only endpoint and explicit model I
   assert.equal(draft.get('openai').endpoint, 'https://proxy.example/v1');
 });
 
+test('DeepSeek, GLM and Kimi expose fixed provider presets with isolated drafts', () => {
+  const draft = createSettingsDraft();
+  for (const [id, name, endpoint] of [
+    ['deepseek', 'DeepSeek', 'https://api.deepseek.com'],
+    ['glm', 'GLM · 智谱', 'https://open.bigmodel.cn/api/paas/v4'],
+    ['kimi', 'Kimi', 'https://api.moonshot.cn/v1'],
+  ]) {
+    const provider = PROVIDERS.find(item => item.id === id);
+    assert.equal(provider?.name, name);
+    assert.equal(provider.requiresKey, true);
+    assert.equal(draft.get(id).endpoint, endpoint);
+    assert.equal(SUPPORTED_CHAT_PROVIDERS[id], name);
+    assert.equal(draft.addModel(id, `${id}-test-model`).ok, true);
+    assert.deepEqual(draft.get(id).models, [`${id}-test-model`]);
+  }
+});
+
 test('endpoint validation rejects embedded credentials, tokens and remote cleartext', () => {
   for (const url of ['javascript:alert(1)', 'http://remote.example', 'https://u:p@example.com', 'https://example.com?key=secret', 'https://example.com#secret', 'not a url', 'http://127.0.0.1.evil.test']) {
     assert.equal(validateEndpoint(url).ok, false, url);
@@ -47,7 +64,7 @@ test('model IDs are bounded literal data; local demo cannot acquire an external 
 test('model chooser exposes the running source and settings without fake effort choices', () => {
   const source = readFileSync(new URL('../desktop/design-previews/ui.js', import.meta.url), 'utf8');
   const fn = source.match(/ {2}function openModel\([^]*?\n {2}}/)[0];
-  const context = vm.createContext({ settingsHref, openMenu: options => options, location: { href: '', pathname: '/chat-full.html' } });
+  const context = vm.createContext({ isUsableModelConnection, settingsHref, openMenu: options => options, location: { href: '', pathname: '/chat-full.html' } });
   vm.runInContext(fn, context);
   const trigger = {};
   let selected;
@@ -141,13 +158,14 @@ function settingsHarness({ unavailable = false, holdConnect = null, catalogError
         connection.status = 'error'; connection.hasCredential = true; connection.error = { code: 'upstream', message: '目录读取失败，请重试' };
         return { ok: true, json: async () => JSON.parse(JSON.stringify(snapshot)) };
       }
-      connection.status = action === 'disconnect' ? 'disconnected' : 'connected';
+      connection.status = action === 'disconnect' ? 'disconnected' : id === 'glm' ? 'configured' : 'connected';
+      if (id === 'glm') { connection.catalogSource = 'preset'; connection.hasCredential = action !== 'disconnect'; }
       connection.authMethod = action === 'disconnect' ? null : id === 'ollama' ? 'local' : 'api-key';
       connection.models = action === 'disconnect' || emptyCatalog ? [] : [{ id: 'model-one', name: 'Model One' }, { id: 'model-two', name: 'Model Two' }];
     }
     return { ok: true, json: async () => JSON.parse(JSON.stringify(snapshot)) };
   };
-  const context = vm.createContext({ document, window, URLSearchParams, SUPPORTED_CHAT_PROVIDERS, PROVIDERS, createSettingsDraft, createProviderIcon, createIcon, createActionButton,
+  const context = vm.createContext({ isUsableModelConnection, document, window, URLSearchParams, SUPPORTED_CHAT_PROVIDERS, PROVIDERS, createSettingsDraft, createProviderIcon, createIcon, createActionButton,
     createConnectionClient: () => createConnectionClient(fetcher),
     setTimeout: callback => { const id = ++timerId; timers.set(id, callback); return id; }, clearTimeout: id => timers.delete(id),
   });
@@ -424,6 +442,21 @@ test('credential dialog uses a bounded native form and an official key link', as
   input.value = 'k'.repeat(600); await input.fire('input'); await form.fire('submit'); await app.flush();
   assert.equal(input.value, '');
   assert.equal(app.detail.querySelectorAll('.provider-model-row').length, 2);
+});
+
+test('GLM browser settings save a clearly unverified preset and offer returning to chat without fake discovery', async () => {
+  const app = settingsHarness(); await app.flush(); await app.select('glm');
+  await app.findButton(app.detail, '设置 API Key').fire('click');
+  const dialog = app.dialogs.at(-1);
+  assert.equal(dialog.querySelector('a').href, 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys');
+  assert.ok(app.findButton(dialog, '保存配置'));
+  dialog.querySelector('input').value = 'glm-test-key';
+  await dialog.querySelector('form').fire('submit'); await app.flush();
+  assert.ok(app.findButton(app.detail, '重新载入预设'));
+  assert.equal(app.detail.querySelector('.provider-status').textContent, '配置已保存，尚未验证');
+  assert.match(app.detail.querySelector('.provider-description').textContent, /官方文档预设.*不验证密钥/);
+  assert.ok(app.detail.querySelector('.provider-chat-link'));
+  assert.equal(app.requests.filter(item => item.options.method === 'POST').length, 1);
 });
 
 test('provider navigation stays native while guarded connection actions use shared open-source buttons', async () => {

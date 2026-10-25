@@ -29,7 +29,7 @@ async function harness(t, options = {}) {
 test('local broker bootstraps an HTTP-only session and rejects cross-origin mutations', async t => {
   const app = await harness(t);
   assert.equal(app.snapshot.storage, 'memory');
-  assert.equal(app.snapshot.connections.length, 6);
+  assert.equal(app.snapshot.connections.length, 9);
   assert.ok(app.snapshot.connections.every(c => c.status === 'disconnected'));
   assert.match(app.cookieHeader, /HttpOnly; SameSite=Lax; Path=\/api\/model-connections/);
   const bad = await app.post('/openai/connect', { apiKey: 'test-key' }, { Origin: 'https://evil.example' });
@@ -41,6 +41,47 @@ test('local broker bootstraps an HTTP-only session and rejects cross-origin muta
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 const find = (snapshot, id) => snapshot.connections.find(connection => connection.providerId === id);
+
+test('domestic credentials restore privately and GLM presets stay explicitly unverified', async t => {
+  const records = new Map();
+  let requests = 0;
+  const options = {
+    credentialStore: {
+      load: async id => records.get(id) ?? null,
+      save: async (id, record) => records.set(id, structuredClone(record)),
+      delete: async id => records.delete(id),
+    },
+    fetchImpl: async url => {
+      requests++;
+      assert.ok(!url.includes('bigmodel.cn'));
+      return json({ data: [{ id: url.includes('moonshot') ? 'kimi-k2.6' : 'deepseek-flash' }] });
+    },
+  };
+  const app = await harness(t, options);
+  for (const provider of ['deepseek', 'glm', 'kimi']) {
+    const connected = await (await app.post(`/${provider}/connect`, { apiKey: `fake-${provider}-secret`, storage: 'system' })).json();
+    const entry = find(connected, provider);
+    assert.equal(entry.status, provider === 'glm' ? 'configured' : 'connected');
+    assert.equal(entry.credentialStorage, 'system');
+    assert.equal(entry.inference.status, 'unverified');
+    assert.doesNotMatch(JSON.stringify(connected), /-secret/);
+    if (provider === 'glm') {
+      assert.equal(entry.catalogSource, 'preset');
+      assert.equal(entry.checkedAt, null);
+    }
+  }
+  assert.equal(requests, 2);
+  const restarted = await harness(t, options);
+  for (const provider of ['deepseek', 'glm', 'kimi']) {
+    const restored = find(restarted.snapshot, provider);
+    assert.equal(restored.hasCredential, true);
+    assert.equal(restored.status, 'disconnected');
+    await restarted.post(`/${provider}/refresh`);
+    await restarted.post(`/${provider}/disconnect`);
+    assert.equal(records.has(provider), false);
+  }
+  assert.equal(requests, 4);
+});
 async function startOAuth(app) {
   const result = await (await app.post('/openrouter/oauth/start')).json();
   const authorization = new URL(result.authorizationUrl);

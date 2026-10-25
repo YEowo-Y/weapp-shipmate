@@ -1,9 +1,10 @@
 import { createCustomEndpointFetch, validateCustomEndpoint } from './custom-endpoint.mjs';
 import { randomUUID } from 'node:crypto';
 import { TextDecoder } from 'node:util';
-import { ConnectionError, isGoogleModelResource } from './model-providers.mjs';
+import { ConnectionError, isGoogleModelResource, GLM_CHAT_MODELS, KIMI_CHAT_MODELS } from './model-providers.mjs';
 
-const ENDPOINTS = Object.freeze({ openai: 'https://api.openai.com/v1/responses', anthropic: 'https://api.anthropic.com/v1/messages', google: 'https://generativelanguage.googleapis.com/v1beta/', openrouter: 'https://openrouter.ai/api/v1/chat/completions', ollama: 'http://127.0.0.1:11434/api/chat' });
+const ENDPOINTS = Object.freeze({ openai: 'https://api.openai.com/v1/responses', anthropic: 'https://api.anthropic.com/v1/messages', google: 'https://generativelanguage.googleapis.com/v1beta/', deepseek: 'https://api.deepseek.com/chat/completions', glm: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', kimi: 'https://api.moonshot.cn/v1/chat/completions', openrouter: 'https://openrouter.ai/api/v1/chat/completions', ollama: 'http://127.0.0.1:11434/api/chat' });
+const CHAT_COMPLETIONS = new Set(['deepseek', 'glm', 'kimi', 'openrouter', 'custom']);
 const streamError = message => { throw new ConnectionError('chat_failed', message, 502); };
 function validateFrame(value, depth = 0, budget = { left: 10000 }) {
   if (--budget.left < 0 || depth > 16) throw new Error('invalid');
@@ -21,6 +22,7 @@ export function validateChatRequest(provider, body) {
   if (provider !== 'custom' && !Object.hasOwn(ENDPOINTS, provider)) throw new ConnectionError('chat_unsupported', '此服务商暂仅支持模型目录连接。', 400);
   if (!body || Object.keys(body).length !== 2 || typeof body.model !== 'string' || !body.model.length || body.model.length > 256 || !Array.isArray(body.messages) || !body.messages.length || body.messages.length > 100) invalid();
   if (provider === 'google' && !isGoogleModelResource(body.model)) invalid();
+  if (provider === 'glm' && !GLM_CHAT_MODELS.includes(body.model) || provider === 'kimi' && !KIMI_CHAT_MODELS.includes(body.model)) invalid();
   for (const message of body.messages) {
     if (!message || Object.keys(message).length !== 2 || !['user', 'assistant'].includes(message.role) || typeof message.content !== 'string' || !message.content.trim() || message.content.length > 32768) invalid();
   }
@@ -62,7 +64,9 @@ export async function streamChatResponse(res, provider, key, body, { fetchImpl =
       ? { model: body.model, input: body.messages, stream: true, max_output_tokens: maxOutputTokens, store: false }
       : provider === 'google'
         ? { contents: body.messages.map(message => ({ role: message.role === 'assistant' ? 'model' : 'user', parts: [{ text: message.content }] })), generationConfig: { maxOutputTokens, candidateCount: 1 } }
-      : { ...body, stream: true, ...(provider === 'ollama' ? { options: { num_predict: maxOutputTokens } } : { max_tokens: maxOutputTokens }) };
+      : { ...body, stream: true, ...(provider === 'ollama' ? { options: { num_predict: maxOutputTokens } } : provider === 'kimi' ? { max_completion_tokens: maxOutputTokens } : { max_tokens: maxOutputTokens }) };
+    // Plain chat does not request hidden reasoning; keep the existing text budget.
+    if (['deepseek', 'glm', 'kimi'].includes(provider)) payload.thinking = { type: 'disabled' };
     const headers = { 'Content-Type': 'application/json', Accept: provider === 'ollama' ? 'application/x-ndjson' : 'text/event-stream' };
     if (provider === 'anthropic') Object.assign(headers, { 'x-api-key': key, 'anthropic-version': '2023-06-01' });
     else if (provider === 'google') headers['x-goog-api-key'] = key;
@@ -84,7 +88,7 @@ export async function streamChatResponse(res, provider, key, body, { fetchImpl =
     const process = async raw => {
       if (!raw.trim()) return;
       if (raw === '[DONE]') {
-        if (!['openrouter', 'custom'].includes(provider) || !stopped) throw new Error('incomplete');
+        if (!CHAT_COMPLETIONS.has(provider) || !stopped) throw new Error('incomplete');
         terminal = true; return;
       }
       if (Buffer.byteLength(raw) > 262144) throw new Error('limit');
@@ -145,7 +149,7 @@ export async function streamChatResponse(res, provider, key, body, { fetchImpl =
           }
           if (candidate.finishReason === 'STOP') terminal = true;
         }
-      } else if (provider === 'openrouter' || provider === 'custom') {
+      } else if (CHAT_COMPLETIONS.has(provider)) {
         if (!Array.isArray(value.choices) || value.choices.length > 1) throw new Error('invalid');
         const choice = value.choices[0];
         if (choice) {

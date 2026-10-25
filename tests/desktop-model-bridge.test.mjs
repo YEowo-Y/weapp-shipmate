@@ -8,6 +8,18 @@ import assert from 'node:assert/strict';
 import { createDesktopBridge, validateRequest } from '../desktop/server/desktop-bridge.mjs';
 
 const BASE = '/api/model-connections';
+
+test('domestic provider routes permit only existing connection and chat operations', () => {
+  for (const provider of ['deepseek', 'glm', 'kimi']) {
+    for (const action of ['connect', 'refresh', 'disconnect', 'chat', 'verify']) {
+      const request = { id: 'domestic-1', path: `${BASE}/${provider}/${action}`, method: 'POST' };
+      assert.equal(validateRequest(request), true);
+      assert.equal(validateRequest({ ...request, method: 'GET' }), false);
+      assert.equal(validateRequest({ ...request, path: `${request.path}?endpoint=evil` }), false);
+    }
+    for (const action of ['agent', 'oauth/start']) assert.equal(validateRequest({ id: 'domestic-1', path: `${BASE}/${provider}/${action}`, method: 'POST' }), false);
+  }
+});
 async function harness(t, fetchImpl, options = {}) {
   const streams = new Map();
   const bridge = await createDesktopBridge({ brokerOptions: { fetchImpl, ...options }, emit(event) { streams.get(event.id)?.push(event); } });
@@ -88,7 +100,7 @@ test('owned stdio child returns framed events and exits when its owner closes st
   child.stdin.write(`${JSON.stringify({ type: 'request', request: { id: 'native-1', path: BASE, method: 'GET' } })}\n`);
   await finished;
   const events = output.trim().split('\n').map(line => JSON.parse(line));
-  assert.equal(privateFrames.length, 6);
+  assert.equal(privateFrames.length, 9);
   assert.ok(privateFrames.every(frame => frame.operation === 'load'));
   assert.equal(events[0].type, 'headers'); assert.equal(events[0].status, 200);
   assert.ok(events.every(event => event.id === 'native-1'));

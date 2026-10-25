@@ -1,8 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createConnectionClient } from '../desktop/design-previews/model-connection-client.js';
+import { createConnectionClient, isUsableModelConnection } from '../desktop/design-previews/model-connection-client.js';
 const snapshot = (token = 'csrf') => ({ csrfToken: token, storage: 'memory', connections: [], oauth: null });
 const response = value => ({ ok: true, json: async () => value });
+test('only credential-backed GLM presets may be selected before remote verification', async () => {
+  const configured = { providerId: 'glm', status: 'configured', catalogSource: 'preset', hasCredential: true, models: [{ id: 'glm-5.2', name: 'GLM 5.2' }] };
+  const client = createConnectionClient(async () => response({ ...snapshot(), connections: [configured] }));
+  await client.load();
+  assert.equal(isUsableModelConnection(client.snapshot.connections[0]), true);
+  for (const invalid of [undefined, { ...configured, hasCredential: false }, { ...configured, providerId: 'deepseek' }, { ...configured, catalogSource: 'remote' }]) {
+    assert.equal(isUsableModelConnection(invalid), false);
+    if (!invalid) continue;
+    const badClient = createConnectionClient(async () => response({ ...snapshot(), connections: [invalid] }));
+    await assert.rejects(badClient.load(), /本地连接服务/);
+  }
+});
 const authorization = (mode = 'manual') => {
   const flowId = 'f'.repeat(43);
   const url = new URL('https://openrouter.ai/auth');

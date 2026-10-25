@@ -1,10 +1,11 @@
+import { isUsableModelConnection } from '../design-previews/model-connection-client.js';
 import { createProviderIcon } from '../design-previews/components/provider-icons.js';
 import { createIcon } from '../design-previews/components/icons.js';
 import { attachFloatingSurface } from '../design-previews/components/floating-surface.js';
 import { createActionButton } from '../design-previews/components/ui-kit.js';
 
 type Selection = { providerId: string; model: string; label: string };
-type Connection = { providerId: string; status: string; hasCredential?: boolean; models: { id: string; name: string }[] };
+type Connection = { providerId: string; status: string; hasCredential?: boolean; catalogSource?: string; inference?: { status: string; model: string | null }; models: { id: string; name: string }[] };
 
 /** A read-only view of the connection client's catalog; credentials stay in settings. */
 export function mountModelPicker({ anchor, providers, connections, load, select, getSelection, isBusy, manage }: {
@@ -34,7 +35,7 @@ export function mountModelPicker({ anchor, providers, connections, load, select,
     let restoredFocus = false;
     const query = search.value.trim().toLowerCase();
     const selection = getSelection();
-    const available = connections().filter(c => c.status === 'connected');
+    const available = connections().filter(isUsableModelConnection);
     list.replaceChildren();
     for (const connection of available) {
       const provider = providers.find(p => p[0] === connection.providerId)?.[1] || connection.providerId;
@@ -46,7 +47,7 @@ export function mountModelPicker({ anchor, providers, connections, load, select,
         option.setAttribute('aria-pressed', String(selected)); option.disabled = isBusy();
         const label = document.createElement('span'); label.className = 'desktop-picker-label';
         const title = document.createElement('strong'); title.textContent = model.name;
-        const subtitle = document.createElement('small'); subtitle.textContent = provider;
+        const subtitle = document.createElement('small'); subtitle.textContent = connection.status === 'configured' ? `${provider} · ${connection.inference?.status === 'verified' && connection.inference.model === model.id ? '推理已验证' : '预设，尚未验证'}` : provider;
         label.append(title, subtitle);
         const check = createIcon(document, 'check', 'desktop-model-check'); check.style.visibility = selected ? 'visible' : 'hidden';
         option.append(createProviderIcon(document, connection.providerId), label, check);
@@ -59,6 +60,7 @@ export function mountModelPicker({ anchor, providers, connections, load, select,
     const emptyMessage = !available.length ? (connections().some(c => c.hasCredential) ? '凭据已保存，请在管理模型连接中重新连接并读取目录。' : '尚无可用模型，请先连接服务商。')
       : available.some(connection => connection.models.length) ? '没有匹配的模型，试试其他关键词。'
       : available.every(connection => connection.providerId === 'ollama') ? '已连接 Ollama，但尚无本地模型。请先下载模型，再到管理模型连接中刷新目录。'
+      : available.some(connection => connection.providerId === 'kimi') ? '当前账号未返回本应用支持的 Kimi K2.6；其他 Kimi 模型暂不兼容。请在管理模型连接中确认账号权限。'
       : '已连接，但服务商尚未返回可用模型。请到管理模型连接中刷新目录。';
     status.textContent = error || (loading ? '正在读取模型…' : list.childElementCount ? '' : emptyMessage);
     status.hidden = !status.textContent; status.classList.toggle('is-busy', loading); status.dataset.tone = error ? 'error' : 'neutral';

@@ -35,6 +35,9 @@ fn provider(id: &str) -> bool {
         "openai",
         "anthropic",
         "google",
+        "deepseek",
+        "glm",
+        "kimi",
         "openrouter",
         "ollama",
         "custom",
@@ -223,6 +226,12 @@ mod tests {
     fn rejects_untrusted_names_records_and_frames() {
         assert!(CredentialStore::new("bad/namespace").is_err());
         assert!(valid_record("openai", &record()));
+        for id in ["deepseek", "glm", "kimi"] {
+            assert!(valid_record(id, &record()));
+            let mut oauth = record();
+            oauth.method = "oauth".into();
+            assert!(!valid_record(id, &oauth));
+        }
         assert!(!valid_record("custom", &record()));
         let mut bad = record();
         bad.key = "fake\nkey".into();

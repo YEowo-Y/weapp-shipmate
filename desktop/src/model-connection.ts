@@ -1,6 +1,6 @@
 import './model-connection.css';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { createConnectionClient } from '../design-previews/model-connection-client.js';
+import { createConnectionClient, isUsableModelConnection } from '../design-previews/model-connection-client.js';
 import { createProviderIcon } from '../design-previews/components/provider-icons.js';
 import { createIcon } from '../design-previews/components/icons.js';
 import { createActionButton } from '../design-previews/components/ui-kit.js';
@@ -8,7 +8,12 @@ import { desktopModelFetch } from './model-fetch';
 import { mountModelPicker } from './model-picker';
 
 type Selection = { providerId: string; model: string; label: string };
-const providers = [['openai', 'OpenAI'], ['anthropic', 'Anthropic'], ['google', 'Google'], ['openrouter', 'OpenRouter'], ['ollama', 'Ollama'], ['custom', '自定义服务']];
+const providers = [['openai', 'OpenAI'], ['anthropic', 'Anthropic'], ['google', 'Google'], ['deepseek', 'DeepSeek'], ['glm', 'GLM · 智谱'], ['kimi', 'Kimi'], ['openrouter', 'OpenRouter'], ['ollama', 'Ollama'], ['custom', '自定义服务']];
+const providerHelp: Record<string, { keyUrl: string; note: string }> = {
+  deepseek: { keyUrl: 'https://platform.deepseek.com/api_keys', note: '使用 DeepSeek 开放平台 API 密钥。当前支持非思考文本聊天；连接读取目录，不会自动发起付费推理。' },
+  glm: { keyUrl: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys', note: '使用智谱开放平台 API 密钥。此入口使用按量计费 API，不是 Coding Plan 专用地址。模型列表为官方文档预设；保存配置不验证密钥，可主动测试所选模型。' },
+  kimi: { keyUrl: 'https://platform.kimi.com/console/api-keys', note: '使用 Kimi API 开放平台密钥。当前支持非思考文本聊天模型（如 Kimi K2.6）；需要保留思考过程的模型暂不列入目录。' },
+};
 
 /** Native dialog and shared provider client; credentials never enter conversation storage. */
 export function mountModelConnections({ button, picker, select, isBusy, getSelection, onManage }: {
@@ -56,6 +61,8 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
   const reveal = action('desktop-provider-reveal', '显示', 'plain');
   paintReveal(false);
   find('.desktop-key-input').append(reveal);
+  const getKey = action('desktop-provider-get-key', '获取 API 密钥', 'plain');
+  find('.desktop-key-field').append(getKey);
   find('.desktop-catalog-search').prepend(createIcon(document, 'search'));
   const nav = find('nav'), status = find('#desktop-provider-status'), form = find<HTMLFormElement>('form');
   const key = find<HTMLInputElement>('#desktop-provider-key'), search = find<HTMLInputElement>('#desktop-model-search');
@@ -90,20 +97,21 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
     dialog.dataset.connectionState = connection?.status || 'disconnected';
     find('.desktop-model-note').textContent = selected === 'ollama'
       ? '连接此设备上的 Ollama，无需 API 密钥。请先启动 Ollama 并下载模型。'
-      : selected === 'custom' ? '连接你信任的兼容服务。连接读取目录，不代表模型已通过推理测试。' : '连接凭据、模型目录与推理测试分别验证；会话与草稿保留在此设备。';
+      : selected === 'custom' ? '连接你信任的兼容服务。连接读取目录，不代表模型已通过推理测试。' : providerHelp[selected]?.note || '连接凭据、模型目录与推理测试分别验证；会话与草稿保留在此设备。';
     find('h3').textContent = providers.find(p => p[0] === selected)![1];
     find('.desktop-provider-brand').replaceChildren(createProviderIcon(document, selected));
     nav.querySelectorAll<HTMLButtonElement>('button').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.providerId === selected)); b.disabled = busy; });
     const auth = client.snapshot?.oauth;
     const pending = oauthPending(), pendingOpenRouter = selected === 'openrouter' && pending;
     const blocked = busy || pendingOpenRouter || isBusy();
-    const connected = connection?.status === 'connected';
+    const connected = isUsableModelConnection(connection);
     const nextEditorState = `${selected}:${connected}`;
     if (editorState !== nextEditorState) { editorState = nextEditorState; editor.open = !connected; }
     if (pendingOpenRouter) editor.open = true;
     editorToggle.hidden = !connected || pendingOpenRouter;
     editorToggle.textContent = selected === 'ollama' ? '重新设置连接' : '更改密钥或授权方式';
     find('.desktop-model-catalog').hidden = !connected;
+    find('.desktop-model-catalog > label').textContent = selected === 'glm' ? '模型预设（非实时目录）' : '模型目录';
     find('.desktop-inference-panel').hidden = !connected;
     find('.desktop-endpoint-field').hidden = selected !== 'custom';
     if (selected === 'custom' && !endpoint.value && connection?.endpoint) { endpoint.value = connection.endpoint.baseUrl; localHttp.checked = connection.endpoint.allowLocalHttp; }
@@ -116,9 +124,11 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
     if (!systemAvailable) storage.value = 'memory';
     find('#desktop-storage-hint').textContent = credentialUncertain ? '系统凭据状态未确认。可重新读取，或断开并删除保存的凭据；删除失败时可再次重试。' : connection?.credentialStorage === 'system' ? '当前凭据已保存在系统凭据库。重新连接将替换已保存凭据；失败后需重新输入。断开连接会删除保存的凭据。' : systemAvailable ? '默认仅本次使用。选择系统凭据库可在重启后重新连接；密钥不会返回界面。' : '此连接服务仅支持临时凭据；退出后需重新输入。';
     const selection = getSelection();
-    verify.disabled = blocked || connection?.status !== 'connected' || selection?.providerId !== selected || !connection.models.some(m => m.id === selection?.model);
+    verify.disabled = blocked || !isUsableModelConnection(connection) || selection?.providerId !== selected || !connection.models.some(m => m.id === selection?.model);
     const inference = connection?.inference;
-    find('#desktop-inference-status').textContent = inference?.status === 'verified' ? `已通过推理测试 · ${inference.model || ''}` : inference?.error?.message || (inference?.status === 'checking' ? '正在测试模型…' : selection?.providerId === selected && connection?.models.some(m => m.id === selection.model) ? `尚未测试 · ${selection.model}` : '尚未测试。请先在目录中选择模型，再打开此页测试。');
+    const inferenceMatchesSelection = selection?.providerId === selected && inference?.model === selection.model;
+    const verifiedSelection = inferenceMatchesSelection && inference?.status === 'verified';
+    find('#desktop-inference-status').textContent = verifiedSelection ? `已通过推理测试 · ${inference.model || ''}` : (inferenceMatchesSelection && inference?.error?.message) || (inference?.status === 'checking' && inferenceMatchesSelection ? '正在测试模型…' : selection?.providerId === selected && connection?.models.some(m => m.id === selection.model) ? `尚未测试 · ${selection.model}` : '尚未测试。请先在目录中选择模型，再打开此页测试。');
     find('#desktop-inference-status').classList.toggle('is-busy', inference?.status === 'checking');
     form.hidden = pendingOpenRouter;
     const visibleError = error || loadError;
@@ -126,18 +136,20 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
     find('.desktop-oauth-panel > .desktop-field-hint').textContent = pendingOpenRouter
       ? '完成当前授权，或取消后选择其他连接方式。'
       : '使用浏览器授权，或选择授权码连接；也可以在上方填写 API 密钥。';
-    status.textContent = visibleError || (busy ? '正在处理连接…' : connection?.error?.message || (connection?.status === 'connected' ? `已连接 · ${connection.models.length} 个模型` : connection?.hasCredential ? '凭据已保存，尚未读取模型目录。请重新连接。' : '尚未连接。请添加凭据或连接本机 Ollama。'));
+    status.textContent = visibleError || (busy ? '正在处理连接…' : connection?.error?.message || (connection?.status === 'configured' ? `配置已保存 · ${verifiedSelection ? '所选模型已通过推理测试' : '所选模型尚未验证'}` : connection?.status === 'connected' ? `已连接 · ${connection.models.length} 个模型` : connection?.hasCredential ? '凭据已保存，尚未读取模型目录。请重新连接。' : '尚未连接。请添加凭据或连接本机 Ollama。'));
     status.dataset.tone = visibleError || connection?.error ? 'error' : connection?.status === 'connected' ? 'success' : 'neutral';
     status.classList.toggle('is-busy', busy);
     find('.desktop-key-field').hidden = selected === 'ollama';
     key.hidden = selected === 'ollama'; key.disabled = blocked; key.required = selected !== 'ollama';
     reveal.disabled = blocked;
+    getKey.hidden = !providerHelp[selected]; getKey.disabled = blocked;
+    getKey.textContent = `获取 ${providers.find(p => p[0] === selected)![1]} API 密钥`;
     connect.disabled = blocked || !client.ready || (selected !== 'ollama' && !key.value.trim());
     connect.appearance = connection?.status === 'connected' ? 'outlined' : 'accent';
-    connect.textContent = connection?.status === 'connected'
+    connect.textContent = selected === 'glm' ? (connected ? '更新配置' : '保存配置') : connection?.status === 'connected'
       ? (selected === 'ollama' ? '重新连接' : '更新密钥')
       : (selected === 'ollama' ? '连接本机 Ollama' : '连接并读取模型');
-    refresh.textContent = canRestoreCredential ? '重新读取系统凭据' : connection?.status === 'connected' ? '刷新目录' : '重新连接并读取目录';
+    refresh.textContent = canRestoreCredential ? '重新读取系统凭据' : selected === 'glm' ? '重新载入预设' : connection?.status === 'connected' ? '刷新目录' : '重新连接并读取目录';
     refresh.hidden = !(connection?.hasCredential || connection?.authMethod || canRestoreCredential); refresh.disabled = blocked;
     disconnect.hidden = !(connection?.hasCredential || connection?.authMethod || connection?.credentialStorage === 'system' || credentialUncertain); disconnect.disabled = blocked;
     find('.desktop-oauth-panel').hidden = selected !== 'openrouter';
@@ -156,16 +168,16 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
     find('#desktop-oauth-progress').textContent = pending
       ? `${auth?.message || (manualWaiting ? '等待粘贴浏览器中的授权码。' : '等待在浏览器完成授权…')}${expiry ? ` · 有效至 ${expiry}` : ''}`
       : auth?.message || terminal[auth?.status || ''] || '';
-    if (restoreCodeFocus && dialog.open && !busy) (connection?.status === 'connected' ? search : pending ? cancel : manual).focus();
+    if (restoreCodeFocus && dialog.open && !busy) (isUsableModelConnection(connection) ? search : pending ? cancel : manual).focus();
     retry.hidden = client.ready; retry.disabled = busy;
     renderModels();
   }
   function renderModels() {
 
     const connection = client.snapshot?.connections.find(c => c.providerId === selected);
-    const models = connection?.status === 'connected' ? connection.models.filter(m => `${m.id} ${m.name}`.toLowerCase().includes(search.value.trim().toLowerCase())) : [];
+    const models = isUsableModelConnection(connection) ? connection.models.filter(m => `${m.id} ${m.name}`.toLowerCase().includes(search.value.trim().toLowerCase())) : [];
     const selection = getSelection();
-    const emptyState = connection?.status !== 'connected' ? 'disconnected' : connection.models.length ? 'filtered' : 'empty';
+    const emptyState = !isUsableModelConnection(connection) ? 'disconnected' : connection.models.length ? 'filtered' : 'empty';
     const signature = JSON.stringify([selected, connection?.status, models, selection, emptyState]);
     if (signature === listSignature) {
       list.querySelectorAll<HTMLButtonElement>('button').forEach(b => { b.disabled = busy || isBusy(); });
@@ -191,6 +203,7 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
       empty.textContent = emptyState === 'disconnected' ? '连接成功后，模型会显示在这里。'
         : emptyState === 'filtered' ? '没有匹配的模型。试试其他关键词。'
         : selected === 'ollama' ? '已连接 Ollama，但尚无本地模型。请先下载模型，再刷新目录。'
+        : selected === 'kimi' ? '当前账号未返回本应用支持的 Kimi K2.6；其他模型暂不兼容。可前往 Kimi 开放平台确认账号的模型权限。'
         : '已连接，但服务商尚未返回可用模型。请刷新目录。';
       list.append(empty);
     }
@@ -241,7 +254,7 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
   for (const [id, label] of providers) {
     const b = document.createElement('button'); b.type = 'button'; b.dataset.providerId = id;
     b.append(createProviderIcon(document, id), document.createTextNode(label));
-    b.addEventListener('click', () => { selected = id; resetScroll(); clearKey(); code.value = ''; search.value = ''; storage.value = 'memory'; endpoint.value = client.snapshot?.connections.find(c => c.providerId === id)?.endpoint?.baseUrl || ''; localHttp.checked = client.snapshot?.connections.find(c => c.providerId === id)?.endpoint?.allowLocalHttp || false; error = ''; render(); }); nav.append(b);
+    b.addEventListener('click', () => { selected = id; resetScroll(); clearKey(); code.value = ''; search.value = ''; storage.value = 'memory'; endpoint.value = client.snapshot?.connections.find(c => c.providerId === id)?.endpoint?.baseUrl || ''; localHttp.checked = client.snapshot?.connections.find(c => c.providerId === id)?.endpoint?.allowLocalHttp || false; error = ''; render(); b.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); }); nav.append(b);
   }
   form.addEventListener('submit', event => {
     event.preventDefault();
@@ -257,6 +270,12 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
     paintReveal(key.type === 'text');
   });
   refresh.addEventListener('click', () => void mutate('refresh'));
+  getKey.addEventListener('click', async () => {
+    const help = providerHelp[selected];
+    if (!help || getKey.disabled) return;
+    try { await openUrl(help.keyUrl); }
+    catch { error = '未能打开服务商密钥页面，请稍后重试。'; render(); }
+  });
   verify.addEventListener('click', () => { const selection = getSelection(); if (!verify.disabled && selection?.providerId === selected) void mutate('verify', { model: selection.model }); });
   disconnect.addEventListener('click', () => void mutate('disconnect'));
   oauth.addEventListener('click', () => { clearKey(); void mutate('oauth/start', { mode: 'callback', storage: storage.value }); });
@@ -281,8 +300,21 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
   search.addEventListener('input', renderModels);
   closeButton.addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => { clearKey(); code.value = ''; opener?.focus(); });
+  dialog.addEventListener('keydown', event => {
+    // Match the shared dialog boundary wrap; native semantics own interior
+    // navigation and Escape. WebView2 must not tab into browser chrome.
+    if (event.key !== 'Tab' || event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || !dialog.open) return;
+    const controls = [...dialog.querySelectorAll<HTMLElement>('button, wa-button, input, select, textarea, a[href], summary, [tabindex]')]
+      .filter(node => (node.tabIndex >= 0 || node.matches('wa-button')) && !node.matches(':disabled')
+        && !node.hasAttribute('disabled') && !node.closest('[hidden], [inert]')
+        && (!editor.contains(node) || editor.open || node === editorToggle)
+        && node.getClientRects().length > 0 && window.getComputedStyle(node).visibility !== 'hidden');
+    const first = controls[0], last = controls[controls.length - 1], active = document.activeElement;
+    const target = event.shiftKey && active === first ? last : !event.shiftKey && active === last ? first : null;
+    if (target) { event.preventDefault(); target.focus(); }
+  });
   function focusField() {
-    const connected = client.snapshot?.connections.find(c => c.providerId === selected)?.status === 'connected';
+    const connected = isUsableModelConnection(client.snapshot?.connections.find(c => c.providerId === selected));
     const target = selected === 'openrouter' && oauthPending() ? (client.snapshot?.oauth?.mode === 'manual' ? code : cancel) : connected ? search : selected === 'ollama' ? connect : key;
     if (!target.disabled) target.focus();
   }

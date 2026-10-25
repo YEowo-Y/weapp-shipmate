@@ -1,3 +1,4 @@
+import { isUsableModelConnection } from './model-connection-client.js';
 import { GUIDE_SUBJECTS, validateGuideInput } from './guide-contract.js';
 /* global window, document, location, navigator, CustomEvent, requestAnimationFrame */
 import { createIcon, iconMarkup } from './components/icons.js';
@@ -328,6 +329,7 @@ import { loadChatConnections, SUPPORTED_CHAT_PROVIDERS } from './chat-transport.
           if (failed) status.textContent += ' · 部分服务连接异常，可在设置中处理。';
         } else if (failed) status.textContent = '连接异常，暂无可选模型。请在设置中检查或重新连接服务。';
         else if (connections.some(connection => connection.status === 'connecting')) status.textContent = '服务正在连接。完成后重新加载目录，或在设置中查看进度。';
+        else if (connections.some(connection => connection.providerId === 'kimi' && connection.status === 'connected')) status.textContent = '当前账号未返回本应用支持的 Kimi K2.6；其他 Kimi 模型暂不兼容。请在设置中确认账号的模型权限。';
         else if (connections.some(connection => connection.status === 'connected')) status.textContent = '服务已连接，但目录为空。请在设置中刷新目录或检查账户的模型权限。';
         else status.textContent = '没有可用于聊天的模型。尚未连接支持的服务，请先管理模型连接。';
       }
@@ -367,7 +369,7 @@ import { loadChatConnections, SUPPORTED_CHAT_PROVIDERS } from './chat-transport.
         if (closed || current !== generation) return;
         connections = snapshot.connections.filter(connection => Object.hasOwn(SUPPORTED_CHAT_PROVIDERS, connection.providerId));
         for (const connection of connections) {
-          if (connection.status !== 'connected') continue;
+          if (!isUsableModelConnection(connection)) continue;
           for (const model of connection.models) models.push({ providerId: connection.providerId, model: model.id, name: model.name || model.id, label: `${SUPPORTED_CHAT_PROVIDERS[connection.providerId]} · ${model.name || model.id}` });
         }
         ready = true; render();

@@ -1,8 +1,8 @@
-import { createConnectionClient } from './model-connection-client.js';
+import { createConnectionClient, isUsableModelConnection } from './model-connection-client.js';
 import { readUIMessageStream } from './ui-message-stream.js';
 import { AGENT_PROVIDERS, AGENT_TOOL_NAME, validateAgentInput, validateAgentResult } from './agent-contract.js';
 
-export const SUPPORTED_CHAT_PROVIDERS = Object.freeze({ openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', openrouter: 'OpenRouter', ollama: 'Ollama', custom: '自定义兼容服务' });
+export const SUPPORTED_CHAT_PROVIDERS = Object.freeze({ openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', deepseek: 'DeepSeek', glm: 'GLM · 智谱', kimi: 'Kimi', openrouter: 'OpenRouter', ollama: 'Ollama', custom: '自定义兼容服务' });
 class ChatTransportError extends Error {}
 const fail = message => { throw new ChatTransportError(message); };
 const abortError = () => Object.assign(new Error('回复已停止。'), { name: 'AbortError' });
@@ -135,7 +135,7 @@ export async function streamChat({ providerId, model, messages, signal, agent, o
       const snapshot = await loadChatConnections({ signal: controller.signal, fetcher });
       checkAbort(controller.signal);
       const connection = snapshot.connections.find(item => item.providerId === providerId);
-      if (connection?.status !== 'connected' || !connection.models.some(item => item.id === model)) fail('所选模型连接已失效，请在设置中重新连接并选择模型。');
+      if (!isUsableModelConnection(connection) || !connection.models.some(item => item.id === model)) fail('所选模型连接已失效，请在设置中重新连接并选择模型。');
       const response = await fetcher(`/api/model-connections/${providerId}/${agent ? 'agent' : 'chat'}`, {
         method: 'POST', credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal,
         headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', 'X-Shipmate-CSRF': snapshot.csrfToken },

@@ -3,6 +3,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { discoverModels, exchangeOpenRouterCode, ConnectionError, PROVIDER_CONFIGS } from '../desktop/server/model-providers.mjs';
 const json = value => new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } });
+
+for (const [provider, endpoint] of [
+  ['deepseek', 'https://api.deepseek.com/models'],
+  ['kimi', 'https://api.moonshot.cn/v1/models'],
+]) {
+  test(`${provider} discovers account models only from its fixed bearer-authenticated endpoint`, async () => {
+    const result = await discoverModels(provider, 'fake-key', { fetchImpl: async (url, options) => {
+      assert.equal(url, endpoint);
+      assert.equal(options.headers.Authorization, 'Bearer fake-key');
+      assert.equal(options.redirect, 'error');
+      assert.equal(options.method, undefined);
+      return json({ data: [{ id: provider === 'kimi' ? 'kimi-k2.6' : 'account-model' }] });
+    } });
+    const id = provider === 'kimi' ? 'kimi-k2.6' : 'account-model';
+    assert.deepEqual(result, { models: [{ id, name: id }], truncated: false });
+    await assert.rejects(discoverModels(provider, 'fake-key', { fetchImpl: async () => new Response('private upstream text', { status: 401 }) }), { code: 'authentication_failed' });
+  });
+}
 test('OpenAI discovery uses only fixed endpoint and bearer auth, rejects redirects', async () => {
   const result = await discoverModels('openai', 'test-key', { fetchImpl: async (url, options) => {
     assert.equal(url, 'https://api.openai.com/v1/models');
@@ -11,6 +29,24 @@ test('OpenAI discovery uses only fixed endpoint and bearer auth, rejects redirec
     return json({ data: [{ id: 'sample-model' }] });
   } });
   assert.deepEqual(result, { models: [{ id: 'sample-model', name: 'sample-model' }], truncated: false });
+});
+
+test('GLM presets do not make an undocumented catalog request or validate a key remotely', async () => {
+  const noNetwork = () => assert.fail('Saving GLM must not make a model or paid inference request');
+  const result = await discoverModels('glm', 'fake-key', { fetchImpl: noNetwork });
+  assert.deepEqual(result, { models: [{ id: 'glm-5.2', name: 'glm-5.2' }, { id: 'glm-4.7', name: 'glm-4.7' }], truncated: false, catalogSource: 'preset' });
+  await assert.rejects(discoverModels('glm', '', { fetchImpl: noNetwork }), { code: 'invalid_key' });
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(discoverModels('glm', 'fake-key', { fetchImpl: noNetwork, signal: controller.signal }), { code: 'canceled' });
+});
+
+test('Kimi excludes reasoning-only and retired models without fabricating an available model', async () => {
+  const result = await discoverModels('kimi', 'fake-key', { fetchImpl: async () => json({ data: [
+    { id: 'kimi-k3.1-pro' }, { id: 'kimi-k2.7-code' }, { id: 'moonshot-v1-8k' }, { id: 'kimi-k2.6' },
+  ] }) });
+  assert.deepEqual(result.models, [{ id: 'kimi-k2.6', name: 'kimi-k2.6' }]);
+  const empty = await discoverModels('kimi', 'fake-key', { fetchImpl: async () => json({ data: [{ id: 'kimi-k3.1-pro' }] }) });
+  assert.deepEqual(empty.models, []);
 });
 
 test('provider configuration is immutable and unsupported identities never make requests', async () => {

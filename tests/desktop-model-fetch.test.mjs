@@ -12,6 +12,19 @@ function bridge() {
 }
 const headers = { type: 'headers', status: 200, headers: { 'content-type': 'text/plain', 'set-cookie': 'never-expose' } };
 
+test('new built-in providers use native fixed chat routes without acquiring agent or OAuth routes', async () => {
+  for (const provider of ['deepseek', 'glm', 'kimi']) {
+    const b = bridge();
+    for (const action of ['agent', 'oauth/start']) await assert.rejects(b.fetcher(`/api/model-connections/${provider}/${action}`, { method: 'POST' }));
+    assert.equal(b.calls.length, 0);
+    const pending = b.fetcher(`/api/model-connections/${provider}/chat`, { method: 'POST', body: '{}' });
+    assert.equal(b.calls[0].args.request.path, `/api/model-connections/${provider}/chat`);
+    b.emit(headers); b.emit({ type: 'chunk', data: 'reply' }); b.emit({ type: 'end' });
+    assert.equal(await (await pending).text(), 'reply');
+    b.fetcher.dispose();
+  }
+});
+
 test('native explain uses the shared query transport and only the exact POST route', async () => {
   const calls = [];
   const fetcher = createDesktopModelFetch({ createChannel: () => ({}), invoke: async (command, args) => {

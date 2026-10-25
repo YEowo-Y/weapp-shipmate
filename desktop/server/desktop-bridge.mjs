@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { createModelConnectionHandler, validOAuthCallback } from './model-connections.mjs';
 
 const BASE = '/api/model-connections';
-const ROUTE = /^\/api\/model-connections\/(openai|anthropic|google|openrouter|ollama|custom)\/(connect|refresh|disconnect|chat|verify)$/;
+const ROUTE = /^\/api\/model-connections\/(openai|anthropic|google|deepseek|glm|kimi|openrouter|ollama|custom)\/(connect|refresh|disconnect|chat|verify)$/;
 const MAX_LINE = 400_000;
 const validId = id => typeof id === 'string' && /^[\w-]{1,80}$/.test(id);
 const same = (a, b) => typeof a === 'string' && typeof b === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
