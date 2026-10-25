@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync, symlinkSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { EventEmitter } from 'node:events';
@@ -10,7 +10,8 @@ import { isScanPathEligible } from '../src/scanner.mjs';
 import { startProjectWatch, relevantWatchEvent } from '../desktop/server/project-watch.mjs';
 
 function fixture(t) {
-  const base = mkdtempSync(join(tmpdir(), 'shipmate-watch-'));
+  // Windows CI may expose TEMP through an 8.3 alias; watcher roots are canonical.
+  const base = realpathSync.native(mkdtempSync(join(tmpdir(), 'shipmate-watch-')));
   t.after(() => rmSync(base, { recursive: true, force: true }));
   const root = join(base, 'project'); mkdirSync(root);
   return { base, root };
