@@ -11,9 +11,13 @@ export async function checkOpenClaudeChat({ run, checked, click, press, inspect,
     await click('#desktop-preferences-open');
     await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'chat appearance settings');
   };
+  const closePreferences = async () => {
+    await click('#preferences-content-dismiss');
+    await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'return to chat from appearance settings');
+  };
   await preferences();
-  const originalTheme = await inspect('return document.querySelector("input[name=desktop-theme]:checked").value');
-  await click('#preferences-done');
+  const originalTheme = await inspect('return document.querySelector("#desktop-preferences [role=radio][id^=desktop-theme-][aria-checked=true]").id.replace("desktop-theme-", "")');
+  await closePreferences();
   const fillDraft = async value => {
     const count = requests.length;
     // Clear through real editing keys so input listeners also update send state.
@@ -64,10 +68,10 @@ export async function checkOpenClaudeChat({ run, checked, click, press, inspect,
   try {
     for(const theme of ['light','dark']) await checked(`Open Claude adopted chat proportions remain usable in ${theme} at desktop and narrow widths`, async()=>{
       await command('POST','/window/rect',{width:1000,height:900});
-      await preferences(); await click(`label:has(#desktop-theme-${theme})`); await click('#preferences-done');
+      await preferences(); await click(`#desktop-theme-${theme}`); await closePreferences();
       for(const width of [1000,1440,390,320]) {
         await command('POST','/window/rect',{width,height:900});
-        await click('#desktop-preferences-open'); await click('#preferences-done');
+        await preferences(); await closePreferences();
         const unfocused=await style();
         await click('#desktopInput');
         await until(async()=>{const focused=await style();return focused.shadow!=='none'&&JSON.stringify(focused)!==JSON.stringify(unfocused);}, 'visible composer focus feedback');
@@ -99,7 +103,7 @@ export async function checkOpenClaudeChat({ run, checked, click, press, inspect,
     });
   } finally {
     await command('POST','/window/rect',{width:original.width,height:original.height});
-    await preferences(); await click(`label:has(#desktop-theme-${originalTheme})`); await click('#preferences-done');
+    await preferences(); await click(`#desktop-theme-${originalTheme}`); await closePreferences();
     await fillDraft(original.draft);
   }
 }
