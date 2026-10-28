@@ -64,8 +64,8 @@ export async function checkResultTrust({ run, checked, click, fill, find, inspec
     await until(async () => (await text('[data-action="data-feedback"]')).includes(`已追加导入并保存 ${imported.length} 个会话`), 'import persisted');
     assert.equal(await inspect('return document.querySelector("#desktopInput").value'), '可信结果验收：原会话草稿');
     assert.equal(await text('#session-title'), title);
-    await click('[data-kind="data"] [data-action="cancel"]');
-    if (await inspect('return document.querySelector("#desktop-preferences").open')) await click('#preferences-done');
+    await click('#preferences-content-dismiss');
+    await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'return to conversation after import');
     await selectHistory('验收：缺失成果');
     await screenshot('trust-imported-history');
   });
