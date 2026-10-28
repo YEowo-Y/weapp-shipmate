@@ -239,15 +239,26 @@ async function quit() {
   if (presentationMode) assert.deepEqual(presentationFrontendErrors, [], 'no monitored presentation frontend errors or unhandled rejections');
 }
 async function settingsConnectionsReady() {
-  await until(() => inspect('return document.querySelector("#desktop-preferences").open && document.querySelector("#preferences-connections").checkVisibility() && !document.querySelector("#desktop-model-dialog").open'), 'settings connections section');
+  await until(() => inspect('const settings=document.querySelector("#desktop-preferences"); return settings.open && settings.dataset.section==="models" && settings.querySelector(".desktop-model-panel")?.checkVisibility() && !document.querySelector("#desktop-model-dialog").open'), 'embedded model settings ready');
 }
-async function openSettingsConnections() {
-  await click('#desktop-preferences-open');
-  await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'global settings');
-  await click('#preferences-nav-connections'); await settingsConnectionsReady();
+async function openSettingsSection(section) {
+  if (!await inspect('return document.querySelector("#desktop-preferences").open')) {
+    await openNavigation(); await click('#desktop-preferences-open');
+    await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'global settings');
+  }
+  if (!await inspect('return document.querySelector(arguments[0]).checkVisibility()', [`#preferences-nav-${section}`])) await click('#preferences-categories');
+  await click(`#preferences-nav-${section}`);
 }
-async function openModelSettings() { await openSettingsConnections(); await click('#preferences-models'); }
-async function openDataSettings() { await openSettingsConnections(); await click('#preferences-data'); }
+async function openSettingsConnections() { await openSettingsSection('models'); await settingsConnectionsReady(); }
+async function openModelSettings() { await openSettingsConnections(); }
+async function openDataSettings() {
+  await openSettingsSection('data');
+  await until(() => inspect('const settings=document.querySelector("#desktop-preferences"); return settings.open && settings.dataset.section==="data" && settings.querySelector(".session-workspace-data-panel")?.checkVisibility()'), 'embedded session data settings ready');
+}
+async function closeSettings() {
+  await click('#preferences-content-dismiss');
+  await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'settings return to application');
+}
 async function connectedModel() {
   await openModelSettings();
   await until(() => inspect('return !document.querySelector("[data-provider-id=ollama]").disabled'), 'provider selector ready');
@@ -255,10 +266,10 @@ async function connectedModel() {
   await until(() => inspect('return document.querySelector("[data-provider-id=ollama]").getAttribute("aria-pressed") === "true"'), 'Ollama selected');
   await until(() => inspect('return !document.querySelector("#desktop-provider-connect").disabled'), 'connect ready');
   await click('#desktop-provider-connect');
-  await until(() => find(`#desktop-model-dialog [data-model-id="${model}"]`), 'discovered fixture model');
+  await until(() => find(`#desktop-preferences .desktop-model-panel [data-model-id="${model}"]`), 'discovered fixture model');
   await screenshot('model-connection');
-  await click(`#desktop-model-dialog [data-model-id="${model}"]`);
-  await until(() => inspect('return !document.querySelector("#desktop-model-dialog").open'), 'model selected');
+  await click(`#desktop-preferences .desktop-model-panel [data-model-id="${model}"]`);
+  await until(() => inspect('return document.querySelector("#desktop-preferences .desktop-model-panel [aria-pressed=true][data-model-id]")?.dataset.modelId === arguments[0]', [model]), 'model selected inside settings');
 }
 async function send(message) { await fill('#desktopInput', message); await click('#desktopSend'); }
 async function openExplainFromMenu() {
@@ -654,8 +665,8 @@ async function checkAgentFlows() {
     await click('[data-provider-id="openai"]');
     await until(() => inspect('return !document.querySelector("#desktop-provider-key").disabled && document.querySelector("#desktop-connection-editor").open'), 'P5 key editor ready');
     await fill('#desktop-provider-key','p5-native-fake-key'); await click('#desktop-provider-connect');
-    await until(() => find('#desktop-model-dialog [data-model-id="gpt-4.1-mini"]'),'P5 fixture model');
-    await click('#desktop-model-dialog [data-model-id="gpt-4.1-mini"]');
+    await until(() => find('#desktop-preferences .desktop-model-panel [data-model-id="gpt-4.1-mini"]'),'P5 fixture model');
+    await click('#desktop-preferences .desktop-model-panel [data-model-id="gpt-4.1-mini"]');
   }
   async function runScenario(prompt, steps) {
     const before = requests.length; agentFixture.next(steps); await send(prompt);
@@ -666,7 +677,7 @@ async function checkAgentFlows() {
     await mkdir(directory); await writeFile(resolve(directory,'project.config.json'), JSON.stringify({appid:'touristappid',projectname:'P5 fixture',compileType:'miniprogram',miniprogramRoot:'./'}));
     await writeFile(resolve(directory,'app.json'),JSON.stringify({pages:[]}));
     await projectInvoke('project_save',{project:{id:projectId,name:'P5工具验收',directory,subject:'personal'}});
-    await projectDialog(); await click('#project-retry'); await until(() => inspect('return document.querySelector("#desktop-project-select").options.length===2 && !document.querySelector("#project-retry").disabled'),'P5 project ready'); await closeProjects(); await selectProject(projectId); await connect();
+    await projectDialog(); await click('#project-retry'); await until(() => inspect('return document.querySelector("#desktop-project-select").options.length===2 && !document.querySelector("#project-retry").disabled'),'P5 project ready'); await closeProjects(); await selectProject(projectId); await connect(); await closeSettings();
     await click('#desktop-agent-tools');
     assert.equal(await inspect('return document.querySelector("#desktop-agent-read").checked'),false);
     assert.equal(await inspect('return document.querySelector("#desktop-agent-share").checked'),false);
@@ -735,7 +746,7 @@ async function checkAgentFlows() {
   await checked('Restart retains Agent tool parts and artifacts but revokes both permissions without automatic inference', async () => {
     const before=await toolsCount(), count=requests.length; await quit(); await launch();
     assert.equal(await toolsCount(),before); assert.equal((await snapshot()).artifacts.length,3); assert.equal(requests.length,count);
-    await connect(); await click('#desktop-agent-tools');
+    await connect(); await closeSettings(); await click('#desktop-agent-tools');
     assert.equal(await inspect('return document.querySelector("#desktop-agent-read").checked || document.querySelector("#desktop-agent-share").checked'),false);
     await screenshot('p5-restart-permissions'); await click('#desktop-agent-done');
   });
@@ -768,21 +779,22 @@ async function checkConnectionsFlows() {
   await checked('Explicit system storage saves only the isolated fake OpenRouter credential', async () => {
     await openProvider(); await chooseOption('#desktop-provider-storage', 'system');
     await fill('#desktop-provider-key', dummyKey); await click('#desktop-provider-connect');
-    await until(() => find('#desktop-model-dialog [data-model-id="fixture/oauth-model"]'), 'fixture catalog connected');
-    await screenshot('p4-system-connected'); await click('#desktop-model-dialog [data-model-id="fixture/oauth-model"]');
+    await until(() => find('#desktop-preferences .desktop-model-panel [data-model-id="fixture/oauth-model"]'), 'fixture catalog connected');
+    await screenshot('p4-system-connected'); await click('#desktop-preferences .desktop-model-panel [data-model-id="fixture/oauth-model"]');
   });
   await checked('Restart restores disconnected saved credential and explicit reconnect does not infer', async () => {
     const before = requests.length; await quit(); await launch(); await openProvider();
     assert.equal(await inspect('return document.querySelector("#desktop-provider-key").value'), '');
     assert.equal(requests.length, before);
-    await click('#desktop-provider-refresh'); await until(() => find('#desktop-model-dialog [data-model-id="fixture/oauth-model"]'), 'stored credential reconnects');
+    await click('#desktop-provider-refresh'); await until(() => find('#desktop-preferences .desktop-model-panel [data-model-id="fixture/oauth-model"]'), 'stored credential reconnects');
     assert.equal(requests.length, before); await screenshot('p4-restored-connection');
   });
   await checked('Inference verification is explicit and separate from model discovery', async () => {
     const before = requests.length; await click('#desktop-provider-verify');
     await until(() => requests.length > before && requests.at(-1).completed, 'explicit fixture inference');
     await until(async () => /通过|成功|可用/.test(await text('#desktop-inference-status')), 'inference verified UI');
-    await click('#desktop-model-dialog [data-model-id="fixture/oauth-model"]');
+    await click('#desktop-preferences .desktop-model-panel [data-model-id="fixture/oauth-model"]');
+    await closeSettings();
     await send('P4真实原生桥协议夹具聊天'); await finished();
     assert.ok(requests.at(-1).messages.some(message => message.content.includes('P4真实原生桥协议夹具聊天')));
   });
@@ -792,7 +804,7 @@ async function checkConnectionsFlows() {
   });
   await checked('Deleting saved credential prevents restoration after process restart', async () => {
     await openProvider(); await click('#desktop-provider-disconnect');
-    await until(() => inspect('return document.querySelectorAll("#desktop-model-dialog [data-model-id=\\"fixture/oauth-model\\"]").length===0'), 'delete operation settles');
+    await until(() => inspect('return document.querySelectorAll("#desktop-preferences .desktop-model-panel [data-model-id=\\"fixture/oauth-model\\"]").length===0'), 'delete operation settles');
     await quit(); await launch(); await openProvider();
     assert.equal(await inspect('return document.querySelector("#desktop-provider-key").value'), '');
     assert.match(await text('#desktop-provider-status'), /未连接|断开|连接/);
@@ -800,25 +812,26 @@ async function checkConnectionsFlows() {
   });
   await checked('Temporary replacement removes the previous saved account instead of resurrecting it', async () => {
     await chooseOption('#desktop-provider-storage', 'system'); await fill('#desktop-provider-key', dummyKey); await click('#desktop-provider-connect');
-    await until(() => find('#desktop-model-dialog [data-model-id="fixture/oauth-model"]'), 'system account connected');
+    await until(() => find('#desktop-preferences .desktop-model-panel [data-model-id="fixture/oauth-model"]'), 'system account connected');
     await editConnection(); await screenshot('p4-edit-connection'); await chooseOption('#desktop-provider-storage', 'memory'); await fill('#desktop-provider-key', dummyKey); await click('#desktop-provider-connect');
     await until(async () => /本次|临时|内存/.test(await text('#desktop-storage-hint')), 'temporary replacement applied');
     const count = requests.length; await quit(); await launch(); await openProvider();
-    assert.equal(requests.length, count); assert.equal(await inspect('return document.querySelectorAll("#desktop-model-dialog [data-model-id=\\"fixture/oauth-model\\"]").length'), 0);
+    assert.equal(requests.length, count); assert.equal(await inspect('return document.querySelectorAll("#desktop-preferences .desktop-model-panel [data-model-id=\\"fixture/oauth-model\\"]").length'), 0);
     assert.equal(await inspect('return document.querySelector("#desktop-provider-refresh").hidden'), true);
   });
   await checked('System OAuth fixture survives restart without repeating exchange or inference', async () => {
     await chooseOption('#desktop-provider-storage', 'system'); await click('#desktop-provider-oauth-manual');
     await until(() => inspect('return !document.querySelector("#desktop-oauth-code-form").hidden'), 'manual OAuth ready');
     await fill('#desktop-oauth-code', 'fixture-native-oauth-success'); await click('#desktop-provider-oauth-complete');
-    await until(() => find('#desktop-model-dialog [data-model-id="fixture/oauth-model"]'), 'OAuth catalog');
+    await until(() => find('#desktop-preferences .desktop-model-panel [data-model-id="fixture/oauth-model"]'), 'OAuth catalog');
     const exchanges = oauthExchanges, count = requests.length;
     await quit(); await launch(); await openProvider(); assert.equal(oauthExchanges, exchanges); assert.equal(requests.length, count);
-    await click('#desktop-provider-refresh'); await until(() => find('#desktop-model-dialog [data-model-id="fixture/oauth-model"]'), 'saved OAuth reconnect');
+    await click('#desktop-provider-refresh'); await until(() => find('#desktop-preferences .desktop-model-panel [data-model-id="fixture/oauth-model"]'), 'saved OAuth reconnect');
     assert.equal(oauthExchanges, exchanges); assert.equal(requests.length, count);
     const storage = await inspect('return JSON.stringify({local:{...localStorage},session:{...sessionStorage},html:document.documentElement.outerHTML})');
     assert.ok(!storage.includes(dummyKey));
-    await click('#desktop-model-dialog [data-model-id="fixture/oauth-model"]');
+    await click('#desktop-preferences .desktop-model-panel [data-model-id="fixture/oauth-model"]');
+    await closeSettings();
   });
   await checked('Explicit report context previews actual content and removal excludes it from subsequent requests', async () => {
     const directory = resolve(run, 'P4 上下文项目'); await mkdir(directory);
@@ -836,7 +849,8 @@ async function checkConnectionsFlows() {
     assert.equal(contextSnapshot.contextRevision, artifact.contextRevision);
     assert.equal(contextSnapshot.title, artifact.title);
     await click('#desktop-explain-close');
-    await openProvider(); await click('#desktop-model-dialog [data-model-id="fixture/oauth-model"]');
+    await openProvider(); await click('#desktop-preferences .desktop-model-panel [data-model-id="fixture/oauth-model"]');
+    await closeSettings();
     await click('.agent-composer__add'); await until(() => inspect('return document.querySelector("#desktop-context-dialog").open'), 'context dialog');
     await chooseOption('#desktop-context-report',artifact.id); await click('#desktop-context-add-report');
     await until(() => inspect('return document.querySelectorAll("#desktop-context-items details").length===1'), 'report attached');
@@ -857,12 +871,12 @@ async function checkConnectionsFlows() {
     await send('P4已移除报告上下文'); await finished(); assert.ok(!requests.at(-1).messages.some(message => typeof message.content === 'string' && message.content.includes(artifact.markdown.slice(0,60))));
     await selectProject(null); await click('.agent-composer__add'); assert.equal(await inspect('return document.querySelectorAll("#desktop-context-items details").length'),0); await click('#desktop-context-close');
   });
-  await checked('Connections dialog fits narrow native window and retains modal keyboard focus', async () => {
+  await checked('Connection settings fit a narrow native window and retain modal keyboard focus', async () => {
     await command('POST','/window/rect',{width:390,height:844}); await openProvider();
-    for(let i=0;i<12;i++){await press('\uE004');assert.equal(await inspect('return document.activeElement===document.body || document.querySelector("#desktop-model-dialog").contains(document.activeElement)'),true);}
-    assert.equal(await inspect('return document.documentElement.scrollWidth<=innerWidth && document.querySelector("#desktop-model-dialog").scrollWidth<=document.querySelector("#desktop-model-dialog").clientWidth+1'),true);
+    for(let i=0;i<12;i++){await press('\uE004');assert.equal(await inspect('return document.activeElement===document.body || document.querySelector("#desktop-preferences").contains(document.activeElement)'),true);}
+    assert.equal(await inspect('return document.documentElement.scrollWidth<=innerWidth && document.querySelector("#desktop-preferences").scrollWidth<=document.querySelector("#desktop-preferences").clientWidth+1'),true);
     await screenshot('p4-connections-narrow'); await click('#desktop-provider-disconnect');
-    await until(() => inspect('return document.querySelectorAll("#desktop-model-dialog [data-model-id=\\"fixture/oauth-model\\"]").length===0'), 'final fake credential deleted');
+    await until(() => inspect('return document.querySelectorAll("#desktop-preferences .desktop-model-panel [data-model-id=\\"fixture/oauth-model\\"]").length===0'), 'final fake credential deleted');
   });
   await checked('Custom endpoint enforces local HTTP opt-in and uses actual pinned loopback transport', async () => {
     const customRequests = [];
@@ -887,7 +901,8 @@ async function checkConnectionsFlows() {
     await click('#desktop-provider-connect'); await until(async()=>/HTTP|允许|本机|地址|连接失败/.test(await text('#desktop-provider-status')),'HTTP without opt-in rejected');
     assert.equal(customRequests.length,0);
     await click('#desktop-provider-local-http');await fill('#desktop-provider-key','p4-custom-fake-key');await click('#desktop-provider-connect');
-    await until(()=>find('#desktop-model-dialog [data-model-id="p4-custom-model"]'),'explicit local custom model');await click('#desktop-model-dialog [data-model-id="p4-custom-model"]');
+    await until(()=>find('#desktop-preferences .desktop-model-panel [data-model-id="p4-custom-model"]'),'explicit local custom model');await click('#desktop-preferences .desktop-model-panel [data-model-id="p4-custom-model"]');
+    await closeSettings();
     await send('P4自定义本机服务验收');await until(()=>customRequests.length===1,'actual custom inference');await finished();
     assert.ok((await text('#desktopMessages')).includes('P4_CUSTOM_REAL_TRANSPORT'));
     await screenshot('p4-custom-real-transport');
@@ -1077,7 +1092,7 @@ try {
     });
     await checked('Installed release model provider catalog and credential validation need no account or paid request', async () => {
       await openModelSettings();
-      await until(() => inspect('return document.querySelector("#desktop-model-dialog").open && !document.querySelector("[data-provider-id=openai]").disabled'), 'installed provider catalog');
+      await until(() => inspect('return document.querySelector("#desktop-preferences").open && !document.querySelector("[data-provider-id=openai]").disabled'), 'installed provider catalog');
       // Rejection lookup now uses a short-lived project CLI. The model settings
       // GET starts the lazy broker; verify its installed file identity here,
       // keeping the exact-path/parent-PID checks and no-Node-on-PATH environment.
@@ -1117,7 +1132,7 @@ try {
       await screenshot('release-restarted');
     });
   } else if (realModel) {
-    await checked('Real installed Ollama model connects through native desktop', connectedModel);
+    await checked('Real installed Ollama model connects through native desktop', async () => { await connectedModel(); await closeSettings(); });
     await checked('Real local model generates a response through native IPC', async () => {
       await send('请只回复：连接成功');
       await until(async () => (await text('#desktopMessages .msg--agent .msg__text'))?.trim(), 'real model response', 120000);
@@ -1409,7 +1424,7 @@ try {
   });
   await checked('Open-source credential controls mask and clear drafts without submitting to a cloud provider', async () => {
     await openModelSettings();
-    await until(() => inspect('return document.querySelector("#desktop-model-dialog").open && !document.querySelector("[data-provider-id=openai]").disabled'), 'credential dialog ready');
+    await until(() => inspect('return document.querySelector("#desktop-preferences").open && !document.querySelector("[data-provider-id=openai]").disabled'), 'credential dialog ready');
     await click('[data-provider-id="openai"]');
     assert.equal(await inspect('return document.querySelector("#desktop-provider-key").value'), '');
     assert.equal(await inspect('return document.querySelector("#desktop-provider-key").type'), 'password');
@@ -1427,10 +1442,10 @@ try {
     assert.equal(await inspect('return document.querySelector("#desktop-provider-reveal").textContent.trim()'), '显示密钥');
     await screenshot('credential-masked');
     await press('\uE00C');
-    await until(() => inspect('return !document.querySelector("#desktop-model-dialog").open && document.activeElement.id === "desktop-preferences-open"'), 'credential Escape returns to settings trigger');
+    await until(() => inspect('return !document.querySelector("#desktop-preferences").open && document.activeElement.id === "desktop-preferences-open"'), 'credential Escape returns to settings trigger');
     assert.equal(await inspect('return document.querySelector("#desktop-provider-key").value'), '');
     await openModelSettings();
-    await until(() => inspect('return document.querySelector("#desktop-model-dialog").open && !document.querySelector("[data-provider-id=openai]").disabled'), 'credential dialog reopens');
+    await until(() => inspect('return document.querySelector("#desktop-preferences").open && !document.querySelector("[data-provider-id=openai]").disabled'), 'credential dialog reopens');
     assert.equal(await inspect('return document.querySelector("#desktop-provider-key").value'), '');
     assert.equal(await inspect('return document.querySelector("#desktop-provider-key").type'), 'password');
     assert.equal(await inspect('return document.querySelector("#desktop-provider-connect").disabled'), true);
@@ -1443,11 +1458,11 @@ try {
     assert.equal(await inspect('return document.querySelector("#desktop-provider-connect").disabled'), true);
     assert.equal(requests.length, 0, 'credential UI inspection does not issue inference requests');
     await press('\uE00C');
-    await until(() => inspect('return !document.querySelector("#desktop-model-dialog").open && document.activeElement.id === "desktop-preferences-open"'), 'provider switch dialog returns focus');
+    await until(() => inspect('return !document.querySelector("#desktop-preferences").open && document.activeElement.id === "desktop-preferences-open"'), 'provider switch dialog returns focus');
   });
   await checked('Manual OAuth remains recoverable after closing settings and never retains a code draft', async () => {
     await openModelSettings();
-    await until(() => inspect('return document.querySelector("#desktop-model-dialog").open && !document.querySelector("[data-provider-id=openrouter]").disabled'), 'OAuth settings ready');
+    await until(() => inspect('return document.querySelector("#desktop-preferences").open && !document.querySelector("[data-provider-id=openrouter]").disabled'), 'OAuth settings ready');
     if (!(await inspect('return document.querySelector("[data-provider-id=openrouter]").getAttribute("aria-pressed") === "true"'))) await click('[data-provider-id="openrouter"]');
     await click('#desktop-provider-oauth-manual');
     await until(() => inspect('return !document.querySelector("#desktop-oauth-code-form").hidden && !document.querySelector("#desktop-provider-oauth-reopen").hidden'), 'manual OAuth waiting');
@@ -1458,7 +1473,7 @@ try {
     assert.equal(await inspect('return document.querySelector("#desktop-provider-key").closest("form").hidden'), true);
     await command('POST', '/window/rect', { width: 390, height: 844 });
     await fill('#desktop-oauth-code', 'fixture-native-never-submit');
-    assert.equal(await inspect('return document.documentElement.scrollWidth <= innerWidth && document.querySelector("#desktop-model-dialog").scrollWidth <= document.querySelector("#desktop-model-dialog").clientWidth'), true);
+    assert.equal(await inspect('return document.documentElement.scrollWidth <= innerWidth && document.querySelector("#desktop-preferences").scrollWidth <= document.querySelector("#desktop-preferences").clientWidth'), true);
     const authGeometry = await inspect('const r=document.querySelector("#desktop-provider-oauth-complete").getBoundingClientRect(); return {left:r.left,right:r.right,width:innerWidth};');
     assert.ok(authGeometry.left >= 0 && authGeometry.right <= authGeometry.width);
     await screenshot('oauth-manual-narrow');
@@ -1499,15 +1514,15 @@ try {
     assert.doesNotMatch(storageText, /fixture-native-oauth|code_verifier|authorizationUrl/);
     await screenshot('oauth-connected');
     await click('#desktop-provider-disconnect');
-    await until(() => inspect('return document.querySelectorAll("#desktop-model-dialog [data-model-id=\\"fixture/oauth-model\\"]").length === 0'), 'OAuth disconnected');
+    await until(() => inspect('return document.querySelectorAll("#desktop-preferences .desktop-model-panel [data-model-id=\\"fixture/oauth-model\\"]").length === 0'), 'OAuth disconnected');
     await press('\uE00C');
   });
-  await checked('Connect Ollama and select discovered model through production UI', connectedModel);
+  await checked('Connect Ollama and select discovered model through production UI', async () => { await connectedModel(); await closeSettings(); });
   await checked('Quick model selection searches, retains selection, handles keyboard and opens settings separately', async () => {
     const anchor = '#desktopComposer .agent-composer__model';
     await click(anchor);
     await until(() => inspect('return document.querySelector("#desktop-model-picker").matches(":popover-open") && document.querySelector(".desktop-picker-option")'), 'compact picker ready');
-    assert.equal(await inspect('return document.querySelector("#desktop-model-dialog").open'), false);
+    assert.equal(await inspect('return document.querySelector("#desktop-preferences").open || document.querySelector("#desktop-model-dialog").open'), false);
     assert.equal(await inspect('return document.activeElement.id'), 'desktop-picker-search');
     assert.equal(await inspect('return document.querySelector(".desktop-picker-option").getAttribute("aria-pressed")'), 'true');
     await screenshot('model-quick-picker');
@@ -1519,8 +1534,8 @@ try {
     await until(() => inspect('return !document.querySelector("#desktop-model-picker").matches(":popover-open") && document.activeElement.classList.contains("agent-composer__model")'), 'keyboard choice restores anchor');
     await click(anchor);
     await click('.desktop-picker-manage');
-    await settingsConnectionsReady(); await click('#preferences-models');
-    await until(() => inspect('return document.querySelector("#desktop-model-dialog").open && document.activeElement.id === "desktop-model-search"'), 'connected settings focuses search');
+    await settingsConnectionsReady();
+    await until(() => inspect('return document.querySelector("#desktop-preferences").open && document.activeElement.id === "desktop-model-search"'), 'connected settings focuses search');
     assert.match(await text('.desktop-model-note'), /无需 API 密钥/);
     assert.doesNotMatch(await text('.desktop-model-note'), /密钥仅保留/);
     assert.doesNotMatch(await text('#desktopConversationStatus'), /请先连接/);
@@ -1546,14 +1561,15 @@ try {
       await fill('#desktop-picker-search', '');
       await screenshot('model-picker-empty');
       await click('.desktop-picker-manage');
-    await settingsConnectionsReady(); await click('#preferences-models');
-      await until(() => inspect('return document.querySelector("#desktop-model-dialog").open'), 'empty catalog management');
+      await settingsConnectionsReady();
+      await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'empty catalog management');
     } finally { emptyCatalog = false; }
     await until(() => inspect('return !document.querySelector("#desktop-provider-refresh").disabled'), 'catalog recovery ready');
     await click('#desktop-provider-refresh');
-    await until(() => find(`#desktop-model-dialog [data-model-id="${model}"]`), 'catalog restored after refresh');
-    await click(`#desktop-model-dialog [data-model-id="${model}"]`);
-    await until(() => inspect('return !document.querySelector("#desktop-model-dialog").open'), 'restored model selected');
+    await until(() => find(`#desktop-preferences .desktop-model-panel [data-model-id="${model}"]`), 'catalog restored after refresh');
+    await click(`#desktop-preferences .desktop-model-panel [data-model-id="${model}"]`);
+    await until(() => inspect('return document.querySelector("#desktop-preferences .desktop-model-panel [aria-pressed=true][data-model-id]")?.dataset.modelId === arguments[0]', [model]), 'restored model selected');
+    await closeSettings();
   });
   await checked('Incremental streaming reaches completion through native IPC', async () => {
     await send('原生验收历史关键词');
@@ -1764,7 +1780,7 @@ try {
     assert.equal(await inspect('return document.querySelector("[data-action=import-confirm]").disabled'), true);
     assert.equal(await inspect('return document.querySelector("#desktopInput").value'), '原生重启后草稿保留');
     await screenshot('backup-invalid');
-    await click('[data-kind="data"] [data-action="cancel"]');
+    await closeSettings();
   });
   await checked('Validated backup appends once while preserving the current conversation and draft', async () => {
     const backupPath = resolve(run, 'valid-session-backup.json');
@@ -1782,24 +1798,25 @@ try {
     await screenshot('backup-import-preview');
     await click('[data-kind="data"] [data-action="import-confirm"]');
     await until(async () => (await text('[data-action="data-feedback"]')).includes('已追加导入并保存 1 个会话'), 'backup transaction committed');
-    await until(() => inspect('return document.activeElement === document.querySelector("[data-kind=data] [data-action=cancel]")'), 'completed import restores focus after component enablement');
+    await until(() => inspect('return document.activeElement === document.querySelector("[data-kind=data] [data-action=backup]")'), 'completed import restores focus after component enablement');
     assert.equal(await inspect('return document.querySelector("[data-action=import-confirm]").disabled'), true, 'completed import cannot accidentally be submitted again');
     assert.equal(await inspect('return document.querySelector("#desktopInput").value'), '原生重启后草稿保留');
     assert.equal((await text('#session-title')).trim(), '原生验收：设置与历史');
     await screenshot('backup-import-saved');
-    await click('[data-kind="data"] [data-action="cancel"]');
+    await closeSettings();
   });
   await checked('Data management fits a narrow native window and returns focus to its entry', async () => {
     await command('POST', '/window/rect', { width: 390, height: 844 });
     await openNavigation();
     await openDataSettings();
-    const bounds = await inspect('const d=document.querySelector("[data-kind=data]"),r=d.getBoundingClientRect(); return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight,overflow:d.scrollWidth>d.clientWidth};');
+    const bounds = await inspect('const d=document.querySelector("#desktop-preferences"),r=d.getBoundingClientRect(); return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight,overflow:d.scrollWidth>d.clientWidth};');
     assert.ok(bounds.left >= 0 && bounds.right <= bounds.width && bounds.top >= 0 && bounds.bottom <= bounds.height && !bounds.overflow);
-    const closeLabel = await inspect('const label=document.querySelector("[data-kind=data] [data-action=close] .sr-only"); return {text:label?.textContent,width:label?.getBoundingClientRect().width,clip:label && getComputedStyle(label).clip};');
-    assert.equal(closeLabel.text, '关闭'); assert.equal(closeLabel.width, 1); assert.notEqual(closeLabel.clip, 'auto');
+    assert.equal(await inspect('const panel=document.querySelector(".session-workspace-data-panel"); return panel.scrollWidth<=panel.clientWidth+1;'), true, 'embedded backup controls do not overflow horizontally');
+    const closeLabel = await inspect('const button=document.querySelector("#preferences-content-dismiss"), r=button.getBoundingClientRect(); return {label:button.getAttribute("aria-label"),width:r.width,height:r.height,visible:r.top>=0 && r.bottom<=innerHeight && r.left>=0 && r.right<=innerWidth};');
+    assert.equal(closeLabel.label, '关闭设置'); assert.ok(closeLabel.width >= 32 && closeLabel.height >= 32); assert.equal(closeLabel.visible, true);
     await screenshot('backup-data-narrow');
     await press('\uE00C');
-    await until(() => inspect('return !document.querySelector("[data-kind=data]") && document.activeElement.id === "desktop-preferences-open"'), 'data dialog dismisses and restores entry focus');
+    await until(() => inspect('return !document.querySelector("#desktop-preferences").open && document.activeElement.id === "desktop-preferences-open"'), 'data dialog dismisses and restores entry focus');
     await command('POST', '/window/rect', { width: 1000, height: 720 });
   });
   await screenshot('conversation-1000x720');
@@ -1817,7 +1834,7 @@ try {
     await press('\uE00C');
     await command('POST', '/window/rect', { width: 1280, height: 850 });
   });
-  await checked('Narrow native layout and model dialog remain usable with keyboard dismissal', async () => {
+  await checked('Narrow native layout and model settings remain usable with keyboard dismissal', async () => {
     await command('POST', '/window/rect', { width: 390, height: 844 });
     assert.equal(await inspect('return document.documentElement.scrollWidth <= document.documentElement.clientWidth'), true);
     await screenshot('conversation-narrow');
@@ -1836,13 +1853,13 @@ try {
     await openNavigation();
     await openModelSettings();
     await until(() => inspect('return !document.querySelector("#desktop-provider-connect").disabled'), 'narrow dialog ready');
-    const bounds = await inspect('const r = document.querySelector("#desktop-model-dialog").getBoundingClientRect(); return { left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight,font:getComputedStyle(document.body).fontFamily };');
+    const bounds = await inspect('const r = document.querySelector("#desktop-preferences").getBoundingClientRect(); return { left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight,font:getComputedStyle(document.body).fontFamily };');
     assert.ok(bounds.left >= 0 && bounds.right <= bounds.width && bounds.top >= 0 && bounds.bottom <= bounds.height);
-    assert.ok(await inspect('return document.querySelector("#desktop-model-dialog [data-close]").getBoundingClientRect().height < 48'), 'close action does not wrap');
+    assert.ok(await inspect('const r=document.querySelector("#preferences-content-dismiss").getBoundingClientRect(); return r.height>0 && r.height<48 && r.top>=0 && r.bottom<=innerHeight;'), 'close action remains visible and does not wrap');
     captures.push({ name: 'narrow-layout-measurements', ...bounds });
     await screenshot('model-dialog-narrow');
     await command('POST', '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value: '\uE00C' }, { type: 'keyUp', value: '\uE00C' }] }] });
-    await until(() => inspect('return !document.querySelector("#desktop-model-dialog").open && document.activeElement.id === "desktop-preferences-open"'), 'Escape restores dialog trigger focus');
+    await until(() => inspect('return !document.querySelector("#desktop-preferences").open && document.activeElement.id === "desktop-preferences-open"'), 'Escape restores dialog trigger focus');
     await command('POST', '/window/rect', { width: 1000, height: 720 });
   });
   await checked('Validated rejection result joins the current conversation once, preserves draft, and remains searchable', async () => {
@@ -1914,7 +1931,7 @@ try {
     assert.equal(await inspect('return document.querySelector("#desktopInput").value'), '原生重启后草稿保留');
   });
   await checked('Reconnection after process restart enables another real transport request', async () => {
-    await connectedModel(); const count = requests.length;
+    await connectedModel(); await closeSettings(); const count = requests.length;
     await send('重启后重新连接验收');
     await until(() => requests.length > count && requests.at(-1).completed, 'post restart response'); await finished();
   });
