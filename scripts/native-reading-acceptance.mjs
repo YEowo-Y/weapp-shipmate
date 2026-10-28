@@ -133,8 +133,8 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     await closeTools();
     await activate('#desktop-preferences-open');
     await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'appearance preferences open');
-    await activate(`label:has(#desktop-theme-${theme})`); await activate('label:has(#desktop-message-size-18)'); await activate('label:has(#desktop-motion-reduce)');
-    await click('#preferences-done'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'appearance saved');
+    await activate(`#desktop-theme-${theme}`); await activate('#desktop-message-size-18'); await activate('#desktop-motion-reduce');
+    await click('#preferences-content-dismiss'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'appearance saved');
     assert.equal(await inspect('return document.body.dataset.theme'), theme);
   };
   const clearStress = () => inspect(`document.querySelector('#reading-spacing-override')?.remove();for(const [node,style] of window.__readingTextStyles||[]){if(style===null)node.removeAttribute('style');else node.setAttribute('style',style);}delete window.__readingTextStyles;`);
