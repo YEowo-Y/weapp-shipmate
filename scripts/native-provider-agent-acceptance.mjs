@@ -60,9 +60,9 @@ export async function checkProviderAgentFlows(options) {
     if (await inspect('return !document.querySelector("#desktop-connection-editor").open')) await click('#desktop-connection-editor-toggle');
     await until(() => inspect('return !document.querySelector("#desktop-provider-key").disabled'), 'credential ready');
     await fill('#desktop-provider-key', `native-${provider}-fake-key`); await click('#desktop-provider-connect');
-    const selector = `#desktop-model-dialog [data-model-id="${agentProviderFixtures[provider].model}"]`;
+    const selector = `#desktop-preferences .desktop-model-panel [data-model-id="${agentProviderFixtures[provider].model}"]`;
     await until(() => find(selector), 'provider catalog'); await click(selector);
-    await until(() => inspect('return !document.querySelector("#desktop-model-dialog").open'), 'model selected');
+    await until(() => inspect('return document.querySelector(arguments[0]).getAttribute("aria-pressed")==="true"', [selector]), 'model selected');
   }
   async function scenario(provider, prompt, steps) {
     const before = requests.length; fixture.next(provider, steps); await send(prompt);
@@ -80,7 +80,9 @@ export async function checkProviderAgentFlows(options) {
     await closeProjects(); await selectProject(projectId);
     for (const provider of ['anthropic', 'google']) {
       await checked(`${provider}: explicit connection and provider switch revoke native read/share grants`, async () => {
-        await connect(provider); await click('#desktop-agent-tools');
+        await connect(provider);
+        await click('#preferences-content-dismiss'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'return to conversation after model selection');
+        await click('#desktop-agent-tools');
         assert.equal(await inspect('return document.querySelector("#desktop-agent-read").checked || document.querySelector("#desktop-agent-share").checked'), false);
         assert.equal(await inspect('return document.querySelector("#desktop-agent-share").disabled'), true);
         await screenshot(`${provider}-permission-off`); await click('#desktop-agent-done'); await permissions(true);
@@ -120,7 +122,9 @@ export async function checkProviderAgentFlows(options) {
       });
     }
     await checked('Switching back to Anthropic revokes Google read grant', async () => {
-      await connect('anthropic'); await click('#desktop-agent-tools');
+      await connect('anthropic');
+      await click('#preferences-content-dismiss'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'return to conversation after provider switch');
+      await click('#desktop-agent-tools');
       assert.equal(await inspect('return document.querySelector("#desktop-agent-read").checked || document.querySelector("#desktop-agent-share").checked'), false);
       await click('#desktop-agent-done');
     });
