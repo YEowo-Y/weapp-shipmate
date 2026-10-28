@@ -28,6 +28,40 @@ function harness({ invoke: handle, open = async () => true, delayedListen, liste
     openNotice: async () => { node('maintenance-notices').children[0].children[0].listeners.click(); await setImmediate(); },
   };
 }
+
+test('maintenance blocks leaving unsaved or pending settings and explicitly discards the draft', async () => {
+  const pending = deferred();
+  const h = harness({ invoke: name => name.endsWith('save') ? pending.promise : snapshot() });
+  await h.app.select(); assert.equal(h.app.canClose(), true);
+  h.change('maintenance-watch', true); assert.equal(h.app.canClose(), false);
+  assert.equal(h.node('maintenance-discard').disabled, false);
+  h.change('maintenance-watch', false); assert.equal(h.app.canClose(), true, 'returning to saved values clears dirty state');
+  h.change('maintenance-watch', true); await h.click('maintenance-save');
+  assert.equal(h.app.canClose(), false); assert.equal(h.node('maintenance-discard').disabled, true);
+  h.app.discardChanges(); assert.equal(h.node('maintenance-watch').checked, true);
+  pending.resolve(snapshot({ revision: 1, watchEnabled: true })); await setImmediate();
+  assert.equal(h.app.canClose(), true);
+  h.change('maintenance-notifications', true); await h.click('maintenance-discard');
+  assert.equal(h.node('maintenance-notifications').checked, false); assert.equal(h.app.canClose(), true);
+});
+
+test('failed maintenance save reloads a conflict revision without discarding the draft or restarting the watcher', async () => {
+  let conflict = true, revision = 1;
+  const h = harness({ invoke: (name, args) => {
+    if (name.endsWith('save')) {
+      if (conflict) { revision = 2; throw Error('revision conflict'); }
+      return snapshot({ revision: args.expectedRevision + 1, watchEnabled: args.watchEnabled });
+    }
+    return snapshot({ revision });
+  } });
+  await h.app.select(); h.change('maintenance-watch', true); await h.click('maintenance-save');
+  assert.equal(h.node('maintenance-retry').textContent, '重新加载'); assert.equal(h.app.canClose(), false);
+  await h.click('maintenance-retry'); assert.equal(h.node('maintenance-watch').checked, true);
+  assert.equal(h.calls.some(call => call.name === 'project_maintenance_retry'), false);
+  conflict = false; await h.click('maintenance-save');
+  assert.equal(h.calls.filter(call => call.name.endsWith('save')).at(-1).args.expectedRevision, 2);
+  assert.equal(h.app.canClose(), true);
+});
 test('maintenance defaults off, synchronizes once and reloads failed reads explicitly', async () => {
   let fail = true;
   const h = harness({ invoke: (name) => { if (name.endsWith('snapshot') && fail) throw new Error('offline'); return name.endsWith('sync') ? null : snapshot(); } });
