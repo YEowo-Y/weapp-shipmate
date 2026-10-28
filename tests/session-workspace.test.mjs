@@ -28,12 +28,18 @@ function harness({ loaded = null, loadError = false, saveError = false, layout, 
   doc.createElementNS = (_namespace, tag) => node(doc, tag);
   Object.assign(doc, node(doc)); doc.body = node(doc);
   const win = node(doc); win.location = { reload() { win.reloaded = true; } }; doc.defaultView = win;
-  const host = node(doc), input = node(doc), writes = [], lifecycle = [], hooks = [], dataDialogs = [];
+  const host = node(doc), input = node(doc), writes = [], lifecycle = [], hooks = [], dataDialogs = [], dataPanels = [];
   const store = { async load() { if (loadError) throw new Error('offline'); return { revision: 3, snapshot: loaded }; },
     async save(snapshot, revision) { if (typeof saveError === 'function' ? saveError() : saveError) throw Object.assign(new Error('Conflict'), { code: 'conflict' }); writes.push(JSON.parse(JSON.stringify(snapshot))); return { revision: revision + 1 }; }, close() {} };
   const context = vm.createContext({ createSessionStore: () => store, createSessionPersistence, sessionMatch,
     normalizeSessionSnapshot: value => JSON.parse(JSON.stringify(value)), createIcon, createActionButton,
     openSessionDataDialog(options) { dataDialogs.push(options); return { node: node(doc, 'dialog') }; },
+    createSessionDataPanel(options) {
+      const panel = { options, element: node(doc, 'section'), opens: 0, closes: 0, destroyed: false,
+        open() { panel.opens++; }, close() { panel.closes++; }, canClose: () => true,
+        destroy() { panel.destroyed = true; } };
+      dataPanels.push(panel); return panel;
+    },
     mountConversation(options) {
       hooks.push(options); let messages = options.initialMessages, edit = null, view = null, model = null;
       return { stop() { lifecycle.push('stop'); }, destroy() { lifecycle.push('destroy'); },
@@ -48,7 +54,7 @@ function harness({ loaded = null, loadError = false, saveError = false, layout, 
   vm.runInContext(source.replace(/^import .*;\r?\n/gm, '').replace(/^export \{.*\};\r?\n/gm, '').replace(/export /g, ''), context);
   const args = { host, input, layout, projectScoped, sendButton: node(doc), scroll: node(doc), list: node(doc), status: node(doc), jumpButton: node(doc), onSessionChange: session => lifecycle.push(session.id) };
   const mounting = context.mountSessionWorkspace(args);
-  return { mounting, context, host, doc, win, args, hooks, writes, lifecycle, dataDialogs, setLoadError(value) { loadError = value; }, setSaveError(value) { saveError = value; } };
+  return { mounting, context, host, doc, win, args, hooks, writes, lifecycle, dataDialogs, dataPanels, setLoadError(value) { loadError = value; }, setSaveError(value) { saveError = value; } };
 }
 const tick = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
 const find = (root, action) => [root, ...root.children.flatMap(child => flatten(child))].find(item => item.dataset.action === action);
@@ -598,5 +604,66 @@ test('temporary workspace exposes its mode without permitting project changes or
   workspace.openData();
   await assert.rejects(app.dataDialogs.at(-1).prepare(), /临时模式不能导入/);
   assert.equal(app.writes.length, 0);
+  workspace.destroy();
+});
+
+test('data settings panel is lazy, stable and owned by the workspace lifetime', async () => {
+  const app = harness(), workspace = await app.mounting;
+  assert.equal(app.dataPanels.length, 0);
+  const panel = workspace.getDataSettingsPanel();
+  assert.equal(workspace.getDataSettingsPanel(), panel);
+  assert.equal(app.dataPanels.length, 1); assert.equal(app.dataDialogs.length, 0);
+  assert.equal(panel.element.tag, 'section');
+  const mounts = app.hooks.length;
+  panel.open(); panel.close(); panel.open();
+  assert.equal(app.dataPanels[0].opens, 2); assert.equal(app.dataPanels[0].closes, 1);
+  assert.equal(app.hooks.length, mounts);
+  workspace.openData();
+  assert.equal(app.dataPanels[0].closes, 2); assert.equal(app.dataDialogs.length, 1);
+  workspace.destroy();
+  assert.equal(app.dataPanels[0].destroyed, true);
+  assert.equal(app.dataPanels[0].options.isDisposed(), true);
+  panel.open(); assert.equal(app.dataPanels[0].opens, 2);
+});
+
+test('embedded data transaction flushes the live draft and guards the same workspace mutation', async () => {
+  const app = harness({ projectScoped: true }), workspace = await app.mounting;
+  workspace.setKnownProjects(['a']); await workspace.selectProject('a');
+  const panel = workspace.getDataSettingsPanel(), options = app.dataPanels[0].options;
+  app.args.input.disabled = false; app.args.sendButton.disabled = true;
+  app.args.input.value = 'Draft changed in the current conversation';
+  options.onBusyChange(true);
+  assert.equal(panel.canClose(), false); assert.equal(app.args.input.disabled, true);
+  assert.equal(workspace.createSession(), undefined);
+  panel.open(); assert.equal(app.dataPanels[0].opens, 0);
+  const stops = app.lifecycle.filter(item => item === 'stop').length;
+  await options.prepare();
+  assert.equal(app.lifecycle.filter(item => item === 'stop').length, stops + 1);
+  assert.equal(app.writes.at(-1).sessions.find(item => item.id === workspace.getCurrentSession().id).draft, app.args.input.value);
+  const snapshot = JSON.parse(JSON.stringify(options.capture()));
+  snapshot.sessions.push({ id: 'session-99', projectId: 'foreign', title: 'Imported', draft: 'Imported draft', messages: [] });
+  snapshot.sessionSequence = 99;
+  await options.commit(snapshot); options.onBusyChange(false);
+  assert.equal(panel.canClose(), true); assert.equal(app.args.input.disabled, false); assert.equal(app.args.sendButton.disabled, true);
+  const imported = app.writes.at(-1).sessions.find(item => item.id === 'session-99');
+  assert.equal(imported.projectId, null); assert.equal(imported.draft, 'Imported draft');
+  assert.equal(workspace.getCurrentSession().projectId, 'a');
+  assert.equal(app.args.input.value, 'Draft changed in the current conversation');
+  workspace.destroy();
+});
+
+test('embedded data rejects missing registry and detects a persisted import whose UI apply failed', async () => {
+  const app = harness({ projectScoped: true }), workspace = await app.mounting;
+  workspace.getDataSettingsPanel(); const options = app.dataPanels[0].options;
+  await assert.rejects(options.prepare(), error => error.code === 'projects-unavailable');
+  await assert.rejects(options.commit(options.capture()), error => error.code === 'projects-unavailable');
+  workspace.setKnownProjects([]); await options.prepare();
+  assert.equal(options.isReloadRequired(), false);
+  const snapshot = JSON.parse(JSON.stringify(options.capture()));
+  workspace.conversation.replaceMessages = () => { throw new Error('Conversation UI failed'); };
+  await assert.rejects(options.commit(snapshot), error => error.code === 'apply-failed');
+  assert.equal(options.isReloadRequired(), true);
+  assert.throws(options.capture, error => error.code === 'apply-failed');
+  await assert.rejects(options.prepare(), error => error.code === 'apply-failed');
   workspace.destroy();
 });
