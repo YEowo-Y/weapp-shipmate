@@ -15,7 +15,7 @@ const providerHelp: Record<string, { keyUrl: string; note: string }> = {
   kimi: { keyUrl: 'https://platform.kimi.com/console/api-keys', note: '使用 Kimi API 开放平台密钥。当前支持非思考文本聊天模型（如 Kimi K2.6）；需要保留思考过程的模型暂不列入目录。' },
 };
 
-/** Native dialog and shared provider client; credentials never enter conversation storage. */
+/** Shared model controls support either the native dialog or the settings workspace. */
 export function mountModelConnections({ button, picker, select, isBusy, getSelection, onManage }: {
   button?: HTMLButtonElement; picker: HTMLButtonElement; onManage?: () => void;
   select: (value: Selection) => boolean; isBusy: () => boolean; getSelection: () => Selection | null;
@@ -26,7 +26,16 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
   dialog.setAttribute('aria-labelledby', 'desktop-model-title');
   dialog.innerHTML = `<header><div><h2 id="desktop-model-title">模型连接</h2><p>选择服务商，连接后在对话中切换模型。</p></div></header><div class="desktop-model-layout"><nav aria-label="模型服务商"></nav><section class="desktop-model-detail"><div class="desktop-provider-heading"><span class="desktop-provider-brand" aria-hidden="true"></span><h3></h3></div><p class="desktop-model-note"></p><p id="desktop-provider-status" role="status" aria-live="polite"></p><div class="desktop-model-actions" data-current-connection-actions></div><div class="desktop-model-catalog"><label for="desktop-model-search">模型目录</label><div class="desktop-catalog-search"><input id="desktop-model-search" type="search" placeholder="搜索模型名称或 ID" autocomplete="off"></div><div class="desktop-model-list" role="group" aria-label="可用模型"></div></div><section class="desktop-inference-panel"><h4>推理测试</h4><p id="desktop-inference-status" class="desktop-field-hint" role="status"></p><p class="desktop-field-hint">向所选模型发送一条简短测试，可能产生服务商费用；不会自动执行。</p><div data-inference-actions></div></section><details id="desktop-connection-editor"><summary id="desktop-connection-editor-toggle">更改密钥或授权方式</summary><form><div class="desktop-endpoint-field"><label for="desktop-provider-endpoint">API 基础地址</label><input id="desktop-provider-endpoint" type="url" placeholder="https://api.example.com/v1" autocomplete="off"><label class="desktop-checkbox"><input id="desktop-provider-local-http" type="checkbox">允许本机 HTTP（仅回环地址）</label><p class="desktop-field-hint">兼容 OpenAI Chat Completions；凭据绑定此地址。更换地址需重新连接。</p></div><div class="desktop-key-field"><label for="desktop-provider-key">API 密钥</label><div class="desktop-key-input"><input id="desktop-provider-key" type="password" autocomplete="off" spellcheck="false" maxlength="4096" placeholder="输入服务商 API 密钥" aria-describedby="desktop-credential-hint"></div><p id="desktop-credential-hint" class="desktop-field-hint">提交或关闭后清空输入；密钥不会写入会话。</p></div><div class="desktop-storage-field"><label for="desktop-provider-storage">凭据保存方式</label><select id="desktop-provider-storage"><option value="memory">仅本次应用运行</option><option value="system">Windows 系统凭据库</option></select><p id="desktop-storage-hint" class="desktop-field-hint"></p></div><div class="desktop-model-actions" data-connection-actions></div></form><section class="desktop-oauth-panel"><h4>OpenRouter 授权</h4><p class="desktop-field-hint">使用浏览器授权，或选择授权码连接；也可以在上方填写 API 密钥。</p><div class="desktop-model-actions" data-oauth-actions></div><p id="desktop-oauth-progress" class="desktop-field-hint" role="status"></p><form id="desktop-oauth-code-form"><label for="desktop-oauth-code">授权码</label><p id="desktop-oauth-code-hint" class="desktop-field-hint">先在浏览器完成授权并复制授权码，再粘贴到此处连接。提交或关闭后清空。</p><input id="desktop-oauth-code" type="password" autocomplete="off" spellcheck="false" maxlength="4096" aria-describedby="desktop-oauth-code-hint" placeholder="粘贴浏览器显示的授权码"><div class="desktop-model-actions" data-oauth-code-actions></div></form></section></details></section></div>`;
   document.body.append(dialog);
-  const find = <T extends HTMLElement>(s: string) => dialog.querySelector(s) as T;
+  const panel = document.createElement('section');
+  panel.className = 'desktop-model-panel'; panel.setAttribute('aria-labelledby', 'desktop-model-title');
+  let contentHost: HTMLElement = dialog, embedded = false, activation = 0, mutationPending = false;
+  const isOpen = () => embedded || dialog.open;
+  const find = <T extends HTMLElement>(s: string) => contentHost.querySelector(s) as T;
+  const content = [find('header'), find('.desktop-model-layout')];
+  function moveContent(target: HTMLElement) {
+    if (contentHost === target) return;
+    target.append(...content); contentHost = target;
+  }
   const action = (id: string, label: string, appearance: 'accent' | 'outlined' | 'plain' = 'outlined') => {
     const control = createActionButton(document, label, { appearance });
     control.id = id;
@@ -94,7 +103,7 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
   function render() {
     if (disposed) return;
     const connection = client.snapshot?.connections.find(c => c.providerId === selected);
-    dialog.dataset.connectionState = connection?.status || 'disconnected';
+    contentHost.dataset.connectionState = connection?.status || 'disconnected';
     find('.desktop-model-note').textContent = selected === 'ollama'
       ? '连接此设备上的 Ollama，无需 API 密钥。请先启动 Ollama 并下载模型。'
       : selected === 'custom' ? '连接你信任的兼容服务。连接读取目录，不代表模型已通过推理测试。' : providerHelp[selected]?.note || '连接凭据、模型目录与推理测试分别验证；会话与草稿保留在此设备。';
@@ -128,7 +137,7 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
     const inference = connection?.inference;
     const inferenceMatchesSelection = selection?.providerId === selected && inference?.model === selection.model;
     const verifiedSelection = inferenceMatchesSelection && inference?.status === 'verified';
-    find('#desktop-inference-status').textContent = verifiedSelection ? `已通过推理测试 · ${inference.model || ''}` : (inferenceMatchesSelection && inference?.error?.message) || (inference?.status === 'checking' && inferenceMatchesSelection ? '正在测试模型…' : selection?.providerId === selected && connection?.models.some(m => m.id === selection.model) ? `尚未测试 · ${selection.model}` : '尚未测试。请先在目录中选择模型，再打开此页测试。');
+    find('#desktop-inference-status').textContent = verifiedSelection ? `已通过推理测试 · ${inference.model || ''}` : (inferenceMatchesSelection && inference?.error?.message) || (inference?.status === 'checking' && inferenceMatchesSelection ? '正在测试模型…' : selection?.providerId === selected && connection?.models.some(m => m.id === selection.model) ? `尚未测试 · ${selection.model}` : '尚未测试。请先在目录中选择模型。');
     find('#desktop-inference-status').classList.toggle('is-busy', inference?.status === 'checking');
     form.hidden = pendingOpenRouter;
     const visibleError = error || loadError;
@@ -137,6 +146,7 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
       ? '完成当前授权，或取消后选择其他连接方式。'
       : '使用浏览器授权，或选择授权码连接；也可以在上方填写 API 密钥。';
     status.textContent = visibleError || (busy ? '正在处理连接…' : connection?.error?.message || (connection?.status === 'configured' ? `配置已保存 · ${verifiedSelection ? '所选模型已通过推理测试' : '所选模型尚未验证'}` : connection?.status === 'connected' ? `已连接 · ${connection.models.length} 个模型` : connection?.hasCredential ? '凭据已保存，尚未读取模型目录。请重新连接。' : '尚未连接。请添加凭据或连接本机 Ollama。'));
+    if (embedded && !visibleError && !connection?.error && !busy && connected && selection?.providerId === selected && connection?.models.some(m => m.id === selection.model)) status.textContent += ` · 当前模型：${selection.label}`;
     status.dataset.tone = visibleError || connection?.error ? 'error' : connection?.status === 'connected' ? 'success' : 'neutral';
     status.classList.toggle('is-busy', busy);
     find('.desktop-key-field').hidden = selected === 'ollama';
@@ -168,7 +178,7 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
     find('#desktop-oauth-progress').textContent = pending
       ? `${auth?.message || (manualWaiting ? '等待粘贴浏览器中的授权码。' : '等待在浏览器完成授权…')}${expiry ? ` · 有效至 ${expiry}` : ''}`
       : auth?.message || terminal[auth?.status || ''] || '';
-    if (restoreCodeFocus && dialog.open && !busy) (isUsableModelConnection(connection) ? search : pending ? cancel : manual).focus();
+    if (restoreCodeFocus && isOpen() && !busy) (isUsableModelConnection(connection) ? search : pending ? cancel : manual).focus();
     retry.hidden = client.ready; retry.disabled = busy;
     renderModels();
   }
@@ -194,9 +204,12 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
       const check = createIcon(document, 'check', 'desktop-model-check');
       check.style.visibility = selection?.providerId === selected && selection.model === model.id ? 'visible' : 'hidden';
       b.append(createProviderIcon(document, selected), name, id, check); b.disabled = busy || isBusy();
-      b.addEventListener('click', () => { if (select({ providerId: selected, model: model.id, label: model.name })) dialog.close(); });
+      b.addEventListener('click', () => {
+        if (busy || disposed || isBusy() || !select({ providerId: selected, model: model.id, label: model.name })) return;
+        if (embedded) render(); else dialog.close();
+      });
       list.append(b);
-      if (focusedModel === model.id && dialog.open) { b.focus(); restoredFocus = true; }
+      if (focusedModel === model.id && isOpen()) { b.focus(); restoredFocus = true; }
     }
     if (!models.length) {
       const empty = document.createElement('p');
@@ -207,7 +220,7 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
         : '已连接，但服务商尚未返回可用模型。请刷新目录。';
       list.append(empty);
     }
-    if (focusedModel && !restoredFocus && dialog.open) search.focus();
+    if (focusedModel && !restoredFocus && isOpen()) search.focus();
   }
   function schedule() {
     clearTimeout(timer);
@@ -226,7 +239,7 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
   }
   async function mutate(action: string, payload: Record<string, unknown> = {}) {
     if (busy || disposed || isBusy() || (selected === 'openrouter' && oauthPending() && !['oauth/cancel', 'oauth/complete'].includes(action))) return;
-    operation++; clearTimeout(timer); busy = true; error = ''; render();
+    operation++; clearTimeout(timer); busy = true; mutationPending = true; error = ''; render();
     try {
       const result = await client.mutate(`/${selected}/${action}`, payload);
       if (action === 'oauth/start' && payload.mode !== 'manual') {
@@ -241,14 +254,14 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
         : action === 'verify' ? '推理测试未完成，请查看连接状态。不会自动重试，以免重复计费。' : '连接操作失败。请检查凭据、网络与本机服务后重试。';
     }
     finally {
-      busy = false; render(); schedule();
-      if (action === 'oauth/start' && payload.mode === 'manual' && dialog.open && !reopen.hidden) reopen.focus();
+      busy = false; mutationPending = false; render(); schedule();
+      if (action === 'oauth/start' && payload.mode === 'manual' && isOpen() && !reopen.hidden) reopen.focus();
     }
   }
   editor.addEventListener('toggle', () => {
     if (!editor.open) {
       clearKey(); code.value = '';
-      if (editor.contains(document.activeElement) && document.activeElement !== editorToggle) editorToggle.focus();
+      if (isOpen() && editor.contains(document.activeElement) && document.activeElement !== editorToggle) editorToggle.focus();
     }
   });
   for (const [id, label] of providers) {
@@ -299,11 +312,11 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
   retry.addEventListener('click', () => void load());
   search.addEventListener('input', renderModels);
   closeButton.addEventListener('click', () => dialog.close());
-  dialog.addEventListener('close', () => { clearKey(); code.value = ''; opener?.focus(); });
+  dialog.addEventListener('close', () => { activation++; clearKey(); code.value = ''; opener?.focus(); });
   dialog.addEventListener('keydown', event => {
     // Match the shared dialog boundary wrap; native semantics own interior
     // navigation and Escape. WebView2 must not tab into browser chrome.
-    if (event.key !== 'Tab' || event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || !dialog.open) return;
+    if (event.key !== 'Tab' || event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey || embedded || !dialog.open) return;
     const controls = [...dialog.querySelectorAll<HTMLElement>('button, wa-button, input, select, textarea, a[href], summary, [tabindex]')]
       .filter(node => (node.tabIndex >= 0 || node.matches('wa-button')) && !node.matches(':disabled')
         && !node.hasAttribute('disabled') && !node.closest('[hidden], [inert]')
@@ -318,25 +331,66 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
     const target = selected === 'openrouter' && oauthPending() ? (client.snapshot?.oauth?.mode === 'manual' ? code : cancel) : connected ? search : selected === 'ollama' ? connect : key;
     if (!target.disabled) target.focus();
   }
-  function open(anchor?: HTMLElement | null) {
-    if (disposed || isBusy()) return;
-    opener = anchor ?? (document.activeElement instanceof HTMLElement ? document.activeElement : picker);
+  function activate() {
+    const version = ++activation;
     const current = getSelection();
     if (current && providers.some(p => p[0] === current.providerId)) selected = current.providerId;
     search.value = ''; editorState = ''; resetScroll(); render();
     quickPicker.close();
-    if (!dialog.open) dialog.showModal();
+    if (!embedded && !dialog.open) dialog.showModal();
     nav.querySelector<HTMLElement>('[aria-pressed="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-    const loading = load(); focusField();
+    const loading = load(); if (!embedded) focusField();
     const initialFocus = document.activeElement;
-    void loading.then(() => { if (!disposed && dialog.open && document.activeElement === initialFocus) focusField(); });
+    return loading.then(() => { if (!disposed && !embedded && version === activation && dialog.open && document.activeElement === initialFocus) focusField(); });
   }
+  function closeEmbedded() {
+    embedded = false; activation++; clearKey(); code.value = '';
+  }
+  function open(anchor?: HTMLElement | null) {
+    if (disposed || isBusy() || mutationPending) return;
+    if (embedded) closeEmbedded();
+    moveContent(dialog); closeButton.hidden = false;
+    opener = anchor ?? (document.activeElement instanceof HTMLElement ? document.activeElement : picker);
+    void activate();
+  }
+  const settings = {
+    element: panel,
+    open() {
+      if (disposed || embedded) return;
+      opener = null;
+      if (dialog.open) dialog.close();
+      moveContent(panel); embedded = true; closeButton.hidden = true;
+      return activate();
+    },
+    close: closeEmbedded,
+    canClose: () => !mutationPending,
+    searchTarget(target: string): HTMLElement | null {
+      if (disposed || !embedded) return null;
+      let node = panel.querySelector<HTMLElement>(`#${target}`);
+      if (!node) return null;
+      const missingCatalog = node === search && find('.desktop-model-catalog').hidden;
+      if (missingCatalog || (node === editorToggle && editorToggle.hidden)) {
+        const pending = selected === 'openrouter' && oauthPending();
+        node = pending ? (codeForm.hidden ? cancel : code) : selected === 'ollama' ? connect : key;
+        if (missingCatalog) {
+          const hint = pending ? '请先完成当前授权，再查看模型目录。' : '请先连接服务商，再查看模型目录。';
+          if (!status.textContent?.includes(hint)) status.textContent += ` ${hint}`;
+          status.hidden = false;
+        }
+      }
+      if (editor.contains(node)) editor.open = true;
+      if (node.closest('[hidden]') || node.hasAttribute('disabled') || ('disabled' in node && node.disabled === true)) {
+        status.hidden = false; return status;
+      }
+      return node;
+    },
+  };
   const quickPicker = mountModelPicker({ anchor: picker, providers, connections: () => client.snapshot?.connections || [],
     load: () => client.load(), select, getSelection, isBusy: () => busy || isBusy(), manage: onManage ?? (() => open(picker)) });
   const openFromButton = () => open(button);
   button?.addEventListener('click', openFromButton);
-  function shortcut(event: KeyboardEvent) { if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'm') { event.preventDefault(); if (!dialog.open) quickPicker.open(); } }
+  function shortcut(event: KeyboardEvent) { if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'm') { event.preventDefault(); if (!isOpen()) quickPicker.open(); } }
   document.addEventListener('keydown', shortcut);
   render();
-  return { open, destroy() { disposed = true; clearTimeout(timer); client.dispose(); clearKey(); code.value = ''; button?.removeEventListener('click', openFromButton); quickPicker.destroy(); document.removeEventListener('keydown', shortcut); dialog.remove(); } };
+  return { open, settings, destroy() { disposed = true; closeEmbedded(); clearTimeout(timer); client.dispose(); button?.removeEventListener('click', openFromButton); quickPicker.destroy(); document.removeEventListener('keydown', shortcut); panel.remove(); dialog.remove(); } };
 }
