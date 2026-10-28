@@ -1688,3 +1688,57 @@ test('imported guide copy and both download formats preserve the provenance warn
     app.view.destroy();
   });
 });
+
+
+test('send shortcut preference controls Enter while Shift, Alt and IME keep ownership of input', () => {
+  for (const sendKey of ['enter', 'mod-enter']) {
+    const cases = [
+      [{}, sendKey === 'enter'], [{ ctrlKey: true }, true], [{ metaKey: true }, true],
+      [{ shiftKey: true }, false], [{ shiftKey: true, ctrlKey: true }, false],
+      [{ altKey: true }, false], [{ ctrlKey: true, altKey: true }, false],
+      [{ isComposing: true, ctrlKey: true }, false], [{ keyCode: 229, metaKey: true }, false],
+      [{ defaultPrevented: true, ctrlKey: true }, false],
+    ];
+    for (const [modifiers, submits] of cases) {
+      const app = harness([], { getSendShortcut: () => sendKey });
+      app.view.setDraft('Send this draft');
+      const event = app.input.dispatch('keydown', { key: 'Enter', ...modifiers });
+      assert.equal(app.view.getMessages().some(message => message.role === 'user'), submits, JSON.stringify({ sendKey, modifiers }));
+      assert.equal(event.defaultPrevented, submits || !!modifiers.defaultPrevented);
+      if (!submits) assert.equal(app.input.value, 'Send this draft');
+      app.view.destroy();
+    }
+  }
+});
+
+test('live shortcut refresh updates idle and edit hints without touching draft, focus or disabled controls', () => {
+  let sendKey = 'enter';
+  const app = harness(turns(), { getSendShortcut: () => sendKey });
+  const hint = app.input.closest('.composer').querySelector('.agent-composer__hint');
+  app.view.setDraft('Keep draft'); app.input.focus(); app.sendButton.disabled = true;
+  sendKey = 'mod-enter'; app.view.refreshPreferences();
+  assert.match(hint.textContent, /Ctrl \/ ⌘ \+ Enter 发送/);
+  assert.equal(app.input.value, 'Keep draft'); assert.equal(app.input.ownerDocument.activeElement, app.input);
+  assert.equal(app.sendButton.disabled, true);
+  app.action('edit', 'user-a'); assert.match(hint.textContent, /Ctrl \/ ⌘ \+ Enter 发送修改/);
+  sendKey = 'enter'; app.view.refreshPreferences(); assert.match(hint.textContent, /^Enter 发送修改/);
+  assert.equal(app.view.getDraftState().edit.messageId, 'user-a');
+  app.view.destroy(); const previous = hint.textContent;
+  sendKey = 'mod-enter'; app.view.refreshPreferences(); assert.equal(hint.textContent, previous);
+});
+
+test('modifier send shortcut preserves busy drafts and refreshes record-only hints', () => {
+  const app = harness([], { getSendShortcut: () => 'mod-enter' });
+  app.view.submit({ input: 'Running' }); app.view.setDraft('Next draft');
+  const plain = app.input.dispatch('keydown', { key: 'Enter' });
+  assert.equal(plain.defaultPrevented, false); assert.doesNotMatch(app.status.textContent, /未发送/);
+  app.input.dispatch('keydown', { key: 'Enter', ctrlKey: true });
+  assert.match(app.status.textContent, /草稿.*未发送/); assert.equal(app.input.value, 'Next draft');
+  app.view.destroy();
+  let sendKey = 'mod-enter';
+  const records = harness([], { recordOnly: true, getSendShortcut: () => sendKey });
+  const hint = records.input.closest('.composer').querySelector('.agent-composer__hint');
+  assert.match(hint.textContent, /Ctrl \/ ⌘ \+ Enter 保存记录/);
+  sendKey = 'enter'; records.view.refreshPreferences(); assert.match(hint.textContent, /^Enter 保存记录/);
+  records.view.destroy();
+});
