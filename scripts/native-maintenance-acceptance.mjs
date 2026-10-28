@@ -55,7 +55,7 @@ export async function checkMaintenanceFlows({ run, checked, click, fill, press, 
   const openPreferences = async () => {
     await click('#desktop-preferences-open'); await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'preferences dialog');
   };
-  const closePreferences = async () => { await click('#preferences-done'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'preferences closed'); };
+  const closePreferences = async () => { await click('#preferences-content-dismiss'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'preferences closed'); };
   const appearance = () => inspect('return {theme:document.body.dataset.theme,size:document.body.style.getPropertyValue("--message-font-size"),motion:document.body.dataset.motion};');
   const geometry = selector => inspect('const d=document.querySelector(arguments[0]),r=d.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:innerWidth,height:innerHeight,overflow:d.scrollWidth-d.clientWidth,pageOverflow:document.documentElement.scrollWidth-innerWidth};', [selector]);
   const contained = value => { assert.ok(value.left >= -1 && value.right <= value.width + 1 && value.top >= -1 && value.bottom <= value.height + 1, JSON.stringify(value)); assert.ok(value.overflow <= 1 && value.pageOverflow <= 1, JSON.stringify(value)); };
@@ -249,7 +249,7 @@ export async function checkMaintenanceFlows({ run, checked, click, fill, press, 
 
   await checked('P7 appearance controls apply actual dark theme, text size and reduced motion and survive process restart', async () => {
     await openPreferences();
-    await click('label:has(#desktop-theme-dark)'); await click('label:has(#desktop-message-size-18)'); await click('label:has(#desktop-motion-reduce)');
+    await click('#desktop-theme-dark'); await click('#desktop-message-size-18'); await click('#desktop-motion-reduce');
     assert.deepEqual(await appearance(), { theme: 'dark', size: '18px', motion: 'reduce' }); assert.match(await text('#preferences-status'), /已保存/);
     assert.equal(await inspect('return getComputedStyle(document.querySelector("#report")).fontSize'), '18px');
     await screenshot('p7-preferences-dark'); await closePreferences();
@@ -260,11 +260,11 @@ export async function checkMaintenanceFlows({ run, checked, click, fill, press, 
     const restored = await state(); assert.equal(restored.watchEnabled, true); assert.equal(restored.notificationsEnabled, true); assert.deepEqual(restored.notices, before.notices);
     await observeUnchanged('restart restores enabled watcher without replaying checks or notifications', async () => ({ runs: (await checksFor()).length, notices: (await state()).notices }), { runs: count, notices: before.notices });
     await open(); await screenshot('p7-maintenance-dark-restored'); await close();
-    await openPreferences(); assert.equal(await inspect('return document.querySelector("input[name=desktop-theme][value=dark]").checked'), true); await closePreferences();
+    await openPreferences(); assert.equal(await inspect('return document.querySelector("#desktop-theme-dark").getAttribute("aria-checked")==="true"'), true); await closePreferences();
   });
 
   await checked('P7 appearance follows system media, resets only appearance and keeps responsive keyboard focus', async () => {
-    await openPreferences(); await click('label:has(#desktop-theme-system)'); await click('label:has(#desktop-motion-system)');
+    await openPreferences(); await click('#desktop-theme-system'); await click('#desktop-motion-system');
     try {
       await command('POST', '/ms/cdp/execute', { cmd: 'Emulation.setEmulatedMedia', params: { features: [{ name: 'prefers-color-scheme', value: 'light' }, { name: 'prefers-reduced-motion', value: 'no-preference' }] } });
       await until(async () => (await appearance()).theme === 'light' && (await appearance()).motion === 'system', 'appearance follows system light and motion');
@@ -273,27 +273,29 @@ export async function checkMaintenanceFlows({ run, checked, click, fill, press, 
       await click('#preferences-reset'); assert.match(await text('#preferences-status'), /已恢复外观默认/);
       assert.equal((await appearance()).size, '16px'); assert.equal((await state()).watchEnabled, true); assert.equal((await state()).notificationsEnabled, true);
       assert.equal(await inspect('return getComputedStyle(document.querySelector("#report")).fontSize'), '16px');
-      assert.equal(await inspect('return document.querySelector("input[name=desktop-theme][value=system]").checked && document.querySelector("input[name=desktop-motion][value=system]").checked'), true);
+      assert.equal(await inspect('return document.querySelector("#desktop-theme-system").getAttribute("aria-checked")==="true" && document.querySelector("#desktop-motion-system").getAttribute("aria-checked")==="true"'), true);
       visuals.preferencesWide = await geometry('#desktop-preferences'); contained(visuals.preferencesWide); await screenshot('p7-preferences-wide');
       await command('POST', '/window/rect', { width: 390, height: 844 });
-      await inspect('document.querySelector("#preferences-done").focus()'); await press('\uE004'); assert.equal(await inspect('return document.activeElement.id'), 'preferences-dismiss');
+      await inspect('document.querySelector("#preferences-reset").focus()'); await press('\uE004'); assert.equal(await inspect('return document.activeElement.id'), 'preferences-categories');
       await command('POST', '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value: '\uE008' }, { type: 'keyDown', value: '\uE004' }, { type: 'keyUp', value: '\uE004' }, { type: 'keyUp', value: '\uE008' }] }] });
-      assert.equal(await inspect('return document.activeElement.id'), 'preferences-done');
+      assert.equal(await inspect('return document.activeElement.id'), 'preferences-reset');
       for (let index = 0; index < 14; index++) { await press('\uE004'); assert.equal(await inspect('return document.querySelector("#desktop-preferences").contains(document.activeElement)'), true); }
       visuals.preferencesNarrow = await geometry('#desktop-preferences'); contained(visuals.preferencesNarrow); await screenshot('p7-preferences-narrow');
       await closePreferences(); await command('POST', '/window/rect', { width: 1200, height: 850 });
     } finally { await command('POST', '/ms/cdp/execute', { cmd: 'Emulation.setEmulatedMedia', params: { features: [] } }); }
   });
 
-  await checked('P7 preferences reuse real maintenance, model, data and project dialogs instead of duplicate forms', async () => {
-    for (const [button, target, dismiss] of [
-      ['preferences-maintenance', '#desktop-health', '#health-done'], ['preferences-models', '#desktop-model-dialog', null],
-      ['preferences-data', '.session-workspace-dialog[data-kind="data"]', '[data-kind="data"] [data-action="cancel"]'], ['preferences-projects', '#desktop-projects', '#project-close'],
+  await checked('P7 settings embed real maintenance, model, data and project controls without duplicate dialogs or forms', async () => {
+    for (const [section, target, control] of [
+      ['projects', '.maintenance-panel', '#maintenance-watch'], ['models', '.desktop-model-panel', '#desktop-model-search'],
+      ['data', '.session-workspace-data-panel', '[data-action="backup-file"]'], ['projects', '.project-settings-panel', '#project-form'],
     ]) {
-      await openPreferences(); await click('#preferences-nav-connections'); await click(`#${button}`);
-      await until(() => inspect('return !document.querySelector("#desktop-preferences").open && document.querySelector(arguments[0]).open', [target]), `preferences opens ${target}`);
-      if (dismiss) await click(dismiss); else await press('\uE00C');
-      await until(() => inspect('return !document.querySelector(arguments[0])?.open', [target]), `close ${target}`);
+      await openPreferences(); await click(`#preferences-nav-${section}`);
+      await until(() => inspect('const d=document.querySelector("#desktop-preferences"),p=d.querySelector(arguments[1]);return d.open && d.dataset.section===arguments[0] && p?.checkVisibility() && !d.querySelector("[aria-busy=true]") && Boolean(p.querySelector(arguments[2]));', [section, target, control]), `settings mounts ${target}`);
+      assert.equal(await inspect('return document.querySelector("#desktop-preferences").matches(":modal") && document.querySelectorAll("dialog[open]").length===1'), true, 'settings remains the only open dialog');
+      assert.equal(await inspect('return document.querySelectorAll(arguments[0]).length', [control]), 1, 'embedded controls reuse one instance');
+      await closePreferences();
+      assert.equal(await inspect('return Boolean(document.querySelector(arguments[0])?.checkVisibility())', [target]), false, `close ${target}`);
     }
     await open(); visuals.maintenanceWide = await geometry('#desktop-health'); contained(visuals.maintenanceWide); await screenshot('p7-maintenance-wide');
     await command('POST', '/window/rect', { width: 390, height: 844 }); visuals.maintenanceNarrow = await geometry('#desktop-health'); contained(visuals.maintenanceNarrow); await screenshot('p7-maintenance-narrow');
