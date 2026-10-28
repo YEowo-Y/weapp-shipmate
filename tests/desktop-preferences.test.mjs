@@ -15,7 +15,7 @@ let activeHarness;
 afterEach(() => { activeHarness?.cleanup(); activeHarness = null; });
 after(() => dom.window.close());
 
-function harness({ stored = new Map(), dark = false, reduce = false, readFails = false, writeFails = false, withNotifications = false } = {}) {
+function harness({ stored = new Map(), dark = false, reduce = false, readFails = false, writeFails = false, withNotifications = false, overrides = {} } = {}) {
   activeHarness?.cleanup();
   const { window } = dom, { document } = window;
   document.body.replaceChildren(); document.body.removeAttribute('style'); document.body.removeAttribute('data-theme'); document.body.removeAttribute('data-motion');
@@ -39,7 +39,23 @@ function harness({ stored = new Map(), dark = false, reduce = false, readFails =
   window.removeEventListener = (name, callback, options) => { if (name === 'storage') storageListeners.delete(callback); remove(name, callback, options); };
   const node = id => document.getElementById(id);
   const anchor = document.createElement('button'); anchor.textContent = '设置'; document.body.append(anchor);
-  const options = Object.fromEntries(['Models', 'Data', 'Maintenance', 'Projects', 'Sources'].map(name => [`on${name}`, anchor => callbacks.push({ name, anchor, open: node('desktop-preferences').open })]));
+  const panels = Object.fromEntries(['models', 'projects', 'data'].map(section => {
+    const element = document.createElement('section'); element.id = `test-${section}-panel`;
+    const control = document.createElement('button'); control.id = `test-${section}-control`; control.textContent = section; element.append(control);
+    let canClose = true;
+    return [section, { element, open() { callbacks.push({ name: `${section}Open`, open: node('desktop-preferences').open }); },
+      close() { callbacks.push({ name: `${section}Close` }); }, canClose: () => canClose, setCanClose(value) { canClose = value; } }];
+  }));
+  const options = {
+    getPanel: section => panels[section],
+    getPrivacy: () => ({ allowRead: false, shareResults: false, busy: false, projectName: null }),
+    revokePermissions: () => { callbacks.push({ name: 'Revoke' }); },
+    getVersions: () => ({ desktop: '1.0.0', core: '2.0.0', rules: null }),
+    onSources: anchor => callbacks.push({ name: 'Sources', anchor, open: node('desktop-preferences').open }),
+    onArchives: anchor => callbacks.push({ name: 'Archives', anchor, open: node('desktop-preferences').open }),
+    onRepository: () => { callbacks.push({ name: 'Repository' }); },
+    ...overrides,
+  };
   if (withNotifications) {
     const element = document.createElement('section'); const heading = document.createElement('h3'); heading.textContent = '系统通知'; element.append(heading);
     options.systemNotifications = { element, open: async () => { callbacks.push({ name: 'NotificationOpen' }); }, close: () => { callbacks.push({ name: 'NotificationClose' }); }, destroy: () => { callbacks.push({ name: 'NotificationDestroy' }); } };
@@ -51,7 +67,7 @@ function harness({ stored = new Map(), dark = false, reduce = false, readFails =
   const choose = (group, value) => { const control = node(`${group}-${value}`); assert.ok(control, `${group}: ${value}`); act(() => control.click()); return control; };
   const selected = name => [...document.querySelectorAll(`[id^="${name}-"][role=radio]`)].find(control => control.getAttribute('aria-checked') === 'true')?.id.slice(name.length + 1);
   const fireStorage = values => act(() => { const event = new window.Event('storage'); for (const [name, value] of Object.entries(values)) Object.defineProperty(event, name, { value }); window.dispatchEvent(event); });
-  const h = { app, node, anchor, window, storage, stored, writes, callbacks, document, systemTheme, systemMotion, storageListeners, choose, selected, click, fireStorage,
+  const h = { app, node, anchor, window, storage, stored, writes, callbacks, panels, document, systemTheme, systemMotion, storageListeners, choose, selected, click, fireStorage,
     size: () => document.body.style.getPropertyValue('--message-font-size'), setReadFails(value) { readFails = value; }, setWriteFails(value) { writeFails = value; },
     close() { act(() => node('desktop-preferences').close()); },
     cleanup() { app.destroy(); window.addEventListener = add; window.removeEventListener = remove; document.body.replaceChildren(); },
@@ -123,16 +139,25 @@ test('cross-window events apply validated changes and clears without write-back;
   h.fireStorage({ key: null, storageArea: h.storage, newValue: null }); assert.equal(h.document.body.dataset.theme, 'light'); assert.equal(h.size(), '16px'); assert.deepEqual(h.writes, []);
 });
 
-test('settings links close before handoff and return the persistent opener as focus anchor', () => {
-  const h = harness();
-  for (const [id, name] of [['models', 'Models'], ['data', 'Data'], ['maintenance', 'Maintenance'], ['projects', 'Projects'], ['sources', 'Sources']]) {
-    h.app.open(h.anchor, 'connections'); h.click(`preferences-${id}`); const call = h.callbacks.at(-1); assert.equal(call.name, name); assert.equal(call.open, false); assert.equal(call.anchor, h.anchor);
+test('model, project and data controllers stay in the same settings dialog with one active panel', async () => {
+  const h = harness(); h.app.open(h.anchor);
+  for (const section of ['models', 'projects', 'data']) {
+    await act(async () => { h.click(`preferences-nav-${section}`); await setImmediate(); });
+    assert.equal(h.node('desktop-preferences').open, true);
+    assert.equal(h.document.querySelectorAll('dialog[open]').length, 1);
+    assert.equal(h.node(`test-${section}-panel`), h.panels[section].element);
+    assert.equal(h.node('preferences-body').contains(h.panels[section].element), true);
+    assert.equal(h.callbacks.at(-1).name, `${section}Open`);
+    assert.equal(h.callbacks.at(-1).open, true);
+    for (const other of ['models', 'projects', 'data'].filter(value => value !== section)) assert.equal(h.panels[other].element.isConnected, false);
   }
+  assert.ok(h.callbacks.some(call => call.name === 'modelsClose')); assert.ok(h.callbacks.some(call => call.name === 'projectsClose'));
+  h.click('preferences-dismiss'); assert.equal(h.callbacks.at(-1).name, 'dataClose'); assert.equal(h.document.activeElement, h.anchor);
 });
 
 test('pending opening work cannot steal moved focus or focus a closed dialog', async () => {
   const h = harness(); h.app.open(h.anchor); const field = h.node('desktop-theme-system'); field.focus(); await act(async () => { await setImmediate(); }); assert.equal(h.document.activeElement, field);
-  h.click('preferences-done'); assert.equal(h.document.activeElement, h.anchor); h.app.open(h.anchor); h.click('preferences-dismiss'); await act(async () => { await setImmediate(); }); assert.equal(h.document.activeElement, h.anchor);
+  h.click('preferences-dismiss'); assert.equal(h.document.activeElement, h.anchor); h.app.open(h.anchor); h.click('preferences-dismiss'); await act(async () => { await setImmediate(); }); assert.equal(h.document.activeElement, h.anchor);
 });
 
 test('Escape preserves saved values and destroy removes global listeners and stale callbacks', async () => {
@@ -148,10 +173,16 @@ test('explicit reduced motion restores readable static status text and scopes ov
   assert.match(css, /body\.desktop-app\[data-motion=["']?reduce/); assert.match(css, /-webkit-text-fill-color:\s*currentColor/); assert.match(css, /animation:\s*none/); assert.match(css, /prefers|wa-transition/);
 });
 
-test('optional notification panel follows preferences open close and destroy lifecycle without being cloned', async () => {
-  const h = harness({ withNotifications: true }); const panel = h.node('preferences-notifications'); assert.deepEqual(h.callbacks, []);
-  h.app.open(h.anchor); await act(async () => { await setImmediate(); }); assert.equal(h.callbacks.at(-1).name, 'NotificationOpen'); h.click('preferences-nav-notifications'); assert.equal(h.node('preferences-notifications'), panel);
-  h.click('preferences-done'); assert.equal(h.callbacks.at(-1).name, 'NotificationClose'); h.app.open(h.anchor); h.app.destroy(); assert.equal(h.callbacks.at(-1).name, 'NotificationDestroy');
+test('optional notification panel activates only in its section and retains controller ownership', async () => {
+  const h = harness({ withNotifications: true }); assert.deepEqual(h.callbacks, []);
+  h.app.open(h.anchor); await act(async () => { await setImmediate(); }); assert.deepEqual(h.callbacks, []);
+  await act(async () => { h.click('preferences-nav-notifications'); await setImmediate(); });
+  const panel = h.document.querySelector('.preferences-panel-host > section');
+  assert.equal(panel?.textContent, '系统通知'); assert.equal(h.callbacks.at(-1).name, 'NotificationOpen');
+  h.click('preferences-nav-appearance'); assert.equal(h.callbacks.at(-1).name, 'NotificationClose'); assert.equal(panel.isConnected, false);
+  await act(async () => { h.click('preferences-nav-notifications'); await setImmediate(); });
+  assert.equal(h.document.querySelector('.preferences-panel-host > section'), panel);
+  h.click('preferences-dismiss'); assert.equal(h.callbacks.at(-1).name, 'NotificationClose'); h.app.destroy(); assert.equal(h.callbacks.at(-1).name, 'NotificationDestroy');
 });
 
 test('closing preferences after a compact navigation collapse restores its visible summary', async () => {
@@ -161,32 +192,36 @@ test('closing preferences after a compact navigation collapse restores its visib
 });
 
 test('preferences keeps the visible original opener as focus target when navigation stays expanded', async () => {
-  const h = harness(); h.app.open(h.anchor); await act(async () => { await setImmediate(); }); h.click('preferences-done'); assert.equal(h.document.activeElement, h.anchor);
+  const h = harness(); h.app.open(h.anchor); await act(async () => { await setImmediate(); }); h.click('preferences-dismiss'); assert.equal(h.document.activeElement, h.anchor);
 });
 
-test('section navigation displays one current section and moves focus without changing settings', async () => {
-  const h = harness({ withNotifications: true }); h.app.open(h.anchor); await act(async () => { await setImmediate(); }); const notificationCalls = h.callbacks.length;
-  const panels = [['appearance', 'preferences-appearance', 'preferences-appearance-title'], ['notifications', 'preferences-notifications', 'preferences-notifications'], ['connections', 'preferences-connections', 'preferences-links-heading']];
-  for (const [id, panelId, targetId] of panels) {
-    h.node('preferences-body').scrollTop = 300; h.click(`preferences-nav-${id}`); assert.equal(h.document.activeElement, h.node(targetId)); assert.equal(h.node('preferences-body').scrollTop, 0);
-    assert.equal(h.node(`preferences-nav-${id}`).getAttribute('aria-controls'), panelId); assert.equal(h.node(`preferences-nav-${id}`).getAttribute('aria-current'), 'page');
-    for (const [otherId, otherPanel] of panels) { assert.equal(h.node(otherPanel).hidden, otherId !== id); if (otherId !== id) assert.equal(h.node(`preferences-nav-${otherId}`).getAttribute('aria-current'), null); }
+test('section navigation exposes all available categories and only one active section', async () => {
+  const h = harness({ withNotifications: true }); h.app.open(h.anchor);
+  const sections = ['appearance', 'notifications', 'shortcuts', 'models', 'projects', 'data', 'privacy', 'about'];
+  for (const section of sections) {
+    h.node('preferences-body').scrollTop = 300;
+    await act(async () => { h.click(`preferences-nav-${section}`); await setImmediate(); });
+    assert.equal(h.node('desktop-preferences').dataset.section, section);
+    assert.equal(h.document.activeElement, h.node('preferences-section-title')); assert.equal(h.node('preferences-body').scrollTop, 0);
+    for (const other of sections) assert.equal(h.node(`preferences-nav-${other}`).getAttribute('aria-current'), other === section ? 'page' : null);
+    assert.equal(h.document.querySelectorAll('#preferences-section-title').length, 1);
   }
-  assert.deepEqual(h.writes, []); assert.equal(h.callbacks.length, notificationCalls); h.click('preferences-done'); h.anchor.focus(); h.click('preferences-nav-appearance'); assert.equal(h.document.activeElement, h.anchor);
-  assert.equal(harness().node('preferences-nav-notifications'), null);
+  assert.deepEqual(h.writes, []); assert.equal(harness().node('preferences-nav-notifications'), null);
 });
 
-test('settings can open directly at connections and defaults back to appearance on ordinary reopen', () => {
-  const h = harness(); h.app.open(h.anchor, 'connections'); assert.equal(h.node('preferences-heading').textContent, '设置'); assert.equal(h.node('preferences-connections').hidden, false); assert.equal(h.node('preferences-appearance').hidden, true);
-  assert.equal(h.node('preferences-nav-connections').getAttribute('aria-current'), 'page'); h.click('preferences-done'); h.app.open(h.anchor);
-  assert.equal(h.node('preferences-appearance').hidden, false); assert.equal(h.node('preferences-connections').hidden, true); assert.equal(h.node('preferences-nav-appearance').getAttribute('aria-current'), 'page');
-  h.click('preferences-models'); assert.deepEqual(h.callbacks, []); assert.equal(h.node('desktop-preferences').open, true); h.click('preferences-done'); h.app.open(h.anchor, 'notifications'); assert.equal(h.node('preferences-appearance').hidden, false);
+test('settings open directly at models and return to appearance on ordinary reopen', async () => {
+  const h = harness(); await act(async () => { h.app.open(h.anchor, 'models'); await setImmediate(); });
+  assert.equal(h.node('preferences-heading').textContent, '设置'); assert.equal(h.node('test-models-panel'), h.panels.models.element);
+  assert.equal(h.node('preferences-nav-models').getAttribute('aria-current'), 'page'); assert.equal(h.node('preferences-appearance'), null);
+  h.click('preferences-dismiss'); h.app.open(h.anchor);
+  assert.ok(h.node('preferences-appearance')); assert.equal(h.node('test-models-panel'), null); assert.equal(h.node('preferences-nav-appearance').getAttribute('aria-current'), 'page');
+  h.click('preferences-dismiss'); h.app.open(h.anchor, 'notifications'); assert.ok(h.node('preferences-appearance'));
 });
 
-test('reopening settings resets scroll while preserving choices and persistent feedback', () => {
-  const h = harness(); h.app.open(h.anchor); h.choose('desktop-theme', 'dark'); h.node('preferences-body').scrollTop = 800; h.click('preferences-done'); h.app.open(h.anchor);
+test('reopening settings resets scroll and preserves automatically saved choices without a Done action', () => {
+  const h = harness(); h.app.open(h.anchor); h.choose('desktop-theme', 'dark'); h.node('preferences-body').scrollTop = 800; h.click('preferences-dismiss'); h.app.open(h.anchor);
   assert.equal(h.node('preferences-body').scrollTop, 0); assert.equal(h.selected('desktop-theme'), 'dark'); assert.match(h.node('preferences-status').textContent, /已保存/);
-  assert.ok(h.node('preferences-status').closest('footer')); assert.equal(h.node('preferences-body').contains(h.node('preferences-status')), false); assert.equal(h.node('preferences-retry').parentNode, h.node('preferences-status').parentNode);
+  assert.equal(h.node('preferences-done'), null); assert.equal(h.node('preferences-body').contains(h.node('preferences-status')), true);
 });
 
 test('theme previews are decorative and theme radio choices retain accessible names', () => {
@@ -198,16 +233,18 @@ test('theme previews are decorative and theme radio choices retain accessible na
   }
 });
 
-test('settings separates persistent navigation from its scrolling content and footer', () => {
+test('settings separates persistent navigation and search from the scrolling content', () => {
   const h = harness({ withNotifications: true }); const sidebar = h.document.querySelector('.preferences-sidebar'), main = h.document.querySelector('.preferences-main');
-  assert.equal(sidebar?.tagName, 'ASIDE'); assert.ok(main); assert.equal(sidebar.parentNode, main.parentNode); assert.ok(sidebar.contains(h.node('preferences-dismiss'))); assert.ok(sidebar.contains(h.node('preferences-heading'))); assert.ok(sidebar.querySelector('nav[aria-label]'));
-  assert.ok(main.contains(h.node('preferences-body'))); assert.ok(main.contains(h.node('preferences-done'))); assert.ok(main.contains(h.node('preferences-status')));
+  assert.equal(sidebar?.tagName, 'ASIDE'); assert.ok(main); assert.equal(sidebar.parentNode, main.parentNode);
+  assert.ok(sidebar.contains(h.node('preferences-dismiss'))); assert.ok(sidebar.contains(h.node('preferences-heading'))); assert.ok(sidebar.contains(h.node('preferences-search'))); assert.ok(sidebar.querySelector('nav[aria-label]'));
+  assert.ok(main.contains(h.node('preferences-body'))); assert.ok(main.contains(h.node('preferences-content-dismiss'))); assert.equal(h.node('preferences-done'), null);
 });
 
-test('return to app is named, restores its opener and preserves saved choices', () => {
+test('return to app is named, restores its opener and preserves saved choices', async () => {
   const h = harness(); h.app.open(h.anchor); const back = h.node('preferences-dismiss'); assert.match(back.textContent, /返回应用/); assert.equal(back.getAttribute('aria-label') ?? back.textContent, '返回应用');
-  h.choose('desktop-message-size', '18'); const saved = h.stored.get(key), writes = h.writes.length; h.click('preferences-nav-connections'); h.click('preferences-dismiss');
-  assert.equal(h.node('desktop-preferences').open, false); assert.equal(h.document.activeElement, h.anchor); assert.equal(h.anchor.getAttribute('aria-expanded'), 'false'); assert.equal(h.stored.get(key), saved); assert.equal(h.writes.length, writes); assert.deepEqual(h.callbacks, []);
+  h.choose('desktop-message-size', '18'); const saved = h.stored.get(key), writes = h.writes.length;
+  await act(async () => { h.click('preferences-nav-models'); await setImmediate(); }); h.click('preferences-dismiss');
+  assert.equal(h.node('desktop-preferences').open, false); assert.equal(h.document.activeElement, h.anchor); assert.equal(h.anchor.getAttribute('aria-expanded'), 'false'); assert.equal(h.stored.get(key), saved); assert.equal(h.writes.length, writes);
   h.app.open(h.anchor); assert.equal(h.selected('desktop-message-size'), '18');
 });
 
@@ -226,7 +263,183 @@ test('radio keyboard navigation changes the setting and keeps focus on the selec
   assert.equal(h.document.activeElement.id, 'desktop-theme-light'); assert.equal(h.selected('desktop-theme'), 'light'); assert.equal(JSON.parse(h.stored.get(key)).theme, 'light');
 });
 
-test('dialog boundary cycles Tab in both directions between the named return and done actions', () => {
-  const h = harness(); h.app.open(h.anchor); const pressTab = (target, shiftKey) => act(() => { target.focus(); target.dispatchEvent(new h.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true })); });
-  pressTab(h.node('preferences-done'), false); assert.equal(h.document.activeElement, h.node('preferences-dismiss')); pressTab(h.node('preferences-dismiss'), true); assert.equal(h.document.activeElement, h.node('preferences-done'));
+test('dialog boundary cycles Tab between its first and last visible controls', () => {
+  const h = harness(); h.app.open(h.anchor);
+  const controls = [...h.node('desktop-preferences').querySelectorAll('button,input,select,textarea,a[href],wa-button,wa-switch,[tabindex="0"]')].filter(node => !node.hasAttribute('disabled') && !node.closest('[hidden]') && node.getClientRects().length);
+  const first = controls[0], last = controls.at(-1);
+  const pressTab = (target, shiftKey) => act(() => { target.focus(); target.dispatchEvent(new h.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true })); });
+  assert.equal(first, h.node('preferences-dismiss'));
+  pressTab(last, false); assert.equal(h.document.activeElement, first); pressTab(first, true); assert.equal(h.document.activeElement, last);
+});
+
+test('busy embedded changes block navigation, close actions and Escape until the controller allows leaving', async () => {
+  const h = harness(); await act(async () => { h.app.open(h.anchor, 'models'); await setImmediate(); });
+  h.panels.models.setCanClose(false); h.click('preferences-nav-data');
+  assert.equal(h.node('desktop-preferences').dataset.section, 'models'); assert.equal(h.node('test-models-panel'), h.panels.models.element);
+  assert.match(h.document.querySelector('[role=alert]').textContent, /保存|完成/); assert.equal(h.callbacks.some(call => call.name === 'dataOpen'), false);
+  h.click('preferences-dismiss'); h.click('preferences-content-dismiss'); assert.equal(h.node('desktop-preferences').open, true);
+  const cancel = new h.window.Event('cancel', { cancelable: true }); act(() => h.node('desktop-preferences').dispatchEvent(cancel));
+  assert.equal(cancel.defaultPrevented, true); assert.equal(h.callbacks.some(call => call.name === 'modelsClose'), false);
+  h.panels.models.setCanClose(true); await act(async () => { h.click('preferences-nav-data'); await setImmediate(); });
+  assert.equal(h.node('desktop-preferences').dataset.section, 'data'); assert.equal(h.callbacks.filter(call => call.name === 'modelsClose').length, 1);
+  h.click('preferences-content-dismiss'); assert.equal(h.node('desktop-preferences').open, false); assert.equal(h.document.activeElement, h.anchor);
+});
+
+test('late panel resolution cannot replace the latest section or open after closing', async () => {
+  let finish, h;
+  const pending = new Promise(resolve => { finish = resolve; });
+  h = harness({ overrides: { getPanel: section => section === 'models' ? pending : h.panels[section] } });
+  h.app.open(h.anchor, 'models');
+  await act(async () => { h.click('preferences-nav-data'); await setImmediate(); });
+  const field = h.node('test-data-control'); field.focus();
+  await act(async () => { finish(h.panels.models); await setImmediate(); });
+  assert.equal(h.node('desktop-preferences').dataset.section, 'data'); assert.equal(h.node('test-models-panel'), null); assert.equal(h.document.activeElement, field);
+  assert.equal(h.callbacks.some(call => call.name === 'modelsOpen'), false);
+  let finishClosed; const closed = new Promise(resolve => { finishClosed = resolve; });
+  h = harness({ overrides: { getPanel: () => closed } }); h.app.open(h.anchor, 'models'); h.click('preferences-dismiss');
+  await act(async () => { finishClosed(h.panels.models); await setImmediate(); });
+  assert.equal(h.node('desktop-preferences').open, false); assert.equal(h.callbacks.some(call => call.name === 'modelsOpen'), false); assert.equal(h.document.activeElement, h.anchor);
+});
+
+test('late panel activation cannot steal focus after navigation and active disposal closes exactly once', async () => {
+  const h = harness(); let finish;
+  h.panels.models.open = () => new Promise(resolve => { finish = resolve; });
+  await act(async () => { h.app.open(h.anchor, 'models'); await setImmediate(); });
+  await act(async () => { h.click('preferences-nav-projects'); await setImmediate(); });
+  const field = h.node('test-projects-control'); field.focus();
+  await act(async () => { finish(); await setImmediate(); });
+  assert.equal(h.node('desktop-preferences').dataset.section, 'projects'); assert.equal(h.document.activeElement, field);
+  assert.equal(h.callbacks.filter(call => call.name === 'modelsClose').length, 1);
+  h.app.destroy(); h.app.destroy();
+  assert.equal(h.callbacks.filter(call => call.name === 'projectsClose').length, 1); assert.equal(h.node('desktop-preferences'), null); assert.equal(h.panels.projects.element.isConnected, false);
+  assert.equal(h.storageListeners.size, 0);
+});
+
+test('disposal during panel resolution rejects stale activation and a failed load remains retryable', async () => {
+  let finish; const pending = new Promise(resolve => { finish = resolve; });
+  const disposed = harness({ overrides: { getPanel: () => pending } }); disposed.app.open(disposed.anchor, 'models'); disposed.app.destroy();
+  await act(async () => { finish(disposed.panels.models); await setImmediate(); });
+  assert.equal(disposed.node('desktop-preferences'), null); assert.deepEqual(disposed.callbacks, []);
+  let failed = true, h;
+  h = harness({ overrides: { getPanel: async section => { if (failed) throw Error('读取失败'); return h.panels[section]; } } });
+  await act(async () => { h.app.open(h.anchor, 'models'); await setImmediate(); });
+  const alert = h.document.querySelector('[role=alert]'); assert.match(alert.textContent, /读取失败/); assert.equal(h.node('desktop-preferences').open, true);
+  failed = false; await act(async () => { alert.querySelector('button').click(); await setImmediate(); });
+  assert.equal(h.document.querySelector('[role=alert]'), null); assert.equal(h.node('test-models-panel'), h.panels.models.element);
+});
+
+function search(h, query) {
+  act(() => {
+    const input = h.node('preferences-search');
+    Object.getOwnPropertyDescriptor(h.window.HTMLInputElement.prototype, 'value').set.call(input, query);
+    input.dispatchEvent(new h.window.Event('input', { bubbles: true }));
+  });
+}
+
+test('settings search locates a real control and retains the query for returning to its results', async () => {
+  const h = harness(); h.app.open(h.anchor); search(h, '字体');
+  assert.equal(h.node('preferences-section-title').textContent, '搜索结果');
+  const result = [...h.document.querySelectorAll('.preferences-search-result')].find(node => node.textContent.includes('正文大小')); assert.ok(result);
+  await act(async () => { result.click(); await setImmediate(); });
+  assert.equal(h.node('desktop-preferences').dataset.section, 'appearance'); assert.equal(h.document.activeElement, h.node('desktop-message-size-16'));
+  assert.equal(h.node('preferences-search').value, '字体'); assert.equal(h.node('desktop-message-size-16').classList.contains('settings-search-highlight'), true);
+  act(() => h.document.querySelector('.preferences-back-results').click()); assert.equal(h.node('preferences-section-title').textContent, '搜索结果');
+  search(h, 'no-matching-setting'); assert.match(h.document.querySelector('.preferences-results [role=status]').textContent, /未找到/); assert.equal(h.document.querySelectorAll('.preferences-search-result').length, 0);
+  search(h, ''); assert.equal(h.node('preferences-section-title').textContent, '外观与阅读'); assert.deepEqual(h.writes, []);
+});
+
+test('closing search and reopening settings at a requested section starts a fresh navigation visit', async () => {
+  const h = harness(); h.app.open(h.anchor); search(h, '字体'); assert.ok(h.document.querySelector('.preferences-results'));
+  h.click('preferences-dismiss');
+  await act(async () => { h.app.open(h.anchor, 'models'); await setImmediate(); });
+  assert.equal(h.node('preferences-search').value, ''); assert.equal(h.document.querySelector('.preferences-results'), null);
+  assert.equal(h.node('desktop-preferences').dataset.section, 'models'); assert.equal(h.node('test-models-panel')?.id, h.panels.models.element.id);
+  search(h, 'no-matching-setting'); h.click('preferences-content-dismiss'); h.app.open(h.anchor, 'shortcuts');
+  assert.equal(h.node('preferences-search').value, ''); assert.equal(h.node('preferences-section-title').textContent, '快捷键'); assert.ok(h.node('settings-send-key'));
+});
+
+test('search keeps an embedded panel connected and hidden so delayed controller updates retain their targets', async () => {
+  const h = harness(); let finish;
+  const status = h.document.createElement('p'); status.id = 'test-data-status'; h.panels.data.element.append(status);
+  h.panels.data.open = async () => {
+    await new Promise(resolve => { finish = resolve; });
+    const target = h.document.getElementById('test-data-status'); assert.ok(target, 'the controller can still resolve its mounted DOM'); target.textContent = '更新完成';
+  };
+  await act(async () => { h.app.open(h.anchor, 'data'); await setImmediate(); });
+  h.node('preferences-search').focus(); search(h, '备份');
+  assert.equal(h.panels.data.element.isConnected, true); assert.ok(h.panels.data.element.closest('[hidden]')); assert.equal(h.node('test-data-status'), status);
+  await act(async () => { finish(); await setImmediate(); });
+  assert.equal(status.textContent, '更新完成'); assert.equal(h.document.activeElement.id, 'preferences-search');
+  assert.equal(h.callbacks.some(call => call.name === 'dataClose'), false);
+  h.click('preferences-nav-appearance'); assert.equal(h.callbacks.at(-1).name, 'dataClose'); assert.equal(h.panels.data.element.isConnected, false);
+});
+
+test('privacy subscriptions refresh running and permission states and unsubscribe when leaving or destroying', async () => {
+  let notify, subscribed = 0, unsubscribed = 0;
+  let privacy = { allowRead: true, shareResults: true, busy: true, projectName: 'Project A' };
+  const h = harness({ overrides: {
+    getPrivacy: () => privacy,
+    subscribePrivacy(listener) { subscribed++; notify = listener; return () => { unsubscribed++; }; },
+  } });
+  h.app.open(h.anchor); assert.equal(subscribed, 0);
+  await act(async () => { h.click('preferences-nav-privacy'); await setImmediate(); });
+  assert.equal(subscribed, 1); assert.equal(h.node('settings-revoke').disabled, true); assert.match(h.node('settings-permissions').textContent, /Project A/);
+  privacy = { ...privacy, busy: false };
+  await act(async () => { notify(); await setImmediate(); }); assert.equal(h.node('settings-revoke').disabled, false);
+  privacy = { allowRead: false, shareResults: false, busy: false, projectName: 'Project B' };
+  await act(async () => { notify(); await setImmediate(); }); assert.equal(h.node('settings-revoke').disabled, true); assert.match(h.node('settings-permissions').textContent, /Project B/);
+  h.click('preferences-nav-shortcuts'); assert.equal(unsubscribed, 1);
+  await act(async () => { h.click('preferences-nav-privacy'); await setImmediate(); }); assert.equal(subscribed, 2);
+  h.app.destroy(); assert.equal(unsubscribed, 2);
+});
+
+test('about opens the repository through the provided native action', async () => {
+  const h = harness(); await act(async () => { h.app.open(h.anchor, 'about'); await setImmediate(); });
+  const button = [...h.node('settings-licenses').querySelectorAll('button')].find(node => node.textContent.includes('项目源码')); assert.ok(button);
+  await act(async () => { button.click(); await setImmediate(); }); assert.equal(h.callbacks.at(-1).name, 'Repository');
+});
+
+test('search waits for an embedded panel before focusing its destination', async () => {
+  const h = harness(); const field = h.document.createElement('input'); field.id = 'desktop-model-search'; h.panels.models.element.append(field);
+  let finish; h.panels.models.open = () => new Promise(resolve => { finish = resolve; });
+  h.app.open(h.anchor); search(h, '模型目录');
+  await act(async () => { h.document.querySelector('.preferences-search-result').click(); await setImmediate(); });
+  assert.notEqual(h.document.activeElement, field);
+  await act(async () => { finish(); await setImmediate(); });
+  assert.equal(h.document.activeElement, field); assert.equal(h.node('desktop-preferences').open, true); assert.equal(field.classList.contains('settings-search-highlight'), true);
+});
+
+test('pending embedded activation preserves focus the user moved to another settings control', async () => {
+  const h = harness(); let finish;
+  h.panels.models.open = () => new Promise(resolve => { finish = resolve; });
+  await act(async () => { h.app.open(h.anchor, 'models'); await setImmediate(); });
+  const search = h.node('preferences-search'); search.focus();
+  await act(async () => { finish(); await setImmediate(); });
+  assert.equal(h.document.activeElement.id, search.id);
+});
+
+test('settings search cannot hide a panel that has unfinished changes', async () => {
+  const h = harness(); await act(async () => { h.app.open(h.anchor, 'models'); await setImmediate(); });
+  h.panels.models.setCanClose(false); search(h, '字体');
+  assert.equal(h.node('test-models-panel')?.id, h.panels.models.element.id);
+  assert.equal(h.document.querySelector('.preferences-results'), null); assert.equal(h.callbacks.some(call => call.name === 'modelsClose'), false);
+  assert.match(h.document.querySelector('[role=alert]').textContent, /保存|完成/);
+  h.panels.models.setCanClose(true); search(h, '字体 大小'); assert.ok(h.document.querySelector('.preferences-results'));
+});
+
+test('the shortcut control saves its bounded preference and restores the default explicitly', () => {
+  const h = harness(); h.app.open(h.anchor, 'shortcuts'); const select = h.node('settings-send-key');
+  assert.equal(select.value, 'enter');
+  act(() => { select.value = 'mod-enter'; select.dispatchEvent(new h.window.Event('change', { bubbles: true })); });
+  assert.equal(select.value, 'mod-enter'); assert.deepEqual(JSON.parse(h.stored.get('shipmate-desktop-shortcuts')), { version: 1, sendKey: 'mod-enter' });
+  assert.equal(h.stored.has(key), false);
+  const reset = [...h.document.querySelectorAll('button')].find(node => node.textContent === '恢复默认发送方式'); act(() => reset.click());
+  assert.equal(select.value, 'enter'); assert.deepEqual(JSON.parse(h.stored.get('shipmate-desktop-shortcuts')), { version: 1, sendKey: 'enter' });
+});
+
+test('corrupt shortcut data disables ordinary changes and exposes explicit recovery', () => {
+  const h = harness({ stored: new Map([['shipmate-desktop-shortcuts', 'broken']]) }); h.app.open(h.anchor, 'shortcuts');
+  const select = h.node('settings-send-key'); assert.equal(select.disabled, true); assert.match(h.document.querySelector('[role=alert]').textContent, /无法读取/); assert.deepEqual(h.writes, []);
+  const reset = [...h.document.querySelectorAll('button')].find(node => node.textContent === '恢复默认发送方式'); act(() => reset.click());
+  assert.equal(select.disabled, false); assert.equal(select.value, 'enter'); assert.equal(h.document.querySelector('[role=alert]'), null);
 });
