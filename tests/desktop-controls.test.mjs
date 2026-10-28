@@ -13,8 +13,15 @@ const desktopTest = (name, fn) => test(name, { skip: !ts && 'Run npm install in 
 
 function harness({ open = async () => null, invoke = async () => 'report', writeText = async () => {}, sessions = null, bridgeAvailable = true, tools = { open() {} }, explain = { open() {} }, navigation = false, projectReady = true, rulesVersion = '{}' } = {}) {
   if (sessions && !sessions.isTemporary) sessions.isTemporary = () => false;
-  const nodes = new Map();
-  const document = { activeElement: null, querySelector: selector => nodes.get(selector), querySelectorAll: () => [] };
+  const nodes = new Map(), scheduled = [];
+  const previewDocument = createPreviewDocument();
+  const document = { activeElement: null, querySelector: selector => nodes.get(selector), querySelectorAll: () => [],
+    createElement(tag) {
+      const element = previewDocument.createElement(tag); element.listeners = {};
+      element.addEventListener = (name, listener) => { element.listeners[name] = listener; };
+      element.click = () => element.listeners.click?.(); return element;
+    },
+  };
   for (const id of ['stop-tool', 'pick-btn', 'check-btn', 'guide-btn', 'subject', 'status', 'dir', 'report', 'report-title', 'report-note', 'copy-report', 'copy-status', 'handoff-report', 'read-report', 'repair-report', 'desktop-repair-history', 'save-report', 'start-check', 'start-guide', 'start-explain', 'home-report', 'home-report-summary', 'desktop-menu-report', 'home-project-name', 'home-project-summary', 'home-project-manage', 'desktop-preferences-open', 'home-sources']) {
     nodes.set(`#${id}`, Object.assign(id === 'report' ? createPreviewDocument().createElement('div') : {}, {
       disabled: id === 'check-btn', value: 'personal', textContent: '', className: '',
@@ -32,10 +39,12 @@ function harness({ open = async () => null, invoke = async () => 'report', write
     .replace(/^import .*;\r?\n/gm, '');
   const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
   let project = null, projectOptions, maintenanceOptions, preferencesOptions, readerOptions, repairOptions;
-  const integration = { selects: 0, refreshes: 0, healthClosed: 0, sourceOpens: 0, readerOpens: [], readerCloses: 0, repairOpens: [], repairSyncs: 0, projectOpens: 0, preferenceOpens: [] };
-  const maintenance = { element: null, select: async () => { integration.selects++; }, refresh: async () => {}, destroy() {} };
+  const integration = { selects: 0, refreshes: 0, healthClosed: 0, maintenanceRestores: 0, sourceOpens: 0, readerOpens: [], readerCloses: 0, repairOpens: [], repairSyncs: 0, projectOpens: 0, preferenceOpens: [], preferenceSections: [], preferenceCloses: 0, settingsCalls: [] };
+  const panel = name => ({ element: document.createElement('section'), open() { integration.settingsCalls.push(`${name}Open`); }, close() { integration.settingsCalls.push(`${name}Close`); }, canClose: () => true });
+  const maintenance = { element: document.createElement('section'), select: async () => { integration.selects++; }, refresh: async () => {}, canClose: () => true, destroy() {} };
   const projects = {
     ready: Promise.resolve(), isReady: () => projectReady, getActive: () => project, getActiveId: () => project?.id ?? null, getRulesVersion: () => rulesVersion,
+    settings: panel('project'), backupSettings: panel('backup'), getSnapshot: () => ({ projects: project ? [project] : [] }),
     refresh: async () => { integration.refreshes++; return true; }, setBusy() {}, openManager: () => { integration.projectOpens++; },
     async pickFolder() {
       projectOptions.onPending(true);
@@ -56,8 +65,8 @@ function harness({ open = async () => null, invoke = async () => 'report', write
     return { id: args.runId, runId: args.runId, projectId: args.projectId, kind: args.kind, title: args.kind === 'check' ? '代码预检' : '流程导航', markdown: result, createdAt: Date.now(), projectRevision: project?.revision ?? null, toolVersion: 'test', rulesVersion: '{}', inputSummary: '本地测试' };
   };
   if (!explain.reset) explain.reset = () => {};
-  vm.runInNewContext(script, { crypto: { randomUUID: () => 'test-run-' + (++harness.runSequence) }, document, open, openUrl() {}, mountSystemNotifications: () => ({ element: null, open() {}, close() {}, destroy() {} }), mountScrollFades: () => () => {}, invoke: nativeInvoke, renderMessageText, mountProjects: options => { projectOptions = options; return projects; }, createProjectExplain: () => ({ query() {} }), mountProjectMaintenance: options => { maintenanceOptions = options; return maintenance; }, mountPreferences: options => { preferencesOptions = options; return { open(anchor) { integration.preferenceOpens.push(anchor); }, destroy() {} }; }, mountSourceFreshness: () => ({ open() { integration.sourceOpens++; }, close() {}, destroy() {} }), mountProjectHealth: () => ({ open() {}, close() { integration.healthClosed++; }, refresh() {}, destroy() {} }), mountReportReader: options => { readerOptions = options; return { open(anchor) { integration.readerOpens.push({ anchor, artifact: options.getArtifact() }); }, close() { integration.readerCloses++; }, destroy() {} }; }, mountProjectRepair: options => { repairOptions = options; return { openForArtifact(artifact, anchor) { integration.repairOpens.push({ artifact, anchor }); }, openHistory() {}, sync() { integration.repairSyncs++; }, destroy() {} }; }, mountRepairHandoff: () => ({ open() {}, refresh() {}, destroy() {} }), mountWorkflow: () => ({ refresh() {}, setBusy() {}, destroy() {}, open() {} }), mountExplainDialog: () => explain, mountToolsPanel: () => tools, mountDesktopSessions: async () => sessions, navigator: { clipboard: { writeText } }, window: { __TAURI_INTERNALS__: bridgeAvailable ? { invoke } : undefined, matchMedia: () => media, addEventListener: (event, ready) => { if (event === "DOMContentLoaded") ready(); } } });
-  return { selectProject(value) { project = value; projectOptions.onChange(value); }, integration, repairOptions: () => repairOptions, readerOptions: () => readerOptions, maintenanceOptions: () => maintenanceOptions, preferencesOptions: () => preferencesOptions, node: id => nodes.get(`#${id}`), click: id => nodes.get(`#${id}`).listeners.click(), document, navControl, projectOptions: () => projectOptions, setModal(value, sidebar = true) { const selector = sidebar ? ".session-workspace-dialog[data-kind]:modal, #desktop-model-dialog:modal" : "dialog:modal"; if (value) nodes.set(selector, value); else nodes.delete(selector); }, resizeNavigation(narrow) { media.matches = narrow; media.listener(); } };
+  vm.runInNewContext(script, { crypto: { randomUUID: () => 'test-run-' + (++harness.runSequence) }, document, open, getVersion: async () => 'desktop-test', corePackage: { version: 'core-test' }, openUrl() {}, mountSystemNotifications: () => ({ element: null, open() {}, close() {}, destroy() {} }), mountScrollFades: () => () => {}, invoke: nativeInvoke, renderMessageText, mountProjects: options => { projectOptions = options; return projects; }, createProjectExplain: () => ({ query() {} }), mountProjectMaintenance: options => { maintenanceOptions = options; return maintenance; }, mountPreferences: options => { preferencesOptions = options; return { open(anchor, section) { integration.preferenceOpens.push(anchor); integration.preferenceSections.push(section); }, close() { integration.preferenceCloses++; }, destroy() {} }; }, mountSourceFreshness: () => ({ open() { integration.sourceOpens++; }, close() {}, destroy() {} }), mountProjectHealth: () => ({ open() {}, close() { integration.healthClosed++; }, restoreMaintenance() { integration.maintenanceRestores++; }, refresh() {}, destroy() {} }), mountReportReader: options => { readerOptions = options; return { open(anchor) { integration.readerOpens.push({ anchor, artifact: options.getArtifact() }); }, close() { integration.readerCloses++; }, destroy() {} }; }, mountProjectRepair: options => { repairOptions = options; return { openForArtifact(artifact, anchor) { integration.repairOpens.push({ artifact, anchor }); }, openHistory() {}, sync() { integration.repairSyncs++; }, destroy() {} }; }, mountRepairHandoff: () => ({ open() {}, refresh() {}, destroy() {} }), mountWorkflow: () => ({ refresh() {}, setBusy() {}, destroy() {}, open() {} }), mountExplainDialog: () => explain, mountToolsPanel: () => tools, mountDesktopSessions: async () => sessions, navigator: { clipboard: { writeText } }, window: { setTimeout: callback => { scheduled.push(callback); return scheduled.length; }, __TAURI_INTERNALS__: bridgeAvailable ? { invoke } : undefined, matchMedia: () => media, addEventListener: (event, ready) => { if (event === "DOMContentLoaded") ready(); } } });
+  return { flushTimers() { for (const callback of scheduled.splice(0)) callback(); }, selectProject(value) { project = value; projectOptions.onChange(value); }, integration, panels: { projects: projects.settings, backup: projects.backupSettings, maintenance }, repairOptions: () => repairOptions, readerOptions: () => readerOptions, maintenanceOptions: () => maintenanceOptions, preferencesOptions: () => preferencesOptions, node: id => nodes.get(`#${id}`), click: id => nodes.get(`#${id}`).listeners.click(), document, navControl, projectOptions: () => projectOptions, setModal(value, sidebar = true) { const selector = sidebar ? ".session-workspace-dialog[data-kind]:modal, #desktop-model-dialog:modal" : "dialog:modal"; if (value) nodes.set(selector, value); else nodes.delete(selector); }, resizeNavigation(narrow) { media.matches = narrow; media.listener(); } };
 }
 
 desktopTest('desktop selection enables checks and passes the selected directory and subject', async () => {
@@ -548,18 +557,64 @@ desktopTest('maintenance results refresh saved records without replacing the rep
   app.projectOptions().onSnapshot();
   assert.equal(app.integration.selects, 2, 'a registry update lets the controller detect project changes');
   app.maintenanceOptions().onRevealReport();
-  assert.equal(app.integration.healthClosed, 1);
+  assert.equal(app.integration.healthClosed, 1); assert.equal(opens.length, 0);
+  app.flushTimers(); assert.equal(app.integration.preferenceCloses, 1);
   assert.equal(opens.length, 1, 'opening a saved notice is the explicit report action');
 });
 
-desktopTest('preferences routes reuse existing data and model controllers with the original opener', () => {
-  const routes = [];
-  const app = harness({ sessions: { openModels: anchor => routes.push({ kind: 'models', anchor }), openData: anchor => routes.push(anchor) } });
-  return Promise.resolve().then(() => {
-    app.preferencesOptions().onModels(app.node('dir'));
-    app.preferencesOptions().onData(app.node('dir'));
-    assert.deepEqual(routes, [{ kind: 'models', anchor: app.node('dir') }, app.node('dir')]);
-  });
+desktopTest('settings reuse the existing model and data panels and combine data lifecycles with project backup', async () => {
+  const calls = [], histories = [], doc = createPreviewDocument();
+  const model = { element: doc.createElement('section'), open() {}, close() {}, canClose: () => true };
+  const data = { element: doc.createElement('section'), open() { calls.push('open'); }, close() { calls.push('close'); }, canClose: () => true };
+  const app = harness({ sessions: { getModelSettingsPanel: () => model, getDataSettingsPanel: () => data, openHistory: (anchor, filter) => histories.push({ anchor, filter }) } });
+  const options = app.preferencesOptions();
+  assert.equal(await options.getPanel('models'), model);
+  const combined = await options.getPanel('data'); assert.equal(await options.getPanel('data'), combined);
+  assert.equal(combined.element.children[0].id, 'settings-session-data'); assert.equal(combined.element.children[0].children[0], data.element);
+  assert.equal(combined.element.children[1].id, 'settings-project-backup'); assert.equal(combined.element.children[1].children[0], app.panels.backup.element);
+  combined.open(); assert.deepEqual(calls, ['open']); assert.deepEqual(app.integration.settingsCalls, ['backupOpen']);
+  assert.equal(combined.canClose(), true); data.canClose = () => false; assert.equal(combined.canClose(), false);
+  data.canClose = () => true; app.panels.backup.canClose = () => false; assert.equal(combined.canClose(), false);
+  combined.close(); assert.deepEqual(calls, ['open', 'close']); assert.deepEqual(app.integration.settingsCalls, ['backupOpen', 'backupClose']);
+  const archives = combined.element.children[2]; archives.click(); options.onArchives(app.node('dir'));
+  assert.deepEqual(histories, [], 'neither archive entry may interrupt a pending project backup');
+  app.panels.backup.canClose = () => true;
+  archives.click(); assert.equal(histories[0].anchor, archives); assert.equal(histories[0].filter, 'archived');
+  options.onArchives(app.node('dir')); assert.equal(histories[1].anchor, app.node('dir')); assert.equal(histories[1].filter, 'archived');
+  assert.equal(app.integration.projectOpens, 0); assert.equal(app.integration.sourceOpens, 0);
+});
+
+desktopTest('project settings combine the existing project editor and maintenance with both exit guards', async () => {
+  const app = harness(); const combined = await app.preferencesOptions().getPanel('projects');
+  const openProject = app.panels.projects.open;
+  app.panels.projects.open = () => {
+    assert.equal(app.panels.projects.element.parentNode, combined.element, 'mount the project controls before their controller resolves DOM IDs');
+    assert.equal(app.panels.maintenance.element.parentNode, combined.element, 'mount both panels before activating the project controller');
+    openProject();
+  };
+  const selects = app.integration.selects; await combined.open();
+  assert.equal(combined.element.children[0], app.panels.projects.element); assert.equal(combined.element.children[1], app.panels.maintenance.element);
+  assert.equal(app.integration.selects, selects + 1); assert.deepEqual(app.integration.settingsCalls, ['projectOpen']);
+  assert.equal(combined.canClose(), true); app.panels.projects.canClose = () => false; assert.equal(combined.canClose(), false);
+  app.panels.projects.canClose = () => true; app.panels.maintenance.canClose = () => false; assert.equal(combined.canClose(), false);
+  combined.close(); assert.deepEqual(app.integration.settingsCalls, ['projectOpen', 'projectClose']); assert.equal(app.integration.maintenanceRestores, 1);
+  app.projectOptions().onOpenData(); assert.equal(app.integration.preferenceSections.at(-1), 'data');
+});
+
+desktopTest('settings privacy and versions resolve their current owners without running tools', async () => {
+  let revoked = 0, runs = 0;
+  const state = { allowRead: true, shareResults: false, busy: false, projectId: 'p1' };
+  const app = harness({ sessions: { getPrivacy: () => state, revokePermissions: () => { revoked++; } }, invoke: async () => { runs++; }, rulesVersion: 'rules-test' });
+  app.selectProject({ id: 'p1', name: 'Named project', directory: 'C:/project', directoryAvailable: true, subject: 'personal' });
+  assert.deepEqual({ ...await app.preferencesOptions().getPrivacy() }, { ...state, projectName: 'Named project' });
+  await app.preferencesOptions().revokePermissions(); assert.equal(revoked, 1);
+  assert.deepEqual({ ...await app.preferencesOptions().getVersions() }, { desktop: 'desktop-test', core: 'core-test', rules: 'rules-test' }); assert.equal(runs, 0);
+});
+
+desktopTest('unavailable sessions report settings load failures without fabricating model or data panels', async () => {
+  const app = harness();
+  for (const section of ['models', 'data']) await assert.rejects(app.preferencesOptions().getPanel(section), /会话初始化失败/);
+  await assert.rejects(app.preferencesOptions().getPrivacy(), /会话不可用/); await assert.rejects(app.preferencesOptions().revokePermissions(), /会话不可用/);
 });
 
 desktopTest('preferences route uses the single source-status dialog without starting a check', () => {
