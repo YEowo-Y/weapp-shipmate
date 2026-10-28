@@ -620,3 +620,188 @@ desktopTest('model dialog wraps keyboard boundaries without stealing interior or
   for (const options of [{ ctrlKey: true }, { altKey: true }, { metaKey: true }, { isComposing: true }, { defaultPrevented: true }]) assert.equal(tab(last, options), false);
   dialog.close(); assert.equal(tab(last), false);
 });
+
+
+/** Real DOM coverage for moving the same model controls between their two hosts. */
+function embeddedHarness(snapshot, initialSelection = null, options = {}) {
+  const { JSDOM } = requireDesktop('jsdom');
+  const dom = new JSDOM('<!doctype html><html><body><button id="settings-anchor">设置</button><button id="model-anchor">模型</button><main id="settings-host"></main></body></html>');
+  const { document } = dom.window;
+  dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  dom.window.HTMLDialogElement.prototype.close = function () { if (!this.open) return; this.open = false; this.dispatchEvent(new dom.window.Event('close')); };
+  let selection = initialSelection, loads = 0, disposed = 0;
+  const timers = [];
+  const client = { snapshot, ready: true, async load() { loads++; return this.snapshot; }, async mutate() {}, dispose() { disposed++; } };
+  const quickPicker = { open() { this.opened = true; }, close() { this.opened = false; }, destroy() {} };
+  const context = {
+    document, window: dom.window, HTMLElement: dom.window.HTMLElement, isUsableModelConnection,
+    mountModelPicker: options => { quickPicker.options = options; return quickPicker; },
+    createConnectionClient: () => client, desktopModelFetch() {},
+    createIcon: () => document.createElement('span'), createProviderIcon: () => document.createElement('span'),
+    openUrl: async () => {}, setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout() {},
+  };
+  const actionSource = readFileSync(new URL('../desktop/design-previews/components/ui-kit.js', import.meta.url), 'utf8').match(/^export function createActionButton[^]*?^}/m)[0].replace('export ', '');
+  vm.runInNewContext(actionSource, context);
+  const source = readFileSync(new URL('../desktop/src/model-connection.ts', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
+  vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, context);
+  const app = context.mountModelConnections({
+    picker: document.querySelector('#model-anchor'), isBusy: options.isBusy ?? (() => false),
+    select(value) { selection = value; return true; }, getSelection: () => selection,
+  });
+  return { app, client, quickPicker, context, timers, dom, document, get loads() { return loads; }, get disposed() { return disposed; }, get selection() { return selection; } };
+}
+
+desktopTest('embedded model settings reuse one content tree and select without opening or closing a dialog', async () => {
+  const app = embeddedHarness({ connections: [{ providerId: 'openai', status: 'connected', models: [{ id: 'alpha', name: 'Alpha' }] }] });
+  const { element } = app.app.settings;
+  app.document.querySelector('#settings-host').append(element);
+  await app.app.settings.open();
+  const dialog = app.document.querySelector('#desktop-model-dialog');
+  assert.equal(dialog.open, false);
+  assert.equal(element.tagName, 'SECTION');
+  assert.equal(element.querySelector('#desktop-model-title').textContent, '模型连接');
+  assert.equal(element.querySelector('#desktop-model-close').hidden, true);
+  assert.equal(app.document.querySelectorAll('#desktop-provider-key').length, 1);
+  assert.equal(app.loads, 1);
+  const model = element.querySelector('[data-model-id="alpha"]'); model.focus(); model.click();
+  assert.equal(app.selection.model, 'alpha');
+  assert.equal(element.querySelector('[data-model-id="alpha"]').getAttribute('aria-pressed'), 'true');
+  assert.match(element.querySelector('#desktop-provider-status').textContent, /当前模型.*Alpha/);
+  assert.equal(dialog.open, false);
+  assert.equal(app.document.activeElement.dataset.modelId, 'alpha');
+  app.app.destroy(); assert.equal(app.disposed, 1); app.dom.window.close();
+});
+
+desktopTest('embedded settings remain inspectable while a chat is running without allowing model changes', async () => {
+  const app = embeddedHarness({ connections: [{ providerId: 'openai', status: 'connected', models: [{ id: 'alpha', name: 'Alpha' }] }] }, null, { isBusy: () => true });
+  app.document.querySelector('#settings-host').append(app.app.settings.element);
+  await app.app.settings.open();
+  const model = app.app.settings.element.querySelector('[data-model-id="alpha"]');
+  assert.ok(model, 'the embedded panel is populated while the chat is busy');
+  assert.equal(model.disabled, true); model.click(); assert.equal(app.selection, null);
+  assert.equal(app.document.querySelector('#desktop-provider-refresh').disabled, true);
+  assert.equal(app.document.querySelector('#desktop-model-dialog').open, false);
+  assert.equal(app.app.settings.canClose(), true);
+  app.app.destroy(); app.dom.window.close();
+});
+
+desktopTest('embedded model activation leaves initial focus to the settings shell before and after loading', async () => {
+  for (const connections of [[], [{ providerId: 'openai', status: 'connected', models: [{ id: 'alpha', name: 'Alpha' }] }]]) {
+    const app = embeddedHarness({ connections });
+    app.document.querySelector('#settings-host').append(app.app.settings.element);
+    const anchor = app.document.querySelector('#settings-anchor'); anchor.focus();
+    let finish; app.client.load = () => new Promise(resolve => { finish = resolve; });
+    const opening = app.app.settings.open();
+    assert.equal(app.document.activeElement.id, anchor.id, 'activation must not compete with shell search focus');
+    finish(app.client.snapshot); await opening;
+    assert.equal(app.document.activeElement.id, anchor.id, 'metadata completion must leave search navigation to the shell');
+    const target = app.document.querySelector(connections.length ? '#desktop-model-search' : '#desktop-provider-key');
+    target.focus(); assert.equal(app.document.activeElement.id, target.id, 'the shell can focus its requested destination');
+    app.app.destroy(); app.dom.window.close();
+  }
+});
+
+desktopTest('model settings search resolves disconnected catalog and credential results to visible connection controls', async () => {
+  const app = embeddedHarness({ connections: [] }); let mutations = 0; app.client.mutate = async () => { mutations++; };
+  app.document.querySelector('#settings-host').append(app.app.settings.element); await app.app.settings.open();
+  for (const [provider, expected] of [['openai', 'desktop-provider-key'], ['ollama', 'desktop-provider-connect']]) {
+    app.document.querySelector(`[data-provider-id="${provider}"]`).click();
+    for (const id of ['desktop-connection-editor-toggle', 'desktop-model-search']) {
+      const editor = app.document.querySelector('#desktop-connection-editor'); editor.open = false;
+      const target = app.app.settings.searchTarget(id);
+      assert.equal(target.id, expected); assert.equal(target.closest('[hidden]'), null); assert.equal(editor.open, true);
+    }
+    const status = app.document.querySelector('#desktop-provider-status'); assert.match(status.textContent, /请先连接.*模型目录/); assert.equal(status.hidden, false);
+  }
+  assert.equal(app.selection, null); assert.equal(mutations, 0); assert.equal(app.app.settings.searchTarget('missing-setting'), null);
+  app.app.destroy(); app.dom.window.close();
+});
+
+desktopTest('connected model search keeps its catalog target and expands credentials only when requested', async () => {
+  const selection = { providerId: 'openai', model: 'alpha', label: 'Alpha' };
+  const app = embeddedHarness({ connections: [{ providerId: 'openai', status: 'connected', models: [{ id: 'alpha', name: 'Alpha' }] }] }, selection);
+  app.document.querySelector('#settings-host').append(app.app.settings.element); await app.app.settings.open();
+  const editor = app.document.querySelector('#desktop-connection-editor'); assert.equal(editor.open, false);
+  const catalog = app.app.settings.searchTarget('desktop-model-search'); assert.equal(catalog.id, 'desktop-model-search'); assert.equal(catalog.closest('[hidden]'), null); assert.equal(editor.open, false);
+  catalog.focus(); assert.equal(app.document.activeElement.id, catalog.id);
+  const credentials = app.app.settings.searchTarget('desktop-connection-editor-toggle'); assert.equal(credentials.id, 'desktop-connection-editor-toggle'); assert.equal(credentials.hidden, false); assert.equal(editor.open, true);
+  editor.open = false; assert.equal(app.app.settings.searchTarget('desktop-provider-key').id, 'desktop-provider-key'); assert.equal(editor.open, true);
+  assert.equal(app.selection, selection); app.app.settings.close(); assert.equal(app.app.settings.searchTarget('desktop-model-search'), null);
+  app.app.destroy(); app.dom.window.close();
+});
+
+desktopTest('model search during pending OAuth resolves to a visible authorization control without altering the flow', async () => {
+  const oauth = { status: 'waiting', mode: 'manual', flowId: 'search-flow', authorizationUrl: 'https://openrouter.ai/auth' };
+  const app = embeddedHarness({ connections: [], oauth }); let mutations = 0; app.client.mutate = async () => { mutations++; };
+  app.document.querySelector('#settings-host').append(app.app.settings.element); await app.app.settings.open(); app.document.querySelector('[data-provider-id="openrouter"]').click();
+  const target = app.app.settings.searchTarget('desktop-model-search');
+  assert.equal(target.id, 'desktop-oauth-code'); assert.equal(target.closest('[hidden]'), null);
+  assert.match(app.document.querySelector('#desktop-provider-status').textContent, /完成当前授权/); assert.equal(app.client.snapshot.oauth, oauth); assert.equal(mutations, 0);
+  app.app.destroy(); app.dom.window.close();
+});
+
+desktopTest('leaving embedded settings clears revealed credentials and authorization code without restoring outside focus', async () => {
+  const app = embeddedHarness({ connections: [] });
+  app.document.querySelector('#settings-host').append(app.app.settings.element);
+  await app.app.settings.open();
+  const key = app.document.querySelector('#desktop-provider-key'), code = app.document.querySelector('#desktop-oauth-code');
+  key.value = 'ephemeral-key'; app.document.querySelector('#desktop-provider-reveal').click(); code.value = 'ephemeral-code';
+  const destination = app.document.querySelector('#settings-anchor'); destination.focus();
+  app.app.settings.close();
+  assert.equal(key.value, ''); assert.equal(key.type, 'password'); assert.equal(code.value, '');
+  assert.equal(app.document.activeElement, destination);
+  app.app.destroy(); app.dom.window.close();
+});
+
+desktopTest('embedded settings guard in-flight mutations while leaving read-only loads dismissible', async () => {
+  const app = embeddedHarness({ connections: [{ providerId: 'openai', status: 'connected', models: [{ id: 'alpha', name: 'Alpha' }] }] }, { providerId: 'openai', model: 'alpha', label: 'Alpha' });
+  app.document.querySelector('#settings-host').append(app.app.settings.element);
+  let finishLoad; app.client.load = () => new Promise(resolve => { finishLoad = resolve; });
+  const opening = app.app.settings.open();
+  assert.equal(app.app.settings.canClose(), true, 'reading metadata does not lock navigation');
+  finishLoad(app.client.snapshot); await opening;
+  app.client.load = async () => app.client.snapshot;
+  let finishMutation; app.client.mutate = () => new Promise(resolve => { finishMutation = resolve; });
+  app.document.querySelector('#desktop-provider-verify').click();
+  assert.equal(app.app.settings.canClose(), false);
+  finishMutation({}); await settle();
+  assert.equal(app.app.settings.canClose(), true);
+  app.app.destroy(); app.dom.window.close();
+});
+
+desktopTest('embedded settings discard stale opening focus after leaving and do not capture Tab or quick-picker shortcuts', async () => {
+  const app = embeddedHarness({ connections: [] });
+  const panel = app.app.settings.element; app.document.querySelector('#settings-host').append(panel);
+  let finish; app.client.load = () => new Promise(resolve => { finish = resolve; });
+  const opening = app.app.settings.open();
+  const target = app.document.querySelector('#settings-anchor'); target.focus(); app.app.settings.close();
+  finish(app.client.snapshot); await opening;
+  assert.equal(app.document.activeElement, target);
+  app.client.load = async () => app.client.snapshot; await app.app.settings.open();
+  const tab = new app.dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }); panel.dispatchEvent(tab);
+  assert.equal(tab.defaultPrevented, false);
+  app.document.dispatchEvent(new app.dom.window.KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+  assert.notEqual(app.quickPicker.opened, true, 'the composer picker stays behind the settings workspace');
+  app.app.settings.close();
+  app.document.dispatchEvent(new app.dom.window.KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }));
+  assert.equal(app.quickPicker.opened, true);
+  app.app.destroy(); app.dom.window.close();
+});
+
+desktopTest('legacy model dialog and embedded settings transfer the same form without duplicate controls', async () => {
+  const app = embeddedHarness({ connections: [] });
+  app.document.querySelector('#settings-host').append(app.app.settings.element);
+  await app.app.settings.open();
+  const key = app.document.querySelector('#desktop-provider-key'); app.app.settings.close();
+  const anchor = app.document.querySelector('#settings-anchor'); app.app.open(anchor); await settle();
+  const dialog = app.document.querySelector('#desktop-model-dialog');
+  assert.equal(dialog.open, true); assert.equal(dialog.querySelector('#desktop-provider-key'), key);
+  assert.equal(app.document.activeElement.id, key.id);
+  assert.equal(dialog.querySelector('#desktop-model-close').hidden, false);
+  dialog.close(); assert.equal(app.document.activeElement, anchor);
+  await app.app.settings.open();
+  assert.equal(dialog.open, false);
+  assert.equal(app.app.settings.element.querySelector('#desktop-provider-key'), key);
+  assert.equal(app.document.querySelectorAll('#desktop-provider-key').length, 1);
+  app.app.destroy(); app.dom.window.close();
+});
