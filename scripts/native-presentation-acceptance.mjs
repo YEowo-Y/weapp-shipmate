@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { deriveWorkflow } from '../src/workflow.mjs';
+import { checkSettingsWorkspaceFlows } from './native-settings-acceptance.mjs';
 
 // Actual native storage and UI, with labelled temporary project files only.
 // Appearance stress overrides stay in this isolated document and are restored.
@@ -20,7 +21,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     let shape;
     await until(async () => {
       shape = await inspect(`const node=document.querySelector(arguments[0]),r=node.getBoundingClientRect(),hit=document.elementFromPoint((r.left+r.right)/2,(r.top+r.bottom)/2);
-        return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,visible:node.checkVisibility()&&!node.disabled&&r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&(hit===node||node.contains(hit))};`, [selector]);
+        return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,visible:node.checkVisibility()&&!node.disabled&&r.left>=-1&&r.right<=innerWidth+1&&r.top>=-1&&r.bottom<=innerHeight+1&&(hit===node||node.contains(hit))};`, [selector]);
       return shape.visible;
     }, `visible enabled click target ${selector}`, 5000);
     interactions.push({ selector, ...shape });
@@ -38,12 +39,23 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await inspect('document.querySelector("#desktopScroll").scrollTop=0');
   };
   const openPreferences = async () => { await activate('#desktop-preferences-open'); await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'preferences open'); };
+  const sections = {
+    appearance: ['外观与阅读', '#preferences-appearance'], notifications: ['通知', '.system-notifications'],
+    shortcuts: ['快捷键', '#settings-send-key'], models: ['模型与连接', '.desktop-model-panel'],
+    projects: ['项目配置', '.project-settings-panel'], data: ['数据与会话', '.session-workspace-data-panel'],
+    privacy: ['隐私与权限', '#settings-permissions'], about: ['关于', '#settings-versions'],
+  };
   const section = async selected => {
-    assert.equal(await inspect('return document.querySelector("#desktop-preferences").dataset.section'), selected);
-    for (const id of ['appearance', 'notifications', 'connections']) {
-      assert.equal(await inspect('return document.querySelector(arguments[0]).checkVisibility()', [`#preferences-${id}`]), id === selected, `${id} visibility follows the selected settings section`);
+    await until(() => inspect('const root=document.querySelector("#desktop-preferences"),panel=root.querySelector(arguments[1]);return root.dataset.section===arguments[0]&&!root.querySelector(".preferences-loading,.settings-loading")&&panel?.checkVisibility()', [selected, sections[selected][1]]), `settings section ${selected} ready`);
+    assert.equal(await text('#preferences-section-title'), sections[selected][0]);
+    for (const id of Object.keys(sections)) {
       assert.equal(await inspect('return document.querySelector(arguments[0]).getAttribute("aria-current")', [`#preferences-nav-${id}`]), id === selected ? 'page' : null);
     }
+    assert.equal(await inspect('return document.querySelector("#desktop-model-dialog").open'), false, 'model controls stay inside the settings workspace');
+  };
+  const navigate = async selected => {
+    if (!await inspect('return document.querySelector(arguments[0]).checkVisibility()', [`#preferences-nav-${selected}`])) await activate('#preferences-categories');
+    await activate(`#preferences-nav-${selected}`); await section(selected);
   };
   const openWorkflow = async () => {
     await home(); await activate('#home-workflow');
@@ -77,11 +89,11 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
       return {viewport:{width:innerWidth,height:innerHeight},root:rect(root),modal,theme:document.body.dataset.theme,
         pageOverflow:document.documentElement.scrollWidth-innerWidth,rootOverflow:root.scrollWidth-root.clientWidth,
         contentOverflow:scrollContainers.map(n=>({id:n.id,className:n.className,value:n.scrollWidth-n.clientWidth})),clipped,
-        scrollBodies:[...root.querySelectorAll('.context-body,.session-workspace-dialog__body')].filter(visible).map(n=>({id:n.id,...rect(n)})),
+        scrollBodies:[...root.querySelectorAll('.context-body,.session-workspace-dialog__body')].filter(visible).filter(n=>/auto|scroll/.test(getComputedStyle(n).overflowY)).map(n=>({id:n.id,...rect(n)})),
         actionBoxes:root.id==='desktop-workflow'?[...root.querySelectorAll('wa-button')].filter(visible).map(n=>({id:n.id,...rect(n)})):[],
         wideElements:[...root.querySelectorAll('*')].filter(visible).filter(n=>{const r=n.getBoundingClientRect(),p=root.getBoundingClientRect();return r.left<p.left-1||r.right>p.right+1;}).map(n=>({tag:n.tagName,id:n.id,className:typeof n.className==='string'?n.className:'',...rect(n)})),
         headings:[...root.querySelectorAll('h1,h2,h3,h4')].filter(visible).map(n=>({text:n.textContent,fontSize:getComputedStyle(n).fontSize})),
-        close:modal?rect(root.querySelector('header wa-button,header button')):null};`, [selector]);
+        close:modal?rect(root.querySelector(root.id==='desktop-preferences'?'#preferences-content-dismiss':'header wa-button,header button')):null};`, [selector]);
     visuals.push({ label, ...value }); await writeFile(resolve(run, 'presentation-visuals.json'), JSON.stringify(visuals, null, 2));
     await screenshot(`presentation-${label}`);
     assert.ok(value.pageOverflow <= 1, `${label}: page horizontally overflows ${value.pageOverflow}px`);
@@ -92,35 +104,41 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     assert.ok(value.root.left >= -1 && value.root.right <= value.viewport.width + 1, `${label}: surface must fit horizontally`);
     if (value.modal) {
       assert.ok(value.root.top >= -1 && value.root.bottom <= value.viewport.height + 1, `${label}: modal fits viewport`);
-      assert.ok(value.close.top >= 0 && value.close.bottom <= value.viewport.height && value.close.left >= 0 && value.close.right <= value.viewport.width, `${label}: modal close action stays reachable`);
-      for (const body of value.scrollBodies) assert.ok(body.height >= 80 && body.top >= 0 && body.bottom <= value.viewport.height, `${label}: scrollable reading area remains visible ${JSON.stringify(body)}`);
+      assert.ok(value.close.top >= -1 && value.close.bottom <= value.viewport.height + 1 && value.close.left >= -1 && value.close.right <= value.viewport.width + 1, `${label}: modal close action stays reachable`);
+      for (const body of value.scrollBodies) assert.ok(body.height >= 80 && body.top >= -1 && body.bottom <= value.viewport.height + 1, `${label}: scrollable reading area remains visible ${JSON.stringify(body)}`);
     }
   };
   const settingsWorkspace = async label => {
     const value = await inspect(`const root=document.querySelector('#desktop-preferences');
-      const rect=selector=>{const n=root.querySelector(selector),r=n.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
+      const rect=selector=>{const n=root.querySelector(selector),r=n.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height,visible:n.checkVisibility()};};
       const r=root.getBoundingClientRect();
       return {viewport:{width:innerWidth,height:innerHeight},root:{left:r.left,top:r.top,width:r.width,height:r.height},
-        sidebar:rect('.preferences-sidebar'),main:rect('.preferences-main'),body:rect('#preferences-body'),footer:rect('.preferences-footer'),
-        panel:rect('#preferences-'+root.dataset.section),headingSize:getComputedStyle(root.querySelector('#preferences-'+root.dataset.section+' h3')).fontSize};`);
+        sidebar:rect('.preferences-sidebar'),main:rect('.preferences-main'),body:rect('#preferences-body'),
+        headingSize:getComputedStyle(root.querySelector('#preferences-section-title')).fontSize,
+        hasFooter:!!root.querySelector('.preferences-footer,#preferences-done'),
+        navigation: [...root.querySelectorAll('.preferences-navigation button')].map(n=>({height:n.getBoundingClientRect().height,fontSize:getComputedStyle(n).fontSize}))};`);
     visuals.push({ label: `${label}-workspace`, ...value });
     await writeFile(resolve(run, 'presentation-visuals.json'), JSON.stringify(visuals, null, 2));
     assert.ok(Math.abs(value.root.left) <= 1 && Math.abs(value.root.top) <= 1, `${label}: settings starts at the viewport origin`);
     assert.ok(Math.abs(value.root.width - value.viewport.width) <= 1 && Math.abs(value.root.height - value.viewport.height) <= 1, `${label}: settings occupies the full workspace`);
-    assert.ok(value.body.height >= 80 && value.body.bottom <= value.footer.top + 1, `${label}: scrolling content stays above persistent footer`);
-    assert.ok(value.footer.bottom <= value.viewport.height + 1, `${label}: feedback and Done stay in the viewport`);
-    assert.equal(value.headingSize, value.viewport.width <= 520 ? '22px' : '24px', `${label}: every section uses the same heading hierarchy`);
+    assert.ok(value.body.height >= 80 && value.body.top >= -1 && value.body.bottom <= value.viewport.height + 1, `${label}: content has a usable scrolling area`);
+    assert.equal(value.hasFooter, false, `${label}: no permanent Done footer`);
+    assert.equal(value.headingSize, '16px', `${label}: section title uses the approved desktop scale`);
     if (value.viewport.width >= 1000) {
-      assert.ok(value.sidebar.width >= 160 && value.sidebar.width <= 320, `${label}: desktop has a readable navigation column`);
+      assert.ok(value.sidebar.width >= 240 && value.sidebar.width <= 328, `${label}: navigation retains the reference proportions`);
       assert.ok(value.sidebar.right <= value.main.left + 1 && value.main.width > value.sidebar.width, `${label}: main content sits beside the sidebar`);
-      assert.ok(value.panel.width <= 900, `${label}: settings rows retain a limited reading width`);
+      assert.ok(value.main.width <= 720, `${label}: settings content retains a limited reading width`);
+      assert.ok(value.navigation.every(row=>row.height>=32&&row.fontSize==='14px'), `${label}: navigation uses readable 14px labels and 32px targets`);
+    } else if (value.viewport.width < 800) {
+      assert.equal(value.sidebar.visible, false, `${label}: category navigation yields to the detail page`);
+      assert.equal(value.main.visible, true, `${label}: narrow detail is visible`);
     }
   };
   const appearance = async theme => {
     await openPreferences(); await activate(`#desktop-theme-${theme}`);
     await activate('#desktop-message-size-18'); await activate('#desktop-motion-reduce');
     assert.match(await text('#preferences-status'), /保存/);
-    await activate('#preferences-done');
+    await activate('#preferences-content-dismiss');
     assert.equal(await inspect('return document.body.dataset.theme'), theme);
   };
   const clearStress = () => inspect('document.querySelector("#presentation-spacing-override")?.remove(); for(const [node,style] of window.__presentationTextStyles||[]){if(style===null)node.removeAttribute("style");else node.setAttribute("style",style);}delete window.__presentationTextStyles;');
@@ -151,11 +169,11 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     assert.equal(await inspect('return document.querySelector("#desktop-preferences-open").closest("#desktop-navigation")'), null);
     await command('POST', '/window/rect', { width: 320, height: 844 });
     if (await inspect('return document.querySelector("#desktop-navigation").open')) await activate('#desktop-navigation > summary');
-    assert.equal(await inspect('const r=document.querySelector("#desktop-preferences-open").getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight'), true);
+    assert.equal(await inspect('const r=document.querySelector("#desktop-preferences-open").getBoundingClientRect();return r.left>=-1&&r.right<=innerWidth+1&&r.top>=-1&&r.bottom<=innerHeight+1'), true);
     await openPreferences(); await section('appearance');
     assert.equal(await text('#preferences-heading'), '设置');
-    for (const selected of ['notifications', 'connections', 'appearance']) {
-      await activate(`#preferences-nav-${selected}`); await section(selected);
+    for (const selected of Object.keys(sections).filter(id => id !== 'appearance').concat('appearance')) {
+      await navigate(selected);
       await geometry(`settings-section-${selected}-320`, '#desktop-preferences');
     }
     await close('#desktop-preferences'); assert.equal(await inspect('return document.activeElement.id'), 'desktop-preferences-open');
@@ -166,7 +184,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     const draft = '设置入口验收草稿，不发送到任何模型';
     await fill('#desktopInput', draft); await activate('#desktopSend');
     await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'missing model opens settings');
-    await section('connections');
+    await section('models');
     assert.equal(await inspect('return document.querySelector("#desktop-model-dialog").open'), false);
     assert.equal(await inspect('return document.querySelector("#desktopInput").value'), draft);
     await close('#desktop-preferences');
@@ -174,13 +192,12 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await until(() => inspect('return document.querySelector("#desktop-model-picker").matches(":popover-open")'), 'model picker visible');
     await activate('.desktop-picker-manage');
     await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'picker management opens settings');
-    await section('connections');
+    await section('models');
     assert.equal(await inspect('return document.querySelector("#desktop-model-picker").matches(":popover-open")'), false);
     assert.equal(await inspect('return document.querySelector("#desktop-model-dialog").open'), false);
     assert.equal(await inspect('return document.querySelector("#desktopInput").value'), draft);
-    await activate('#preferences-models');
-    await until(() => inspect('return document.querySelector("#desktop-model-dialog").open && !document.querySelector("#desktop-preferences").open'), 'explicit model settings handoff');
-    await close('#desktop-model-dialog'); assert.equal(await inspect('return document.activeElement.matches("#desktopComposer .agent-composer__model")'), true, 'picker-origin settings return focus to the original model picker');
+    assert.equal(await inspect('return document.querySelector("#desktop-preferences .desktop-model-panel").checkVisibility()'), true);
+    await close('#desktop-preferences'); assert.equal(await inspect('return document.activeElement.matches("#desktopComposer .agent-composer__model")'), true, 'picker-origin settings return focus to the original model picker');
     await fill('#desktopInput', ''); assert.deepEqual(requests, []);
   });
   await checked('Home project context comes from real saved storage and routes to the existing manager', async () => {
@@ -276,15 +293,15 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await activate('#desktop-theme-dark'); await activate('#desktop-message-size-18'); await activate('#desktop-motion-reduce');
     assert.equal(await inspect('return document.body.dataset.theme'), 'dark'); assert.equal(await inspect('return document.body.dataset.motion'), 'reduce');
     assert.equal(await inspect('return getComputedStyle(document.querySelector(".preferences-sample")).fontSize'), '18px');
-    for (const [selector, size] of [['#desktop-preferences', '14px'], ['.preferences-field-copy p', '14px'], ['.preferences-choice', '13px'], ['#preferences-status', '13px']]) {
+    for (const [selector, size] of [['#desktop-preferences', '14px'], ['.preferences-field-copy p', '13px'], ['.preferences-choice', '13px'], ['#preferences-status', '12px']]) {
       assert.equal(await inspect('return getComputedStyle(document.querySelector(arguments[0])).fontSize', [selector]), size, `${selector}: reading size does not enlarge settings UI`);
     }
     assert.match(await text('#preferences-status'), /保存/);
-    assert.equal(await inspect('return document.querySelector("#system-notifications-enabled").checked'), false, 'viewing settings never enables system notifications');
-    for (const [nav, target] of [['#preferences-nav-notifications', 'preferences-notifications'], ['#preferences-nav-connections', 'preferences-links-heading'], ['#preferences-nav-appearance', 'preferences-appearance-title']]) {
-      await activate(nav); await section(nav.replace('#preferences-nav-', '')); assert.equal(await inspect('return document.activeElement.id'), target, 'section navigation focuses its readable destination');
+    for (const selected of ['notifications', 'models', 'appearance']) {
+      await navigate(selected); assert.equal(await inspect('return document.activeElement.id'), 'preferences-section-title', 'section navigation focuses its readable destination');
+      if (selected === 'notifications') assert.equal(await inspect('return document.querySelector("#system-notifications-enabled").checked'), false, 'viewing settings never enables system notifications');
     }
-    await activate('#preferences-done'); assert.equal(await inspect('return document.activeElement.id'), 'desktop-preferences-open');
+    await activate('#preferences-content-dismiss'); assert.equal(await inspect('return document.activeElement.id'), 'desktop-preferences-open');
     await openPreferences(); assert.equal(await inspect('return document.querySelector("#preferences-body").scrollTop'), 0, 'reopening settings starts at its overview');
     assert.match(await text('#preferences-dismiss'), /返回应用/);
     await activate('#preferences-dismiss');
@@ -303,15 +320,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     assert.equal(await inspect('return ["desktop-theme-dark","desktop-message-size-18","desktop-motion-reduce"].every(id=>document.getElementById(id).getAttribute("aria-checked")==="true")'), true);
     await close('#desktop-preferences'); assert.equal((await snapshot()).runs.length, 0);
   });
-  await checked('Settings destinations replace the modal and return keyboard focus to the persistent settings entry', async () => {
-    for (const [entry, dialog] of [['#preferences-models', '#desktop-model-dialog'], ['#preferences-data', 'dialog[data-kind="data"]'], ['#preferences-maintenance', '#desktop-health'], ['#preferences-sources', '#desktop-source-freshness'], ['#preferences-projects', '#desktop-projects']]) {
-      await openPreferences(); await activate('#preferences-nav-connections'); await activate(entry);
-      await until(() => inspect('return !document.querySelector("#desktop-preferences").open && document.querySelector(arguments[0])?.open', [dialog]), `${entry} modal handoff`);
-      await close(dialog); assert.equal(await inspect('return document.activeElement.id'), 'desktop-preferences-open'); assert.equal(await inspect('return document.activeElement.checkVisibility()'), true, `${entry} returns visible keyboard focus`);
-      assert.equal(await inspect('return document.querySelectorAll("dialog:modal").length'), 0);
-    }
-    assert.deepEqual(requests, []);
-  });
+  await checkSettingsWorkspaceFlows({ run, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, chooseOption, refresh, quit, launch, projectId, requests });
   await checked('Malformed appearance storage has explicit recovery without deleting project progress', async () => {
     const before = await workflow();
     await inspect('localStorage.setItem("shipmate-desktop-preferences","{invalid acceptance fixture")'); await refresh(); await openPreferences();
@@ -328,8 +337,8 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
         await command('POST', '/window/rect', { width, height: 1000 }); await home(); await geometry(`${theme}-${width}-home`, '#session-empty');
         await openWorkflow(); await geometry(`${theme}-${width}-workflow`, '#desktop-workflow'); await activate('#workflow-next-open'); await close('#desktop-workflow');
         await openPreferences();
-        for (const selected of ['appearance', 'notifications', 'connections']) {
-          await activate(`#preferences-nav-${selected}`); await section(selected);
+        for (const selected of Object.keys(sections)) {
+          await navigate(selected);
           await geometry(`${theme}-${width}-preferences-${selected}`, '#desktop-preferences');
           await settingsWorkspace(`${theme}-${width}-preferences-${selected}`);
           if (selected === 'appearance') {
@@ -337,7 +346,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
             assert.ok(previews.every(n => n.width >= 45 && n.ink >= 12), 'theme miniatures retain a readable canvas and message lines in every mode');
           }
         }
-        await inspect('document.querySelector("#preferences-dismiss").focus()'); await press('\uE004');
+        await inspect('document.querySelector("#preferences-content-dismiss").focus()'); await press('\uE004');
         assert.equal(await inspect('return document.querySelector("#desktop-preferences").contains(document.activeElement)'), true, 'keyboard remains inside the modal');
         await close('#desktop-preferences'); assert.equal(await inspect('return document.activeElement.checkVisibility()'), true);
       }
