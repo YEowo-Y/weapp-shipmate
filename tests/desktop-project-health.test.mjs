@@ -47,7 +47,7 @@ test('health distinguishes unknown basis and changed rules, directory missing, a
   }
 });
 
-function harness({ load = async () => true, openReport = async () => true } = {}) {
+function harness({ load = async () => true, openReport = async () => true, withMaintenance = false } = {}) {
   const document = createPreviewDocument(), create = document.createElement.bind(document), nodes = [];
   document.createElement = tag => {
     const node = create(tag); node.listeners = {}; node.isConnected = true; node.classList = { add() {} };
@@ -61,9 +61,10 @@ function harness({ load = async () => true, openReport = async () => true } = {}
   const context = vm.createContext({ document, createIcon, createActionButton: (doc, label) => { const b = doc.createElement('wa-button'); b.textContent = label; return b; } });
   vm.runInContext(script, context);
   const fallback = document.createElement('button');
-  const app = context.mountProjectHealth({ getSnapshot: () => current, isBusy: () => busy, reload: load, onCheck: () => { checks++; }, onReport: async id => { reports.push(id); return openReport(id); }, onManage() {}, returnFocus: () => fallback });
+  const maintenance = withMaintenance ? document.createElement('section') : undefined;
+  const app = context.mountProjectHealth({ getSnapshot: () => current, isBusy: () => busy, reload: load, onCheck: () => { checks++; }, onReport: async id => { reports.push(id); return openReport(id); }, onManage() {}, maintenance, returnFocus: () => fallback });
   const node = id => nodes.find(item => item.id === id), anchor = document.createElement('button');
-  return { app, node, anchor, fallback, document, checks: () => checks, reports, setSnapshot(value) { current = value; app.refresh(); }, setBusy(value) { busy = value; app.refresh(); }, click: id => node(id).listeners.click() };
+  return { app, node, anchor, fallback, document, maintenance, checks: () => checks, reports, setSnapshot(value) { current = value; app.refresh(); }, setBusy(value) { busy = value; app.refresh(); }, click: id => node(id).listeners.click() };
 }
 test('health reads status without executing tools; duplicate reloads are suppressed and failure preserves report', async () => {
   let resolve, calls = 0;
@@ -107,4 +108,14 @@ test('health returns focus to a visible fallback when reading notices hides the 
   const h = harness(); h.app.open(h.anchor); await setImmediate();
   h.anchor.hidden = true; h.click('health-done');
   assert.equal(h.document.activeElement, h.fallback);
+});
+
+test('health reclaims the same maintenance panel after settings borrows it', async () => {
+  const h = harness({ withMaintenance: true });
+  const home = h.maintenance.parentNode, settings = h.document.createElement('section');
+  settings.append(h.maintenance); assert.equal(h.maintenance.parentNode, settings);
+  h.app.restoreMaintenance(); assert.equal(h.maintenance.parentNode, home);
+  settings.append(h.maintenance); h.app.open(h.anchor);
+  assert.equal(h.maintenance.parentNode, home); assert.equal(h.node('desktop-health').open, true);
+  await setImmediate(); h.app.destroy();
 });
