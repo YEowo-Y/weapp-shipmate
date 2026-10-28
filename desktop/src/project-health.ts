@@ -146,10 +146,12 @@ export function mountProjectHealth(options: Options) {
   return {
     open(anchor: HTMLElement) {
       if (disposed || dialog.open) return;
+      if (options.maintenance) body.append(options.maintenance);
       trigger = anchor; message(options.isBusy() ? '任务执行中，显示上次读取的记录。完成后可刷新。' : ''); refresh();
       dialog.showModal(); anchor.setAttribute('aria-expanded', 'true'); dismiss.focus(); void read();
     },
     refresh,
+    restoreMaintenance() { if (!disposed && options.maintenance) body.append(options.maintenance); },
     close() { if (dialog.open) dialog.close(); },
     destroy() { disposed = true; epoch++; dialog.remove(); },
   };
