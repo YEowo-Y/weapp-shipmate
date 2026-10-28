@@ -780,13 +780,19 @@ export function mountConversation(options) {
     settleScroll();
   }
 
+  function updateHint(state) {
+    if (!hint) return;
+    const busy = ACTIVE_STATES.has(state), sendKey = options.getSendShortcut?.() === 'mod-enter' ? 'Ctrl / ⌘ + Enter' : 'Enter';
+    hint.textContent = busy ? '可继续写草稿，回复完成后发送 · Shift + Enter 换行' : pendingEdit ? `${sendKey} 发送修改 · Esc 取消 · 原版本保留` : `${sendKey} 发送 · Shift + Enter 换行`;
+    if (modelSelection) hint.textContent += ` · ${modelSelection.label} · 仅发送本会话真实文本，不发送引用文件`;
+    if (busy && assistantMessage()?.guide) hint.textContent = '正在本机生成上线清单 · 不调用模型 · 草稿和模型选择保持不变';
+    if (options.recordOnly) hint.textContent = pendingEdit ? `${sendKey} 保存修改 · Esc 取消 · 原版本保留` : `${sendKey} 保存记录 · Shift + Enter 换行 · 不调用模型`;
+  }
+
   function updateControls(state) {
     const busy = ACTIVE_STATES.has(state);
     if (options.requireModel) { const picker = composer?.querySelector('.agent-composer__model'); if (picker) picker.disabled = busy; }
-    if (hint) hint.textContent = busy ? '可继续写草稿，回复完成后发送 · Shift + Enter 换行' : pendingEdit ? 'Enter 发送修改 · Esc 取消 · 原版本保留' : 'Enter 发送 · Shift + Enter 换行';
-    if (hint && modelSelection) hint.textContent += ` · ${modelSelection.label} · 仅发送本会话真实文本，不发送引用文件`;
-    if (hint && busy && assistantMessage()?.guide) hint.textContent = '正在本机生成上线清单 · 不调用模型 · 草稿和模型选择保持不变';
-    if (hint && options.recordOnly) hint.textContent = pendingEdit ? 'Enter 保存修改 · Esc 取消 · 原版本保留' : 'Enter 保存记录 · Shift + Enter 换行 · 不调用模型';
+    updateHint(state);
     const sendLabel = busy ? '停止生成' : options.recordOnly ? (pendingEdit ? '保存修改' : '保存记录') : pendingEdit ? '发送修改' : '发送消息';
     sendButton.dataset.mode = busy ? 'stop' : 'send';
     sendButton.setAttribute('aria-label', sendLabel);
@@ -1099,7 +1105,8 @@ export function mountConversation(options) {
       cancelEdit();
       return;
     }
-    if (event.key !== 'Enter' || event.shiftKey) return;
+    if (event.key !== 'Enter' || event.shiftKey || event.altKey) return;
+    if (options.getSendShortcut?.() === 'mod-enter' && !event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
     if (!ACTIVE_STATES.has(controller.getSnapshot().state)) submit();
     else {
@@ -1337,6 +1344,7 @@ export function mountConversation(options) {
       announce('报告已加入本地会话。');
       return { ok: true };
     },
+    refreshPreferences() { if (!destroyed) updateHint(controller.getSnapshot().state); },
     setModelSelection,
     getModelSelection: () => modelSelection ? { ...modelSelection } : null,
     submit,
