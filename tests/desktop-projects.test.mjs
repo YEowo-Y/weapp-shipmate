@@ -17,7 +17,11 @@ const project = (id, extra = {}) => ({ id, name: id, directory: `C:/projects/${i
 function harness({ projects = [project('a'), project('b')], activeProjectId = 'a', runs = [], artifacts = [], invoke: custom, beforeSelect = async () => true, associateSession = async () => true, onRegistry = () => {} } = {}) {
   const doc = createPreviewDocument();
   const createElement = doc.createElement.bind(doc);
-  doc.createElement = tag => Object.assign(createElement(tag), { events: {}, addEventListener(type, fn) { (this.events[type] ??= []).push(fn); } });
+  doc.createElement = tag => Object.assign(createElement(tag), {
+    events: {}, addEventListener(type, fn) { (this.events[type] ??= []).push(fn); }, removeEventListener() {},
+    append(...children) { for (const child of children) { if (child.parentNode) child.remove(); child.parentNode = this; this.children.push(child); } },
+    prepend(...children) { for (const child of [...children].reverse()) { if (child.parentNode) child.remove(); child.parentNode = this; this.children.unshift(child); } },
+  });
   const nodes = new Map(), calls = [], changes = [], shown = [], reveals = [], registry = [], pending = [], snapshots = [];
   const node = id => {
     if (!nodes.has(id)) {
@@ -29,6 +33,10 @@ function harness({ projects = [project('a'), project('b')], activeProjectId = 'a
     } return nodes.get(id);
   };
   doc.querySelector = selector => node(selector.slice(1)); doc.body = doc.createElement('body');
+  const body = doc.createElement('div'); node('desktop-projects').append(body);
+  body.append(node('project-form'), node('project-backup'), node('project-status'), node('project-history'));
+  node('project-form').append(node('project-export'));
+  doc.body.append(node('desktop-projects'));
   let current = activeProjectId;
   const invoke = async (cmd, args) => {
     calls.push([cmd, args]);
@@ -38,7 +46,7 @@ function harness({ projects = [project('a'), project('b')], activeProjectId = 'a
     if (cmd === 'project_artifact') return { ...artifacts.find(a => a.id === args.artifactId), markdown: 'saved source' };
   };
   let backupOptions;
-  const context = { document: doc, invoke, mountProjectBackup: options => { backupOptions = options; return { sync() {}, async refreshStorage() {}, destroy() {} }; }, open: async () => 'C:/chosen', crypto: { randomUUID: () => 'new-project' }, setTimeout, clearTimeout, URL, Blob };
+  const context = { document: doc, invoke, mountProjectBackup: options => { backupOptions = options; return { sync() {}, async refreshStorage() {}, canClose() { return true; }, close() {}, destroy() {} }; }, open: async () => 'C:/chosen', crypto: { randomUUID: () => 'new-project' }, setTimeout, clearTimeout, URL, Blob };
   vm.createContext(context); vm.runInContext(`${script}\nglobalThis.mount = mountProjects;`, context);
   const controller = context.mount({ beforeSelect, onRegistry: ids => { registry.push(ids); return onRegistry(ids); }, onChange: p => changes.push(p), onSnapshot: value => snapshots.push(value), onArtifact: (a, reveal) => { shown.push(a); reveals.push({ reveal, dialogOpen: node('desktop-projects').open }); if (reveal) node('report').focus(); }, isBusy: () => false, onPending: v => pending.push(v), associateSession });
   return { controller, calls, changes, shown, reveals, registry, pending, snapshots, node, doc, backupOptions, async fire(id, type = 'click') { for (const fn of node(id).events[type] ?? []) fn({ preventDefault() {} }); for (let i = 0; i < 20; i++) await Promise.resolve(); } };
@@ -101,11 +109,15 @@ test('snapshot retry preserves a relocation draft while directory availability a
   assert.equal(app.changes.at(-1).directoryAvailable, false); assert.equal(app.node('project-status').textContent, '');
 });
 
-test('explicit project selection replaces a preserved draft and a failed selection retains it', async () => {
+test('project selection preserves drafts until explicit discard and still respects session failures', async () => {
   let allow = false; const app = harness({ beforeSelect: async id => id !== 'b' || allow });
   await app.controller.ready; app.controller.openManager(); app.node('project-name').value = 'Draft a';
   await app.controller.refresh(); app.node('desktop-project-select').value = 'b'; await app.fire('desktop-project-select', 'change');
   assert.equal(app.node('project-name').value, 'Draft a'); assert.equal(app.controller.getActiveId(), 'a');
+  assert.equal(app.calls.some(([cmd]) => cmd === 'project_select'), false);
+  app.node('project-form').children.find(child => child.id === 'project-discard').events.click[0]();
+  app.node('desktop-project-select').value = 'b'; await app.fire('desktop-project-select', 'change');
+  assert.equal(app.controller.getActiveId(), 'a');
   allow = true; app.node('desktop-project-select').value = 'b'; await app.fire('desktop-project-select', 'change');
   assert.equal(app.node('project-name').value, 'b'); assert.equal(app.node('project-directory').value, 'C:/projects/b');
 });
