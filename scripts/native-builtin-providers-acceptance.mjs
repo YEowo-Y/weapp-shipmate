@@ -68,7 +68,7 @@ export async function checkBuiltinProviderFlows(options) {
   const fixture = createBuiltinProviderFixture(requests);
   const monitorErrors = () => inspect('window.__builtinProviderErrors=[];window.addEventListener("error",e=>window.__builtinProviderErrors.push(e.message));window.addEventListener("unhandledrejection",e=>window.__builtinProviderErrors.push(String(e.reason?.message||e.reason)));');
   const selectProvider = async provider => {
-    if (!await inspect('return document.querySelector("#desktop-model-dialog").open')) await openModelSettings();
+    if (!await inspect('const settings=document.querySelector("#desktop-preferences"); return settings.open && settings.dataset.section==="models"')) await openModelSettings();
     await until(() => inspect('return !document.querySelector(arguments[0]).disabled', [`[data-provider-id="${provider}"]`]), 'provider enabled');
     await click(`[data-provider-id="${provider}"]`);
   };
@@ -80,7 +80,7 @@ export async function checkBuiltinProviderFlows(options) {
       await openModelSettings();
       await until(() => inspect('return !document.querySelector("[data-provider-id=deepseek]").disabled'), 'built-in connections ready');
       for (const [provider, config] of Object.entries(builtinProviderFixtures)) {
-        const selector = `#desktop-model-dialog nav [data-provider-id="${provider}"]`;
+        const selector = `#desktop-preferences .desktop-model-panel nav [data-provider-id="${provider}"]`;
         assert.ok((await text(selector)).includes(config.name));
         assert.equal(await inspect('const b=document.querySelector(arguments[0]);return b.tagName==="BUTTON" && Boolean(b.querySelector(".provider-brand"));', [selector]), true);
       }
@@ -91,10 +91,13 @@ export async function checkBuiltinProviderFlows(options) {
         await selectProvider(provider); const count = requests.length, callCount = fixture.calls.length;
         await fill('#desktop-provider-key', 'native-invalid-fake-key'); await click('#desktop-provider-connect');
         if (provider === 'glm') {
-          await until(() => find(`#desktop-model-dialog [data-model-id="${config.model}"]`), 'local GLM presets');
+          await until(() => find(`#desktop-preferences .desktop-model-panel [data-model-id="${config.model}"]`), 'local GLM presets');
           assert.equal(fixture.calls.length, callCount, 'saving GLM presets performs no undocumented catalog request');
           assert.match(await text('#desktop-provider-status'), /未验证|尚未|配置/);
-          await click(`#desktop-model-dialog [data-model-id="${config.model}"]`); await openModelSettings(); await selectProvider(provider);
+          await click(`#desktop-preferences .desktop-model-panel [data-model-id="${config.model}"]`);
+          await until(() => inspect('return document.querySelector(arguments[0]).getAttribute("aria-pressed")==="true"', [`#desktop-preferences .desktop-model-panel [data-model-id="${config.model}"]`]), 'GLM preset selected');
+          await click('#preferences-content-dismiss'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'return to conversation after model selection');
+          await openModelSettings(); await selectProvider(provider);
           await click('#desktop-provider-verify');
           await until(async () => /未完成|权限/.test(await text('#desktop-inference-status')), 'explicit GLM test detects invalid credential');
           assert.doesNotMatch(await text('#desktop-inference-status'), /已通过/);
@@ -105,13 +108,14 @@ export async function checkBuiltinProviderFlows(options) {
         }
         assert.equal(await inspect('return document.querySelector("#desktop-provider-key").value'), '');
         await fill('#desktop-provider-key', `native-${provider}-fake-key`); await click('#desktop-provider-connect');
-        await until(() => find(`#desktop-model-dialog [data-model-id="${config.model}"]`), 'built-in catalog');
+        await until(() => find(`#desktop-preferences .desktop-model-panel [data-model-id="${config.model}"]`), 'built-in catalog');
         assert.equal(requests.length, count, 'connecting never starts valid inference');
         assert.equal(await inspect('return document.querySelector("#desktop-provider-key").value'), '');
-        if (provider === 'kimi') assert.equal(await inspect('return Boolean(document.querySelector("#desktop-model-dialog [data-model-id=\\"kimi-k3.1-pro\\"]"))'), false);
+        if (provider === 'kimi') assert.equal(await inspect('return Boolean(document.querySelector("#desktop-preferences .desktop-model-panel [data-model-id=\\"kimi-k3.1-pro\\"]"))'), false);
         await screenshot(`${provider}-connected`);
-        await click(`#desktop-model-dialog [data-model-id="${config.model}"]`);
-        await until(() => inspect('return !document.querySelector("#desktop-model-dialog").open'), 'model selection closes dialog');
+        await click(`#desktop-preferences .desktop-model-panel [data-model-id="${config.model}"]`);
+        await until(() => inspect('return document.querySelector(arguments[0]).getAttribute("aria-pressed")==="true"', [`#desktop-preferences .desktop-model-panel [data-model-id="${config.model}"]`]), 'connected model selected');
+        await click('#preferences-content-dismiss'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'return to conversation after model selection');
       });
       await checked(`${provider}: selected model streams public reply through real native transport`, async () => {
         const before = requests.length; fixture.next(provider, [{ text: `${provider}_中文回复` }]);
@@ -137,21 +141,22 @@ export async function checkBuiltinProviderFlows(options) {
         assert.equal(requests.length, before + 2); await screenshot(`${provider}-recovered`);
       });
     }
-    await checked('Provider dialog fits 390px with named controls, modal focus and keyboard dismissal', async () => {
+    await checked('Provider settings fit 390px with named controls, modal focus and keyboard dismissal', async () => {
       await openModelSettings(); await command('POST', '/window/rect', { width: 390, height: 844 });
       for (const provider of Object.keys(builtinProviderFixtures)) {
         await selectProvider(provider);
         await until(() => inspect('const b=document.querySelector(arguments[0]),n=b.parentElement.getBoundingClientRect(),r=b.getBoundingClientRect();return r.left>=n.left && r.right<=n.right+1;', [`[data-provider-id="${provider}"]`]), 'selected provider label is fully visible');
-        assert.equal(await inspect('const d=document.querySelector("#desktop-model-dialog"), r=d.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth+1 && d.scrollWidth<=d.clientWidth+1 && document.documentElement.scrollWidth<=innerWidth;'), true);
+        assert.equal(await inspect('const d=document.querySelector("#desktop-preferences"), panel=d.querySelector(".desktop-model-panel"), r=panel.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth+1 && panel.scrollWidth<=panel.clientWidth+1 && d.scrollWidth<=d.clientWidth+1 && document.documentElement.scrollWidth<=innerWidth;'), true);
         assert.equal(await inspect('const input=document.querySelector("#desktop-model-search"),icon=input.parentElement.querySelector(".app-icon");return input.getBoundingClientRect().left+parseFloat(getComputedStyle(input).paddingLeft)>=icon.getBoundingClientRect().right+4;'), true, 'search text leaves space for its icon');
         await screenshot(`${provider}-connection-narrow`);
       }
       for (let i = 0; i < 10; i++) {
         await press('\uE004');
-        const focus = await inspect('const d=document.querySelector("#desktop-model-dialog"), a=document.activeElement, s=a?.shadowRoot?.activeElement;return {contained:d.contains(a),dialogOpen:d.open,dialogModal:d.matches(":modal"),documentFocused:document.hasFocus(),activeTag:a?.tagName,activeId:a?.id,activeClass:a?.className,shadowActiveTag:s?.tagName,shadowActiveId:s?.id};');
-        assert.equal(focus.contained, true, `Tab ${i + 1} escaped model dialog: ${JSON.stringify(focus)}`);
+        const focus = await inspect('const d=document.querySelector("#desktop-preferences"), a=document.activeElement, s=a?.shadowRoot?.activeElement;return {contained:d.contains(a),dialogOpen:d.open,dialogModal:d.matches(":modal"),documentFocused:document.hasFocus(),activeTag:a?.tagName,activeId:a?.id,activeClass:a?.className,shadowActiveTag:s?.tagName,shadowActiveId:s?.id};');
+        assert.equal(focus.contained, true, `Tab ${i + 1} escaped model settings: ${JSON.stringify(focus)}`);
+        assert.equal(focus.dialogOpen && focus.dialogModal, true);
       }
-      await press('\uE00C'); await until(() => inspect('return !document.querySelector("#desktop-model-dialog").open'), 'keyboard dismissal');
+      await press('\uE00C'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'keyboard dismissal');
       await command('POST', '/window/rect', { width: 1200, height: 850 });
     });
     await checked('Restart retains conversation and selected model without restoring temporary keys or issuing inference', async () => {
@@ -166,7 +171,8 @@ export async function checkBuiltinProviderFlows(options) {
         assert.equal(await inspect('return document.querySelector("#desktop-provider-key").value'), '');
         assert.equal(await inspect('return document.querySelector("#desktop-provider-refresh").hidden'), true);
       }
-      assert.equal(requests.length, count); await screenshot('builtin-provider-restart'); await click('#desktop-model-close');
+      assert.equal(requests.length, count); await screenshot('builtin-provider-restart'); await click('#preferences-content-dismiss');
+      await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'settings closed after restart verification');
       assert.deepEqual(await inspect('return window.__builtinProviderErrors'), []);
     });
     assert.deepEqual(fixture.failures, []);
