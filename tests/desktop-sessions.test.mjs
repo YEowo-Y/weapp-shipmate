@@ -24,20 +24,26 @@ function harness({ fail = false, invoke = async () => { throw Error('missing art
     observe() { this.active = true; }
     disconnect() { this.active = false; }
   }
-  let options, modelOptions;
-  const modelOpens = [];
+  let options, modelOptions, sendKey = 'enter';
+  const modelOpens = [], preferenceRefreshes = [], listeners = new Map();
+  const win = {
+    addEventListener(type, listener) { if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(listener); },
+    removeEventListener(type, listener) { listeners.get(type)?.delete(listener); },
+    fire(type) { for (const listener of listeners.get(type) || []) listener(); },
+  };
   const source = readFileSync(new URL('../desktop/src/sessions.ts', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
   const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
   const context = { invoke, MutationObserver,
     mountAgentTools: () => ({ ...grants, destroy: grants.clear }),
     mountChatContext: () => ({ ...chatContext, ...(prepare ? { prepare } : {}), destroy: chatContext.clear }),
-    window: { addEventListener() {}, removeEventListener() {} }, desktopModelFetch() {},
+    window: win, readSendKey: () => sendKey, SHORTCUTS_EVENT: 'shipmate-shortcuts-change', desktopModelFetch() {},
     streamChat(request) { requests.push(request); }, mountModelConnections: value => { modelOptions = value; return { open(anchor) { modelOpens.push(anchor); }, destroy() {} }; }, document: doc,
-    mountComposer: () => composer, mountSessionWorkspace: async value => { options = value; if (fail) throw Error('failed'); return { destroy() {}, conversation: { getMessages: () => records.map(record => ({ text: record.text, record: { kind: 'report', label: record.label } })), appendRecord: record => { records.push(record); return { ok: true }; } } }; } };
+    mountComposer: () => composer, mountSessionWorkspace: async value => { options = value; if (fail) throw Error('failed'); return { destroy() {}, conversation: { refreshPreferences: () => preferenceRefreshes.push(options.conversationOptions.getSendShortcut()), getMessages: () => records.map(record => ({ text: record.text, record: { kind: 'report', label: record.label } })), appendRecord: record => { records.push(record); return { ok: true }; } } }; } };
   vm.runInNewContext(script, context);
   return { mount: callbacks => context.mountDesktopSessions(callbacks), nodes, records, hiddenActions, permission, grants, chatContext, requests,
     setBusy(value) { composer.sendButton.dataset.mode = value ? 'stop' : 'send'; for (const observer of observers) if (observer.active) observer.callback(); },
-    getOptions: () => options, getModelOptions: () => modelOptions, modelOpens, composer };
+    getOptions: () => options, getModelOptions: () => modelOptions, modelOpens, composer, win, preferenceRefreshes,
+    setSendKey(value) { sendKey = value; }, listenerCount: type => listeners.get(type)?.size || 0 };
 }
 
 desktopTest('model recovery and management enter unified settings without the removed sidebar button', async () => {
@@ -232,3 +238,20 @@ desktopTest('unavailable or disabled memory fails the send without falling back 
   assert.equal(app.requests.length, 0);
 });
 
+
+
+desktopTest('send shortcuts read current preferences and refresh from same-window and storage events until disposal', async () => {
+  for (const dispose of ['destroy', 'pagehide']) {
+    const app = harness(), session = await app.mount();
+    assert.equal(app.getOptions().conversationOptions.getSendShortcut(), 'enter');
+    app.setSendKey('mod-enter'); app.win.fire('shipmate-shortcuts-change');
+    assert.equal(app.getOptions().conversationOptions.getSendShortcut(), 'mod-enter');
+    assert.deepEqual(app.preferenceRefreshes, ['mod-enter']);
+    app.setSendKey('enter'); app.win.fire('storage');
+    assert.deepEqual(app.preferenceRefreshes, ['mod-enter', 'enter']);
+    if (dispose === 'destroy') session.destroy(); else app.win.fire('pagehide');
+    assert.equal(app.listenerCount('shipmate-shortcuts-change'), 0); assert.equal(app.listenerCount('storage'), 0);
+    app.win.fire('shipmate-shortcuts-change'); app.win.fire('storage');
+    assert.deepEqual(app.preferenceRefreshes, ['mod-enter', 'enter']);
+  }
+});
