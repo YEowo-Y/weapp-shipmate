@@ -7,7 +7,7 @@ export type Project = { id: string; name: string; directory: string; subject: st
 export type Run = { id: string; projectId: string | null; kind: 'check' | 'guide' | 'explain'; state: 'running' | 'succeeded' | 'failed' | 'canceled' | 'interrupted'; startedAt: number; finishedAt: number | null; error: string | null; projectRevision: number | null; contextRevision?: number | null; toolVersion: string; rulesVersion: string; inputSummary: string; provenance?: 'imported'; sourceState?: string };
 export type Artifact = { id: string; runId: string; projectId: string | null; kind: 'check' | 'guide' | 'explain'; title: string; markdown: string; data?: { schemaVersion: 1; kind: 'check' | 'guide' | 'explain'; result: unknown; scope: unknown } | null; createdAt: number; projectRevision: number | null; contextRevision?: number | null; toolVersion: string; rulesVersion: string; inputSummary: string; provenance?: 'imported' };
 export type ProjectSnapshot = { rulesVersion?: string | null; projects: Project[]; activeProjectId: string | null; runs: Run[]; artifacts: Omit<Artifact, 'markdown' | 'data'>[] };
-type Options = { onRegistry(ids: string[]): void | Promise<void>; beforeSelect(id: string | null): Promise<boolean>; onChange(project: Project | null): void; onSnapshot?(snapshot: ProjectSnapshot): void; onArtifact(artifact: Artifact, reveal?: boolean): void; isBusy(): boolean; associateSession(id: string | null): Promise<boolean>; onPending?(value: boolean): void };
+type Options = { onRegistry(ids: string[]): void | Promise<void>; beforeSelect(id: string | null): Promise<boolean>; onChange(project: Project | null): void; onSnapshot?(snapshot: ProjectSnapshot): void; onArtifact(artifact: Artifact, reveal?: boolean): void; isBusy(): boolean; associateSession(id: string | null): Promise<boolean>; onPending?(value: boolean): void; canChangeProject?(): boolean; onOpenData?(): void };
 const stateLabels = { running: '执行中', succeeded: '已完成', failed: '失败', canceled: '已取消', interrupted: '意外中断' };
 const date = (value: number) => new Date(value).toLocaleString('zh-CN', { hour12: false });
 
@@ -24,6 +24,24 @@ export function mountProjects(options: Options) {
   const status = el<HTMLElement>('project-status');
   const sidebarStatus = el<HTMLElement>('desktop-project-status');
   const history = el<HTMLElement>('project-history');
+  const body = editor.parentNode as HTMLElement;
+  const settingsElement = document.createElement('section'); settingsElement.className = 'project-settings-panel';
+  const backupSettingsElement = document.createElement('section'); backupSettingsElement.className = 'project-backup-settings-panel';
+  const backupElement = el('project-backup');
+  const backupHome = document.createElement('div'); backupHome.className = 'project-backup-home';
+  backupElement.replaceWith(backupHome); backupHome.append(backupElement);
+  const exportButton = el('project-export');
+  const backupProject = document.createElement('p'); backupProject.id = 'project-backup-project'; backupProject.className = 'desktop-field-hint';
+  backupElement.prepend(backupProject, exportButton);
+  const projectPicker = document.createElement('div'); projectPicker.className = 'project-settings-picker';
+  const projectLabel = document.createElement('label'); projectLabel.htmlFor = 'project-settings-select'; projectLabel.textContent = '当前项目';
+  const settingsSelector = document.createElement('select'); settingsSelector.id = 'project-settings-select';
+  projectPicker.append(projectLabel, settingsSelector); body.prepend(projectPicker);
+  const discard = document.createElement('button'); discard.type = 'button'; discard.id = 'project-discard'; discard.className = 'desktop-action'; discard.textContent = '放弃更改';
+  editor.append(discard);
+  const openData = document.createElement('button'); openData.type = 'button'; openData.className = 'desktop-action'; openData.id = 'project-open-data'; openData.textContent = '管理项目备份与数据'; openData.hidden = true;
+  backupHome.append(openData);
+  let settingsOpen = false, backupSettingsOpen = false;
   let snapshot: ProjectSnapshot = { projects: [], activeProjectId: null, runs: [], artifacts: [] };
   let ready = false, pending = false, externalBusy = false, destroyed = false, pendingLatestRestore = false;
   let editing: Project | null = null, opener: HTMLElement | null = null;
@@ -35,13 +53,24 @@ export function mountProjects(options: Options) {
   }
   const active = () => snapshot.projects.find(project => project.id === snapshot.activeProjectId) ?? null;
   const blocked = () => pending || externalBusy || options.isBusy() || !ready || destroyed;
+  const dirty = () => name.value !== (editing?.name ?? '') || directory.value !== (editing?.directory ?? '') || subject.value !== (editing?.subject ?? 'personal');
+  function canLeaveEditor() {
+    if (pending) { message('正在处理项目操作，请稍候。'); return false; }
+    if (dirty()) { message('项目有未保存的更改，请先保存或放弃更改。'); return false; }
+    return true;
+  }
+  function canChangeProject() {
+    return canLeaveEditor() && (options.canChangeProject?.() ?? true);
+  }
+  function updateDraftControls() { discard.disabled = blocked() || !dirty(); }
   function message(text: string, error = false) {
     status.textContent = text; status.dataset.tone = error ? 'error' : 'neutral';
+    if (backupSettingsOpen) { const dataStatus = el('project-backup-status'); dataStatus.textContent = text; dataStatus.dataset.tone = error ? 'error' : 'neutral'; }
     sidebarStatus.textContent = error || !ready ? text : '';
   }
   function controls() {
     const disabled = blocked();
-    selector.disabled = disabled;
+    selector.disabled = disabled; settingsSelector.disabled = disabled; updateDraftControls();
     for (const id of ['project-new', 'project-choose-directory', 'project-save', 'project-associate', 'project-association-target', 'project-name', 'project-directory', 'project-subject']) {
       (el(id) as HTMLButtonElement).disabled = disabled;
     }
@@ -50,7 +79,7 @@ export function mountProjects(options: Options) {
     for (const id of ['project-compare-before', 'project-compare-after']) el<HTMLSelectElement>(id).disabled = disabled;
     el<HTMLButtonElement>('project-retry').disabled = pending || externalBusy || options.isBusy();
     for (const button of history.querySelectorAll<HTMLButtonElement>('button')) button.disabled = disabled;
-    dialog.setAttribute('aria-busy', String(pending));
+    dialog.setAttribute('aria-busy', String(pending)); settingsElement.setAttribute('aria-busy', String(pending)); backupSettingsElement.setAttribute('aria-busy', String(pending));
     backup?.sync();
   }
   async function operation(action: () => Promise<void>, allowUnready = false) {
@@ -69,13 +98,14 @@ export function mountProjects(options: Options) {
   function fill(project: Project | null) {
     editing = project; name.value = project?.name ?? ''; directory.value = project?.directory ?? ''; subject.value = project?.subject ?? 'personal';
     el('project-editor-title').textContent = project ? '项目设置' : '新建项目';
-    directoryNote(project);
+    directoryNote(project); updateDraftControls();
   }
   function directoryNote(project: Project | null) {
     el('project-directory-note').textContent = project && !project.directoryAvailable ? '原目录不可用，请选择新的位置。历史报告会保留。' : '仅保存目录位置；检查时读取本机文件。';
   }
   function render(preserveEditor = false) {
-    populateSelect(selector, snapshot.activeProjectId); populateSelect(target, snapshot.activeProjectId);
+    populateSelect(selector, snapshot.activeProjectId); populateSelect(target, snapshot.activeProjectId); populateSelect(settingsSelector, snapshot.activeProjectId);
+    backupProject.textContent = active() ? `当前项目：${active()!.name}` : '未选择项目；可导入已有备份。';
     if (preserveEditor) directoryNote(editing ? active() : null);
     else fill(active());
     history.textContent = '';
@@ -155,26 +185,34 @@ export function mountProjects(options: Options) {
     // project stays null. Reconcile against the trusted registry through the same CAS path.
     if ((changed || registryChanged) && !await options.beforeSelect(next.activeProjectId)) { ready = false; throw new Error('会话尚未保存或项目归属未能同步。请先处理会话保存提示，再重新加载项目。'); }
     // Run/history refreshes must not replace an open draft or reset a new-project editor.
-    const preserveEditor = dialog.open && next.activeProjectId === snapshot.activeProjectId
-      && nextActive?.revision === active()?.revision && nextActive?.contextRevision === active()?.contextRevision
-      && (!editing || name.value !== editing.name || directory.value !== editing.directory || subject.value !== editing.subject);
+    const preserveEditor = (dialog.open || settingsOpen) && next.activeProjectId === snapshot.activeProjectId
+      && (!editing || dirty());
     snapshot = next; ready = true; render(preserveEditor); message('');
     if (changed) options.onChange(active());
     if (changed || pendingLatestRestore) await showLatest();
     void backup?.refreshStorage();
   }
   function openEditor() {
+    if (destroyed || backupSettingsOpen || pending) return;
+    if (settingsOpen) { name.focus(); return; }
     opener = document.activeElement as HTMLElement | null;
     if (!dialog.open) dialog.showModal();
-    fill(active()); name.focus();
+    if (!dirty()) fill(active()); name.focus();
     void backup?.refreshStorage();
   }
   listen(el('desktop-project-manage'), 'click', () => openEditor());
-  listen(el('project-close'), 'click', () => dialog.close());
-  listen(dialog, 'close', () => { if (!destroyed && (document.activeElement === document.body || dialog.contains(document.activeElement))) (opener?.isConnected ? opener : el('desktop-project-manage')).focus({ preventScroll: true }); });
-  listen(selector, 'change', () => { const id = selector.value || null; selector.value = snapshot.activeProjectId ?? ''; void operation(() => select(id)); });
+  listen(el('project-close'), 'click', () => { if (canLeaveEditor() && backup?.canClose()) dialog.close(); });
+  listen(dialog, 'cancel', event => { if (!canLeaveEditor() || !backup?.canClose()) event.preventDefault(); });
+  listen(dialog, 'close', () => { if (!destroyed && !settingsOpen && !backupSettingsOpen && (document.activeElement === document.body || dialog.contains(document.activeElement))) (opener?.isConnected ? opener : el('desktop-project-manage')).focus({ preventScroll: true }); });
+  for (const selectControl of [selector, settingsSelector]) listen(selectControl, 'change', () => {
+    const id = selectControl.value || null; selectControl.value = snapshot.activeProjectId ?? '';
+    if (canChangeProject()) void operation(() => select(id));
+  });
+  for (const control of [name, directory, subject]) { listen(control, 'input', updateDraftControls); listen(control, 'change', updateDraftControls); }
+  listen(discard, 'click', () => { if (!blocked()) { fill(active()); message('已放弃未保存的更改。'); } });
+  listen(openData, 'click', () => { if (canLeaveEditor()) options.onOpenData?.(); });
   listen(el('project-retry'), 'click', () => { void operation(load, true); });
-  listen(el('project-new'), 'click', () => { if (!blocked()) { fill(null); name.focus(); } });
+  listen(el('project-new'), 'click', () => { if (!blocked() && canChangeProject()) { fill(null); name.focus(); } });
   listen(el('project-choose-directory'), 'click', () => { void operation(async () => { const path = await open({ directory: true, multiple: false }); if (!destroyed && typeof path === 'string') { directory.value = path; if (!name.value.trim()) name.value = path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''; } }); });
   listen(editor, 'submit', event => {
     event.preventDefault();
@@ -187,7 +225,7 @@ export function mountProjects(options: Options) {
       await select(project.id); message('项目已保存。');
     });
   });
-  listen(el('project-associate'), 'click', () => { const id = target.value || null; void operation(async () => { await select(id, true); message('当前会话的项目归属已保存。'); }); });
+  listen(el('project-associate'), 'click', () => { const id = target.value || null; if (!canChangeProject()) return; void operation(async () => { await select(id, true); message('当前会话的项目归属已保存。'); }); });
   listen(el('project-compare'), 'click', () => { void operation(async () => {
     const output = el('project-comparison'); output.textContent = '正在核对检查依据…';
     try {
@@ -214,7 +252,7 @@ export function mountProjects(options: Options) {
     try { document.body.append(link); link.click(); message('已请求保存项目数据；会话和密钥不包含在此文件中。'); }
     finally { link.remove(); downloads.set(url, setTimeout(() => { URL.revokeObjectURL(url); downloads.delete(url); }, 30000)); }
   }); });
-  backup = mountProjectBackup({ getProject: active, isBusy: blocked, operation, refresh: load,
+  backup = mountProjectBackup({ getProject: active, isBusy: blocked, isOpen: () => dialog.open || backupSettingsOpen, operation, refresh: load,
     async archive(projectId, token) {
       if (snapshot.activeProjectId !== projectId) throw Error('当前项目已改变，请重新准备归档。');
       // Existing selection saves the outgoing draft before a project can be removed.
@@ -233,9 +271,39 @@ export function mountProjects(options: Options) {
       if (!snapshot.artifacts.some(item => item.id === id && item.projectId === snapshot.activeProjectId)) throw new Error('报告不属于当前项目，请从运行历史重新选择。');
       await showArtifact(id);
     }),
+    settings: {
+      element: settingsElement,
+      open() {
+        if (destroyed || backupSettingsOpen || (pending && dialog.open)) return;
+        settingsOpen = true; if (dialog.open) dialog.close();
+        settingsElement.append(body);
+        backupElement.hidden = true; openData.hidden = !options.onOpenData;
+        controls();
+      },
+      close() {
+        if (!settingsOpen || !canLeaveEditor()) return;
+        settingsOpen = false; dialog.append(body); backupElement.hidden = false; openData.hidden = true;
+      },
+      canClose: canLeaveEditor,
+    },
+    backupSettings: {
+      element: backupSettingsElement,
+      open() {
+        if (destroyed || settingsOpen || dirty() || (pending && dialog.open)) return;
+        backupSettingsOpen = true; if (dialog.open) dialog.close();
+        backupSettingsElement.append(backupElement); backupElement.hidden = false;
+        void backup?.refreshStorage();
+      },
+      close() {
+        if (!backupSettingsOpen || pending || !backup?.canClose()) return;
+        backupSettingsOpen = false; backup?.close(); backupHome.append(backupElement);
+      },
+      canClose: () => !pending && (backup?.canClose() ?? true),
+    },
     openManager: openEditor,
     async pickFolder() { if (!blocked()) openEditor(); },
     async saveSubject(value: string) {
+      if (!canLeaveEditor()) return false;
       let saved = false;
       await operation(async () => {
         const project = active(); if (!project) { saved = true; return; }
