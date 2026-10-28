@@ -3,9 +3,19 @@ import { createIcon } from './components/icons.js';
 import { normalizeSessionSnapshot } from './session-store.js';
 import { parseSessionBackup, mergeSessionBackup } from './session-transfer.js';
 
-// The owner supplies its existing persistence lifecycle; this surface never writes storage itself.
-export function openSessionDataDialog({ document: doc, trigger, capture, prepare, commit,
-  onBusyChange = () => {}, isDisposed = () => false, onClose = () => {} }) {
+// Both presentations use the owner's existing store and import transaction.
+export function openSessionDataDialog(options) {
+  const surface = createSessionDataSurface(options, false);
+  surface.open();
+  return surface;
+}
+
+export function createSessionDataPanel(options) {
+  return createSessionDataSurface(options, true);
+}
+
+function createSessionDataSurface({ document: doc, trigger, capture, prepare, commit,
+  onBusyChange = () => {}, isDisposed = () => false, isReloadRequired = () => false, onClose = () => {} }, embedded) {
   const win = doc.defaultView;
   const element = (tag, className = '', text) => {
     const node = doc.createElement(tag); node.className = className;
@@ -15,7 +25,8 @@ export function openSessionDataDialog({ document: doc, trigger, capture, prepare
   const action = (label, name, options = {}) => {
     const control = createActionButton(doc, label, options); control.dataset.action = name; return control;
   };
-  const node = element('dialog', 'session-workspace-dialog'); node.dataset.kind = 'data'; node.setAttribute('aria-label', '数据与会话备份');
+  const node = element(embedded ? 'section' : 'dialog', embedded ? 'session-workspace-data-panel' : 'session-workspace-dialog');
+  node.dataset.kind = 'data'; node.setAttribute('aria-label', '数据与会话备份'); node.hidden = true;
   const header = element('div', 'session-workspace-dialog__header');
   const dismiss = action('', 'close', { appearance: 'plain', className: 'ui-action-icon' });
   dismiss.setAttribute('aria-label', '关闭'); dismiss.append(createIcon(doc, 'x'), element('span', 'sr-only', '关闭'));
@@ -33,20 +44,40 @@ export function openSessionDataDialog({ document: doc, trigger, capture, prepare
   body.append(scope, exportSection, importSection, feedback);
   const actions = element('div', 'session-workspace-dialog__actions');
   const cancel = action('完成', 'cancel'), confirm = action('追加导入', 'import-confirm', { appearance: 'accent' }); confirm.disabled = true;
-  actions.append(cancel, confirm); node.append(header, body, actions);
-  let parsed = null, busy = false, closed = false, needsReload = false, readSequence = 0;
-  const alive = () => !closed && !isDisposed();
-  function close() { if (!busy) node.close(); }
-  function setBusy(value) {
-    busy = value; node.setAttribute('aria-busy', String(value));
-    file.disabled = backup.disabled = value || needsReload;
-    cancel.disabled = dismiss.disabled = value;
-    confirm.disabled = value || needsReload || !parsed;
-    confirm.textContent = value ? '正在保存…' : '追加导入'; onBusyChange(value);
+  if (embedded) { actions.append(confirm); importSection.append(actions); node.append(body); }
+  else { actions.append(cancel, confirm); node.append(header, body, actions); }
+  let parsed = null, busy = false, active = false, destroyed = false, needsReload = false, readSequence = 0;
+  const alive = () => active && !destroyed && !isDisposed();
+  const reloadMessage = embedded
+    ? '会话已保存到本地，但界面未能更新。请返回应用并重新载入，不要重复导入；重新载入后可下载最新备份。'
+    : '会话已保存到本地，但界面未能更新。请关闭此弹窗并重新载入页面，不要重复导入；重新载入后可下载最新备份。';
+  function resetPreview() {
+    readSequence++; parsed = null; file.value = ''; preview.hidden = true; confirm.disabled = true;
   }
-  dismiss.addEventListener('click', close); cancel.addEventListener('click', close);
-  node.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
-  node.addEventListener('close', () => { closed = true; readSequence++; node.remove(); onClose(node); if (!isDisposed()) trigger?.focus(); });
+  function renderBusy() {
+    node.setAttribute('aria-busy', String(busy));
+    file.disabled = backup.disabled = busy || needsReload;
+    cancel.disabled = dismiss.disabled = busy;
+    confirm.disabled = busy || needsReload || !parsed;
+    confirm.textContent = busy ? '正在保存…' : '追加导入';
+  }
+  function setBusy(value) { busy = value; renderBusy(); onBusyChange(value); }
+  function close() {
+    if (busy) return false;
+    if (!active) return true;
+    if (embedded) { active = false; resetPreview(); node.hidden = true; }
+    else node.close();
+    return true;
+  }
+  function destroy() {
+    if (destroyed) return;
+    destroyed = true; active = false; resetPreview(); node.remove();
+  }
+  if (!embedded) {
+    dismiss.addEventListener('click', close); cancel.addEventListener('click', close);
+    node.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
+    node.addEventListener('close', () => { destroy(); onClose(node); if (!isDisposed()) trigger?.focus(); });
+  }
   backup.addEventListener('click', () => {
     if (busy || needsReload || !alive()) return;
     try {
@@ -65,7 +96,6 @@ export function openSessionDataDialog({ document: doc, trigger, capture, prepare
       if (selected.size > 20 * 1024 * 1024) throw new Error('备份文件超过 20 MiB。');
       const candidate = parseSessionBackup(await selected.text());
       if (!alive() || sequence !== readSequence) return;
-      // Validate merged capacity as well as the file before enabling a write.
       const merged = mergeSessionBackup(capture(), candidate);
       parsed = candidate; preview.textContent = `${selected.name} · ${merged.importedCount} 个会话 · ${merged.messageCount} 条消息。将追加为独立副本，当前会话和草稿保持不变。`;
       preview.hidden = false; confirm.disabled = false;
@@ -76,7 +106,7 @@ export function openSessionDataDialog({ document: doc, trigger, capture, prepare
     }
   });
   confirm.addEventListener('click', async () => {
-    if (busy || !parsed || !alive()) return;
+    if (busy || needsReload || !parsed || !alive()) return;
     setBusy(true); feedback.textContent = '正在保存当前会话并校验备份…';
     try {
       await prepare();
@@ -84,31 +114,38 @@ export function openSessionDataDialog({ document: doc, trigger, capture, prepare
       const merged = mergeSessionBackup(capture(), parsed);
       await commit(merged.snapshot);
       if (!alive()) return;
-      parsed = null; file.value = ''; preview.hidden = true;
+      resetPreview();
       feedback.textContent = `已追加导入并保存 ${merged.importedCount} 个会话。可在历史会话中查看，当前草稿保持不变。`;
     } catch (error) {
       if (alive() && error?.code === 'apply-failed') {
-        needsReload = true; parsed = null; readSequence++; file.value = ''; preview.hidden = true;
-        feedback.textContent = '会话已保存到本地，但界面未能更新。请关闭此弹窗并重新载入页面，不要重复导入；重新载入后可下载最新备份。';
+        needsReload = true; resetPreview(); feedback.textContent = reloadMessage;
       } else if (alive() && error?.code === 'projects-unavailable') {
-        feedback.textContent = '项目列表尚未加载，未导入备份。请关闭弹窗，在项目区重试加载后，再追加导入。';
+        feedback.textContent = embedded ? '项目列表尚未加载，未导入备份。请到项目配置中重试加载后，再追加导入。'
+          : '项目列表尚未加载，未导入备份。请关闭弹窗，在项目区重试加载后，再追加导入。';
       } else if (alive()) feedback.textContent = ['conflict', 'changed', 'busy'].includes(error?.code)
         ? '会话已被其他操作更新，未导入备份。请处理保存冲突后重新选择文件。'
         : '导入未完成，原会话仍保留。请处理保存错误后重试；也可先下载当前备份。';
     } finally {
-      setBusy(false);
-      const focusTarget = parsed ? confirm : cancel;
-      // The component's inner button must finish clearing its disabled state.
-      await focusTarget.updateComplete;
-      if (alive()) focusTarget.focus();
+      if (isDisposed()) busy = false;
+      else {
+        setBusy(false);
+        const focusTarget = parsed ? confirm : embedded ? backup : cancel, focusSequence = readSequence;
+        await focusTarget.updateComplete;
+        if (alive() && readSequence === focusSequence) focusTarget.focus();
+      }
     }
   });
-  doc.body.append(node); node.showModal();
-  const initialFocus = doc.activeElement;
-  // A newly connected custom button has no inner focus target until its first render.
-  // Return the surface immediately and preserve any focus moved in the meantime.
-  void Promise.resolve(cancel.updateComplete).then(() => {
-    if (alive() && node.open && doc.activeElement === initialFocus) cancel.focus();
-  });
-  return { node, close };
+  function open() {
+    if (active || destroyed || isDisposed()) return;
+    resetPreview(); active = true; node.hidden = false;
+    needsReload ||= isReloadRequired();
+    feedback.textContent = needsReload ? reloadMessage : ''; renderBusy();
+    if (embedded) return;
+    doc.body.append(node); node.showModal();
+    const initialFocus = doc.activeElement;
+    void Promise.resolve(cancel.updateComplete).then(() => {
+      if (alive() && node.open && doc.activeElement === initialFocus) cancel.focus();
+    });
+  }
+  return { node, element: node, open, close, canClose: () => !busy, destroy };
 }
