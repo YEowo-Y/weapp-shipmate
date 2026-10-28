@@ -7,7 +7,7 @@ type Capacity = { projects: number; runs: number; confirmations: number; artifac
 type Preview = { projectName: string; sourceProjectId: string; runs: number; artifacts: number; memoryEntries: number; warnings: string[] };
 type Archive = { token: string; projectName: string; runs: number; artifacts: number; expiresAt: number };
 type Options = {
-  getProject(): Project | null; isBusy(): boolean;
+  getProject(): Project | null; isBusy(): boolean; isOpen?(): boolean;
   operation(action: () => Promise<void>): Promise<boolean>; refresh(): Promise<void>;
   archive(projectId: string, token: string): Promise<{ backupPath: string }>;
 };
@@ -29,6 +29,8 @@ export function mountProjectBackup(options: Options) {
     listeners.push(() => element.removeEventListener(event, listener, capture));
   };
   const blocked = () => disposed || working || options.isBusy();
+  const isOpen = () => options.isOpen?.() ?? dialog.open;
+  function close() { if (mutating) return; epoch++; restore = null; archive = null; sync(); }
   function message(value: string, error = false) { status.textContent = value; status.dataset.tone = error ? 'error' : 'neutral'; }
   function finishFocus(token: number) { if (current(token)) focusTarget?.focus(); focusTarget = null; }
   function sync() {
@@ -46,7 +48,7 @@ export function mountProjectBackup(options: Options) {
     node('project-backup').setAttribute('aria-busy', String(working));
   }
   async function execute(action: (token: number) => Promise<void>, mutation = false) {
-    if (blocked() || !dialog.open) return;
+    if (blocked() || !isOpen()) return;
     const token = ++epoch; working = true; mutating = mutation; focusTarget = null; sync();
     try {
       const started = await options.operation(async () => {
@@ -56,7 +58,7 @@ export function mountProjectBackup(options: Options) {
       if (!started && !disposed && token === epoch) message('当前项目尚未就绪或正在运行，请稍后重试。', true);
     } finally { working = false; mutating = false; sync(); finishFocus(token); }
   }
-  const current = (token: number) => !disposed && token === epoch && dialog.open;
+  const current = (token: number) => !disposed && token === epoch && isOpen();
   async function refreshStorage() {
     const token = ++storageEpoch;
     node('project-storage-status').textContent = '正在读取本机容量…';
@@ -152,7 +154,7 @@ export function mountProjectBackup(options: Options) {
   listen(node('project-archive-cancel'), 'click', () => { if (!mutating) { epoch++; archive = null; sync(); message('已取消归档，现有项目未改变。'); node('project-archive').focus(); } });
   listen(dialog, 'cancel', event => { if (mutating) event.preventDefault(); });
   listen(node('project-close'), 'click', event => { if (mutating) { event.preventDefault(); event.stopImmediatePropagation(); } }, true);
-  listen(dialog, 'close', () => { epoch++; restore = null; archive = null; sync(); });
+  listen(dialog, 'close', () => { if (!isOpen()) close(); });
   sync();
-  return { sync, refreshStorage, destroy() { disposed = true; epoch++; storageEpoch++; listeners.forEach(remove => remove()); } };
+  return { sync, refreshStorage, close, canClose: () => !working, destroy() { disposed = true; epoch++; storageEpoch++; listeners.forEach(remove => remove()); } };
 }
