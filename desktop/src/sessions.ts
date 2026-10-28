@@ -5,6 +5,7 @@ import { desktopModelFetch } from './model-fetch';
 import { mountModelConnections } from './model-connection';
 import { mountChatContext } from './context';
 import { mountAgentTools } from './agent-tools';
+import { readSendKey, SHORTCUTS_EVENT } from './settings/shortcuts-store';
 import { invoke } from '@tauri-apps/api/core';
 import type { Artifact, ProjectSnapshot } from './projects';
 
@@ -32,7 +33,7 @@ export async function mountDesktopSessions(options: { onOpenArtifact?: (artifact
       list: node('#desktopMessages'), status, jumpButton: node('#desktopJump'),
       layout: 'sidebar', projectScoped: true, workspace: 'desktop-local', storageLabel: '已保存在此设备',
       conversationOptions: {
-        requireModel: true, allowRecords: true,
+        requireModel: true, allowRecords: true, getSendShortcut: readSendKey,
         async transport(args) {
           const revision = selectionRevision;
           const request = await context.prepare(args);
@@ -89,10 +90,20 @@ export async function mountDesktopSessions(options: { onOpenArtifact?: (artifact
       void options.onToolResults?.().catch(() => { if (!disposed) status.textContent = '报告已保存在本机；项目历史刷新失败，请重新打开项目管理。'; });
     });
     terminalObserver.observe(sendButton, { attributes: true, attributeFilter: ['data-mode'] });
-    const disposeModels = () => { disposed = true; selectionRevision++; terminalObserver.disconnect(); models?.destroy(); context.destroy(); agentTools.destroy(); };
+    const refreshPreferences = () => { if (!disposed) workspace.conversation.refreshPreferences(); };
+    window.addEventListener(SHORTCUTS_EVENT, refreshPreferences);
+    window.addEventListener('storage', refreshPreferences);
+    const disposeModels = () => {
+      disposed = true; selectionRevision++; terminalObserver.disconnect();
+      window.removeEventListener(SHORTCUTS_EVENT, refreshPreferences); window.removeEventListener('storage', refreshPreferences);
+      models?.destroy(); context.destroy(); agentTools.destroy();
+    };
     window.addEventListener('pagehide', disposeModels, { once: true });
     return {
       ...workspace,
+      getModelSettingsPanel: () => models!.settings,
+      getPrivacy: () => agentTools.snapshot(),
+      revokePermissions: () => agentTools.revoke(),
       isBusy: () => sendButton.dataset.mode === 'stop',
       openModels(anchor?: HTMLElement | null) { models?.open(anchor); },
       openMemory(anchor?: HTMLElement | null) { context.openMemory(anchor); },
