@@ -22,7 +22,7 @@ export function mountProjectMaintenance(options: Options) {
   const state = node('p'); state.id = 'maintenance-state'; state.setAttribute('role', 'status');
   const status = node('p'); status.id = 'maintenance-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-atomic', 'true');
   const actions = node('div'); actions.className = 'context-actions';
-  const save = button('maintenance-save', '保存维护设置'), retry = button('maintenance-retry', '重新加载'), stop = button('maintenance-stop', '停止本次自动预检'); actions.append(save, retry, stop);
+  const save = button('maintenance-save', '保存维护设置'), retry = button('maintenance-retry', '重新加载'), stop = button('maintenance-stop', '停止本次自动预检'), discard = button('maintenance-discard', '放弃更改'); actions.append(save, discard, retry, stop);
   const notices = node('div'); notices.id = 'maintenance-notices';
   const readAll = button('maintenance-read-all', '全部标为已读');
   element.append(title, description, watch.label, notifications.label, state, actions, status, notices, readAll);
@@ -49,7 +49,7 @@ export function mountProjectMaintenance(options: Options) {
   function render() {
     const disabled = !projectId || !ready || pending;
     watch.input.disabled = disabled; notifications.input.disabled = disabled;
-    save.disabled = disabled || !dirty;
+    save.disabled = disabled || !dirty; discard.disabled = pending || !dirty;
     retry.disabled = !projectId || pending;
     retry.textContent = ready && !readFailed ? '重试自动维护' : '重新加载';
     stop.disabled = disabled || !(snapshot?.state === 'pending' || (snapshot?.state === 'checking' && snapshot.runId));
@@ -130,7 +130,7 @@ export function mountProjectMaintenance(options: Options) {
       if (saved) dirty = false;
       if (!dirty && snapshot) { watch.input.checked = snapshot.watchEnabled; notifications.input.checked = snapshot.notificationsEnabled; }
       message(saved ? '维护设置已保存。' : '');
-    } catch { if (current(token, id)) message('操作未能完成，已保留设置草稿。请重试；版本冲突时先重新加载。', true); }
+    } catch { if (current(token, id)) { if (saved) readFailed = true; message('操作未能完成，已保留设置草稿。请重试；版本冲突时先重新加载。', true); } }
     finally { if (current(token, id)) { pending = false; render(); } }
   }
   async function openNotice(notice: Notice) {
@@ -146,14 +146,26 @@ export function mountProjectMaintenance(options: Options) {
     } catch { if (current(token, id)) message('保存的报告未能打开，通知仍保留未读。请重试。', true); }
     finally { if (current(token, id)) { pending = false; render(); } }
   }
-  for (const input of [watch.input, notifications.input]) input.addEventListener('change', () => { dirty = true; render(); });
+  function discardChanges() {
+    if (disposed || pending) return;
+    dirty = false; watch.input.checked = snapshot?.watchEnabled ?? false; notifications.input.checked = snapshot?.notificationsEnabled ?? false;
+    message('已放弃未保存的维护设置。'); render();
+  }
+  function canClose() {
+    if (pending || dirty) { message(pending ? '正在处理维护操作，请稍候。' : '维护设置尚未保存，请先保存或放弃更改。'); return false; }
+    return true;
+  }
+  for (const input of [watch.input, notifications.input]) input.addEventListener('change', () => {
+    dirty = watch.input.checked !== (snapshot?.watchEnabled ?? false) || notifications.input.checked !== (snapshot?.notificationsEnabled ?? false); render();
+  });
+  discard.addEventListener('click', discardChanges);
   save.addEventListener('click', () => { if (!save.disabled) void command('save', { expectedRevision: snapshot!.revision, watchEnabled: watch.input.checked, notificationsEnabled: notifications.input.checked }, true); });
   retry.addEventListener('click', () => { if (!retry.disabled) void (ready && !readFailed ? command('retry') : read()); });
   stop.addEventListener('click', () => { if (!stop.disabled) void command('stop'); });
   readAll.addEventListener('click', () => { if (!readAll.disabled) void command('read', { noticeIds: snapshot!.notices.filter(notice => !notice.read).map(notice => notice.id) }); });
   render();
   return {
-    element,
+    element, canClose, discardChanges,
     async select() {
       if (disposed) return;
       const id = options.getProjectId();
