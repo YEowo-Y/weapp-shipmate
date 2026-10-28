@@ -255,9 +255,11 @@ export async function checkSourceFreshnessFlows({ run, checked, click, press, in
 
   await checked('P7 preferences and health route to one source dialog with dark, narrow and keyboard support', async () => {
     await click('#desktop-preferences-open'); await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'preferences open');
-    await click('label:has(#desktop-theme-dark)'); await click('label:has(#desktop-motion-reduce)');
-    await click('#preferences-nav-connections'); await click('#preferences-sources'); await ready();
-    assert.equal(await inspect('return document.querySelector("#desktop-preferences").open'), false);
+    await click('#desktop-theme-dark'); await click('#desktop-motion-reduce');
+    await click('#preferences-nav-about'); await click('#settings-sources'); await ready();
+    assert.equal(await inspect('return document.querySelector("#desktop-preferences").open && document.querySelector("#desktop-preferences").dataset.section==="about"'), true);
+    assert.equal(await inspect('return document.querySelector("#desktop-source-freshness").matches(":modal") && document.querySelector("#desktop-source-freshness").contains(document.activeElement)'), true);
+    assert.equal(await inspect('return document.querySelectorAll("#desktop-source-freshness").length'), 1);
     assert.equal(await inspect('return document.body.dataset.theme'), 'dark'); await expand(automatic);
     visuals.darkWide = await geometry(); contained(visuals.darkWide); await screenshot('p7-sources-dark-wide');
     await command('POST', '/window/rect', { width: 390, height: 844 });
@@ -267,6 +269,8 @@ export async function checkSourceFreshnessFlows({ run, checked, click, press, in
     for (let index = 0; index < 16; index++) { await press('\uE004'); assert.equal(await inspect('return document.querySelector("#desktop-source-freshness").contains(document.activeElement)'), true); }
     await screenshot('p7-sources-dark-narrow'); await close();
     assert.equal(await inspect('return document.activeElement.checkVisibility()'), true);
+    assert.equal(await inspect('return document.activeElement.id'), 'settings-sources');
+    await click('#preferences-content-dismiss'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'return from source settings to application');
     await command('POST', '/window/rect', { width: 1200, height: 850 });
     await click('#desktop-more'); await click('#desktop-actions wa-dropdown-item[value="health"]');
     await until(() => inspect('return document.querySelector("#desktop-health").open'), 'health open');
