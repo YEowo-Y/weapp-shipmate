@@ -44,7 +44,7 @@ export function mountAgentTools(composer: HTMLElement, isBusy: () => boolean) {
     state.setProvider(composer.dataset.modelProvider || null);
     const value = state.snapshot(), busy = isBusy();
     button.disabled = busy;
-    button.dataset.enabled = String(value.allowRead);
+    if (button.dataset.enabled !== String(value.allowRead)) button.dataset.enabled = String(value.allowRead);
     button.title = value.allowRead ? (value.shareResults ? '已允许读取项目并发送结果摘要' : '已允许读取项目，结果留在本机') : '设置当前会话的只读项目工具';
     read.input.checked = value.allowRead; share.input.checked = value.shareResults;
     read.input.disabled = busy || !value.eligible; share.input.disabled = busy || !value.eligible || !value.allowRead;
@@ -70,6 +70,8 @@ export function mountAgentTools(composer: HTMLElement, isBusy: () => boolean) {
   observer.observe(composer, { attributes: true, attributeFilter: ['data-model-provider', 'data-chat-state'] });
   render();
   return {
+    snapshot() { render(); return { ...state.snapshot(), busy: isBusy() }; },
+    revoke() { if (isBusy()) throw new Error('当前对话正在执行。'); state.update({ allowRead: false, shareResults: false }); render(); },
     select(session: Session) { state.select(session); if (dialog.open) dialog.close(); render(); },
     prepare<T extends { providerId: string; agent?: unknown }>(request: T) { render(); return state.prepare(request); },
     destroy() { disposed = true; observer.disconnect(); state.clear(); dialog.remove(); button.remove(); composer.classList.remove('has-agent-tools'); },
