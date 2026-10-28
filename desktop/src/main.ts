@@ -1,4 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
+import corePackage from '../../package.json';
+import type { SettingsPanel } from './settings/types';
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { mountProjects, type Artifact, type Project } from "./projects";
 import { mountDesktopSessions } from "./sessions";
@@ -386,11 +389,13 @@ window.addEventListener("DOMContentLoaded", () => {
   resetReport();
   updateStopControl();
   const sessionsReady = mountDesktopSessions({
-    onOpenSettings: anchor => preferences?.open(anchor, 'connections'),
+    onOpenSettings: anchor => preferences?.open(anchor, 'models'),
     onOpenArtifact: artifact => { showArtifact(artifact); tools.open($("#desktop-project-manage"), $("#report")); },
     onToolResults: async () => { await projects?.refresh(); },
   }).then(value => { sessions = value; updateCopyControl(); return value; });
   projects = mountProjects({
+    onOpenData: () => preferences?.open(null, 'data'),
+    canChangeProject: () => maintenance?.canClose() ?? true,
     isBusy: () => busy,
     onPending: setBusy,
     onRegistry: ids => sessionsReady.then(value => { value?.setKnownProjects(ids); }),
@@ -404,14 +409,14 @@ window.addEventListener("DOMContentLoaded", () => {
     onSnapshot: () => { health?.refresh(); void maintenance?.select(); },
     onArtifact: (artifact, reveal) => {
       showArtifact(artifact);
-      if (reveal) tools.open($("#desktop-project-manage"), $("#report"));
+      if (reveal) window.setTimeout(() => { preferences?.close(); tools.open($("#desktop-project-manage"), $("#report")); }, 0);
     },
   });
   maintenance = mountProjectMaintenance({
     getProjectId: () => projects?.getActiveId() ?? null,
     onResult: async () => { if (projects && !await projects.refresh()) throw new Error('项目记录未能刷新'); },
     onOpenArtifact: async id => await projects?.openArtifact(id) ?? false,
-    onRevealReport: () => { health?.close(); tools.open($("#desktop-more"), $("#report")); },
+    onRevealReport: () => { health?.close(); window.setTimeout(() => { preferences?.close(); tools.open($("#desktop-more"), $("#report")); }, 0); },
     onUnread: count => {
       const control = $("#desktop-maintenance-open"), label = $("#desktop-maintenance-count");
       if (control) { control.hidden = count === 0; control.setAttribute('aria-label', `项目维护，${count} 条未读提醒`); }
@@ -431,13 +436,43 @@ window.addEventListener("DOMContentLoaded", () => {
     returnFocus: () => $("#desktop-more"),
   });
   void projects.ready.then(() => maintenance?.select());
+  const projectSettings: SettingsPanel = {
+    element: document.createElement('div'),
+    async open() { this.element.append(projects!.settings.element, maintenance!.element); projects!.settings.open(); await maintenance!.select(); },
+    close() { projects!.settings.close(); health!.restoreMaintenance(); },
+    canClose: () => projects!.settings.canClose() && maintenance!.canClose(),
+  };
+  let dataSettings: SettingsPanel | null = null;
   preferences = mountPreferences({
     systemNotifications: mountSystemNotifications({ invoke }),
-    onModels: anchor => sessions?.openModels(anchor ?? $("#desktop-preferences-open")),
-    onData: anchor => sessions?.openData(anchor ?? $("#desktop-preferences-open")),
-    onMaintenance: anchor => health?.open(anchor ?? $("#desktop-preferences-open")),
-    onProjects: () => projects?.openManager(),
+    async getPanel(section) {
+      if (section === 'projects') { await projects!.ready; return projectSettings; }
+      const workspace = await sessionsReady;
+      if (!workspace) throw new Error('会话初始化失败，请重新打开应用。');
+      if (section === 'models') return workspace.getModelSettingsPanel();
+      await projects!.ready;
+      if (!dataSettings) {
+        const sessionData = workspace.getDataSettingsPanel(), backup = projects!.backupSettings;
+        const element = document.createElement('div'); element.className = 'settings-data';
+        const wrap = (id: string, child: HTMLElement) => { const host = document.createElement('section'); host.id = id; host.append(child); return host; };
+        const archives = document.createElement('button'); archives.id = 'settings-archives'; archives.className = 'settings-button settings-button--outline'; archives.textContent = '查看归档会话';
+        archives.addEventListener('click', () => { if (dataSettings?.canClose?.() !== false) workspace.openHistory(archives, 'archived'); });
+        element.append(wrap('settings-session-data', sessionData.element), wrap('settings-project-backup', backup.element), archives);
+        dataSettings = { element, open() { sessionData.open(); backup.open(); }, close() { sessionData.close(); backup.close(); }, canClose: () => sessionData.canClose() && backup.canClose() };
+      }
+      return dataSettings;
+    },
+    async getPrivacy() {
+      const workspace = await sessionsReady; if (!workspace) throw new Error('会话不可用');
+      const state = workspace.getPrivacy();
+      return { ...state, projectName: projects?.getSnapshot()?.projects.find(project => project.id === state.projectId)?.name ?? null };
+    },
+    async revokePermissions() { const workspace = await sessionsReady; if (!workspace) throw new Error('会话不可用'); workspace.revokePermissions(); },
+    subscribePrivacy(listener) { const observer = new MutationObserver(listener); observer.observe($('#desktopComposer'), { attributes: true, subtree: true, attributeFilter: ['data-mode', 'data-model-provider', 'data-enabled'] }); return () => observer.disconnect(); },
+    async getVersions() { return { desktop: await getVersion(), core: corePackage.version, rules: projects?.getRulesVersion() ?? null }; },
     onSources: anchor => sources?.open(anchor ?? $("#desktop-preferences-open")),
+    onArchives: anchor => { if (dataSettings?.canClose?.() !== false) sessions?.openHistory(anchor, 'archived'); },
+    onRepository: () => openUrl('https://github.com/YEowo-Y/weapp-shipmate'),
   });
   $("#desktop-preferences-open")?.addEventListener('click', () => preferences?.open($("#desktop-preferences-open")));
   $("#desktop-maintenance-open")?.addEventListener('click', () => health?.open($("#desktop-maintenance-open")));
