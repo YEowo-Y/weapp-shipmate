@@ -4,7 +4,7 @@ import { createActionButton } from './components/ui-kit.js';
 import { createSessionStore, normalizeSessionSnapshot } from './session-store.js';
 import { createSessionPersistence } from './session-persistence.js';
 import { sessionMatch } from './session-search.js';
-import { openSessionDataDialog } from './session-data-dialog.js';
+import { openSessionDataDialog, createSessionDataPanel } from './session-data-dialog.js';
 export { sessionMatch };
 
 let workspaceSequence = 0;
@@ -62,7 +62,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
   host.append(root);
   input.disabled = sendButton.disabled = create.disabled = rename.disabled = title.disabled = true;
   let store = createSessionStore({ workspace }), persistence = null, temporaryMode = false;
-  let disposed = false, restoring = false, mutationBusy = false, conversation, activeDialog = null;
+  let disposed = false, restoring = false, mutationBusy = false, conversation, activeDialog = null, dataSettings = null;
   const bindings = [];
   function bind(node, type, handler, options) {
     node.addEventListener(type, handler, options); bindings.push([node, type, handler, options]);
@@ -404,25 +404,42 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
   function requireProjectRegistry() {
     if (projectScoped && knownProjects === null) throw Object.assign(new Error('项目列表尚未加载，请先在项目区重试，再追加导入。'), { code: 'projects-unavailable' });
   }
+  function dataOptions() {
+    return { document: doc, capture: () => {
+      if (persistence?.getState().code === 'apply-failed') throw Object.assign(new Error('重新载入后可下载最新备份。'), { code: 'apply-failed' });
+      return capture();
+    }, async prepare() {
+      if (persistence?.getState().code === 'apply-failed') throw Object.assign(new Error('请先重新载入已保存的会话。'), { code: 'apply-failed' });
+      requireProjectRegistry();
+      if (temporaryMode) throw new Error('临时模式不能导入，请先恢复会话存储。');
+      conversation.stop(); if (!await flush()) throw new Error('当前会话尚未保存，请先处理保存错误。');
+    }, commit: async snapshot => {
+      requireProjectRegistry();
+      if (knownProjects) for (const session of snapshot.sessions) {
+        if (!sessions.some(item => item.id === session.id) && session.projectId && !knownProjects.has(session.projectId)) session.projectId = null;
+      }
+      await commitSnapshot(snapshot);
+    }, onBusyChange: setMutationBusy, isDisposed: () => disposed,
+    isReloadRequired: () => persistence?.getState().code === 'apply-failed' };
+  }
   function openData(trigger = title) {
     if (disposed || mutationBusy) return;
     if (persistence?.getState().code === 'apply-failed') { reload.focus(); return; }
-    activeDialog?.close();
-    const surface = openSessionDataDialog({ document: doc, trigger, capture,
-      async prepare() {
-        requireProjectRegistry();
-        if (temporaryMode) throw new Error('临时模式不能导入，请先恢复会话存储。');
-        conversation.stop(); if (!await flush()) throw new Error('当前会话尚未保存，请先处理保存错误。');
-      }, commit: async snapshot => {
-        requireProjectRegistry();
-        if (knownProjects) for (const session of snapshot.sessions) {
-          if (!sessions.some(item => item.id === session.id) && session.projectId && !knownProjects.has(session.projectId)) session.projectId = null;
-        }
-        await commitSnapshot(snapshot);
-      }, onBusyChange: setMutationBusy, isDisposed: () => disposed,
+    dataSettings?.close(); activeDialog?.close();
+    const surface = openSessionDataDialog({ ...dataOptions(), trigger,
       onClose(closedNode) { if (activeDialog === closedNode) activeDialog = null; },
     });
     activeDialog = surface.node;
+  }
+  function getDataSettingsPanel() {
+    if (!dataSettings) {
+      const panel = createSessionDataPanel(dataOptions());
+      dataSettings = { ...panel,
+        open() { if (disposed || mutationBusy) return; activeDialog?.close(); panel.open(); },
+        canClose: () => !mutationBusy && panel.canClose(),
+      };
+    }
+    return dataSettings;
   }
   function setKnownProjects(ids) {
     if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string' || !id.trim() || id.length > 256)) throw new Error('无效的项目列表');
@@ -487,7 +504,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     if (disposed) return;
     conversation.stop(); capture(); schedule(); conversation.destroy();
     for (const [node, type, handler, options] of bindings) node.removeEventListener(type, handler, options);
-    disposed = true; activeDialog?.close(); root.remove();
+    disposed = true; dataSettings?.destroy(); activeDialog?.close(); root.remove();
     void Promise.resolve(persistence?.flush()).finally(() => { persistence?.dispose(); store.close(); });
   }
   bind(title, 'click', () => openHistory()); bind(create, 'click', createSession); bind(rename, 'click', renameSession);
@@ -502,5 +519,5 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     else win.location.reload();
   });
   bind(win, 'pagehide', event => { if (event.persisted) { conversation.stop(); void flush(); } else destroy(); });
-  return { conversation, flush, openHistory, openData, createSession, getCurrentSession: current, isTemporary: () => temporaryMode, selectProject, associateCurrentSession, setKnownProjects, destroy };
+  return { conversation, flush, openHistory, openData, getDataSettingsPanel, createSession, getCurrentSession: current, isTemporary: () => temporaryMode, selectProject, associateCurrentSession, setKnownProjects, destroy };
 }
