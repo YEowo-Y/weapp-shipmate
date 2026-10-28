@@ -36,13 +36,13 @@ export async function checkSystemNotificationFlows({ run, checked, click, press,
   const ready = () => until(() => inspect('const d=document.querySelector("#desktop-preferences"),s=document.querySelector(".system-notifications"),t=document.querySelector("#system-notifications-enabled");return d?.open && s?.getAttribute("aria-busy")==="false" && t&&!t.disabled;'), 'native system-notification settings ready');
   const scrollEvidence = [];
   const settingGeometry = selector => inspect(`
-    const control=document.querySelector(arguments[0]),body=control.closest('.context-body'),footer=document.querySelector('#desktop-preferences > footer');
+    const control=document.querySelector(arguments[0]),body=control.closest('.context-body'),header=document.querySelector('#desktop-preferences .preferences-content-header');
     const bounds=node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
-    const target=bounds(control),bodyRect=bounds(body),footerRect=bounds(footer),hit=document.elementFromPoint((target.left+target.right)/2,(target.top+target.bottom)/2);
-    return {target,body:bodyRect,footer:footerRect,bodyScrollTop:body.scrollTop,bodyScrollHeight:body.scrollHeight,bodyClientHeight:body.clientHeight,
-      bodyOverflowY:getComputedStyle(body).overflowY,footerPosition:getComputedStyle(footer).position,
+    const target=bounds(control),bodyRect=bounds(body),headerRect=bounds(header),hit=document.elementFromPoint((target.left+target.right)/2,(target.top+target.bottom)/2);
+    return {target,body:bodyRect,header:headerRect,bodyScrollTop:body.scrollTop,bodyScrollHeight:body.scrollHeight,bodyClientHeight:body.clientHeight,
+      bodyOverflowY:getComputedStyle(body).overflowY,headerPosition:getComputedStyle(header).position,
       hit:hit?{tag:hit.tagName,id:hit.id,className:hit.className}:null,
-      clickable:target.width>0&&target.height>0&&!control.disabled&&target.top>=bodyRect.top&&target.bottom<=bodyRect.bottom&&target.bottom<=footerRect.top&&
+      clickable:target.width>0&&target.height>0&&!control.disabled&&target.top>=bodyRect.top&&target.bottom<=bodyRect.bottom&&target.top>=headerRect.bottom&&
         target.left>=0&&target.right<=innerWidth&&target.top>=0&&target.bottom<=innerHeight&&(hit===control||control.contains(hit))};
   `, [selector]);
   const clickSetting = async selector => {
@@ -59,7 +59,7 @@ export async function checkSystemNotificationFlows({ run, checked, click, press,
   const open = async () => {
     await click('#desktop-preferences-open'); await click('#preferences-nav-notifications'); await ready();
   };
-  const close = async () => { await click('#preferences-done'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'preferences closed'); };
+  const close = async () => { await click('#preferences-content-dismiss'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'preferences closed'); };
   const reload = async () => { await clickSetting('#system-notifications-reload'); await ready(); };
   const enabled = async value => {
     const before = await snapshot();
@@ -221,7 +221,7 @@ export async function checkSystemNotificationFlows({ run, checked, click, press,
   });
 
   await checked('P7 notification controls share actual dark styling and retain narrow keyboard navigation', async () => {
-    await open(); await click('#preferences-nav-appearance'); await clickSetting('label:has(#desktop-theme-dark)'); await clickSetting('label:has(#desktop-motion-reduce)'); await click('#preferences-nav-notifications');
+    await open(); await click('#preferences-nav-appearance'); await clickSetting('#desktop-theme-dark'); await clickSetting('#desktop-motion-reduce'); await click('#preferences-nav-notifications'); await ready();
     assert.equal(await inspect('return document.body.dataset.theme'), 'dark');
     await inspect('document.querySelector("#system-notifications-enabled").scrollIntoView({block:"center"})');
     visuals.darkWide = await geometry(); contained(visuals.darkWide); await screenshot('p7-notifications-dark-wide');
@@ -237,7 +237,7 @@ export async function checkSystemNotificationFlows({ run, checked, click, press,
     assert.equal(await inspect('return document.querySelector("#desktop-navigation").open'), false, 'closing preferences keeps narrow navigation folded');
     await press('\uE007');
     await until(() => inspect('return document.querySelector("#desktop-preferences").open && !document.querySelector("#desktop-navigation").open'), 'Enter reopens settings while navigation stays folded');
-    await click('#preferences-nav-notifications'); await ready();
+    await click('#preferences-categories'); await click('#preferences-nav-notifications'); await ready();
     await press('\uE00C');
     await until(() => inspect('return !document.querySelector("#desktop-preferences").open && document.activeElement.id==="desktop-preferences-open" && document.activeElement.checkVisibility()'), 'reopened preferences returns focus to its visible opener');
     assert.equal(await inspect('return document.querySelector("#desktop-navigation").open'), false);
