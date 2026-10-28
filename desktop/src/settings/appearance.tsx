@@ -28,8 +28,7 @@ function SettingChoices({ field, name, label, hint, choices, snapshot, store }: 
 
 export function Appearance({ snapshot, store, hidden }: { snapshot: PreferencesSnapshot; store: PreferencesStore; hidden: boolean }) {
   return <section id="preferences-appearance" className="preferences-appearance" aria-labelledby="preferences-appearance-title" hidden={hidden}>
-    <h3 id="preferences-appearance-title" tabIndex={-1}>外观与阅读</h3>
-    <p>选择舒适的显示方式。更改会自动保存到此设备。</p>
+    <span id="preferences-appearance-title" className="preferences-sr-only">外观与阅读</span>
     <h4>显示</h4>
     <div className="preferences-group"><SettingChoices field="theme" name="desktop-theme" label="主题模式" hint="跟随系统，或选择固定的浅色、深色外观。" choices={[[ 'system', '跟随系统' ], [ 'light', '浅色' ], [ 'dark', '深色' ]]} snapshot={snapshot} store={store} /></div>
     <h4>阅读与交互</h4>
