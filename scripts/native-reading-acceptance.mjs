@@ -53,12 +53,16 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
   };
   const openMenu = async () => { await click('#desktop-more'); await click('#desktop-actions wa-dropdown-item[value="report"]'); await readerReady(); };
   const fromHistory = async artifact => {
-    await closeTools(); await projectDialog(); await click('#project-retry');
-    await until(() => inspect('return !document.querySelector("#project-retry").disabled && !document.querySelector("#desktop-project-select").disabled'), 'project history refreshed');
+    await closeTools();
+    if (!await inspect('return document.querySelector("#desktop-results-open").checkVisibility()')) await click('#desktop-navigation > summary');
+    await click('#desktop-results-open');
+    await until(() => inspect('return document.querySelector("#desktop-project-results").open'), 'results workspace opened');
+    await click('#project-results-retry');
+    await until(() => inspect('return !document.querySelector("#project-results-retry").disabled && !document.querySelector("#desktop-project-select").disabled'), 'project history refreshed');
     const rows = (await snapshot()).runs.filter(item => item.projectId === projectId), index = rows.findIndex(item => item.id === artifact.runId);
     assert.ok(index >= 0, 'saved run remains in real project history');
     await activate(`#project-history .project-run:nth-child(${index + 1}) > button`);
-    await until(() => inspect('return !document.querySelector("#desktop-projects").open && document.querySelector("#desktop-tools").open && !document.querySelector("#read-report").disabled'), 'saved report loaded through history');
+    await until(() => inspect('return !document.querySelector("#desktop-project-results").open && document.querySelector("#desktop-tools").open && !document.querySelector("#read-report").disabled'), 'saved report loaded through history');
     await activate('#read-report'); await readerReady();
     assert.equal(await text('#report-reader-title'), artifact.title);
     assert.equal(await inspect('return document.querySelector(".report-reader-body").scrollTop'), 0, 'each opened report starts at its overview, not a previous reading position');
@@ -89,7 +93,7 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
         assert.ok(row.visibleParagraphs.some(value => value.includes(`业务自查线索：${signals.join('、')}`)), 'conditional signals remain in visible article text');
       }
       if (rule.note) assert.ok(row.visibleParagraphs.some(value => value.includes(rule.note)), 'rule notes are not hidden in evidence');
-      if (rule.manual_required) assert.match(row.text, /需要本人在官方后台核验/);
+      if (rule.manual_required) assert.match(row.text, /按操作类型处理后核对实际结果，并记录验证依据/);
       if (item.rejectSummary) assert.ok(row.text.includes(item.rejectSummary));
       assert.deepEqual(row.links.map(link => link.href), rule.official_url ? [new URL(rule.official_url).href] : []);
       for (const link of row.links) { assert.match(link.href, /^https:\/\//); assert.equal(link.target, '_blank'); assert.match(link.rel, /noopener/); assert.match(link.rel, /noreferrer/); }
@@ -163,9 +167,8 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     await activate('#read-report'); await readerReady(); await verifyContent(artifacts.check); await geometry('check-wide');
   });
   await checked('Reading path labels are guidance; native outline links focus the actual headings', async () => {
-    assert.equal(await inspect('return document.querySelector(".report-reader-steps").getAttribute("aria-label")'), '建议阅读路径，不代表执行状态');
-    assert.deepEqual(await inspect('return [...document.querySelectorAll(".report-reader-steps li")].map(n=>n.textContent)'), ['阅读发现', '核对官方依据', '处理后复查']);
-    assert.equal(await inspect('return document.querySelectorAll(".report-reader-steps [role=progressbar],.report-reader-steps [aria-current=step],.report-reader-steps input[type=checkbox]").length'), 0);
+    assert.equal(await inspect('return document.querySelector(".report-reader-steps")'), null, 'static tutorial is replaced by the report content');
+    assert.equal(await inspect('return document.querySelector("#desktop-report-reader").getAttribute("role")'), 'region');
     const count = createHandoff(artifacts.check).items.length;
     await activate(`#report-reader-outline a[href="#reader-item-${count - 1}"]`);
     assert.equal(await inspect('return document.activeElement.id'), `reader-item-${count - 1}`);
@@ -215,10 +218,10 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     await press('\uE00C'); await until(() => inspect('return !document.querySelector("#desktop-handoff").open && document.activeElement.checkVisibility() && document.activeElement!==document.body'), 'handoff closes to visible product entry');
     await closeTools();
   });
-  await checked('Toolbar reader retains top-layer focus when shrinking across the tools breakpoint', async () => {
+  await checked('Report workspace retains focus and reachable navigation when shrinking', async () => {
     await command('POST', '/window/rect', { width: 1000, height: 850 }); await fromHistory(artifacts.check);
     await command('POST', '/window/rect', { width: 390, height: 850 });
-    await until(() => inspect('const d=document.querySelector("#desktop-report-reader"),b=document.querySelector("#report-reader-dismiss"),r=b.getBoundingClientRect(),hit=document.elementFromPoint((r.left+r.right)/2,(r.top+r.bottom)/2);return d.open && d.matches(":modal") && d.contains(document.activeElement) && (hit===b||b.contains(hit))'), 'reader stays active above the responsive tools drawer');
+    await until(() => inspect('const d=document.querySelector("#desktop-report-reader"),b=document.querySelector("#report-reader-dismiss"),r=b.getBoundingClientRect(),hit=document.elementFromPoint((r.left+r.right)/2,(r.top+r.bottom)/2);return d.open && !d.matches(":modal") && d.getAttribute("role")==="region" && d.contains(document.activeElement) && (hit===b||b.contains(hit))'), 'reader stays active above the responsive tools drawer');
     await geometry('toolbar-reader-resize'); await closeReader();
     assert.equal(await inspect('return document.activeElement!==document.body && document.activeElement.checkVisibility()'), true);
     await closeTools(); await command('POST', '/window/rect', { width: 1200, height: 850 });
