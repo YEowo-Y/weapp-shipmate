@@ -32,7 +32,8 @@
             </section>
             <nav class="desktop-primary-navigation" aria-label="工作区">
               <button id="desktop-home-open" class="desktop-action" type="button"><span data-icon="house"></span><span>工作台</span></button>
-              <button id="desktop-workflow-open" class="desktop-action" type="button" aria-haspopup="dialog"><span data-icon="list-checks"></span><span>上线进度</span></button>
+              <button id="desktop-workflow-open" class="desktop-action" type="button" aria-controls="desktop-workspace"><span data-icon="list-checks"></span><span>上线进度</span></button>
+              <button id="desktop-results-open" class="desktop-action" type="button" aria-controls="desktop-workspace"><span data-icon="file-text"></span><span>运行与报告</span></button>
             </nav>
             <nav id="sessionHost" aria-label="本地会话"></nav>
           </div>
@@ -63,38 +64,36 @@
             <wa-tooltip for="desktop-more" without-arrow>更多功能</wa-tooltip>
           </div>
         </header>
+        <section id="desktop-workspace" class="desktop-workspace" aria-label="项目工作区" hidden></section>
         <div id="desktopScroll" class="conversation-scroll scroll" tabindex="0" aria-label="会话记录">
           <section id="session-empty" class="desktop-home" aria-labelledby="desktop-home-title">
-            <header class="home-heading">
-              <h2 id="desktop-home-title">项目工作台</h2>
-              <p>从一次预检开始，逐项完成上线准备。</p>
-            </header>
+            <header class="home-heading"><h2 id="desktop-home-title">项目工作台</h2></header>
             <section class="home-project" aria-labelledby="home-project-name">
               <span data-icon="folder" aria-hidden="true"></span>
               <div><h3 id="home-project-name">未选择项目</h3><p id="home-project-summary">选择项目后可预检代码；也可先按主体整理上线清单。</p></div>
               <wa-button id="home-project-manage" appearance="plain" size="s" aria-haspopup="dialog" aria-controls="desktop-projects">选择或管理项目<span slot="end" data-icon="chevron-right"></span></wa-button>
             </section>
             <section aria-labelledby="home-start-title">
-              <div class="home-section-heading"><h3 id="home-start-title">开始检查与准备</h3><span>本地工具 · 无需连接模型</span></div>
+              <div class="home-section-heading"><h3 id="home-start-title">下一步</h3><span>本机执行 · 无需模型</span></div>
               <div class="home-start-grid">
                 <article class="home-primary-task">
-                  <h4><span data-icon="folder" aria-hidden="true"></span>项目预检</h4><p>检查配置、隐私声明与域名，发现待核对的问题。</p>
-                  <wa-button id="start-check" variant="neutral" appearance="accent" size="s" aria-haspopup="dialog" aria-controls="desktop-tools">打开项目预检<span slot="end" data-icon="arrow-right"></span></wa-button>
+                  <div><h4><span data-icon="folder" aria-hidden="true"></span>项目预检</h4><p>检查配置、隐私声明与域名。</p></div>
+                  <wa-button id="start-check" variant="neutral" appearance="accent" size="s" aria-controls="desktop-tools"><span id="start-check-label">配置预检</span><span slot="end" data-icon="arrow-right"></span></wa-button>
                 </article>
-                <article><h4><span data-icon="list-checks" aria-hidden="true"></span>上线清单</h4><p>按主体整理办理步骤、所需材料与官方依据。</p><wa-button id="start-guide" appearance="plain" size="s" aria-haspopup="dialog" aria-controls="desktop-tools">整理上线清单<span slot="end" data-icon="arrow-right"></span></wa-button></article>
-                <article><h4><span data-icon="circle-question-mark" aria-hidden="true"></span>拒因反查</h4><p>根据审核反馈，查找相关要求与处理方向。</p><wa-button id="start-explain" appearance="plain" size="s" aria-haspopup="dialog">查找处理方向<span slot="end" data-icon="arrow-right"></span></wa-button></article>
+                <article><wa-button id="start-guide" appearance="plain" size="s" aria-controls="desktop-tools"><span slot="start" data-icon="list-checks"></span>整理上线清单<span slot="end" data-icon="chevron-right"></span></wa-button></article>
+                <article><wa-button id="start-explain" appearance="plain" size="s" aria-haspopup="dialog"><span slot="start" data-icon="circle-question-mark"></span>查询审核拒因<span slot="end" data-icon="chevron-right"></span></wa-button></article>
               </div>
             </section>
             <section class="home-continue" aria-labelledby="home-continue-title">
-              <div class="home-section-heading"><h3 id="home-continue-title">继续处理</h3><span>阅读结果，推进当前项目</span></div>
+              <div class="home-section-heading"><h3 id="home-continue-title">最近结果</h3><button id="home-results" class="desktop-action" type="button">全部运行记录<span data-icon="chevron-right"></span></button></div>
               <article class="home-report" aria-labelledby="home-report-title">
-                <span data-icon="file-text" aria-hidden="true"></span><div><h4 id="home-report-title">当前报告</h4><p id="home-report-summary">尚未生成报告。运行工具后，可阅读并加入当前会话。</p></div><wa-button id="home-report" appearance="outlined" size="s" aria-haspopup="dialog" aria-controls="desktop-report-reader" disabled>阅读报告<span slot="end" data-icon="arrow-right"></span></wa-button>
+                <span data-icon="file-text" aria-hidden="true"></span><div><h4 id="home-report-title">当前报告</h4><p id="home-report-summary">尚未生成报告。运行工具后，可阅读并加入当前会话。</p></div><wa-button id="home-report" appearance="outlined" size="s" aria-controls="desktop-report-reader" disabled>阅读报告<span slot="end" data-icon="arrow-right"></span></wa-button>
               </article>
               <div class="home-destinations">
-                <wa-button id="home-workflow" appearance="plain" size="s" aria-haspopup="dialog" aria-controls="desktop-workflow"><span slot="start" data-icon="list-checks"></span><span class="home-destination-copy"><strong>查看上线进度</strong><span>核对项目事实，逐项记录人工准备</span></span><span slot="end" data-icon="chevron-right"></span></wa-button>
-                <wa-button id="home-health" appearance="plain" size="s" aria-haspopup="dialog" aria-controls="desktop-health"><span slot="start" data-icon="activity"></span><span class="home-destination-copy"><strong>项目维护</strong><span>预检记录、文件监听与提醒</span></span><span slot="end" data-icon="chevron-right"></span></wa-button>
-                <wa-button id="home-memory" appearance="plain" size="s" aria-haspopup="dialog"><span slot="start" data-icon="file-text"></span><span class="home-destination-copy"><strong>项目记忆</strong><span>保存背景与偏好，按需附加到对话</span></span><span slot="end" data-icon="chevron-right"></span></wa-button>
-                <wa-button id="home-sources" appearance="plain" size="s" aria-haspopup="dialog"><span slot="start" data-icon="book-open"></span><span class="home-destination-copy"><strong>规则依据</strong><span>查看官方来源与资料更新状态</span></span><span slot="end" data-icon="chevron-right"></span></wa-button>
+                <wa-button id="home-workflow" appearance="plain" size="s" aria-controls="desktop-workflow"><span slot="start" data-icon="list-checks"></span><span class="home-destination-copy"><strong>查看上线进度</strong></span><span slot="end" data-icon="chevron-right"></span></wa-button>
+                <wa-button id="home-health" appearance="plain" size="s" aria-haspopup="dialog" aria-controls="desktop-health"><span slot="start" data-icon="activity"></span><span class="home-destination-copy"><strong>项目维护</strong></span><span slot="end" data-icon="chevron-right"></span></wa-button>
+                <wa-button id="home-memory" appearance="plain" size="s" aria-haspopup="dialog"><span slot="start" data-icon="file-text"></span><span class="home-destination-copy"><strong>项目记忆</strong></span><span slot="end" data-icon="chevron-right"></span></wa-button>
+                <wa-button id="home-sources" appearance="plain" size="s" aria-haspopup="dialog"><span slot="start" data-icon="book-open"></span><span class="home-destination-copy"><strong>规则依据</strong></span><span slot="end" data-icon="chevron-right"></span></wa-button>
               </div>
             </section>
           </section>
@@ -136,7 +135,7 @@
       <p id="status" class="status" role="status" aria-live="polite" aria-atomic="true"></p>
       <div class="report-toolbar">
         <h2 id="report-title">执行报告</h2>
-        <wa-button id="read-report" appearance="outlined" size="s" aria-haspopup="dialog" aria-controls="desktop-report-reader" disabled><span slot="start" data-icon="book-open"></span>阅读报告</wa-button>
+        <wa-button id="read-report" appearance="outlined" size="s" aria-controls="desktop-report-reader" disabled><span slot="start" data-icon="book-open"></span>阅读报告</wa-button>
         <button id="handoff-report" type="button" aria-haspopup="dialog" aria-controls="desktop-handoff" disabled>修复交接</button>
         <button id="repair-report" type="button" aria-haspopup="dialog" aria-controls="desktop-repair" title="仅检查当前项目本机预检报告支持的受限修复；导入报告请先重新预检。" disabled>检查可用修复</button>
         <button id="save-report" type="button" disabled>加入当前会话</button>
