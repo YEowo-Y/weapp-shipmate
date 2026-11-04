@@ -1,5 +1,5 @@
 /** Keep the same report DOM while switching between an adjacent panel and a drawer. */
-export function mountToolsPanel() {
+export function mountToolsPanel(options: { beforeOpen?(): boolean } = {}) {
   const panel = document.querySelector<HTMLDialogElement>('#desktop-tools');
   const toggle = document.querySelector<HTMLButtonElement>('#desktop-tools-toggle');
   const closeButton = document.querySelector<HTMLButtonElement>('#desktop-tools-close');
@@ -25,7 +25,7 @@ export function mountToolsPanel() {
     restoreFocus();
   };
   const open = (trigger: HTMLElement = toggle, focusTarget?: HTMLElement) => {
-    if (destroyed) return;
+    if (destroyed || options.beforeOpen?.() === false) return;
     returnFocus = trigger;
     if (!expanded) { show(); reflect(true); }
     if (focusTarget && panel.contains(focusTarget)) focusTarget.focus();
