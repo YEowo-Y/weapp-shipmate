@@ -6,6 +6,8 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { mountProjects, type Artifact, type Project } from "./projects";
 import { mountDesktopSessions } from "./sessions";
 import { mountToolsPanel } from "./tools-panel";
+import { mountWorkspacePages } from './workspace-pages';
+import { bindApplicationShortcuts } from './application-shortcuts';
 import { mountExplainDialog } from "./explain-dialog";
 import { createProjectExplain } from "./project-explain";
 import { mountWorkflow } from "./workflow";
@@ -110,6 +112,8 @@ function updateCopyControl() {
   if (summary) summary.textContent = lastSuccessful
     ? `已保存的${lastSuccessful.type}报告。${busy ? "正在运行工具，暂不可打开。" : "可查看、复制或加入当前会话。"}`
     : "尚未生成报告。运行工具后，可阅读并加入当前会话。";
+  const nextAction = $('#start-check-label');
+  if (nextAction) nextAction.textContent = busy ? '查看执行状态' : !dir ? '配置预检' : projects?.getActive()?.directoryAvailable === false ? '重新定位项目' : lastSuccessful ? '重新预检' : '开始预检';
 }
 
 function resetCopy() {
@@ -291,7 +295,16 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   // Fade only scroll edges that hide content (open-claude-ui ScrollFadeContainer).
   mountScrollFades(document.body);
-  const tools = mountToolsPanel();
+  const workspace = mountWorkspacePages({ host: $('#desktop-workspace'), returnFocus: () => $('#desktop-more'), onChange(page) {
+    $('.desktop-conversation').dataset.workspaceOpen = String(!!page);
+    for (const [id, pageId] of [['desktop-home-open', null], ['desktop-workflow-open', 'desktop-workflow'], ['desktop-results-open', 'desktop-project-results']]) {
+      const control = $(`#${id}`);
+      if (page && page.id === pageId) control?.setAttribute('aria-current', 'page');
+      else control?.removeAttribute('aria-current');
+    }
+    if (page) { tools.close(); if (navigation && compactNavigation?.matches) navigation.open = false; }
+  } });
+  const tools = mountToolsPanel({ beforeOpen: () => workspace.close() });
   handoff = mountRepairHandoff({ getArtifact: () => lastSuccessful?.artifact ?? null, getProject: () => projects?.getActive() ?? null, getRulesVersion: () => projects?.getRulesVersion() ?? null, isBusy: () => busy });
   repair = mountProjectRepair({
     getProjectId: () => projects?.getActiveId() ?? null,
@@ -304,6 +317,7 @@ window.addEventListener("DOMContentLoaded", () => {
     },
   });
   reader = mountReportReader({
+    openPage: (page, trigger) => workspace.open(page, trigger),
     getArtifact: () => lastSuccessful?.artifact ?? null,
     getProject: () => projects?.getActive() ?? null,
     getRulesVersion: () => projects?.getRulesVersion() ?? null,
@@ -335,6 +349,7 @@ window.addEventListener("DOMContentLoaded", () => {
   $("#start-check").addEventListener("click", () => tools.open($("#start-check"), $(dir && !busy && projects?.getActive()?.directoryAvailable !== false ? "#check-btn" : "#pick-btn")));
   $("#start-guide").addEventListener("click", () => tools.open($("#start-guide"), $("#subject")));
   const showHome = () => {
+    if (!workspace.close()) return;
     $("#session-empty").hidden = false;
     $("#session-empty").scrollIntoView({ block: "start" });
     $("#start-check").focus();
@@ -353,8 +368,8 @@ window.addEventListener("DOMContentLoaded", () => {
   const actionMenu = $("#desktop-actions");
   if (actionMenu) bindActionMenu(actionMenu, value => {
     if (value === "home") showHome();
-    if (value === "history") sessions?.openHistory($("#desktop-more"));
-    if (value === "archived") sessions?.openHistory($("#desktop-more"), "archived");
+    if (value === "history" && workspace.close()) sessions?.openHistory($("#desktop-more"));
+    if (value === "archived" && workspace.close()) sessions?.openHistory($("#desktop-more"), "archived");
     if (value === "report") showReport($("#desktop-more"));
     if (value === "handoff") handoff?.open($("#desktop-more"));
     if (value === "repairs") repair?.openHistory($("#desktop-more"));
@@ -393,9 +408,19 @@ window.addEventListener("DOMContentLoaded", () => {
     onOpenArtifact: artifact => { showArtifact(artifact); tools.open($("#desktop-project-manage"), $("#report")); },
     onToolResults: async () => { await projects?.refresh(); },
   }).then(value => { sessions = value; updateCopyControl(); return value; });
+  const showResults = () => {
+    preferences?.close();
+    window.setTimeout(() => {
+      if (!$<HTMLDialogElement>('#desktop-preferences')?.open) projects?.results.open($('#desktop-results-open'));
+    }, 0);
+  };
+  $('#desktop-results-open')?.addEventListener('click', showResults);
+  $('#home-results')?.addEventListener('click', showResults);
   projects = mountProjects({
+    onOpenResults: showResults,
+    openResultsPage: (page, trigger) => workspace.open(page, trigger, { canLeave: () => projects?.results.canClose() ?? true }),
     onOpenData: () => preferences?.open(null, 'data'),
-    canChangeProject: () => maintenance?.canClose() ?? true,
+    canChangeProject: () => (maintenance?.canClose() ?? true) && (workflow?.canClose() ?? true),
     isBusy: () => busy,
     onPending: setBusy,
     onRegistry: ids => sessionsReady.then(value => { value?.setKnownProjects(ids); }),
@@ -447,16 +472,16 @@ window.addEventListener("DOMContentLoaded", () => {
     systemNotifications: mountSystemNotifications({ invoke }),
     async getPanel(section) {
       if (section === 'projects') { await projects!.ready; return projectSettings; }
-      const workspace = await sessionsReady;
-      if (!workspace) throw new Error('会话初始化失败，请重新打开应用。');
-      if (section === 'models') return workspace.getModelSettingsPanel();
+      const sessionWorkspace = await sessionsReady;
+      if (!sessionWorkspace) throw new Error('会话初始化失败，请重新打开应用。');
+      if (section === 'models') return sessionWorkspace.getModelSettingsPanel();
       await projects!.ready;
       if (!dataSettings) {
-        const sessionData = workspace.getDataSettingsPanel(), backup = projects!.backupSettings;
+        const sessionData = sessionWorkspace.getDataSettingsPanel(), backup = projects!.backupSettings;
         const element = document.createElement('div'); element.className = 'settings-data';
         const wrap = (id: string, child: HTMLElement) => { const host = document.createElement('section'); host.id = id; host.append(child); return host; };
         const archives = document.createElement('button'); archives.id = 'settings-archives'; archives.className = 'settings-button settings-button--outline'; archives.textContent = '查看归档会话';
-        archives.addEventListener('click', () => { if (dataSettings?.canClose?.() !== false) workspace.openHistory(archives, 'archived'); });
+        archives.addEventListener('click', () => { if (dataSettings?.canClose?.() !== false && workspace.close()) sessionWorkspace.openHistory(archives, 'archived'); });
         element.append(wrap('settings-session-data', sessionData.element), wrap('settings-project-backup', backup.element), archives);
         dataSettings = { element, open() { sessionData.open(); backup.open(); }, close() { sessionData.close(); backup.close(); }, canClose: () => sessionData.canClose() && backup.canClose() };
       }
@@ -471,14 +496,23 @@ window.addEventListener("DOMContentLoaded", () => {
     subscribePrivacy(listener) { const observer = new MutationObserver(listener); observer.observe($('#desktopComposer'), { attributes: true, subtree: true, attributeFilter: ['data-mode', 'data-model-provider', 'data-enabled'] }); return () => observer.disconnect(); },
     async getVersions() { return { desktop: await getVersion(), core: corePackage.version, rules: projects?.getRulesVersion() ?? null }; },
     onSources: anchor => sources?.open(anchor ?? $("#desktop-preferences-open")),
-    onArchives: anchor => { if (dataSettings?.canClose?.() !== false) sessions?.openHistory(anchor, 'archived'); },
+    onArchives: anchor => { if (dataSettings?.canClose?.() !== false && workspace.close()) sessions?.openHistory(anchor, 'archived'); },
     onRepository: () => openUrl('https://github.com/YEowo-Y/weapp-shipmate'),
   });
+  const disposeShortcuts = bindApplicationShortcuts({
+    newSession: () => { if (workspace.close()) sessions?.createSession(); },
+    search: () => { if (workspace.close()) sessions?.openHistory($('#desktop-more')); },
+    settings: () => preferences?.open($('#desktop-preferences-open')),
+  });
+  $('#sessionHost')?.addEventListener('click', event => {
+    if ((event.target as HTMLElement).closest('[data-action="new"], [data-action="recent-session"], [data-action="history"]') && !workspace.close()) { event.preventDefault(); event.stopImmediatePropagation(); }
+  }, true);
+  window.addEventListener('pagehide', () => { disposeShortcuts(); workspace.destroy(); }, { once: true });
   $("#desktop-preferences-open")?.addEventListener('click', () => preferences?.open($("#desktop-preferences-open")));
   $("#desktop-maintenance-open")?.addEventListener('click', () => health?.open($("#desktop-maintenance-open")));
   $("#home-health")?.addEventListener('click', () => health?.open($("#home-health")));
   window.addEventListener('pagehide', () => { health?.destroy(); maintenance?.destroy(); preferences?.destroy(); sources?.destroy(); }, { once: true });
-  workflow = mountWorkflow({ getProject: () => projects?.getActive() ?? null, isBusy: () => busy, onProjectChanged: async () => { await projects?.refresh(); } });
+  workflow = mountWorkflow({ openPage: (page, trigger) => workspace.open(page, trigger, { canLeave: () => workflow?.canClose() ?? true }), getProject: () => projects?.getActive() ?? null, isBusy: () => busy, onProjectChanged: async () => { await projects?.refresh(); } });
   for (const id of ['desktop-workflow-open', 'home-workflow']) {
     $(`#${id}`)?.addEventListener('click', () => workflow?.open($(`#${id}`)));
   }
