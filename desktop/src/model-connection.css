@@ -22,7 +22,15 @@
 #desktop-model-dialog[open] { display:flex; flex-direction:column; }
 #desktop-model-dialog > header { position:relative; flex:0 0 auto; }
 #desktop-model-dialog .desktop-model-layout { min-height:0; flex:1 1 auto; overflow:hidden; }
-#desktop-model-dialog .desktop-model-layout > nav { overflow-y:auto; }
+#desktop-model-dialog .desktop-provider-picker { min-height:0; overflow-y:auto; }
+.desktop-provider-picker { min-width:0; padding:12px; border-right:1px solid var(--border); }
+.desktop-provider-picker > label { display:block; font-size:13px; margin-bottom:8px; }
+.desktop-provider-picker input { box-sizing:border-box; width:100%; min-width:0; min-height:36px; padding:8px; font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:var(--ds-radius-sm,6px); }
+.desktop-provider-picker nav { margin-top:8px; }
+.preferences-dialog .desktop-provider-picker nav { padding:0; border:0; }
+.desktop-provider-picker nav button[hidden] { display:none !important; }
+.desktop-provider-picker nav button { min-width:0; white-space:normal; overflow-wrap:anywhere; }
+.desktop-provider-picker > p { font-size:13px; }
 #desktop-model-dialog .desktop-model-detail { overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
 #desktop-model-dialog [data-current-connection-actions] { margin-bottom:12px; }
 #desktop-model-dialog .desktop-model-catalog > label { margin-top:12px; }
@@ -35,6 +43,7 @@
 #desktop-model-dialog .desktop-inference-panel p { margin:6px 0; }
 @media (max-width:600px) {
   #desktop-model-dialog .desktop-model-layout { grid-template-rows:auto minmax(0,1fr); }
-  #desktop-model-dialog .desktop-model-layout > nav { overflow-y:hidden; }
+  #desktop-model-dialog .desktop-provider-picker { max-height:200px; }
+  #desktop-model-dialog .desktop-provider-picker nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
   #desktop-model-dialog .desktop-model-list { max-height:160px; }
 }
