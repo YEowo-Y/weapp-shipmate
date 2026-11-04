@@ -18,6 +18,7 @@ function harness({ projects = [project('a'), project('b')], activeProjectId = 'a
   const doc = createPreviewDocument();
   const createElement = doc.createElement.bind(doc);
   doc.createElement = tag => Object.assign(createElement(tag), {
+    showModal() { this.open = true; }, close() { this.open = false; this.events.close?.forEach(fn => fn({})); },
     events: {}, addEventListener(type, fn) { (this.events[type] ??= []).push(fn); }, removeEventListener() {},
     append(...children) { for (const child of children) { if (child.parentNode) child.remove(); child.parentNode = this; this.children.push(child); } },
     prepend(...children) { for (const child of [...children].reverse()) { if (child.parentNode) child.remove(); child.parentNode = this; this.children.unshift(child); } },
@@ -34,7 +35,9 @@ function harness({ projects = [project('a'), project('b')], activeProjectId = 'a
   };
   doc.querySelector = selector => node(selector.slice(1)); doc.body = doc.createElement('body');
   const body = doc.createElement('div'); node('desktop-projects').append(body);
-  body.append(node('project-form'), node('project-backup'), node('project-status'), node('project-history'));
+  const historySection = doc.createElement('section'); historySection.append(node('project-history'));
+  node('project-history').closest = () => historySection;
+  body.append(node('project-form'), node('project-backup'), node('project-status'), historySection);
   node('project-form').append(node('project-export'));
   doc.body.append(node('desktop-projects'));
   let current = activeProjectId;
