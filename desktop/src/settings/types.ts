@@ -18,6 +18,7 @@ export type SettingsOptions = {
   subscribePrivacy?(listener: () => void): () => void;
   revokePermissions(): void | Promise<void>;
   getVersions(): VersionInfo | Promise<VersionInfo>;
+  copyText?(text: string): Promise<void>;
   onSources(anchor: HTMLElement): void;
   onArchives(anchor: HTMLElement): void;
   onRepository(): void | Promise<void>;
