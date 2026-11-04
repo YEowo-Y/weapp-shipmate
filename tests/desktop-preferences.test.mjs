@@ -75,6 +75,17 @@ function harness({ stored = new Map(), dark = false, reduce = false, readFails =
   activeHarness = h; return h;
 }
 
+test('version copy reports completion only after clipboard write and allows retry on failure', async () => {
+  let fail = true; const writes = [];
+  const h = harness({ overrides: { copyText: async text => { if (fail) throw Error('denied'); writes.push(text); } } });
+  h.app.open(h.anchor, 'about'); await act(async () => { await setImmediate(); });
+  h.click('settings-copy-versions'); await act(async () => { await setImmediate(); });
+  assert.match(h.document.body.textContent, /复制失败/); assert.deepEqual(writes, []);
+  fail = false; h.click('settings-copy-versions'); await act(async () => { await setImmediate(); });
+  assert.deepEqual(writes, ['上线船友\n桌面应用 1.0.0\n检查核心 2.0.0\n项目规则 尚未加载']);
+  assert.match(h.document.body.textContent, /版本信息已复制/);
+});
+
 test('desktop preferences apply system defaults without writes and react to system changes', () => {
   const h = harness({ dark: true });
   assert.equal(h.document.body.dataset.theme, 'dark'); assert.equal(h.size(), '16px'); assert.equal(h.document.body.dataset.motion, 'system'); assert.deepEqual(h.writes, []);
