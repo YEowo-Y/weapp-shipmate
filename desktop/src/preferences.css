@@ -125,7 +125,7 @@ body.desktop-app[data-motion=reduce] :is(#desktop-provider-status.is-busy,#deskt
   .preferences-field-row { grid-template-columns:minmax(0,1fr); gap:16px; }
   .preferences-choices { justify-self:start; justify-content:flex-start; }
   .preferences-dialog .desktop-model-layout { grid-template-columns:minmax(0,1fr); }
-  .preferences-dialog .desktop-model-layout nav { flex-direction:row; flex-wrap:nowrap; overflow-x:auto; border-right:0; border-bottom:1px solid var(--border); }
+  .preferences-dialog .desktop-model-layout nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); overflow-y:auto; max-height:200px; border-right:0; border-bottom:1px solid var(--border); }
   .preferences-dialog .desktop-model-layout nav button { flex:none; }
 }
 @media(max-width:799px) {
