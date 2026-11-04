@@ -99,6 +99,8 @@ export async function checkSettingsWorkspaceFlows({ run, checked, click, fill, p
     assert.deepEqual(versions.map(row => row.name), ['桌面应用', '检查核心', '项目规则']);
     assert.match(versions[0].value, /^\d+\.\d+\.\d+/); assert.match(versions[1].value, /^\d+\.\d+\.\d+/);
     assert.equal(versions[2].value, (await snapshot()).rulesVersion, 'rule version is the actual native snapshot value');
+    await click('#settings-copy-versions');
+    await until(() => inspect('return document.querySelector("#settings-copy-versions").nextElementSibling.textContent === "版本信息已复制"'), 'native clipboard write succeeds before confirming version copy');
     assert.match(await text('#settings-licenses'), /MIT/); await screenshot('settings-about');
     evidence.push({ versions, noExternalNavigation: true }); await close();
   });
@@ -138,7 +140,7 @@ export async function checkSettingsWorkspaceFlows({ run, checked, click, fill, p
     assert.equal(await inspect('return document.querySelector("#settings-session-data").contains(document.querySelector(".session-workspace-data-panel")) && document.querySelector("#settings-project-backup").contains(document.querySelector("#project-backup"))'), true);
     assert.equal(await inspect('return document.querySelector("#desktop-projects").open'), false);
     assert.equal(await inspect('return [...document.querySelectorAll("dialog[data-kind=data]")].some(dialog=>dialog.open)'), false);
-    assert.equal(await inspect('return document.querySelector(".session-workspace-data-panel [data-action=backup]").checkVisibility() && document.querySelector(".session-workspace-data-panel input[type=file]").checkVisibility()'), true);
+    assert.equal(await inspect('return document.querySelector(".session-workspace-data-panel [data-action=backup]").checkVisibility() && document.querySelector(".session-workspace-data-panel [data-action=choose-backup]").checkVisibility()'), true);
     await until(() => inspect('return /项目.*\\//.test(document.querySelector("#project-storage-status").textContent)'), 'actual project capacity available');
     await screenshot('settings-data');
     await click('#settings-archives');
@@ -152,6 +154,13 @@ export async function checkSettingsWorkspaceFlows({ run, checked, click, fill, p
     await embedded('.session-workspace-data-panel');
     await section('models'); await embedded('.desktop-model-panel');
     assert.equal(await inspect('return document.querySelector("#desktop-model-dialog").open'), false);
+    await fill('#desktop-provider-search', '智谱');
+    assert.deepEqual(await inspect('return [...document.querySelectorAll(".desktop-model-panel nav [data-provider-id]")].filter(n=>!n.hidden).map(n=>n.dataset.providerId)'), ['glm']);
+    await fill('#desktop-provider-search', 'not-a-provider');
+    assert.equal(await inspect('return document.querySelector("#desktop-provider-empty").checkVisibility()'), true);
+    await fill('#desktop-provider-search', 'x');
+    await press('\uE003');
+    await until(() => inspect('return !document.querySelector(".desktop-model-panel [data-provider-id=openai]").hidden'), 'clearing provider search restores the list');
     await screenshot('settings-models');
     await click('.desktop-model-panel [data-provider-id="openai"]');
     await until(() => inspect('const key=document.querySelector("#desktop-provider-key");return document.querySelector(".desktop-model-panel [data-provider-id=openai]").getAttribute("aria-pressed")==="true"&&key.checkVisibility()&&!key.disabled'), 'unconnected OpenAI exposes its real credential input');
