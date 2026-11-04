@@ -1,0 +1,18 @@
+.desktop-workspace { flex:1; min-height:0; min-width:0; overflow:hidden; }
+.desktop-workspace[hidden] { display:none; }
+.desktop-workspace > dialog.workspace-page[open] { animation:none; transform:none; }
+.desktop-workspace > dialog.workspace-page[open] { position:static; inset:auto; box-sizing:border-box; display:flex; flex-direction:column; width:100%; max-width:none; height:100%; max-height:none; margin:0; padding:0; border:0; border-radius:0; box-shadow:none; background:var(--ds-canvas); color:var(--text); }
+.desktop-workspace .workspace-page > header { flex:none; width:100%; max-width:1048px; margin:0 auto; box-sizing:border-box; padding:20px 32px; border-bottom:1px solid var(--border); }
+.desktop-workspace .workspace-page > header h2 { font-size:18px; line-height:26px; }
+.desktop-workspace .workspace-page > :is(.session-workspace-dialog__body,.report-reader-body) { box-sizing:border-box; flex:1; min-height:0; width:100%; max-width:1048px; margin:0 auto; padding:24px 32px; overflow:auto; }
+.desktop-workspace .workspace-page > footer { flex:none; width:100%; max-width:1048px; box-sizing:border-box; margin:0 auto; padding:16px 32px; }
+.desktop-workspace .project-results-page .project-comparison-controls { margin-block:20px; }
+.desktop-workspace .workflow-next { border-left:3px solid var(--accent); padding:16px; font-size:16px; }
+.desktop-workspace .workflow-facts { margin-block:24px; }
+.desktop-conversation[data-workspace-open=true] > :is(#desktopScroll,#desktopJump,#desktopConversationStatus,#desktopComposer,.desktop-storage-note) { display:none; }
+@media(max-width:640px) {
+  .desktop-workspace .workspace-page > header { padding:16px; }
+  .desktop-workspace .workspace-page > :is(.session-workspace-dialog__body,.report-reader-body) { padding:20px 16px; }
+  .desktop-workspace .workspace-page > footer { padding:12px 16px; }
+  .desktop-workspace .workspace-page button { min-height:44px; }
+}
