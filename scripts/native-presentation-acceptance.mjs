@@ -367,6 +367,22 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
       await close('#desktop-preferences');
     }
   });
+  await checked('Project results are a nonmodal workspace with a usable empty state and stable return navigation', async () => {
+    await command('POST', '/window/rect', { width:1000, height:850 }); await home();
+    await activate('#desktop-results-open');
+    await until(() => inspect('const d=document.querySelector("#desktop-project-results");return d?.open&&d.getAttribute("role")==="region"&&!d.matches(":modal")'), 'results workspace ready');
+    assert.equal(await inspect('return document.querySelector("#desktop-project-results").contains(document.querySelector("#project-history"))'), true);
+    assert.equal(await inspect('return document.querySelector("#desktop-results-open").getAttribute("aria-current")'), 'page');
+    await geometry('results-empty', '#desktop-project-results'); await close('#desktop-project-results');
+    await openPreferences(); await navigate('projects');
+    assert.equal(await inspect('return document.querySelector("#project-history").checkVisibility()'), false);
+    await activate('#project-open-results');
+    await until(() => inspect('return !document.querySelector("#desktop-preferences").open&&document.querySelector("#desktop-project-results").open'), 'settings link reaches results after releasing its panel');
+    await command('POST', '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value: '\uE009' }, { type: 'keyDown', value: 'k' }, { type: 'keyUp', value: 'k' }, { type: 'keyUp', value: '\uE009' }] }] });
+    await until(() => inspect('return document.querySelector("dialog[data-kind=history]")?.open && !document.querySelector("#desktop-project-results").open'), 'session search releases the results workspace');
+    await activate('dialog[data-kind=history] [data-action=session]');
+    await until(() => inspect('return !document.querySelector("dialog[data-kind=history]")?.open && document.querySelector("#desktopComposer").checkVisibility()'), 'selected conversation is visible after leaving results');
+  });
   await checked('Presentation navigation never changes source files, creates reports or submits model requests', async () => {
     const final = await snapshot(); assert.equal(final.runs.length, 0); assert.equal(final.artifacts.length, 0); assert.deepEqual(requests, []);
     assert.deepEqual((await readdir(directory)).sort(), Object.keys(files).sort());
