@@ -8,7 +8,7 @@ import './report-reader.css';
 
 // createHandoff validates these fields before this presentation-only narrowing.
 type ReadingItem = { conditional: boolean; rejectSummary: string | null; relevance?: 'direct' | 'possible'; matchEvidence?: { aliases: string[]; codes: string[]; partialAliases: string[] }; rule: { ruleId: string; title: string; severity: 'blocker' | 'warning' | 'info'; why?: string | null; requires: string[]; official_url?: string | null; source_quote?: string | null; last_verified?: string | null; manual_required: boolean; warn?: string | null; note?: string | null; action_categories?: string[] } };
-type Options = { getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(): void; onRepair?(): void; onOpenSource?(url: string): Promise<unknown>; returnFocus?(): HTMLElement | null };
+type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(): void; onRepair?(): void; onOpenSource?(url: string): Promise<unknown>; returnFocus?(): HTMLElement | null };
 
 // The export contract intentionally omits run notes and business signals. Validate
 // only these additional reading fields; never derive execution state from prose.
@@ -34,13 +34,12 @@ export function mountReportReader(options: Options) {
     const element = document.createElement(tag); element.textContent = text; if (id) element.id = id; return element;
   };
   const dialog = node('dialog', '', 'desktop-report-reader'); dialog.className = 'context-dialog report-reader';
-  dialog.setAttribute('aria-labelledby', 'report-reader-title'); dialog.setAttribute('aria-describedby', 'report-reader-description');
+  dialog.setAttribute('aria-labelledby', 'report-reader-title');
   const header = node('header'); header.className = 'context-header';
   const title = node('h2', '报告阅读', 'report-reader-title');
   const button = (label: string, id: string) => { const b = createActionButton(document, label, { appearance: 'plain' }); b.id = id; return b; };
-  const dismiss = button('', 'report-reader-dismiss'); dismiss.classList.add('ui-action-icon'); dismiss.setAttribute('aria-label', '关闭报告阅读'); dismiss.append(createIcon(document, 'x')); header.append(title, dismiss);
+  const dismiss = button('', 'report-reader-dismiss'); dismiss.classList.add('ui-action-icon'); dismiss.setAttribute('aria-label', '关闭报告阅读'); dismiss.append(createIcon(document, 'arrow-left')); header.append(title, dismiss);
   const body = node('div'); body.className = 'report-reader-body';
-  const description = node('p', '核对发现与官方依据，处理后重新检查。', 'report-reader-description');
   const summary = node('p', '', 'report-reader-summary');
   const provenance = node('p', '', 'report-reader-provenance');
   const versions = node('details', '', 'report-reader-versions'); versions.append(node('summary', '报告标识与版本'));
@@ -48,10 +47,6 @@ export function mountReportReader(options: Options) {
   const linkStatus = node('p', '', 'report-reader-link-status'); linkStatus.setAttribute('role', 'status'); linkStatus.setAttribute('aria-live', 'polite');
   const warning = node('p', '', 'report-reader-warning'); warning.className = 'report-reader-warning';
   const context = node('section', '', 'report-reader-context'); context.setAttribute('aria-label', '本次报告的范围与限制');
-  const steps = node('ol'); steps.className = 'report-reader-steps'; steps.setAttribute('aria-label', '建议阅读路径，不代表执行状态');
-  for (const [icon, label] of [['file-text', '阅读发现'], ['external-link', '核对官方依据'], ['search', '处理后复查']]) {
-    const item = node('li'); item.append(createIcon(document, icon), node('span', label)); steps.append(item);
-  }
   const layout = node('div'); layout.className = 'report-reader-layout';
   const outline = node('details', '', 'report-reader-outline'); outline.open = true;
   outline.append(node('summary', '报告目录'));
@@ -60,10 +55,10 @@ export function mountReportReader(options: Options) {
   const content = node('section', '', 'report-reader-content'); content.setAttribute('aria-label', '报告核对项');
   const original = node('details', '', 'report-reader-original'); original.append(node('summary', '完整原报告'));
   const originalContent = node('div'); originalContent.className = 'report-markdown'; original.append(originalContent);
-  column.append(content, original, versions); layout.append(outline, column); body.append(description, summary, provenance, warning, context, linkStatus, steps, layout);
+  column.append(content, original, versions); layout.append(outline, column); body.append(summary, provenance, warning, context, linkStatus, layout);
   const footer = node('footer'); footer.className = 'report-reader-footer';
   const repair = button('检查可用修复', 'report-reader-repair');
-  const handoff = button('准备修复交接', 'report-reader-handoff'), done = button('完成阅读', 'report-reader-done'); footer.append(repair, handoff, done);
+  const handoff = button('准备修复交接', 'report-reader-handoff'); footer.append(repair, handoff);
   dialog.append(header, body, footer); document.body.append(dialog);
   let trigger: HTMLElement | null = null, disposed = false, pendingHandoff = false, pendingRepair = false, snapshotId: string | null = null, epoch = 0;
   const visible = (element: HTMLElement | null | undefined): element is HTMLElement => !!element?.isConnected && element.getClientRects().length > 0;
@@ -74,7 +69,7 @@ export function mountReportReader(options: Options) {
     warning.removeAttribute('role');
     content.replaceChildren(); nav.replaceChildren(); originalContent.replaceChildren(); context.replaceChildren(); context.hidden = true;
     title.textContent = artifact?.title || '报告阅读'; original.hidden = !artifact; original.open = false; outline.hidden = true;
-    handoff.hidden = true; repair.hidden = true; steps.hidden = !artifact;
+    handoff.hidden = true; repair.hidden = true;
     warning.textContent = artifact ? artifact.provenance === 'imported' ? '外部导入报告：内容与执行情况未在本机核验，不能作为本机已完成检查的证据。' : '历史快照：打开时读取已保存内容，未重新扫描当前项目；官方依据未实时核验。' : '';
     warning.hidden = !artifact;
     if (!artifact) { summary.textContent = '尚未选择已保存报告。'; content.append(node('p', '尚无报告可供阅读。运行项目预检、生成上线清单，或从项目历史打开报告。')); return; }
@@ -151,7 +146,7 @@ export function mountReportReader(options: Options) {
       if (!disposed && dialog.open && epoch === token) linkStatus.textContent = '无法打开外部页面，请检查系统默认浏览器后再次点击该链接重试。';
     });
   });
-  dismiss.addEventListener('click', close); done.addEventListener('click', close);
+  dismiss.addEventListener('click', close);
   repair.addEventListener('click', () => {
     if (!dialog.open || repair.hidden || disposed) return;
     if (options.getArtifact()?.id !== snapshotId) {
@@ -170,22 +165,23 @@ export function mountReportReader(options: Options) {
     pendingHandoff = true; close();
   });
   dialog.addEventListener('close', () => {
+    if (dialog.open) return;
     epoch++;
     trigger?.setAttribute('aria-expanded', 'false');
     if (disposed) return;
-    const target = visible(trigger) ? trigger : options.returnFocus?.(); if (visible(target)) target.focus();
+    const target = visible(trigger) ? trigger : options.returnFocus?.(); if (!options.openPage && visible(target)) target.focus();
     if (pendingHandoff) { pendingHandoff = false; options.onHandoff?.(); }
     if (pendingRepair) { pendingRepair = false; options.onRepair?.(); }
   });
   return {
     open(anchor: HTMLElement | null) {
       if (disposed || dialog.open) return;
-      epoch++; trigger = anchor; pendingHandoff = false; pendingRepair = false; render(); dialog.showModal();
+      epoch++; trigger = anchor; pendingHandoff = false; pendingRepair = false; render(); if (options.openPage) { if (!options.openPage(dialog, anchor)) return; } else dialog.showModal();
       // A hidden dialog has no scroll box: reset after it participates in layout.
       body.scrollTop = 0; outline.scrollTop = 0;
       trigger?.setAttribute('aria-expanded', 'true'); dismiss.focus();
     },
-    close,
+    close, element: dialog, canClose: () => true,
     destroy() { disposed = true; epoch++; trigger?.setAttribute('aria-expanded', 'false'); dialog.remove(); },
   };
 }
