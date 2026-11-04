@@ -38,8 +38,11 @@ function createSessionDataSurface({ document: doc, trigger, capture, prepare, co
   exportSection.append(element('h3', '', '导出备份'), element('p', '', '文件可能包含对话中的私人信息，请妥善保管。'), backup);
   const importSection = element('section', 'session-workspace__data-section');
   const file = element('input'); file.type = 'file'; file.accept = '.json,application/json'; file.dataset.action = 'backup-file'; file.setAttribute('aria-label', '选择 Shipmate 会话备份');
+  file.hidden = true;
+  const choose = action('选择备份文件', 'choose-backup', { appearance: 'outlined' });
+  choose.addEventListener('click', () => file.click());
   const preview = element('p', 'session-workspace__import-preview'); preview.hidden = true; preview.setAttribute('role', 'status');
-  importSection.append(element('h3', '', '追加导入'), element('p', '', '仅支持 Shipmate JSON 会话备份，最大 20 MiB。追加为独立副本，不覆盖现有会话；不会重放工具或历史审批。'), file, preview);
+  importSection.append(element('h3', '', '追加导入'), element('p', '', '仅支持 Shipmate JSON 会话备份，最大 20 MiB。追加为独立副本，不覆盖现有会话；不会重放工具或历史审批。'), choose, file, preview);
   const feedback = element('p', 'session-workspace__status'); feedback.setAttribute('role', 'status'); feedback.setAttribute('aria-live', 'polite'); feedback.dataset.action = 'data-feedback';
   body.append(scope, exportSection, importSection, feedback);
   const actions = element('div', 'session-workspace-dialog__actions');
@@ -56,7 +59,7 @@ function createSessionDataSurface({ document: doc, trigger, capture, prepare, co
   }
   function renderBusy() {
     node.setAttribute('aria-busy', String(busy));
-    file.disabled = backup.disabled = busy || needsReload;
+    choose.disabled = file.disabled = backup.disabled = busy || needsReload;
     cancel.disabled = dismiss.disabled = busy;
     confirm.disabled = busy || needsReload || !parsed;
     confirm.textContent = busy ? '正在保存…' : '追加导入';
