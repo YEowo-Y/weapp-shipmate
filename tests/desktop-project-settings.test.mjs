@@ -121,6 +121,19 @@ test('project switching consults the maintenance guard before native selection',
   assert.equal(h.node('project-name').value, 'a'); h.app.destroy();
 });
 
+test('results reuse the existing history outside settings and preserve configuration drafts', async () => {
+  const h = harness(); await h.app.ready;
+  const history = h.node('project-history');
+  h.app.settings.open(); assert.equal(history.closest('div').hidden, true);
+  h.node('project-name').value = '未保存'; await h.fire('project-name', 'input');
+  assert.equal(h.app.results.open(), false); assert.equal(h.app.settings.canClose(), false);
+  await h.fire('project-discard'); h.app.settings.close();
+  assert.equal(h.app.results.open(), true); assert.equal(h.app.results.element.contains(history), true);
+  h.app.results.close(); h.app.openManager();
+  assert.equal(h.node('desktop-projects').contains(history), true);
+  h.app.destroy();
+});
+
 test('opening settings during initial project loading still mounts the disabled controls', async () => {
   const pending = deferred(); const h = harness({ invoke: cmd => cmd === 'project_snapshot' ? pending.promise : undefined });
   h.app.settings.open(); assert.equal(h.app.settings.element.contains(h.node('project-form')), true);
