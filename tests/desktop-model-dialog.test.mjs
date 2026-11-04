@@ -45,6 +45,17 @@ function harness(snapshot, selection = null, options = {}) {
   return { app, nodes, timers, client, doc, context, picker, button, quickPicker };
 }
 
+desktopTest('provider search filters names and ids without changing the selected connection', async () => {
+  const h = harness({ connections: [] }); h.app.open(); await settle();
+  const search = h.nodes.get('#desktop-provider-search'), nav = h.nodes.get('nav');
+  search.value = '智谱'; search.events.input();
+  assert.deepEqual(nav.children.filter(b => !b.hidden).map(b => b.dataset.providerId), ['glm']);
+  assert.equal(h.nodes.get('h3').textContent, 'OpenAI');
+  search.value = 'missing-provider'; search.events.input(); assert.equal(h.nodes.get('#desktop-provider-empty').hidden, false);
+  search.value = ''; search.events.input(); assert.ok(nav.children.filter(b => !b.hidden).length > 5);
+  h.app.destroy();
+});
+
 for (const [providerId, name] of [['deepseek', 'DeepSeek'], ['glm', 'GLM · 智谱'], ['kimi', 'Kimi']]) {
   desktopTest(`${providerId} opens the native connection form and keeps OAuth exclusive to OpenRouter`, async () => {
     const app = harness({ connections: [] }, { providerId, model: 'model', label: 'Model' });
