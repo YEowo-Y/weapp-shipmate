@@ -6,7 +6,7 @@ import type { Project, ProjectFacts } from './projects';
 import './workflow.css';
 
 type Snapshot = { project: Project; catalog: unknown; rulesVersion: string; confirmations: unknown[] };
-type Options = { getProject(): Project | null; isBusy(): boolean; onProjectChanged(): Promise<void> };
+type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getProject(): Project | null; isBusy(): boolean; onProjectChanged(): Promise<void> };
 const labels: Record<string, string> = { confirmed: '人工已确认', not_applicable: '人工不适用', pending: '待确认', unknown: '事实待补充', stale: '待重检' };
 
 /** Native storage owns facts and confirmations; the shared domain projection owns stage state. */
@@ -206,11 +206,12 @@ export function mountWorkflow(options: Options) {
     void operation(async () => { await invoke('project_facts_save', { projectId: basis.project.id, expectedRevision: basis.project.revision, facts }); const draft = draftFor(basis.project.id); draft.facts = {}; delete draft.factsBasis; await saved(); });
   });
   listen(el('workflow-retry'), 'click', () => { void refresh(); });
-  listen(el('workflow-close'), 'click', () => dialog.close());
-  listen(dialog, 'close', () => { if (!destroyed && (document.activeElement === document.body || dialog.contains(document.activeElement))) opener?.focus({preventScroll:true}); });
+  listen(el('workflow-close'), 'click', () => { if (!pending) dialog.close(); });
+  listen(dialog, 'close', () => { if (!dialog.open && !options.openPage && !destroyed && (document.activeElement === document.body || dialog.contains(document.activeElement))) opener?.focus({preventScroll:true}); });
   return {
-    open(trigger: HTMLElement) { if (destroyed || dialog.open) return; opener = trigger; dialog.showModal(); el('workflow-close').focus(); invalidate(); void refresh(); },
-    refresh,
+    open(trigger: HTMLElement) { if (destroyed || dialog.open) return; opener = trigger; if (options.openPage) { if (!options.openPage(dialog, trigger)) return; } else dialog.showModal(); el('workflow-close').focus(); invalidate(); void refresh(); },
+    refresh, element: dialog, canClose: () => !pending,
+    close() { if (!pending && dialog.open) dialog.close(); },
     setBusy(value: boolean) { busy = value; if (snapshot && snapshot.project.id !== options.getProject()?.id) { invalidate(); reloadAfterPending = true; } controls(); drainReload(); },
     destroy() { destroyed = true; epoch++; drafts.clear(); for (const dispose of listeners) dispose(); if (dialog.open) dialog.close(); },
   };
