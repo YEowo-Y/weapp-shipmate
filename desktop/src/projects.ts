@@ -7,7 +7,7 @@ export type Project = { id: string; name: string; directory: string; subject: st
 export type Run = { id: string; projectId: string | null; kind: 'check' | 'guide' | 'explain'; state: 'running' | 'succeeded' | 'failed' | 'canceled' | 'interrupted'; startedAt: number; finishedAt: number | null; error: string | null; projectRevision: number | null; contextRevision?: number | null; toolVersion: string; rulesVersion: string; inputSummary: string; provenance?: 'imported'; sourceState?: string };
 export type Artifact = { id: string; runId: string; projectId: string | null; kind: 'check' | 'guide' | 'explain'; title: string; markdown: string; data?: { schemaVersion: 1; kind: 'check' | 'guide' | 'explain'; result: unknown; scope: unknown } | null; createdAt: number; projectRevision: number | null; contextRevision?: number | null; toolVersion: string; rulesVersion: string; inputSummary: string; provenance?: 'imported' };
 export type ProjectSnapshot = { rulesVersion?: string | null; projects: Project[]; activeProjectId: string | null; runs: Run[]; artifacts: Omit<Artifact, 'markdown' | 'data'>[] };
-type Options = { onRegistry(ids: string[]): void | Promise<void>; beforeSelect(id: string | null): Promise<boolean>; onChange(project: Project | null): void; onSnapshot?(snapshot: ProjectSnapshot): void; onArtifact(artifact: Artifact, reveal?: boolean): void; isBusy(): boolean; associateSession(id: string | null): Promise<boolean>; onPending?(value: boolean): void; canChangeProject?(): boolean; onOpenData?(): void };
+type Options = { onRegistry(ids: string[]): void | Promise<void>; beforeSelect(id: string | null): Promise<boolean>; onChange(project: Project | null): void; onSnapshot?(snapshot: ProjectSnapshot): void; onArtifact(artifact: Artifact, reveal?: boolean): void; isBusy(): boolean; associateSession(id: string | null): Promise<boolean>; onPending?(value: boolean): void; canChangeProject?(): boolean; onOpenData?(): void; onOpenResults?(): void; openResultsPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean };
 const stateLabels = { running: '执行中', succeeded: '已完成', failed: '失败', canceled: '已取消', interrupted: '意外中断' };
 const date = (value: number) => new Date(value).toLocaleString('zh-CN', { hour12: false });
 
@@ -25,6 +25,21 @@ export function mountProjects(options: Options) {
   const sidebarStatus = el<HTMLElement>('desktop-project-status');
   const history = el<HTMLElement>('project-history');
   const body = editor.parentNode as HTMLElement;
+  const historySection = history.closest('section')!;
+  const historyHome = document.createElement('div');
+  historySection.replaceWith(historyHome); historyHome.append(historySection);
+  const resultsDialog = document.createElement('dialog'); resultsDialog.id = 'desktop-project-results'; resultsDialog.className = 'session-workspace-dialog desktop-project-dialog project-results-page';
+  resultsDialog.setAttribute('aria-labelledby', 'project-results-title');
+  const resultsHeader = document.createElement('header'); resultsHeader.className = 'session-workspace-dialog__header';
+  const resultsTitle = document.createElement('h2'); resultsTitle.id = 'project-results-title'; resultsTitle.textContent = '运行历史';
+  const resultsClose = document.createElement('button'); resultsClose.type = 'button'; resultsClose.className = 'desktop-action'; resultsClose.textContent = '返回'; resultsClose.setAttribute('aria-label', '返回工作区');
+  resultsHeader.append(resultsTitle, resultsClose);
+  const resultsBody = document.createElement('div'); resultsBody.className = 'session-workspace-dialog__body scroll';
+  const resultsStatus = document.createElement('p'); resultsStatus.id = 'project-results-status'; resultsStatus.setAttribute('role', 'status');
+  const resultsRetry = document.createElement('button'); resultsRetry.id = 'project-results-retry'; resultsRetry.type = 'button'; resultsRetry.className = 'desktop-action'; resultsRetry.textContent = '重新加载';
+  resultsBody.append(resultsStatus, resultsRetry); resultsDialog.append(resultsHeader, resultsBody); document.body.append(resultsDialog);
+  let resultsTrigger: HTMLElement | null = null;
+
   const settingsElement = document.createElement('section'); settingsElement.className = 'project-settings-panel';
   const backupSettingsElement = document.createElement('section'); backupSettingsElement.className = 'project-backup-settings-panel';
   const backupElement = el('project-backup');
@@ -41,6 +56,8 @@ export function mountProjects(options: Options) {
   editor.append(discard);
   const openData = document.createElement('button'); openData.type = 'button'; openData.className = 'desktop-action'; openData.id = 'project-open-data'; openData.textContent = '管理项目备份与数据'; openData.hidden = true;
   backupHome.append(openData);
+  const openResults = document.createElement('button'); openResults.type = 'button'; openResults.className = 'desktop-action'; openResults.textContent = '查看运行历史'; openResults.id = 'project-open-results'; openResults.hidden = true;
+  body.append(openResults);
   let settingsOpen = false, backupSettingsOpen = false;
   let snapshot: ProjectSnapshot = { projects: [], activeProjectId: null, runs: [], artifacts: [] };
   let ready = false, pending = false, externalBusy = false, destroyed = false, pendingLatestRestore = false;
@@ -65,12 +82,15 @@ export function mountProjects(options: Options) {
   function updateDraftControls() { discard.disabled = blocked() || !dirty(); }
   function message(text: string, error = false) {
     status.textContent = text; status.dataset.tone = error ? 'error' : 'neutral';
+    resultsStatus.textContent = text; resultsStatus.dataset.tone = error ? 'error' : 'neutral';
     if (backupSettingsOpen) { const dataStatus = el('project-backup-status'); dataStatus.textContent = text; dataStatus.dataset.tone = error ? 'error' : 'neutral'; }
     sidebarStatus.textContent = error || !ready ? text : '';
   }
   function controls() {
     const disabled = blocked();
     selector.disabled = disabled; settingsSelector.disabled = disabled; updateDraftControls();
+    resultsRetry.disabled = pending || externalBusy || options.isBusy(); resultsClose.disabled = pending;
+    resultsDialog.setAttribute('aria-busy', String(pending));
     for (const id of ['project-new', 'project-choose-directory', 'project-save', 'project-associate', 'project-association-target', 'project-name', 'project-directory', 'project-subject']) {
       (el(id) as HTMLButtonElement).disabled = disabled;
     }
@@ -150,7 +170,7 @@ export function mountProjects(options: Options) {
   async function showArtifact(id: string, reveal = false) {
     const artifact = await invoke<Artifact>('project_artifact', { artifactId: id });
     if (!destroyed && artifact.projectId === snapshot.activeProjectId) {
-      if (reveal) dialog.close();
+      if (reveal) { dialog.close(); if (resultsDialog.open) resultsDialog.close(); }
       options.onArtifact(artifact, reveal);
     }
   }
@@ -196,6 +216,7 @@ export function mountProjects(options: Options) {
     if (destroyed || backupSettingsOpen || pending) return;
     if (settingsOpen) { name.focus(); return; }
     opener = document.activeElement as HTMLElement | null;
+    if (resultsDialog.open) resultsDialog.close(); historyHome.append(historySection); historyHome.hidden = false;
     if (!dialog.open) dialog.showModal();
     if (!dirty()) fill(active()); name.focus();
     void backup?.refreshStorage();
@@ -212,6 +233,15 @@ export function mountProjects(options: Options) {
   listen(discard, 'click', () => { if (!blocked()) { fill(active()); message('已放弃未保存的更改。'); } });
   listen(openData, 'click', () => { if (canLeaveEditor()) options.onOpenData?.(); });
   listen(el('project-retry'), 'click', () => { void operation(load, true); });
+  listen(openResults, 'click', () => { if (canLeaveEditor()) options.onOpenResults?.(); });
+  listen(resultsRetry, 'click', () => { void operation(load, true); });
+  listen(resultsClose, 'click', () => { if (!pending) resultsDialog.close(); });
+  listen(resultsDialog, 'cancel', event => { if (pending) event.preventDefault(); });
+  listen(resultsDialog, 'close', () => {
+    if (resultsDialog.open) return;
+    historyHome.append(historySection);
+    if (!options.openResultsPage && !destroyed && resultsTrigger?.isConnected && resultsTrigger.getClientRects().length && (document.activeElement === document.body || resultsDialog.contains(document.activeElement))) resultsTrigger.focus({ preventScroll: true });
+  });
   listen(el('project-new'), 'click', () => { if (!blocked() && canChangeProject()) { fill(null); name.focus(); } });
   listen(el('project-choose-directory'), 'click', () => { void operation(async () => { const path = await open({ directory: true, multiple: false }); if (!destroyed && typeof path === 'string') { directory.value = path; if (!name.value.trim()) name.value = path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''; } }); });
   listen(editor, 'submit', event => {
@@ -271,11 +301,28 @@ export function mountProjects(options: Options) {
       if (!snapshot.artifacts.some(item => item.id === id && item.projectId === snapshot.activeProjectId)) throw new Error('报告不属于当前项目，请从运行历史重新选择。');
       await showArtifact(id);
     }),
+    results: {
+      element: resultsDialog,
+      open(trigger: HTMLElement | null = null) {
+        if (destroyed || settingsOpen || backupSettingsOpen || pending || !canLeaveEditor()) return false;
+        if (resultsDialog.open) return true;
+        resultsTrigger = trigger;
+        if (dialog.open) dialog.close();
+        if (options.openResultsPage) { if (!options.openResultsPage(resultsDialog, trigger)) return false; }
+        else resultsDialog.showModal();
+        resultsBody.append(historySection); resultsBody.scrollTop = 0;
+        resultsClose.focus(); controls(); return true;
+      },
+      close() { if (!pending && resultsDialog.open) resultsDialog.close(); },
+      canClose: () => !pending,
+    },
     settings: {
       element: settingsElement,
       open() {
         if (destroyed || backupSettingsOpen || (pending && dialog.open)) return;
+        if (resultsDialog.open) resultsDialog.close();
         settingsOpen = true; if (dialog.open) dialog.close();
+        historyHome.hidden = true; openResults.hidden = !options.onOpenResults;
         settingsElement.append(body);
         backupElement.hidden = true; openData.hidden = !options.onOpenData;
         controls();
@@ -283,6 +330,7 @@ export function mountProjects(options: Options) {
       close() {
         if (!settingsOpen || !canLeaveEditor()) return;
         settingsOpen = false; dialog.append(body); backupElement.hidden = false; openData.hidden = true;
+        historyHome.hidden = false; openResults.hidden = true;
       },
       canClose: canLeaveEditor,
     },
@@ -312,7 +360,7 @@ export function mountProjects(options: Options) {
       }); return saved;
     },
     setBusy(value: boolean) { externalBusy = value; controls(); },
-    destroy() { destroyed = true; backup?.destroy(); listeners.forEach(remove => remove()); for (const [url, timer] of downloads) { clearTimeout(timer); URL.revokeObjectURL(url); } downloads.clear(); if (dialog.open) dialog.close(); },
+    destroy() { destroyed = true; backup?.destroy(); listeners.forEach(remove => remove()); for (const [url, timer] of downloads) { clearTimeout(timer); URL.revokeObjectURL(url); } downloads.clear(); if (dialog.open) dialog.close(); resultsDialog.remove(); },
   };
   return controller;
 }
