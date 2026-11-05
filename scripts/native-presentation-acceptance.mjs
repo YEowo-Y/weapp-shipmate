@@ -383,6 +383,37 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await activate('dialog[data-kind=history] [data-action=session]');
     await until(() => inspect('return !document.querySelector("dialog[data-kind=history]")?.open && document.querySelector("#desktopComposer").checkVisibility()'), 'selected conversation is visible after leaving results');
   });
+  await checked('History and archive data links reuse settings, retain the draft and return keyboard focus', async () => {
+    const draft = '历史数据入口验收草稿 · 保留当前输入';
+    await command('POST', '/window/rect', { width:1000, height:850 });
+    await fill('#desktopInput', draft);
+    const openHistory = async () => {
+      await command('POST', '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value: '\uE009' }, { type: 'keyDown', value: 'k' }, { type: 'keyUp', value: 'k' }, { type: 'keyUp', value: '\uE009' }] }] });
+      await until(() => inspect('return document.querySelector("dialog[data-kind=history]")?.open'), 'history open for data navigation');
+    };
+    for (const width of [1000, 390]) {
+      await command('POST', '/window/rect', { width, height:850 });
+      await openHistory(); await activate('dialog[data-kind=history] [data-action=data]');
+      await section('data');
+      await until(() => inspect('return !document.querySelector("dialog[data-kind=history]")'), 'history close callback has finished');
+      assert.equal(await inspect('return document.querySelectorAll("dialog[open]").length'), 1);
+      assert.equal(await inspect('return document.querySelectorAll(".session-workspace-data-panel").length'), 1);
+      assert.equal(await inspect('return document.querySelector("dialog[data-kind=data]")?.open ?? false'), false);
+      assert.equal(await inspect('return document.querySelector("#desktopInput").value'), draft);
+      await geometry(`history-data-${width}`, '#desktop-preferences');
+      await screenshot(`history-data-${width}`);
+      await activate('#settings-archives');
+      await until(() => inspect('return document.querySelector("dialog[data-kind=history]")?.open'), 'archives open over settings');
+      assert.equal(await inspect('return document.querySelector("dialog[data-kind=history] [data-action=filter-archived]").getAttribute("aria-pressed")'), 'true');
+      await activate('dialog[data-kind=history] [data-action=data]'); await section('data');
+      await until(() => inspect('return document.querySelectorAll("dialog[open]").length===1 && !document.querySelector("dialog[data-kind=history]")'), 'archive returns to the existing settings workspace');
+      assert.equal(await inspect('return document.querySelector("#desktopInput").value'), draft);
+      await close('#desktop-preferences');
+      await until(() => inspect('return document.activeElement.id==="desktop-preferences-open" && document.activeElement.checkVisibility()'), 'data settings returns to stable visible opener');
+    }
+    await fill('#desktopInput', '');
+  });
+
   await checked('Presentation navigation never changes source files, creates reports or submits model requests', async () => {
     const final = await snapshot(); assert.equal(final.runs.length, 0); assert.equal(final.artifacts.length, 0); assert.deepEqual(requests, []);
     assert.deepEqual((await readdir(directory)).sort(), Object.keys(files).sort());
