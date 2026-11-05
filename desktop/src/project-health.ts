@@ -35,7 +35,7 @@ export function deriveProjectHealth(snapshot: ProjectSnapshot | null) {
 type Options = {
   getSnapshot(): ProjectSnapshot | null; isBusy(): boolean; reload(): Promise<boolean>;
   onCheck(): void; onReport(id: string): Promise<boolean>; onRevealReport?(): void; onManage(): void;
-  onSources?(): void;
+  onSources?(): void; onHistory?(): void;
   maintenance?: HTMLElement;
   returnFocus?(): HTMLElement | null;
 };
@@ -62,8 +62,9 @@ export function mountProjectHealth(options: Options) {
   const actions = node('div'); actions.className = 'health-actions';
   const check = button('health-check', '重新预检', 'accent');
   const report = button('health-report', '查看上次成功报告', 'outlined');
-  const manage = button('health-project', '项目设置与运行历史');
-  actions.append(check, report, manage);
+  const manage = button('health-project', '项目设置');
+  const history = options.onHistory ? button('health-history', '运行历史') : null;
+  actions.append(check, report, manage); if (history) actions.append(history);
   if (options.onSources) {
     const sources = button('health-sources', '规则来源');
     sources.addEventListener('click', () => { dialog.close(); options.onSources?.(); });
@@ -100,7 +101,7 @@ export function mountProjectHealth(options: Options) {
     }
     const note = node('p', '预检只读取项目代码与配置，不运行项目脚本，也不调用模型。文件监听需在下方主动开启；规则来源状态可单独查看，不代表政策已重新核验。'); note.className = 'health-note'; content.append(note);
     check.disabled = blocked || !state.canCheck; check.textContent = state.report ? '重新预检' : '运行首次预检';
-    report.disabled = blocked || !state.report; manage.disabled = blocked; reload.disabled = blocked;
+    report.disabled = blocked || !state.report; manage.disabled = blocked; reload.disabled = blocked; if (history) history.disabled = blocked;
     dialog.setAttribute('aria-busy', String(loading));
   }
   function message(text: string, error = false) { status.textContent = text; status.dataset.error = String(error); }
@@ -131,6 +132,7 @@ export function mountProjectHealth(options: Options) {
     finally { if (!disposed && token === epoch) { loading = false; refresh(); } }
   });
   manage.addEventListener('click', () => { if (!loading && !options.isBusy()) { dialog.close(); options.onManage(); } });
+  history?.addEventListener('click', () => { if (!loading && !options.isBusy()) { dialog.close(); options.onHistory?.(); } });
   reload.addEventListener('click', () => { void read(); });
   dismiss.addEventListener('click', () => dialog.close()); done.addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => {
