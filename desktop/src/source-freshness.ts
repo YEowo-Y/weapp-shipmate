@@ -27,11 +27,21 @@ export function mountSourceFreshness(options: Options) {
   const body = node('div'); body.className = 'context-body';
   const description = node('p', '打开与刷新仅读取本机记录。点击某一来源的检查按钮才访问该官方来源，不发送项目文件或项目资料。正文差异不代表政策已更新，仍需人工核验。'); description.id = 'source-freshness-description';
   const version = node('p'); version.id = 'source-freshness-version';
+  const filters = node('div'); filters.className = 'source-freshness-filters';
+  const search = node('input'); search.id = 'source-freshness-search'; search.type = 'search'; search.value = ''; search.placeholder = '搜索来源、网址或规则'; search.setAttribute('aria-label', '搜索规则来源'); search.setAttribute('aria-controls', 'source-freshness-list');
+  const stateFilter = node('select'); stateFilter.id = 'source-freshness-filter'; stateFilter.setAttribute('aria-label', '来源检查状态'); stateFilter.setAttribute('aria-controls', 'source-freshness-list');
+  for (const [value, label] of Object.entries({ all: '全部状态', unchecked: '尚未在线检查', ...labels })) { const option = node('option', label); option.value = value; stateFilter.append(option); }
+  stateFilter.value = 'all';
+  filters.append(search, stateFilter);
+  const results = node('div'); results.className = 'source-freshness-results';
+  const count = node('span'); count.id = 'source-freshness-count'; count.setAttribute('role', 'status'); count.setAttribute('aria-atomic', 'true');
+  const clearFilters = button('source-freshness-clear', '清除筛选'); clearFilters.hidden = true; results.append(count, clearFilters);
+  const empty = node('p', '没有匹配的来源。清除筛选可查看全部。'); empty.id = 'source-freshness-empty'; empty.hidden = true;
   const list = node('div'); list.id = 'source-freshness-list';
   const status = node('p'); status.id = 'source-freshness-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-atomic', 'true');
   const footer = node('footer'); footer.className = 'source-freshness-footer';
   const reload = button('source-freshness-reload', '刷新本机记录'), stop = button('source-freshness-stop', '停止检查'), done = button('source-freshness-done', '完成'); footer.append(reload, stop, done);
-  body.append(description, version, list, status); dialog.append(header, body, footer); document.body.append(dialog);
+  body.append(description, filters, results, list, empty, version, status); dialog.append(header, body, footer); document.body.append(dialog);
   let snapshot: Snapshot | null = null, disposed = false, epoch = 0, loading = false, canceling = false;
   let active: { runId: string; sourceId: string; finished: boolean } | null = null, anchor: HTMLElement | null = null;
   let checkRequest: Promise<Check> | null = null;
@@ -39,6 +49,18 @@ export function mountSourceFreshness(options: Options) {
   const expanded = new Set<string>();
   const valid = (token: number) => !disposed && dialog.open && token === epoch;
   function message(text: string, error = false) { status.textContent = text; status.dataset.error = String(error); }
+  function filterRows() {
+    const query = search.value.trim().toLocaleLowerCase(); let matches = 0;
+    for (const row of Array.from(list.children) as HTMLElement[]) {
+      row.hidden = !(row.dataset.searchText!.includes(query) && (stateFilter.value === 'all' || row.dataset.state === stateFilter.value));
+      if (!row.hidden) matches++;
+    }
+    const total = snapshot?.catalog.sources.length ?? 0;
+    count.textContent = snapshot ? `${matches} / ${total} 个来源` : '尚未读取来源';
+    empty.hidden = !snapshot || matches > 0;
+    empty.textContent = total ? '没有匹配的来源。清除筛选可查看全部。' : '当前目录暂无规则来源。';
+    clearFilters.hidden = !search.value && stateFilter.value === 'all';
+  }
   function render() {
     reload.disabled = loading || Boolean(active) || canceling; stop.disabled = !active || canceling; stop.hidden = !active;
     dialog.setAttribute('aria-busy', String(loading || Boolean(active) || canceling)); status.dataset.running = String(Boolean(active));
@@ -50,6 +72,8 @@ export function mountSourceFreshness(options: Options) {
     for (const source of snapshot?.catalog.sources ?? []) {
       const saved = snapshot!.checks.find(check => check.sourceId === source.id), manual = source.baseline?.method === 'manual' || saved?.latest.state === 'manual';
       const detail = node('details'); detail.className = 'source-freshness-row'; detail.dataset.sourceId = source.id; detail.open = expanded.has(source.id);
+      detail.dataset.state = manual ? 'manual' : saved?.latest.state ?? 'unchecked';
+      detail.dataset.searchText = [source.title, source.url, ...source.references.flatMap(reference => [reference.id, reference.title])].join('\n').toLocaleLowerCase();
       detail.addEventListener('toggle', () => { if (detail.open) expanded.add(source.id); else expanded.delete(source.id); });
       const summary = node('summary'); summary.append(node('span', source.title), node('small', active?.sourceId === source.id ? '正在检查正文…' : manual ? labels.manual : saved ? labels[saved.latest.state] : '尚未在线检查'), createIcon(document, 'chevron-down')); detail.append(summary);
       focusTargets.set(source.id, { summary });
@@ -73,7 +97,12 @@ export function mountSourceFreshness(options: Options) {
       }
       detail.append(content); list.append(detail);
     }
-    if (focused) { const target = focusTargets.get(focused[0]); (focusedLink ? target?.link : focusedCheck && !loading && !active && !canceling ? target?.check : target?.summary)?.focus(); }
+    filterRows();
+    if (focused) {
+      const target = focusTargets.get(focused[0]);
+      if ((target?.summary.parentNode as HTMLElement | null)?.hidden) search.focus();
+      else (focusedLink ? target?.link : focusedCheck && !loading && !active && !canceling ? target?.check : target?.summary)?.focus();
+    }
   }
   async function read() {
     if (disposed || !dialog.open || loading || active || canceling) return;
@@ -117,6 +146,8 @@ export function mountSourceFreshness(options: Options) {
     anchor?.setAttribute('aria-expanded', 'false'); if (!disposed && anchor?.isConnected) anchor.focus();
   }
   dismiss.addEventListener('click', () => dialog.close()); done.addEventListener('click', () => dialog.close()); reload.addEventListener('click', () => { void read(); }); stop.addEventListener('click', () => { void cancel(); }); dialog.addEventListener('close', closed);
+  search.addEventListener('input', filterRows); stateFilter.addEventListener('change', filterRows);
+  clearFilters.addEventListener('click', () => { search.value = ''; stateFilter.value = 'all'; filterRows(); search.focus(); });
   dialog.addEventListener('keydown', event => {
     if (event.key !== 'Tab' || event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey) return;
     const target = event.shiftKey && document.activeElement === dismiss ? done : !event.shiftKey && document.activeElement === done ? dismiss : null;
