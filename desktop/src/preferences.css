@@ -30,12 +30,12 @@
 .preferences-sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
 .preferences-group { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
 .preferences-field { margin:0; padding:0; border:0; min-width:0; }
-.preferences-field-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:24px; padding:20px; }
+.preferences-field-row { display:flex; flex-wrap:wrap; align-items:center; gap:16px 24px; padding:20px; }
 .preferences-field + .preferences-field, .preferences-sample + .preferences-field { border-top:1px solid var(--border); }
-.preferences-field-copy { min-width:0; }
+.preferences-field-copy { flex:1 1 14em; min-width:0; }
 .preferences-field-label, .preferences-recovery > div > span { display:block; font-weight:500; color:var(--text); }
 .preferences-dialog .preferences-field p { margin:6px 0 0; max-width:34em; }
-.preferences-choices { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; max-width:100%; padding:3px; border-radius:8px; background:var(--surface-2); }
+.preferences-choices { margin-inline-start:auto; min-width:0; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; max-width:100%; padding:3px; border-radius:8px; background:var(--surface-2); }
 .preferences-choice-option { position:relative; display:inline-flex; min-width:0; align-items:center; }
 .preferences-choices input { position:absolute; opacity:0; width:1px; height:1px; }
 .preferences-choice { appearance:none; margin:0; background:transparent; font-family:inherit; cursor:pointer; display:flex; align-items:center; justify-content:center; box-sizing:border-box; min-height:32px; padding:6px 10px; border:1px solid transparent; border-radius:6px; color:var(--text-2); font-size:13px; line-height:1.5; overflow-wrap:anywhere; transition:background-color 140ms ease,color 140ms ease; }
@@ -68,13 +68,14 @@
 .preferences-dialog .preferences-error p { color:inherit; }
 .preferences-panel-host { min-width:0; }
 .preferences-dialog .desktop-model-panel > header { display:none; }
-.preferences-dialog .desktop-model-layout { grid-template-columns:152px minmax(0,1fr); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
-.preferences-dialog .desktop-model-layout nav { padding:8px; background:var(--surface); }
+.preferences-dialog .desktop-model-layout { grid-template-columns:176px minmax(0,1fr); border:0; border-radius:0; overflow:visible; }
+.preferences-dialog .desktop-model-layout .desktop-provider-picker { padding:0 16px 0 0; }
+.preferences-dialog .desktop-model-layout nav { padding:0; border:0; background:transparent; }
 .preferences-dialog .desktop-model-layout button { border:1px solid transparent; border-radius:6px; padding:8px; color:var(--text); background:transparent; font:inherit; cursor:pointer; }
 .preferences-dialog .desktop-model-layout nav button { min-height:32px; font-size:13px; }
 .preferences-dialog .desktop-model-layout nav .provider-brand { width:18px; height:18px; }
 .preferences-dialog .desktop-model-layout button:hover:not(:disabled), .preferences-dialog .desktop-model-layout button[aria-pressed=true] { background:var(--surface-2); }
-.preferences-dialog .desktop-model-detail { padding:20px; overflow:visible; }
+.preferences-dialog .desktop-model-detail { padding:0 0 0 24px; overflow:visible; }
 .preferences-dialog .desktop-model-detail h3 { font-size:14px; line-height:20px; }
 .preferences-dialog .desktop-model-detail label { display:block; margin:16px 0 8px; font-size:13px; }
 .preferences-dialog .desktop-model-detail input:not([type=checkbox]), .preferences-dialog .project-settings-panel :is(input,select), .preferences-dialog .project-backup-settings-panel input { box-sizing:border-box; width:100%; min-width:0; min-height:32px; padding:7px 10px; border:1px solid var(--border); border-radius:6px; color:var(--text); background:var(--bg); font:inherit; }
@@ -89,17 +90,22 @@
 .preferences-dialog .desktop-inference-panel h4 { margin:0; }
 .preferences-dialog .project-settings-panel > .session-workspace-dialog__body, .preferences-dialog .session-workspace-data-panel > .session-workspace-dialog__body { margin:0; padding:0; max-height:none; overflow:visible; }
 .preferences-dialog .project-settings-panel h3, .preferences-dialog .project-backup-settings-panel h3, .preferences-dialog .session-workspace-data-panel h3, .preferences-dialog .maintenance-panel h3 { font-size:14px; line-height:20px; font-weight:500; }
-.preferences-dialog .project-settings-panel .project-form, .preferences-dialog .session-workspace__data-section, .preferences-dialog .project-backup-settings-panel { padding:20px; border:1px solid var(--border); border-radius:8px; background:var(--surface); margin-block:16px; }
+.preferences-dialog .session-workspace__data-section { padding:20px; border:1px solid var(--border); border-radius:8px; background:var(--surface); margin-block:16px; }
+.preferences-dialog .project-settings-panel .project-form { padding:0; border:0; border-radius:0; background:transparent; margin-block:24px; }
+.preferences-dialog .project-backup-settings-panel { padding:0; border:0; border-radius:0; background:transparent; margin-block:32px; }
+.preferences-dialog .project-backup-settings-panel > .project-backup { margin:0; padding:0; border:0; }
 .preferences-dialog .session-workspace-data-panel input[type=file], .preferences-dialog .project-backup-settings-panel input[type=file] { width:100%; min-width:0; max-width:100%; }
 .preferences-dialog .session-workspace-data-panel .session-workspace-dialog__actions { padding:16px 0 0; border:0; justify-content:flex-start; }
 .preferences-dialog .maintenance-panel { margin-top:32px; }
 .preferences-dialog .settings-data > section + section { margin-top:32px; }
-.preferences-dialog .settings-row, .preferences-dialog .settings-keyboard-list > div { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px; margin:0; min-width:0; }
+.preferences-dialog .settings-row, .preferences-dialog .settings-keyboard-list > div { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 24px; padding:20px; margin:0; min-width:0; }
 .settings-row + .settings-row, .settings-keyboard-list > div + div { border-top:1px solid var(--border); }
-.settings-row > span { min-width:0; }
+.settings-row > span { flex:1 1 12em; min-width:0; }
+.settings-row > strong { min-width:0; max-width:100%; overflow-wrap:anywhere; }
+.preferences-dialog .settings-row > .settings-button { flex-shrink:0; }
 .settings-row strong { font-weight:500; }
 .settings-row small { display:block; margin-top:4px; color:var(--text-2); font-size:13px; line-height:1.6; }
-.preferences-dialog .settings-row select { max-width:50%; min-height:32px; padding:4px 8px; border:1px solid var(--border); border-radius:6px; color:var(--text); background:var(--bg); font:inherit; }
+.preferences-dialog .settings-row select { max-width:100%; min-height:32px; padding:4px 8px; border:1px solid var(--border); border-radius:6px; color:var(--text); background:var(--bg); font:inherit; }
 .settings-keyboard-list { margin:0 0 32px; }
 .settings-keyboard-list dd { margin:0; text-align:right; overflow-wrap:anywhere; }
 .settings-keyboard-list kbd { padding:2px 5px; border:1px solid var(--border); border-radius:4px; background:var(--bg); font-size:12px; }
@@ -122,11 +128,11 @@ body.desktop-app[data-motion=reduce] :is(#desktop-provider-status.is-busy,#deskt
 @media(max-width:1100px) {
   .preferences-layout { grid-template-columns:264px minmax(0,1fr); padding-inline:24px; }
   .preferences-sidebar { padding-right:32px; }
-  .preferences-field-row { grid-template-columns:minmax(0,1fr); gap:16px; }
-  .preferences-choices { justify-self:start; justify-content:flex-start; }
   .preferences-dialog .desktop-model-layout { grid-template-columns:minmax(0,1fr); }
-  .preferences-dialog .desktop-model-layout nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); overflow-y:auto; max-height:200px; border-right:0; border-bottom:1px solid var(--border); }
+  .preferences-dialog .desktop-model-layout .desktop-provider-picker { padding:0 0 16px; margin-bottom:24px; border-right:0; border-bottom:1px solid var(--border); }
+  .preferences-dialog .desktop-model-layout nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); overflow-y:auto; max-height:200px; }
   .preferences-dialog .desktop-model-layout nav button { flex:none; }
+  .preferences-dialog .desktop-model-detail { padding:0; }
 }
 @media(max-width:799px) {
   .preferences-layout { display:block; padding:0; }
@@ -146,9 +152,11 @@ body.desktop-app[data-motion=reduce] :is(#desktop-provider-status.is-busy,#deskt
 @media(max-width:520px) {
   .preferences-dialog .preferences-main > .context-body { padding:24px 16px 32px; }
   .preferences-dialog .settings-button, .preferences-dialog wa-button::part(button) { min-height:44px; }
-  .preferences-dialog .settings-row { align-items:flex-start; flex-direction:column; gap:12px; padding:16px; }
+  .preferences-dialog .settings-row { gap:12px; padding:16px; }
   .preferences-dialog .settings-row select { max-width:100%; min-height:44px; }
   .preferences-field-row { padding:16px; }
+  .preferences-field-copy { flex-basis:100%; }
+  .preferences-choices { margin-inline-start:0; justify-content:flex-start; }
   .preferences-choice { min-height:44px; padding:8px; }
   .preferences-dialog .desktop-model-layout nav button { min-height:44px; }
   .preferences-theme-choices { width:min(264px,100%); gap:4px; }
