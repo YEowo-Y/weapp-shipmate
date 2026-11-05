@@ -244,6 +244,17 @@ export async function checkSystemNotificationFlows({ run, checked, click, press,
     await command('POST', '/window/rect', { width: 1200, height: 850 });
   });
 
+  await checked('P7 notification settings link to project reminders and return without enabling either preference', async () => {
+    const before = await snapshot(), projectBefore = await maintenance();
+    await open(); await clickSetting('#system-notifications-project');
+    await until(() => inspect('return document.querySelector("#desktop-preferences").dataset.section==="projects" && !document.querySelector("#maintenance-watch").disabled'), 'project reminders from notification settings');
+    await clickSetting('#maintenance-system-settings'); await ready();
+    assert.deepEqual(await snapshot(), before);
+    assert.deepEqual(await maintenance(), projectBefore);
+    assert.equal(await inspect('return document.querySelectorAll("dialog[open]").length'), 1);
+    await screenshot('p7-notifications-linked'); await close();
+  });
+
   await checked('P7 notification acceptance records delivery limits and leaves real project evidence intact', async () => {
     for (const [name, expected] of Object.entries(files)) assert.equal(await readFile(resolve(directory, name), 'utf8'), expected);
     assert.deepEqual(await projectInvoke('project_artifact', { artifactId: baseline.id }), baseline);
