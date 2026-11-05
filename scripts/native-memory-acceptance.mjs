@@ -97,6 +97,16 @@ export async function checkMemoryFlows({ run, checked, click, fill, press, inspe
     await click('#home-memory'); await ready(); assert.match(await text('#memory-scope'), /P7 项目记忆 A/);
     entry = await create(a, '交付用语', 'P7_MEMORY_FIRST：交付说明使用简明中文。');
     assert.ok(entry.createdAt > 0); assert.ok(entry.updatedAt >= entry.createdAt);
+    await fill('#memory-search', 'P7_MEMORY_FIRST');
+    assert.equal(await inspect('return document.querySelectorAll("#memory-list .memory-entry").length'), 1);
+    assert.match(await text('#memory-count'), /1 \/ 1 条匹配/);
+    await fill('#memory-search', 'no-such-project-note');
+    assert.match(await text('#memory-list'), /没有|未找到|无匹配/);
+    await click('#memory-search-clear');
+    assert.equal(await inspect('return document.querySelectorAll("#memory-list .memory-entry").length'), 1);
+    assert.deepEqual((await snapshot(a)).entries, [entry], 'local search cannot change saved notes');
+    await screenshot('p7-memory-search');
+    await click(row(entry.id));
     await screenshot('p7-memory-saved-disabled'); await close();
     await assert.rejects(projectInvoke('project_memory_context', { projectId: a, entryIds: [entry.id] }), /停用|引用|未启用|禁用/);
   });
