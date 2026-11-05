@@ -27,6 +27,10 @@ export function mountProjectMemory(options: Options) {
   const toolbar = node('div'); toolbar.className = 'memory-toolbar';
   const count = node('span'); count.id = 'memory-count';
   const add = button('memory-new', '新增记忆', 'outlined'); const plus = createIcon(document, 'plus'); plus.setAttribute('slot', 'start'); add.append(plus); toolbar.append(count, add);
+  const searchBar = node('div'); searchBar.className = 'memory-search';
+  const search = node('input'); search.id = 'memory-search'; search.type = 'search'; search.value = ''; search.placeholder = '搜索名称或内容'; search.setAttribute('aria-label', '搜索项目记忆'); search.setAttribute('aria-controls', 'memory-list');
+  const clearSearch = button('memory-search-clear', '清除搜索'); clearSearch.hidden = true; searchBar.append(search, clearSearch);
+  count.setAttribute('role', 'status'); count.setAttribute('aria-atomic', 'true');
   const list = node('div'); list.id = 'memory-list'; list.className = 'memory-list';
   const editor = node('section'); editor.id = 'memory-editor'; editor.className = 'memory-editor'; editor.hidden = true; editor.setAttribute('aria-labelledby', 'memory-editor-heading');
   const editorHeading = node('h3'); editorHeading.id = 'memory-editor-heading';
@@ -50,7 +54,7 @@ export function mountProjectMemory(options: Options) {
   const status = node('p'); status.id = 'memory-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-atomic', 'true');
   const footer = node('footer'); footer.className = 'memory-footer';
   const refresh = button('memory-refresh', '重新读取'); const done = button('memory-done', '完成'); footer.append(refresh, done);
-  body.append(scope, description, toolbar, list, editor, prompt, status); dialog.append(header, body, footer); document.body.append(dialog);
+  body.append(scope, description, toolbar, searchBar, list, editor, prompt, status); dialog.append(header, body, footer); document.body.append(dialog);
 
   let projectId: string | null = null, snapshot: MemorySnapshot | null = null, current: Draft | null = null;
   let baseline = '', expectedRevision = 0, epoch = 0, disposed = false, pending: 'read' | 'write' | null = null;
@@ -62,6 +66,7 @@ export function mountProjectMemory(options: Options) {
   const scoped = () => projectId !== null && projectId === options.getProjectId();
   const blocked = () => disposed || !dialog.open || pending !== null || options.isBusy() || !scoped() || snapshot === null || guarded !== null;
   const byteCount = () => new TextEncoder().encode(text.value).length;
+  const matchingEntries = () => (snapshot?.entries ?? []).filter(entry => `${entry.title}\n${entry.text}`.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase()));
   const valid = () => Boolean(current && title.value.trim() && [...title.value].length <= 80 && text.value.trim() && byteCount() <= 4096);
   function message(value: string, error = false) { status.textContent = value; status.dataset.error = String(error); }
   function controls() {
@@ -76,13 +81,16 @@ export function mountProjectMemory(options: Options) {
     done.disabled = pending === 'write'; dismiss.disabled = pending === 'write';
     for (const row of entryButtons) row.disabled = unavailable;
     bytes.textContent = `${byteCount().toLocaleString()} / 4,096 字节`; bytes.dataset.error = String(byteCount() > 4096);
-    count.textContent = snapshot ? `${snapshot.entries.length} / 20 条 · 保存在此设备` : '保存在此设备';
+    search.disabled = !snapshot; clearSearch.hidden = !search.value; clearSearch.disabled = !snapshot;
+    count.textContent = snapshot ? search.value.trim() ? `${matchingEntries().length} / ${snapshot.entries.length} 条匹配` : `${snapshot.entries.length} / 20 条 · 保存在此设备` : '保存在此设备';
   }
   function renderList() {
     list.replaceChildren(); entryButtons = [];
     if (!snapshot) { list.append(node('p', projectId ? '读取项目记忆后可查看或编辑。' : '选择项目后可管理独立的记忆。')); return; }
     if (!snapshot.entries.length) { list.append(node('p', '暂无项目记忆。可从一条明确的项目背景或偏好开始。')); return; }
-    for (const entry of snapshot.entries) {
+    const entries = matchingEntries();
+    if (!entries.length) { list.append(node('p', '没有匹配的记忆。清除搜索可查看全部。')); return; }
+    for (const entry of entries) {
       const row = button(`memory-entry-${entry.id}`, ''); row.classList.add('memory-entry');
       row.setAttribute('aria-label', `编辑 ${entry.title}`); row.setAttribute('aria-pressed', String(current?.id === entry.id));
       const content = node('span'); content.className = 'memory-entry-content';
@@ -152,6 +160,8 @@ export function mountProjectMemory(options: Options) {
     protect(() => { if (projectId) drafts.delete(projectId); dialog.close(); });
   }
   add.addEventListener('click', () => { if (!blocked() && snapshot!.entries.length < 20) protect(() => edit()); });
+  search.addEventListener('input', () => { renderList(); controls(); });
+  clearSearch.addEventListener('click', () => { search.value = ''; renderList(); controls(); search.focus(); });
   refresh.addEventListener('click', () => { if (!pending && !guarded && !options.isBusy() && scoped()) protect(() => { if (projectId) drafts.delete(projectId); void read(); }); });
   save.addEventListener('click', () => { void persist('save'); });
   remove.addEventListener('click', () => {
@@ -175,7 +185,7 @@ export function mountProjectMemory(options: Options) {
     open(opener: HTMLElement | null = null) {
       if (disposed || dialog.open) return;
       anchor = opener; projectId = options.getProjectId(); snapshot = null; current = null; pending = null; guarded = null; prompt.hidden = true; editor.hidden = true;
-      title.value = ''; text.value = ''; enabled.checked = false; scope.textContent = projectId ? '当前项目 · 读取中' : '未选择项目';
+      title.value = ''; text.value = ''; enabled.checked = false; search.value = ''; scope.textContent = projectId ? '当前项目 · 读取中' : '未选择项目';
       dialog.showModal(); anchor?.setAttribute('aria-expanded', 'true'); renderList(); controls(); dismiss.focus();
       message(!projectId ? '请先选择项目，再管理项目记忆。' : options.isBusy() ? '任务执行中，完成后可重新读取记忆。' : ''); void read();
     },
