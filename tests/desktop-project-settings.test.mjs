@@ -102,6 +102,10 @@ test('data settings reuse the real project backup controller without opening its
   await h.app.ready; const backup = h.node('project-backup'); h.app.backupSettings.open(); await h.settle();
   assert.equal(h.node('desktop-projects').open, false); assert.equal(h.app.backupSettings.element.contains(backup), true);
   assert.equal(backup.contains(h.node('project-export')), true); assert.match(h.node('project-backup-project').textContent, /a/);
+  assert.equal(backup.firstElementChild.querySelector('h3')?.id, 'project-backup-title');
+  assert.equal(backup.firstElementChild.nextElementSibling.id, 'project-backup-project');
+  assert.equal(h.node('project-export').parentElement, h.node('project-import').parentElement);
+  assert.equal(h.node('project-export').nextElementSibling.id, 'project-import');
   await h.selectFile(); assert.equal(h.node('project-import-review').hidden, false);
   await h.fire('project-import-directory'); await h.fire('project-import-confirm');
   assert.equal(h.calls.filter(([cmd]) => cmd === 'project_import').length, 1);
