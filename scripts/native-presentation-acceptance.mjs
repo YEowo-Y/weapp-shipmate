@@ -134,6 +134,40 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
       assert.equal(value.main.visible, true, `${label}: narrow detail is visible`);
     }
   };
+  const settingsLayout = async (label, selected) => {
+    const value = await inspect(`const rect=n=>{const r=n.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width};};
+      const rows=[...document.querySelectorAll('.preferences-field-row')].filter(n=>n.checkVisibility()).map(n=>({copy:rect(n.firstElementChild),control:rect(n.lastElementChild)}));
+      const shells=[...document.querySelectorAll('.preferences-dialog .desktop-model-layout,.preferences-dialog .project-form,.preferences-dialog .project-backup-settings-panel,.preferences-dialog .project-backup-settings-panel > .project-backup')].filter(n=>n.checkVisibility()).map(n=>({className:n.className,border:getComputedStyle(n).borderTopWidth,padding:getComputedStyle(n).paddingTop}));
+      const fields=['project-name','project-directory','desktop-provider-key'].map(id=>document.getElementById(id)).filter(n=>n?.checkVisibility()).map(n=>{const label=document.querySelector('label[for="'+n.id+'"]');return {id:n.id,input:rect(n),label:label?rect(label):null};});
+      return {width:innerWidth,rows,shells,fields};`);
+    visuals.push({label:label+'-layout',...value});
+    await writeFile(resolve(run, 'presentation-visuals.json'), JSON.stringify(visuals, null, 2));
+    if (selected === 'appearance') {
+      assert.equal(value.rows.length, 3);
+      if (value.width >= 1000) {
+        for (const row of value.rows) {
+          assert.ok(row.control.left >= row.copy.right + 20, label+': controls sit beside their labels');
+          assert.ok(Math.abs((row.control.top+row.control.bottom)-(row.copy.top+row.copy.bottom)) < 3, label+': setting row is vertically aligned');
+          assert.ok(Math.abs(row.control.right-value.rows[0].control.right) < 2, label+': controls share a right edge');
+        }
+      } else if (value.width <= 390) {
+        for (const row of value.rows) assert.ok(row.control.top >= row.copy.bottom + 12, label+': narrow controls follow their labels without overlap');
+      }
+    }
+    for (const shell of value.shells) assert.equal(shell.border, '0px', label+': no redundant outer border on '+shell.className);
+    if (selected === 'models') {
+      assert.ok(value.fields.some(field => field.id === 'desktop-provider-key'), label+': model credential field is inspected');
+      const border = await inspect(`const s=getComputedStyle(document.querySelector('.desktop-provider-picker'));return {right:s.borderRightWidth,bottom:s.borderBottomWidth};`);
+      assert.equal(parseFloat(border.right) > 0, value.width > 1100, label+': provider divider follows layout direction');
+      if (value.width <= 1100) assert.ok(parseFloat(border.bottom) > 0 && parseFloat(border.bottom) <= 1, label+': stacked provider list has one horizontal hairline');
+    }
+    if (selected === 'projects') assert.equal(value.fields.length, 2, label+': project name and directory fields are inspected');
+    if (selected === 'data') assert.equal(await inspect(`const root=document.querySelector('#project-backup');return root.firstElementChild.querySelector('h3')?.id==='project-backup-title'&&root.querySelector('#project-export').parentElement===root.querySelector('#project-import').parentElement;`), true, label+': project backup heading precedes its shared action row');
+    for (const field of value.fields) {
+      assert.ok(field.label, label+': complex input retains its visible label');
+      assert.ok(field.input.top >= field.label.bottom - 1, label+': complex form keeps label above input');
+    }
+  };
   const appearance = async theme => {
     await openPreferences(); await activate(`#desktop-theme-${theme}`);
     await activate('#desktop-message-size-18'); await activate('#desktop-motion-reduce');
@@ -341,6 +375,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
           await navigate(selected);
           await geometry(`${theme}-${width}-preferences-${selected}`, '#desktop-preferences');
           await settingsWorkspace(`${theme}-${width}-preferences-${selected}`);
+          await settingsLayout(`${theme}-${width}-preferences-${selected}`, selected);
           if (selected === 'appearance') {
             const previews = await inspect(`return [...document.querySelectorAll('.preferences-theme-preview')].map(n=>({width:n.getBoundingClientRect().width,ink:n.lastElementChild.getBoundingClientRect().width}))`);
             assert.ok(previews.every(n => n.width >= 45 && n.ink >= 12), 'theme miniatures retain a readable canvas and message lines in every mode');
