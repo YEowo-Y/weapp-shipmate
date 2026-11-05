@@ -30,6 +30,38 @@ test('open and refresh are offline; sources are compact and dates/evidence separ
   assert.match(rows[0].textContent, /维护核验日期/); assert.match(rows[0].textContent, /正文归档日期/); assert.match(rows[0].textContent, /上次在线尝试/); assert.match(rows[0].textContent, /保留的有效正文证据/);
   assert.match(rows[1].textContent, /需人工核验/); assert.equal(rows[1].children[1].children.some(n => n.tag === 'wa-button'), false);
 });
+
+test('source search combines title URL and rule matching with state filtering without requests or row replacement', async () => {
+  const h = harness(); await h.open(); const calls = h.calls.length;
+  const rows = h.node('source-freshness-list').children;
+  rows[0].open = true; rows[0].listeners.toggle();
+  const search = value => { h.node('source-freshness-search').value = value; h.node('source-freshness-search').listeners.input(); };
+  const filter = value => { h.node('source-freshness-filter').value = value; h.node('source-freshness-filter').listeners.change(); };
+  search(' r-01 '); assert.equal(rows[0].hidden, false); assert.equal(rows[1].hidden, true);
+  assert.equal(h.node('source-freshness-count').textContent, '1 / 2 个来源');
+  search('EXAMPLE.ORG/MANUAL'); assert.equal(rows[0].hidden, true); assert.equal(rows[1].hidden, false);
+  search('官方'); filter('manual'); assert.equal(h.node('source-freshness-empty').hidden, false);
+  assert.equal(h.node('source-freshness-count').textContent, '0 / 2 个来源');
+  await h.click('source-freshness-clear');
+  assert.equal(h.node('source-freshness-filter').value, 'all'); assert.equal(h.node('source-freshness-search').value, '');
+  assert.equal(h.node('source-freshness-empty').hidden, true); assert.equal(rows[0].open, true);
+  assert.equal(h.node('source-freshness-list').children[0], rows[0]); assert.equal(h.document.activeElement, h.node('source-freshness-search'));
+  assert.equal(h.calls.length, calls);
+});
+
+test('source check completion updates filtered counts and returns hidden-row focus to search', async () => {
+  const pending = deferred(); const h = harness(name => name === 'source_freshness_snapshot' ? snapshot() : pending.promise); await h.open();
+  h.node('source-freshness-filter').value = 'unchanged'; h.node('source-freshness-filter').listeners.change();
+  await h.check();
+  h.node('source-freshness-list').children[0].children[0].focus();
+  pending.resolve(result({ state: 'changed', reason: 'different' })); await setImmediate();
+  assert.equal(h.node('source-freshness-count').textContent, '0 / 2 个来源');
+  assert.equal(h.node('source-freshness-empty').hidden, false);
+  assert.equal(h.document.activeElement, h.node('source-freshness-search'));
+  assert.equal(h.calls.filter(call => call.name === 'source_freshness_check').length, 1);
+  await h.click('source-freshness-clear');
+  assert.match(h.node('source-freshness-list').textContent, /正文与归档不同/);
+});
 test('explicit source check uses only catalog source ID and owned run ID, renders persisted result', async () => {
   const h = harness((name) => name === 'source_freshness_snapshot' ? snapshot() : result({ state: 'changed', reason: 'different' })); await h.open(); await h.check();
   const call = h.calls.find(c => c.name === 'source_freshness_check'); assert.equal(call.args.sourceId, 'official'); assert.equal(call.args.runId, 'owned-1'); assert.equal(Object.keys(call.args).length, 2);
