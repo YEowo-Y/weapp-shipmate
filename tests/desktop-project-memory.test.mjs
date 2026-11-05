@@ -48,6 +48,36 @@ test('memory loads current scope and empty state without sending or writing; new
   assert.equal(h.node('memory-save').disabled, true); assert.equal(h.node('memory-editor').hidden, false);
 });
 
+test('memory searches saved names and content locally and clears an empty result without writes', async () => {
+  const h = harness({ project_memory_snapshot: async () => snapshot([entry, { ...entry, id: 'entry-b', title: '发布约定', text: 'Use GitHub checks' }]) });
+  h.app.open(); await setImmediate(); const calls = h.calls.length;
+  h.input('memory-search', '  github ');
+  assert.match(h.node('memory-list').textContent, /发布约定/);
+  assert.doesNotMatch(h.node('memory-list').textContent, /语言偏好/);
+  assert.equal(h.node('memory-count').textContent, '1 / 2 条匹配');
+  h.input('memory-search', '语言'); assert.match(h.node('memory-list').textContent, /语言偏好/);
+  h.input('memory-search', '无匹配'); assert.match(h.node('memory-list').textContent, /没有匹配/);
+  assert.equal(h.node('memory-count').textContent, '0 / 2 条匹配');
+  h.click('memory-search-clear');
+  assert.equal(h.node('memory-search').value, ''); assert.equal(h.node('memory-search-clear').hidden, true);
+  assert.equal(h.document.activeElement, h.node('memory-search'));
+  assert.match(h.node('memory-list').textContent, /语言偏好/); assert.match(h.node('memory-list').textContent, /发布约定/);
+  assert.equal(h.calls.length, calls);
+});
+
+test('filtered memory editing retains its query and unsaved draft through cancel confirmation', async () => {
+  const h = harness({ project_memory_snapshot: async () => snapshot([entry]) }); h.app.open(); await setImmediate();
+  h.input('memory-search', '中文'); h.click('memory-entry-entry-a'); h.input('memory-text', '未保存的新内容');
+  h.click('memory-cancel-edit'); assert.equal(h.node('memory-prompt').hidden, false);
+  h.click('memory-keep-editing'); assert.equal(h.node('memory-text').value, '未保存的新内容');
+  assert.equal(h.node('memory-search').value, '中文');
+  h.click('memory-cancel-edit'); h.click('memory-confirm');
+  assert.equal(h.node('memory-editor').hidden, true); assert.equal(h.node('memory-count').textContent, '1 / 1 条匹配');
+  h.setProject('b'); h.app.open(); await setImmediate();
+  assert.equal(h.node('memory-search').value, '', 'a previous project search does not hide another project');
+  assert.equal(h.calls.some(call => call.name === 'project_memory_save'), false);
+});
+
 test('memory writes explicit title/body/consent with revision and updates only after persisted success', async () => {
   let finish;
   const h = harness({ project_memory_save: args => new Promise(resolve => { finish = () => resolve({ ...snapshot([{ ...entry, ...args.entry }]), revision: 3 }); }) });
