@@ -86,6 +86,19 @@ test('version copy reports completion only after clipboard write and allows retr
   assert.match(h.document.body.textContent, /版本信息已复制/);
 });
 
+test('About keeps full rule versions in a collapsed disclosure and copies them unchanged', async () => {
+  const rules = JSON.stringify({ 'rules/review.yaml': 'a'.repeat(64), 'flow.yaml': 'b'.repeat(64) });
+  const writes = [];
+  const h = harness({ overrides: { getVersions: () => ({ desktop: '1.0.0', core: '2.0.0', rules }), copyText: async text => { writes.push(text); } } });
+  h.app.open(h.anchor, 'about'); await act(async () => { await setImmediate(); });
+  const details = h.document.querySelector('.settings-rule-version details');
+  assert.equal(details.open, false); assert.equal(details.querySelector('summary').textContent, '查看规则版本');
+  act(() => details.querySelector('summary').click()); assert.equal(details.open, true);
+  assert.equal(details.querySelector('pre').textContent, rules);
+  h.click('settings-copy-versions'); await act(async () => { await setImmediate(); });
+  assert.equal(writes[0], `上线船友\n桌面应用 1.0.0\n检查核心 2.0.0\n项目规则 ${rules}`);
+});
+
 test('desktop preferences apply system defaults without writes and react to system changes', () => {
   const h = harness({ dark: true });
   assert.equal(h.document.body.dataset.theme, 'dark'); assert.equal(h.size(), '16px'); assert.equal(h.document.body.dataset.motion, 'system'); assert.deepEqual(h.writes, []);
@@ -248,6 +261,8 @@ test('settings separates persistent navigation and search from the scrolling con
   const h = harness({ withNotifications: true }); const sidebar = h.document.querySelector('.preferences-sidebar'), main = h.document.querySelector('.preferences-main');
   assert.equal(sidebar?.tagName, 'ASIDE'); assert.ok(main); assert.equal(sidebar.parentNode, main.parentNode);
   assert.ok(sidebar.contains(h.node('preferences-dismiss'))); assert.ok(sidebar.contains(h.node('preferences-heading'))); assert.ok(sidebar.contains(h.node('preferences-search'))); assert.ok(sidebar.querySelector('nav[aria-label]'));
+  assert.ok(sidebar.querySelector('.preferences-sidebar-footer').contains(h.node('preferences-dismiss')));
+  assert.equal(sidebar.querySelector('nav').contains(h.node('preferences-search')), false);
   assert.ok(main.contains(h.node('preferences-body'))); assert.ok(main.contains(h.node('preferences-content-dismiss'))); assert.equal(h.node('preferences-done'), null);
 });
 
@@ -259,12 +274,15 @@ test('return to app is named, restores its opener and preserves saved choices', 
   h.app.open(h.anchor); assert.equal(h.selected('desktop-message-size'), '18');
 });
 
-test('all settings choice groups retain visible names, explanatory text and radio semantics', () => {
+test('settings choice groups retain names, applicable descriptions and radio semantics', () => {
   const h = harness(); const groups = [...h.document.querySelectorAll('#desktop-preferences [role=radiogroup]')]; assert.equal(groups.length, 3);
   for (const label of h.document.querySelectorAll('#desktop-preferences label')) assert.ok(label.querySelectorAll('button,input:not([type=hidden]),select,textarea').length <= 1, 'a label cannot wrap both the Base UI button and its hidden input');
   for (const group of groups) {
     const field = group.closest('fieldset'); assert.ok(field?.querySelector('legend')?.textContent || h.node(group.getAttribute('aria-labelledby'))?.textContent, 'group has an accessible name');
-    const description = group.getAttribute('aria-describedby') || field?.getAttribute('aria-describedby'); assert.ok(h.node(description)?.textContent, 'group exposes its explanation'); assert.ok(group.querySelectorAll('[role=radio]').length >= 2);
+    const description = group.getAttribute('aria-describedby') || field?.getAttribute('aria-describedby');
+    if (group.getAttribute('aria-labelledby') === 'desktop-theme-label') assert.equal(description, null, 'self-explanatory theme previews have no dangling description');
+    else assert.ok(h.node(description)?.textContent, 'reading options retain their scope explanation');
+    assert.ok(group.querySelectorAll('[role=radio]').length >= 2);
   }
 });
 
@@ -279,7 +297,7 @@ test('dialog boundary cycles Tab between its first and last visible controls', (
   const controls = [...h.node('desktop-preferences').querySelectorAll('button,input,select,textarea,a[href],wa-button,wa-switch,[tabindex="0"]')].filter(node => !node.hasAttribute('disabled') && !node.closest('[hidden]') && node.getClientRects().length);
   const first = controls[0], last = controls.at(-1);
   const pressTab = (target, shiftKey) => act(() => { target.focus(); target.dispatchEvent(new h.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true })); });
-  assert.equal(first, h.node('preferences-dismiss'));
+  assert.equal(first.id, 'preferences-search');
   pressTab(last, false); assert.equal(h.document.activeElement, first); pressTab(first, true); assert.equal(h.document.activeElement, last);
 });
 
