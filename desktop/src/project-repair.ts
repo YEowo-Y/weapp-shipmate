@@ -50,7 +50,14 @@ export function mountProjectRepair(options: Options) {
   const historySection = node('section'); historySection.className = 'project-repair-history'; historySection.setAttribute('aria-labelledby', 'repair-history-title');
   const historyHeader = node('div'); historyHeader.className = 'project-repair-history-header';
   const reload = button('刷新修复记录', 'repair-history-refresh', 'plain'); historyHeader.append(node('h3', '本机修复记录', 'repair-history-title'), reload);
-  const history = node('div', '', 'repair-history'); historySection.append(historyHeader, history);
+  const filters = node('div'); filters.className = 'project-repair-filters';
+  const filterLabel = node('label', '记录状态'); filterLabel.htmlFor = 'repair-history-filter';
+  const filter = node('select', '', 'repair-history-filter');
+  for (const [value, label] of [['all', '全部记录'], ...Object.entries(writeLabels)]) { const option = node('option', label); option.value = value; filter.append(option); }
+  const historyCount = node('span', '', 'repair-history-count'); historyCount.setAttribute('role', 'status');
+  const resetFilter = button('显示全部', 'repair-history-reset', 'plain'); resetFilter.hidden = true;
+  filters.append(filterLabel, filter, historyCount, resetFilter);
+  const history = node('div', '', 'repair-history'); historySection.append(historyHeader, filters, history);
   body.append(description, status, preview, result, recheckStatus, resultNote, historySection);
   const footer = node('footer'); footer.className = 'project-repair-footer';
   const refreshPlan = button('重新预览', 'repair-refresh-plan', 'plain');
@@ -59,7 +66,7 @@ export function mountProjectRepair(options: Options) {
   dialog.append(header, body, footer); document.body.append(dialog);
   let disposed = false, busy = false, writing = false, epoch = 0;
   let projectId: string | null = null, plan: RepairPlan | null = null, source: Source | null = null, requestId = '';
-  let opener: HTMLElement | null = null;
+  let opener: HTMLElement | null = null, operations: RepairResult[] = [];
   const available = () => !disposed && dialog.open && projectId !== null && projectId === options.getProjectId();
   const blocked = () => !available() || busy || options.isBusy();
   const message = (text: string, error = false) => { status.textContent = text; status.dataset.error = String(error); };
@@ -73,7 +80,7 @@ export function mountProjectRepair(options: Options) {
     dismiss.disabled = done.disabled = writing;
     confirm.disabled = disabled || !plan || expired || (plan.kind === 'apply' && !businessCheck.checked);
     refreshPlan.disabled = disabled || !source;
-    reload.disabled = disabled;
+    reload.disabled = filter.disabled = resetFilter.disabled = disabled;
     businessCheck.disabled = disabled || !plan || expired;
     dialog.setAttribute('aria-busy', String(busy));
     for (const control of history.querySelectorAll<HTMLElement>('[data-repair-action]')) (control as HTMLElement & { disabled: boolean }).disabled = disabled;
@@ -96,10 +103,17 @@ export function mountProjectRepair(options: Options) {
   async function loadHistory(token: number) {
     const snapshot = await invoke<{ operations: RepairResult[] }>('project_repair_snapshot', { projectId });
     if (!current(token)) return;
+    operations = snapshot.operations; renderHistory();
+  }
+  function renderHistory() {
     history.replaceChildren();
-    if (!snapshot.operations.length) { history.append(node('p', '尚无本机修复记录。预览不会修改文件或建立成功记录。')); return; }
-    for (const operation of snapshot.operations) {
-      const row = node('article'); row.className = 'project-repair-operation';
+    const visible = operations.filter(operation => filter.value === 'all' || operation.writeState === filter.value);
+    historyCount.textContent = `${visible.length} / ${operations.length} 条记录`;
+    resetFilter.hidden = filter.value === 'all';
+    if (!operations.length) { history.append(node('p', '尚无本机修复记录。预览不会修改文件或建立成功记录。')); return; }
+    if (!visible.length) { history.append(node('p', '此状态下没有修复记录。')); return; }
+    for (const operation of visible) {
+      const row = node('article'); row.className = 'project-repair-operation'; row.dataset.writeState = operation.writeState;
       row.append(node('h4', `${writeLabels[operation.writeState]} · ${date(operation.createdAt)}`), node('p', operation.message));
       if (operation.backupPath) row.append(node('p', `备份：${operation.backupPath}`));
       if (operation.recheckState === 'completed') row.append(node('p', '写入后的本机源码复检已完成并关联报告；这不代表官方审核通过。'));
@@ -165,7 +179,7 @@ export function mountProjectRepair(options: Options) {
   function open(anchor?: HTMLElement | null) {
     if (disposed || dialog.open || writing || options.isBusy()) return false;
     opener = anchor ?? document.activeElement as HTMLElement | null; projectId = options.getProjectId();
-    plan = null; source = null; preview.hidden = true; businessCheck.checked = false; result.textContent = recheckStatus.textContent = ''; history.replaceChildren(); epoch++;
+    plan = null; source = null; preview.hidden = true; businessCheck.checked = false; result.textContent = recheckStatus.textContent = ''; operations = []; filter.value = 'all'; renderHistory(); epoch++;
     dialog.showModal(); opener?.setAttribute('aria-expanded', 'true'); dismiss.focus(); sync();
     if (!projectId) message('请先选择一个本机项目，再打开修复记录。', true);
     return true;
@@ -173,6 +187,8 @@ export function mountProjectRepair(options: Options) {
   const close = () => { if (!writing && dialog.open) dialog.close(); };
   dismiss.addEventListener('click', close); done.addEventListener('click', close);
   reload.addEventListener('click', () => { void readHistory(); });
+  filter.addEventListener('change', () => { if (!blocked()) { renderHistory(); sync(); } });
+  resetFilter.addEventListener('click', () => { if (!blocked()) { filter.value = 'all'; renderHistory(); sync(); filter.focus(); } });
   refreshPlan.addEventListener('click', () => { if (source) void prepare(source); });
   confirm.addEventListener('click', () => { void commit(); }); businessCheck.addEventListener('change', sync);
   dialog.addEventListener('cancel', event => { if (writing) event.preventDefault(); });
