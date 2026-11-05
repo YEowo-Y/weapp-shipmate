@@ -90,7 +90,7 @@ process.stdout.write(JSON.stringify(result)+'\\n');
   };
 }
 
-export async function checkSourceFreshnessFlows({ run, checked, click, press, inspect, text, command, until, screenshot, projectInvoke, quit, launch, requests, sourceFixture, ownedRuntimeProcesses }) {
+export async function checkSourceFreshnessFlows({ run, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, quit, launch, requests, sourceFixture, ownedRuntimeProcesses }) {
   const fixture = sourceFixture, snapshot = () => projectInvoke('source_freshness_snapshot');
   const automatic = fixture.catalog.sources.find(source => source.baseline?.method === 'fetch');
   const manual = fixture.catalog.sources.find(source => source.baseline?.method === 'manual');
@@ -159,6 +159,18 @@ export async function checkSourceFreshnessFlows({ run, checked, click, press, in
     assert.match(await text('#source-freshness-description'), /不发送项目/);
     assert.match(await text('#source-freshness-status'), /未发起在线请求/);
     await unchanged('opening and refreshing only read local records', async () => (await invocations()).length, 0);
+    await fill('#source-freshness-search', initial.catalog.sources[0].references[0].id);
+    assert.ok(await inspect('return [...document.querySelectorAll(".source-freshness-row")].filter(n=>!n.hidden).length > 0'));
+    await fill('#source-freshness-search', 'no-such-official-source');
+    assert.equal(await inspect('return document.querySelector("#source-freshness-empty").checkVisibility()'), true);
+    await click('#source-freshness-clear');
+    await click('#source-freshness-filter'); await press('\uE010'); await press('\uE007');
+    await until(() => inspect('return document.querySelector("#source-freshness-filter").value === "manual"'), 'source state filter selected by keyboard');
+    assert.deepEqual(await inspect('return [...document.querySelectorAll(".source-freshness-row")].filter(n=>!n.hidden).map(n=>n.dataset.sourceId)'), initial.catalog.sources.filter(source => source.baseline?.method === 'manual').map(source => source.id));
+    assert.equal(await inspect('return [...document.querySelectorAll(".source-freshness-row")].filter(n=>!n.hidden).every(n=>n.querySelector("summary small").textContent === "需人工核验")'), true);
+    await screenshot('p7-sources-filtered'); await click('#source-freshness-clear');
+    assert.equal(await inspect('return [...document.querySelectorAll(".source-freshness-row")].filter(n=>!n.hidden).length'), 16);
+    assert.equal((await invocations()).length, 0, 'local filtering makes no online checks');
     visuals.directory = await geometry(); contained(visuals.directory); await screenshot('p7-sources-directory');
   });
 
