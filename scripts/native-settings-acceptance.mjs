@@ -95,7 +95,7 @@ export async function checkSettingsWorkspaceFlows({ run, checked, click, fill, p
     await screenshot('settings-privacy');
     await section('about');
     await until(() => inspect('return document.querySelectorAll("#settings-versions dd").length === 3'), 'actual version information');
-    const versions = await inspect('return [...document.querySelectorAll("#settings-versions > div")].map(row=>({name:row.querySelector("dt").textContent,value:row.querySelector("dd").textContent}))');
+    const versions = await inspect('return [...document.querySelectorAll("#settings-versions > div")].map(row=>({name:row.querySelector("dt").textContent,value:(row.querySelector("dd pre")??row.querySelector("dd")).textContent}))');
     assert.deepEqual(versions.map(row => row.name), ['桌面应用', '检查核心', '项目规则']);
     assert.match(versions[0].value, /^\d+\.\d+\.\d+/); assert.match(versions[1].value, /^\d+\.\d+\.\d+/);
     assert.equal(versions[2].value, (await snapshot()).rulesVersion, 'rule version is the actual native snapshot value');
