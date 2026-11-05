@@ -14,7 +14,7 @@ const requireDesktop = createRequire(new URL('../desktop/package.json', import.m
 let ts;
 try { ts = requireDesktop('typescript'); } catch { /* Optional for CLI-only installation. */ }
 const desktopTest = (name, fn) => test(name, { skip: !ts && 'Install desktop dependencies' }, fn);
-function harness() {
+function harness({ copyText = async () => {} } = {}) {
   const document = createPreviewDocument(), create = document.createElement.bind(document), nodes = [];
   document.createElement = tag => {
     const node = create(tag); node.listeners = {}; node.isConnected = true; node.classList = { add() {} };
@@ -31,7 +31,7 @@ function harness() {
   const context = vm.createContext({ ...contract, Error, document, createIcon, renderMessageText, createActionButton: (doc, label) => { const node = doc.createElement('wa-button'); node.textContent = label; return node; }, createArtifactDownloader: () => ({ download: () => true, dispose() {} }) });
   vm.runInContext(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, context);
   const artifact = { id: 'source-1', runId: 'run-1', projectId: null, projectRevision: null, contextRevision: null, kind: 'guide', title: '上线清单', createdAt: 1792700000000, toolVersion: 'test', rulesVersion: 'rules', ...runProjectTool('guide', { subject: 'personal' }) };
-  const app = context.mountRepairHandoff({ getArtifact: () => artifact, getProject: () => null, getRulesVersion: () => 'rules', isBusy: () => false });
+  const app = context.mountRepairHandoff({ getArtifact: () => artifact, getProject: () => null, getRulesVersion: () => 'rules', isBusy: () => false, copyText });
   const node = id => nodes.find(node => node.id === id), trigger = document.createElement('button');
   const select = text => { node('handoff-file').files = [{ size: 100, text }]; node('handoff-file').listeners.change(); };
   return { app, artifact, node, trigger, select, document };
@@ -87,4 +87,34 @@ desktopTest('destroy invalidates pending file reads without updating detached co
   const before = h.node('handoff-source').textContent;
   h.app.destroy(); finish(contract.exportHandoff(contract.createHandoff({ ...h.artifact, id: 'late' }), 'json').text); await setImmediate();
   assert.equal(h.node('handoff-source').textContent, before);
+});
+
+desktopTest('handoff copies complete Markdown only after clipboard success and supports retry', async () => {
+  let fail = true; const copied = [];
+  const h = harness({ copyText: async value => { if (fail) throw Error('denied'); copied.push(value); } });
+  h.app.open(h.trigger, true);
+  await h.node('handoff-copy').listeners.click();
+  assert.match(h.node('handoff-status').textContent, /复制失败.*重试/);
+  assert.equal(h.node('handoff-copy').disabled, false);
+  fail = false; await h.node('handoff-copy').listeners.click();
+  assert.equal(copied[0], contract.exportHandoff(contract.createHandoff(h.artifact), 'markdown').text);
+  assert.match(h.node('handoff-status').textContent, /已复制/);
+  assert.equal(h.node('handoff-status').dataset.error, 'false');
+  h.select(async () => contract.exportHandoff(contract.createHandoff(h.artifact), 'json').text); await setImmediate();
+  await h.node('handoff-copy').listeners.click();
+  assert.match(copied[1], /^> 外部文件 · 来源未核验/);
+  h.app.destroy();
+});
+
+desktopTest('late clipboard completion cannot change feedback after close and reopen', async () => {
+  let finish; const h = harness({ copyText: () => new Promise(resolve => { finish = resolve; }) });
+  h.app.open(h.trigger, true);
+  const copying = h.node('handoff-copy').listeners.click();
+  assert.equal(h.node('handoff-copy').disabled, true);
+  assert.equal(h.node('handoff-open').disabled, true);
+  h.node('desktop-handoff').close(); h.app.open(h.trigger, true);
+  finish(); await copying;
+  assert.equal(h.node('handoff-status').textContent, '');
+  assert.equal(h.node('handoff-copy').disabled, false);
+  h.app.destroy();
 });
