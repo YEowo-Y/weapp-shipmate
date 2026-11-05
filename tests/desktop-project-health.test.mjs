@@ -47,7 +47,7 @@ test('health distinguishes unknown basis and changed rules, directory missing, a
   }
 });
 
-function harness({ load = async () => true, openReport = async () => true, withMaintenance = false } = {}) {
+function harness({ load = async () => true, openReport = async () => true, withMaintenance = false, onHistory, onManage = () => {} } = {}) {
   const document = createPreviewDocument(), create = document.createElement.bind(document), nodes = [];
   document.createElement = tag => {
     const node = create(tag); node.listeners = {}; node.isConnected = true; node.classList = { add() {} };
@@ -62,7 +62,7 @@ function harness({ load = async () => true, openReport = async () => true, withM
   vm.runInContext(script, context);
   const fallback = document.createElement('button');
   const maintenance = withMaintenance ? document.createElement('section') : undefined;
-  const app = context.mountProjectHealth({ getSnapshot: () => current, isBusy: () => busy, reload: load, onCheck: () => { checks++; }, onReport: async id => { reports.push(id); return openReport(id); }, onManage() {}, maintenance, returnFocus: () => fallback });
+  const app = context.mountProjectHealth({ getSnapshot: () => current, isBusy: () => busy, reload: load, onCheck: () => { checks++; }, onReport: async id => { reports.push(id); return openReport(id); }, onManage, onHistory, maintenance, returnFocus: () => fallback });
   const node = id => nodes.find(item => item.id === id), anchor = document.createElement('button');
   return { app, node, anchor, fallback, document, maintenance, checks: () => checks, reports, setSnapshot(value) { current = value; app.refresh(); }, setBusy(value) { busy = value; app.refresh(); }, click: id => node(id).listeners.click() };
 }
@@ -118,4 +118,21 @@ test('health reclaims the same maintenance panel after settings borrows it', asy
   settings.append(h.maintenance); h.app.open(h.anchor);
   assert.equal(h.maintenance.parentNode, home); assert.equal(h.node('desktop-health').open, true);
   await setImmediate(); h.app.destroy();
+});
+
+test('health exposes separate configuration and history destinations and guards both while loading', async () => {
+  let settings = 0, histories = 0, resolve;
+  const h = harness({ load: () => new Promise(done => { resolve = done; }), onManage: () => { settings++; }, onHistory: () => { histories++; } });
+  h.app.open(h.anchor);
+  assert.equal(h.node('health-project').textContent, '项目设置');
+  assert.equal(h.node('health-history').textContent, '运行历史');
+  assert.equal(h.node('health-history').disabled, true);
+  h.click('health-project'); h.click('health-history');
+  assert.equal(settings + histories, 0);
+  resolve(true); await setImmediate();
+  h.click('health-history'); assert.equal(histories, 1); assert.equal(settings, 0);
+  assert.equal(h.node('desktop-health').open, false);
+  h.app.open(h.anchor); resolve(true); await setImmediate();
+  h.click('health-project'); assert.equal(settings, 1); assert.equal(histories, 1);
+  h.app.destroy();
 });
