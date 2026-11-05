@@ -1,16 +1,16 @@
 .health-dialog { width:min(620px,calc(100vw - 32px)); }
 .health-dialog .health-eyebrow { margin:6px 0 10px; color:var(--text-2); overflow-wrap:anywhere; }
-.health-dialog h3 { font-size:23px; line-height:1.35; letter-spacing:-.025em; margin:0 0 10px; }
+.health-dialog h3 { font-size:20px; line-height:28px; margin:0 0 12px; }
 .health-dialog #health-description { color:var(--text-2); margin:0 0 20px; }
-.health-records { margin:0; padding:4px 16px; border-radius:12px; background:var(--surface); font-size:13px; line-height:1.7; }
-.health-records > div { display:grid; grid-template-columns:80px minmax(0,1fr); gap:14px; padding:12px 0; }
+.health-records { margin:0; padding:4px 16px; border-radius:8px; background:var(--surface); font-size:13px; line-height:1.7; }
+.health-records > div { display:grid; grid-template-columns:80px minmax(0,1fr); gap:16px; padding:12px 0; }
 .health-records dt { color:var(--text-3); }
 .health-records dd { margin:0; color:var(--text); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
 .health-evidence { font-size:13px; color:var(--text-2); }
 .health-evidence > summary { cursor:pointer; padding:8px 0; }
 .health-evidence .health-records { margin-top:8px; }
 .health-dialog .health-basis-warning { color:var(--text-2); margin:8px 0; }
-.health-location { margin:14px 0; font-size:13px; color:var(--text-2); }
+.health-location { margin:16px 0; font-size:13px; color:var(--text-2); }
 .health-location summary { padding:4px 0; cursor:pointer; }
 .health-location p { overflow-wrap:anywhere; }
 .health-dialog .health-note { margin:16px 0 20px; }
@@ -19,8 +19,9 @@
 .health-dialog :is(.health-error[data-state=failed],.health-error[data-state=interrupted],#health-status[data-error=true]) { color:var(--block); }
 .health-footer { flex:none; display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:16px; }
 @media(max-width:480px) {
-  .health-dialog h3 { font-size:21px; }
+  .health-dialog h3 { font-size:20px; }
+  .health-actions > wa-button { min-height:44px; }
   .health-records { padding:4px 12px; }
-  .health-records > div { grid-template-columns:64px minmax(0,1fr); gap:10px; }
+  .health-records > div { grid-template-columns:64px minmax(0,1fr); gap:12px; }
   .health-actions > wa-button { flex:1 1 auto; }
 }
