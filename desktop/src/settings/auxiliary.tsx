@@ -46,7 +46,7 @@ export function AuxiliarySettings({ section, options, shortcuts }: { section: Se
     </>}
     {section === 'about' && <>
       <Button id="settings-copy-versions" variant="outline" disabled={!versions || busy} onClick={() => { void copyVersions(); }}>复制版本信息</Button><p role="status">{copyStatus}</p>
-      <h4>上线船友</h4><dl id="settings-versions" className="preferences-group settings-keyboard-list">{versions ? <><div><dt>桌面应用</dt><dd>{versions.desktop}</dd></div><div><dt>检查核心</dt><dd>{versions.core}</dd></div><div><dt>项目规则</dt><dd>{versions.rules || '尚未加载项目规则'}</dd></div></> : !error && <p className="settings-loading" role="status">正在读取版本…</p>}</dl>
+      <h4>上线船友</h4><dl id="settings-versions" className="preferences-group settings-keyboard-list">{versions ? <><div><dt>桌面应用</dt><dd>{versions.desktop}</dd></div><div><dt>检查核心</dt><dd>{versions.core}</dd></div><div><dt>项目规则</dt><dd className="settings-rule-version">{versions.rules ? <details><summary>查看规则版本</summary><pre>{versions.rules}</pre></details> : '尚未加载项目规则'}</dd></div></> : !error && <p className="settings-loading" role="status">正在读取版本…</p>}</dl>
       <div className="preferences-group"><div className="settings-row"><span><strong>规则来源</strong><small>查看已安装依据，或主动检查来源更新。</small></span><Button id="settings-sources" variant="outline" onClick={event => options.onSources(event.currentTarget)}>查看来源</Button></div><div id="settings-licenses" className="settings-row"><span><strong>开源许可</strong><small>项目使用 MIT 许可证。</small></span><Button variant="outline" onClick={() => { void Promise.resolve().then(options.onRepository).catch(() => setError('无法打开项目源码，请重试。')); }}>项目源码 ↗</Button></div></div>
     </>}
   </section>;
