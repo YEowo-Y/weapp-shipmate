@@ -404,6 +404,7 @@ window.addEventListener("DOMContentLoaded", () => {
   resetReport();
   updateStopControl();
   const sessionsReady = mountDesktopSessions({
+    onOpenDataSettings: () => { window.setTimeout(() => preferences?.open($('#desktop-preferences-open'), 'data'), 0); },
     onOpenSettings: anchor => preferences?.open(anchor, 'models'),
     onOpenArtifact: artifact => { showArtifact(artifact); tools.open($("#desktop-project-manage"), $("#report")); },
     onToolResults: async () => { await projects?.refresh(); },
