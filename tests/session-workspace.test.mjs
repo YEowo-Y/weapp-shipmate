@@ -23,7 +23,7 @@ function node(doc, tag = 'div') {
     focus() { doc.activeElement = this; }, select() {}, showModal() { this.open = true; }, close() { this.open = false; Promise.resolve().then(() => this.fire('close')); },
   };
 }
-function harness({ loaded = null, loadError = false, saveError = false, layout, projectScoped } = {}) {
+function harness({ loaded = null, loadError = false, saveError = false, layout, projectScoped, onOpenDataSettings } = {}) {
   const doc = { createElement(tag) { return node(doc, tag); } };
   doc.createElementNS = (_namespace, tag) => node(doc, tag);
   Object.assign(doc, node(doc)); doc.body = node(doc);
@@ -52,7 +52,7 @@ function harness({ loaded = null, loadError = false, saveError = false, layout, 
     },
   });
   vm.runInContext(source.replace(/^import .*;\r?\n/gm, '').replace(/^export \{.*\};\r?\n/gm, '').replace(/export /g, ''), context);
-  const args = { host, input, layout, projectScoped, sendButton: node(doc), scroll: node(doc), list: node(doc), status: node(doc), jumpButton: node(doc), onSessionChange: session => lifecycle.push(session.id) };
+  const args = { host, input, layout, projectScoped, onOpenDataSettings, sendButton: node(doc), scroll: node(doc), list: node(doc), status: node(doc), jumpButton: node(doc), onSessionChange: session => lifecycle.push(session.id) };
   const mounting = context.mountSessionWorkspace(args);
   return { mounting, context, host, doc, win, args, hooks, writes, lifecycle, dataDialogs, dataPanels, setLoadError(value) { loadError = value; }, setSaveError(value) { saveError = value; } };
 }
@@ -653,7 +653,8 @@ test('embedded data transaction flushes the live draft and guards the same works
 });
 
 test('embedded data rejects missing registry and detects a persisted import whose UI apply failed', async () => {
-  const app = harness({ projectScoped: true }), workspace = await app.mounting;
+  let navigations = 0;
+  const app = harness({ projectScoped: true, onOpenDataSettings: () => { navigations++; } }), workspace = await app.mounting;
   workspace.getDataSettingsPanel(); const options = app.dataPanels[0].options;
   await assert.rejects(options.prepare(), error => error.code === 'projects-unavailable');
   await assert.rejects(options.commit(options.capture()), error => error.code === 'projects-unavailable');
@@ -665,5 +666,44 @@ test('embedded data rejects missing registry and detects a persisted import whos
   assert.equal(options.isReloadRequired(), true);
   assert.throws(options.capture, error => error.code === 'apply-failed');
   await assert.rejects(options.prepare(), error => error.code === 'apply-failed');
+  workspace.openData(); assert.equal(navigations, 0, 'persisted but unapplied import cannot navigate into another import surface');
+  workspace.destroy();
+});
+
+test('history data navigation uses the host route without replacing the stable data panel or mutating sessions', async () => {
+  const anchors = [], app = harness({ onOpenDataSettings: anchor => anchors.push(anchor) });
+  const workspace = await app.mounting; await workspace.flush();
+  const panel = workspace.getDataSettingsPanel(), anchor = node(app.doc, 'button');
+  const writes = app.writes.length, lifecycle = [...app.lifecycle];
+  workspace.openHistory(anchor, 'archived');
+  const history = app.doc.body.children.find(child => child.dataset.kind === 'history');
+  find(history, 'data').click(); await tick();
+  assert.equal(history.open, false); assert.equal(anchors[0], anchor);
+  assert.equal(app.dataDialogs.length, 0); assert.equal(workspace.getDataSettingsPanel(), panel);
+  assert.equal(app.dataPanels[0].closes, 0, 'host owns embedded panel lifecycle');
+  assert.equal(app.writes.length, writes); assert.deepEqual(app.lifecycle, lifecycle);
+  workspace.destroy(); workspace.openData(anchor); assert.equal(anchors.length, 1);
+});
+
+test('data navigation cannot close history or escape a pending import transaction', async () => {
+  const anchors = [], app = harness({ onOpenDataSettings: anchor => anchors.push(anchor) });
+  const workspace = await app.mounting; workspace.getDataSettingsPanel();
+  workspace.openHistory();
+  const history = app.doc.body.children.find(child => child.dataset.kind === 'history');
+  const options = app.dataPanels[0].options; options.onBusyChange(true);
+  find(history, 'data').click(); workspace.openData();
+  assert.equal(history.open, true); assert.equal(anchors.length, 0); assert.equal(app.dataDialogs.length, 0);
+  options.onBusyChange(false); app.dataPanels[0].canClose = () => false;
+  find(history, 'data').click(); assert.equal(history.open, true); assert.equal(anchors.length, 0);
+  app.dataPanels[0].canClose = () => true;
+  workspace.openData(); assert.equal(anchors.length, 1);
+  workspace.destroy();
+});
+
+test('standalone history data entry retains the existing backup dialog fallback', async () => {
+  const app = harness(), workspace = await app.mounting, anchor = node(app.doc, 'button');
+  workspace.openHistory(anchor);
+  find(app.doc.body.children.find(child => child.dataset.kind === 'history'), 'data').click();
+  await tick(); assert.equal(app.dataDialogs.length, 1); assert.equal(app.dataDialogs[0].trigger, anchor);
   workspace.destroy();
 });
