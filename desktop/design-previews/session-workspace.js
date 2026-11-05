@@ -12,7 +12,7 @@ let workspaceSequence = 0;
 // The caller owns its mounted composer and passes its existing input/send nodes.
 export async function mountSessionWorkspace({ host, input, sendButton, scroll, list, status, jumpButton,
   initialMessages = [], workspace = 'my-miniprogram', storageLabel = '已保存在此浏览器', layout = 'toolbar', projectScoped = false,
-  onEvent, onSessionChange, conversationOptions = {} }) {
+  onEvent, onSessionChange, onOpenDataSettings, conversationOptions = {} }) {
   const doc = host.ownerDocument, win = doc.defaultView;
   const instanceId = ++workspaceSequence;
   const element = (tag, className = '', text) => {
@@ -251,7 +251,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     const feedback = element('p', 'session-workspace__status'); feedback.setAttribute('role', 'status');
     exportButton.addEventListener('click', () => download(feedback));
     const dataButton = actionButton('数据与备份', 'data', { appearance: 'plain' });
-    dataButton.addEventListener('click', () => { surface.close(false); openData(trigger); });
+    dataButton.addEventListener('click', () => { if (disposed || mutationBusy || dataSettings?.canClose() === false) return; surface.close(false); openData(trigger); });
     surface.body.append(searchBox, filters, count, results, empty, feedback);
     surface.actions.replaceChildren(exportButton, dataButton, surface.cancel);
     let resultRows = [];
@@ -425,6 +425,8 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
   function openData(trigger = title) {
     if (disposed || mutationBusy) return;
     if (persistence?.getState().code === 'apply-failed') { reload.focus(); return; }
+    if (dataSettings?.canClose() === false) return;
+    if (onOpenDataSettings) { activeDialog?.close(); onOpenDataSettings(trigger); return; }
     dataSettings?.close(); activeDialog?.close();
     const surface = openSessionDataDialog({ ...dataOptions(), trigger,
       onClose(closedNode) { if (activeDialog === closedNode) activeDialog = null; },
