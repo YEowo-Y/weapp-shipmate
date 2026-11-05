@@ -255,3 +255,14 @@ desktopTest('send shortcuts read current preferences and refresh from same-windo
     assert.deepEqual(app.preferenceRefreshes, ['mod-enter', 'enter']);
   }
 });
+
+desktopTest('desktop data navigation forwards the host route until disposal and preserves the standalone fallback', async () => {
+  const app = harness(), anchors = [];
+  const session = await app.mount({ onOpenDataSettings: anchor => anchors.push(anchor) });
+  const anchor = {};
+  app.getOptions().onOpenDataSettings(anchor); assert.equal(anchors[0], anchor);
+  assert.equal(app.requests.length, 0); assert.equal(app.records.length, 0);
+  session.destroy(); app.getOptions().onOpenDataSettings(anchor); assert.equal(anchors.length, 1);
+  const standalone = harness(); const fallback = await standalone.mount();
+  assert.equal(standalone.getOptions().onOpenDataSettings, undefined); fallback.destroy();
+});
