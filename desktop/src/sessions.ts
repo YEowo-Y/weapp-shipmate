@@ -9,7 +9,7 @@ import { readSendKey, SHORTCUTS_EVENT } from './settings/shortcuts-store';
 import { invoke } from '@tauri-apps/api/core';
 import type { Artifact, ProjectSnapshot } from './projects';
 
-export async function mountDesktopSessions(options: { onOpenArtifact?: (artifact: Artifact) => void; onToolResults?: () => Promise<void>; onOpenSettings?: (anchor?: HTMLElement | null) => void } = {}) {
+export async function mountDesktopSessions(options: { onOpenArtifact?: (artifact: Artifact) => void; onToolResults?: () => Promise<void>; onOpenSettings?: (anchor?: HTMLElement | null) => void; onOpenDataSettings?: (anchor?: HTMLElement | null) => void } = {}) {
   const node = <T extends HTMLElement>(selector: string) => document.querySelector(selector) as T;
   const status = node('#desktopConversationStatus');
   const contextNode = document.createElement('div');
@@ -31,6 +31,7 @@ export async function mountDesktopSessions(options: { onOpenArtifact?: (artifact
     const workspace = await mountSessionWorkspace({
       host: node('#sessionHost'), input, sendButton, scroll: node('#desktopScroll'),
       list: node('#desktopMessages'), status, jumpButton: node('#desktopJump'),
+      onOpenDataSettings: options.onOpenDataSettings ? (anchor: HTMLElement) => { if (!disposed) options.onOpenDataSettings?.(anchor); } : undefined,
       layout: 'sidebar', projectScoped: true, workspace: 'desktop-local', storageLabel: '已保存在此设备',
       conversationOptions: {
         requireModel: true, allowRecords: true, getSendShortcut: readSendKey,
