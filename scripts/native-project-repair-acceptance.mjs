@@ -82,6 +82,17 @@ export async function checkProjectRepairFlows(options) {
     await click('#repair-confirm');
     await until(async () => /复检已完成/.test(await text('#repair-recheck-status')) && await inspect('return document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'undo rechecked', 30_000);
     assert.deepEqual(await readFile(file), original); assert.match(await text('#repair-result'), /已恢复原文件/);
+    const historyBefore = await repairSnapshot();
+    await click('#repair-history-filter');
+    await command('POST', '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value: '\uE010' }, { type: 'keyUp', value: '\uE010' }, { type: 'keyDown', value: '\uE007' }, { type: 'keyUp', value: '\uE007' }] }] });
+    await until(() => inspect('return document.querySelector("#repair-history-filter").value === "undone"'), 'repair history filters undone operations');
+    const undone = historyBefore.operations.filter(operation => operation.writeState === 'undone');
+    assert.ok(undone.length > 0);
+    assert.equal(await inspect('return document.querySelectorAll("#repair-history .project-repair-operation").length'), undone.length);
+    assert.equal(await inspect('return [...document.querySelectorAll("#repair-history .project-repair-operation")].every(n=>n.dataset.writeState === "undone")'), true);
+    assert.match(await text('#repair-history-count'), /条记录/);
+    await screenshot('repair-history-filtered'); await click('#repair-history-reset');
+    assert.deepEqual(await repairSnapshot(), historyBefore, 'history filters cannot mutate repair state');
     await closeRepair(); await closeReport();
   });
   await checked('A file changed after preview invalidates the plan and is never overwritten', async () => {
