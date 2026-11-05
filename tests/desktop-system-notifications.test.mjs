@@ -10,11 +10,11 @@ const source = readFileSync(new URL('../desktop/src/system-notifications.ts', im
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 const snapshot = (extra = {}) => ({ schemaVersion: 1, revision: 0, enabled: false, permission: 'granted', delivery: 'idle', message: null, installationRequired: true, ...extra });
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
-function harness(handle = async () => snapshot()) {
+function harness(handle = async () => snapshot(), onProjectSettings) {
   const document = createPreviewDocument(), create = document.createElement.bind(document), nodes = [], calls = [];
   document.createElement = tag => { const n = create(tag); n.listeners = {}; n.addEventListener = (name, fn) => { n.listeners[name] = fn; }; nodes.push(n); return n; };
   const context = vm.createContext({ document, createActionButton: (doc, text) => { const b = doc.createElement('wa-button'); b.textContent = text; return b; } }); vm.runInContext(script, context);
-  const app = context.mountSystemNotifications({ invoke: async (name, args) => { calls.push({ name, args }); return handle(name, args); } });
+  const app = context.mountSystemNotifications({ onProjectSettings, invoke: async (name, args) => { calls.push({ name, args }); return handle(name, args); } });
   const node = id => nodes.find(n => n.id === id);
   return { app, node, calls, change: async enabled => { node('system-notifications-enabled').checked = enabled; node('system-notifications-enabled').listeners.change(); await setImmediate(); }, click: async suffix => { node(`system-notifications-${suffix}`).listeners.click(); await setImmediate(); } };
 }
@@ -58,4 +58,17 @@ test('persisted watcher delivery failure and submission remain distinct from act
   const h = harness(() => snapshot({ lastAttempt: { kind: 'notice', noticeId: 'private-id', attemptedAt: 1000, outcome } }));
   await h.app.open(); assert.match(h.node('system-notifications-last-attempt').textContent, /维护通知尝试.*提交失败/); assert.doesNotMatch(h.node('system-notifications-last-attempt').textContent, /private-id/);
   outcome = 'submitted'; await h.click('reload'); assert.match(h.node('system-notifications-last-attempt').textContent, /已提交给系统，不代表实际显示/);
+});
+
+test('project settings navigation is unavailable during IPC or after closing and never changes permission', async () => {
+  let opened = 0; const pending = deferred();
+  const h = harness(async () => pending.promise, () => { opened++; });
+  const opening = h.app.open();
+  await h.click('project'); assert.equal(opened, 0);
+  pending.resolve(snapshot()); await opening;
+  await h.click('project'); assert.equal(opened, 1);
+  assert.deepEqual(h.calls.map(call => call.name), ['system_notifications_snapshot']);
+  h.app.close(); await h.click('project'); assert.equal(opened, 1);
+  h.app.destroy(); await h.click('project'); assert.equal(opened, 1);
+  assert.equal(harness().node('system-notifications-project').hidden, true);
 });
