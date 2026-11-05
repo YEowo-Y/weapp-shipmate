@@ -5,7 +5,7 @@ import './maintenance.css';
 
 type Notice = { id: string; artifactId: string; createdAt: number; newCount: number; read: boolean };
 type Snapshot = { projectId: string; revision: number; watchEnabled: boolean; notificationsEnabled: boolean; state: 'off' | 'starting' | 'watching' | 'pending' | 'checking' | 'paused' | 'error'; message: string; runId: string | null; lastCheckedAt: number | null; notices: Notice[] };
-type Options = { getProjectId(): string | null; onResult(): Promise<unknown>; onOpenArtifact(id: string): Promise<boolean>; onRevealReport?(): void; onUnread?(count: number): void };
+type Options = { getProjectId(): string | null; onResult(): Promise<unknown>; onOpenArtifact(id: string): Promise<boolean>; onRevealReport?(): void; onUnread?(count: number): void; onNotifications?(): void };
 const labels = { off: '自动维护已关闭', starting: '正在启动监听', watching: '正在监听文件变化', pending: '等待自动预检', checking: '自动预检执行中', paused: '自动维护已暂停', error: '自动维护需要处理' };
 
 export function mountProjectMaintenance(options: Options) {
@@ -23,9 +23,19 @@ export function mountProjectMaintenance(options: Options) {
   const status = node('p'); status.id = 'maintenance-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-atomic', 'true');
   const actions = node('div'); actions.className = 'context-actions';
   const save = button('maintenance-save', '保存维护设置'), retry = button('maintenance-retry', '重新加载'), stop = button('maintenance-stop', '停止本次自动预检'), discard = button('maintenance-discard', '放弃更改'); actions.append(save, discard, retry, stop);
+  const lastCheck = node('p'); lastCheck.id = 'maintenance-last-check';
+  const noticeHeader = node('div'); noticeHeader.className = 'maintenance-notice-header';
+  const noticeTitle = node('h4', '项目提醒');
+  const filter = node('select'); filter.id = 'maintenance-notice-filter'; filter.setAttribute('aria-label', '筛选项目提醒'); filter.setAttribute('aria-controls', 'maintenance-notices');
+  for (const [value, text] of [['all', '全部提醒'], ['unread', '仅未读']]) { const option = node('option', text); option.value = value; filter.append(option); }
+  filter.value = 'all';
+  const count = node('p'); count.id = 'maintenance-notice-count'; count.setAttribute('role', 'status');
+  const reset = button('maintenance-notice-reset', '显示全部');
+  noticeHeader.append(noticeTitle, filter);
   const notices = node('div'); notices.id = 'maintenance-notices';
+  const notificationSettings = button('maintenance-system-settings', '系统通知设置'); notificationSettings.hidden = !options.onNotifications;
   const readAll = button('maintenance-read-all', '全部标为已读');
-  element.append(title, description, watch.label, notifications.label, state, actions, status, notices, readAll);
+  element.append(title, description, watch.label, notifications.label, state, lastCheck, actions, status, noticeHeader, count, notices, reset, readAll, notificationSettings);
   let projectId: string | null = null, snapshot: Snapshot | null = null, epoch = 0, eventSequence = 0;
   let disposed = false, pending = false, dirty = false, ready = false, readFailed = false, unsubscribe: (() => void) | undefined;
   const synced = new Set<string>();
@@ -56,16 +66,28 @@ export function mountProjectMaintenance(options: Options) {
     state.textContent = snapshot ? `${labels[snapshot.state]}${snapshot.message ? ` · ${snapshot.message}` : ''}` : projectId ? '维护状态尚未读取' : '选择项目后设置自动维护';
     state.dataset.state = snapshot?.state ?? 'off';
     element.setAttribute('aria-busy', String(pending));
-    const noticeKey = JSON.stringify([snapshot?.notices ?? [], disabled]);
+    lastCheck.textContent = snapshot?.lastCheckedAt ? `最近预检记录：${new Date(snapshot.lastCheckedAt).toLocaleString('zh-CN')}` : '尚无预检记录';
+    lastCheck.hidden = !projectId;
+    filter.disabled = disabled;
+    reset.disabled = disabled;
+    reset.hidden = filter.value !== 'unread';
+    notificationSettings.disabled = pending;
+    const allNotices = snapshot?.notices ?? [], unread = allNotices.filter(notice => !notice.read);
+    const visibleNotices = filter.value === 'unread' ? unread : allNotices;
+    count.textContent = `${unread.length} 条未读 · 共 ${allNotices.length} 条提醒`;
+    const noticeKey = JSON.stringify([visibleNotices, disabled, filter.value]);
     if (noticeKey !== renderedNotices) {
+      const restoreFocus = notices.contains(document.activeElement); const focusedId = (document.activeElement as HTMLElement | null)?.dataset.noticeId;
       renderedNotices = noticeKey; notices.textContent = '';
-      if (!snapshot?.notices.length) notices.append(node('p', '暂无通知。仅在可比较的预检结果中发现新增问题时通知；这不表示当前文件没有问题。'));
-      for (const notice of snapshot?.notices ?? []) {
+      if (!visibleNotices.length) notices.append(node('p', filter.value === 'unread' ? '没有未读提醒。' : '暂无提醒。仅在可比较的预检结果中发现新增问题时提醒；这不表示当前文件没有问题。'));
+      for (const notice of visibleNotices) {
       const row = node('div'); row.className = 'maintenance-notice'; row.dataset.read = String(notice.read);
       const open = button('', `${notice.read ? '已读' : '未读'} · ${notice.newCount} 个新增问题 · ${new Date(notice.createdAt).toLocaleString('zh-CN')}`);
       open.dataset.noticeId = notice.id; open.disabled = disabled;
         open.addEventListener('click', () => { void openNotice(notice); }); row.append(open); notices.append(row);
+        if (restoreFocus && notice.id === focusedId && !disabled) open.focus();
       }
+      if (restoreFocus && !disabled && !notices.contains(document.activeElement)) filter.focus();
     }
     readAll.disabled = disabled || !snapshot?.notices.some(notice => !notice.read);
     options.onUnread?.(snapshot?.notices.filter(notice => !notice.read).length ?? 0);
@@ -158,6 +180,9 @@ export function mountProjectMaintenance(options: Options) {
   for (const input of [watch.input, notifications.input]) input.addEventListener('change', () => {
     dirty = watch.input.checked !== (snapshot?.watchEnabled ?? false) || notifications.input.checked !== (snapshot?.notificationsEnabled ?? false); render();
   });
+  filter.addEventListener('change', () => { if (!filter.disabled) render(); });
+  reset.addEventListener('click', () => { if (!reset.disabled) { filter.value = 'all'; render(); filter.focus(); } });
+  notificationSettings.addEventListener('click', () => { if (!disposed && !notificationSettings.hidden && !notificationSettings.disabled && canClose()) options.onNotifications?.(); });
   discard.addEventListener('click', discardChanges);
   save.addEventListener('click', () => { if (!save.disabled) void command('save', { expectedRevision: snapshot!.revision, watchEnabled: watch.input.checked, notificationsEnabled: notifications.input.checked }, true); });
   retry.addEventListener('click', () => { if (!retry.disabled) void (ready && !readFailed ? command('retry') : read()); });
@@ -172,7 +197,7 @@ export function mountProjectMaintenance(options: Options) {
       if (id === projectId && (ready || pending)) return;
       if (id !== projectId) {
         epoch++; eventSequence++; projectId = id; snapshot = null; pending = false; dirty = false; ready = false; readFailed = false;
-        watch.input.checked = false; notifications.input.checked = false; message(''); render();
+        watch.input.checked = false; notifications.input.checked = false; filter.value = 'all'; message(''); render();
       }
       await read();
     },
