@@ -146,15 +146,25 @@ export async function checkHealthFlows({ run, checked, click, fill, press, inspe
       await screenshot('p7-health-failed');
       const originalTheme = await inspect('return document.body.dataset.theme');
       try {
-        // Presentation fixture only: exercises the existing theme tokens, not a settings-persistence claim.
-        await inspect('document.body.dataset.theme="dark"');
+        await close(); await click('#desktop-preferences-open');
+        await until(() => inspect('return document.querySelector("#desktop-theme-dark")?.checkVisibility()'), 'appearance settings ready');
+        await click('#desktop-theme-dark'); await click('#preferences-content-dismiss');
+        await until(() => inspect('return !document.querySelector("#desktop-preferences").open && document.body.dataset.theme === "dark"'), 'explicit dark preference applied');
+        await open();
         await command('POST', '/ms/cdp/execute', { cmd: 'Emulation.setEmulatedMedia', params: { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] } });
         const visual = await inspect('const e=document.querySelector(".health-error"),d=document.querySelector("#desktop-health");return {theme:document.body.dataset.theme,errorColor:getComputedStyle(e).color,errorToken:getComputedStyle(e).getPropertyValue("--block").trim(),background:getComputedStyle(d).backgroundColor,reduced:matchMedia("(prefers-reduced-motion: reduce)").matches};');
-        assert.equal(visual.theme, 'dark'); assert.equal(visual.reduced, true); assert.equal(visual.errorToken, '#e8705f'); assert.equal(visual.errorColor, 'rgb(232, 112, 95)');
+        assert.equal(visual.theme, 'dark'); assert.equal(visual.reduced, true);
+        assert.match(visual.errorToken, /^#[0-9a-f]{6}$/i);
+        const channels = [1, 3, 5].map(start => parseInt(visual.errorToken.slice(start, start + 2), 16));
+        assert.equal(visual.errorColor, `rgb(${channels.join(', ')})`, 'failure text uses the active semantic error color');
         await screenshot('p7-health-dark-failed'); await writeFile(resolve(run, 'health-dark.json'), JSON.stringify(visual, null, 2));
       } finally {
-        await inspect('document.body.dataset.theme=arguments[0]', [originalTheme]);
         await command('POST', '/ms/cdp/execute', { cmd: 'Emulation.setEmulatedMedia', params: { features: [] } });
+        await close(); await click('#desktop-preferences-open');
+        await until(() => inspect('return document.querySelector(arguments[0])?.checkVisibility()', [`#desktop-theme-${originalTheme}`]), 'appearance settings ready to restore');
+        await click(`#desktop-theme-${originalTheme}`); await click('#preferences-content-dismiss');
+        await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'appearance settings closed');
+        await open();
       }
       await click('#health-report'); assert.equal(await text('#report-title'), '代码预检');
       await click('#desktop-tools-close');
@@ -215,9 +225,18 @@ export async function checkHealthFlows({ run, checked, click, fill, press, inspe
     const evidence = JSON.parse(await readFile(resolve(run, 'health-visuals.json'), 'utf8'));
     await writeFile(resolve(run, 'health-visuals.json'), JSON.stringify({ ...evidence, narrow }, null, 2));
     await click('#health-project');
-    await until(() => inspect('return !document.querySelector("#desktop-health").open && document.querySelector("#desktop-projects").open'), 'health opens project management');
+    await until(() => inspect('return !document.querySelector("#desktop-health").open && document.querySelector("#desktop-preferences").open && document.querySelector("#desktop-preferences").dataset.section === "projects" && document.querySelector("#project-form").checkVisibility()'), 'health opens embedded project configuration');
+    assert.equal(await inspect('return document.querySelector("#project-name").value'), 'P7 维护项目 A 已改名');
+    assert.equal(await inspect('return document.querySelector("#project-history").checkVisibility()'), false);
+    await click('#preferences-content-dismiss');
+    await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'project settings closed');
+    await command('POST', '/window/rect', { width: 1200, height: 850 });
+    await open(); await click('#health-history');
+    await until(() => inspect('return !document.querySelector("#desktop-health").open && document.querySelector("#desktop-project-results").open'), 'maintenance history opens the results workspace');
     assert.match(await text('#project-history-title'), /P7 维护项目 A 已改名/);
-    await closeProjects(); await command('POST', '/window/rect', { width: 1200, height: 850 });
+    await screenshot('p7-health-results-destination');
+    await press('\uE00C');
+    await until(() => inspect('return !document.querySelector("#desktop-project-results").open'), 'results closed');
   });
 
   await checked('P7 maintenance and read-only preflight leave source files and prior artifacts intact without model calls', async () => {
