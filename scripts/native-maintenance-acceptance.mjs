@@ -99,9 +99,18 @@ export async function checkMaintenanceFlows({ run, checked, click, fill, press, 
     await until(() => inspect('return !document.querySelector("#desktop-maintenance-open").hidden && Number.parseInt(document.querySelector("#desktop-maintenance-count").textContent,10)>0'), 'unread count exposes maintenance shortcut');
     await click('#desktop-maintenance-open'); await ready();
     await until(() => inspect('return Boolean(document.querySelector(arguments[0]))', [`[data-notice-id="${firstNotice.id}"]`]), 'source-linked notice rendered');
+    assert.match(await text('#maintenance-last-check'), /最近预检记录/);
+    const noticeState = await state();
+    await click('#maintenance-notice-filter'); await press('\uE010'); await press('\uE007');
+    assert.deepEqual(await inspect('return [...document.querySelectorAll("#maintenance-notices [data-notice-id]")].map(n=>n.dataset.noticeId)'), [firstNotice.id]);
+    assert.deepEqual(await state(), noticeState, 'local filter does not mark reminders read or write settings');
+    await inspect('document.querySelector("#maintenance-notices").scrollIntoView({block:"center",behavior:"instant"})');
     await screenshot('p7-maintenance-notice'); await click('#maintenance-read-all');
     await until(async () => (await state()).notices.every(item => item.read), 'read state persisted');
     await until(() => inspect('return document.querySelector("#desktop-maintenance-open").hidden'), 'read notices hide maintenance shortcut');
+    assert.match(await text('#maintenance-notices'), /没有未读/);
+    await click('#maintenance-notice-reset');
+    assert.deepEqual(await inspect('return [...document.querySelectorAll("#maintenance-notices [data-notice-id]")].map(n=>n.dataset.noticeId)'), [firstNotice.id]);
     await close();
     assert.equal(await inspect('return document.activeElement.id'), 'desktop-more', 'hidden unread shortcut falls back to a visible keyboard target');
     await open();
@@ -134,7 +143,9 @@ export async function checkMaintenanceFlows({ run, checked, click, fill, press, 
       assert.equal(await inspect('return document.querySelector("#project-directory").value'), creating ? '' : beforeProjects.find(item => item.id === a).directory);
       assert.deepEqual((await project()).projects, beforeProjects, 'unsaved form text never becomes a native project mutation');
       await screenshot(creating ? 'p7-maintenance-new-project-draft' : 'p7-maintenance-project-draft');
-      await closeProjects();
+      await click('#project-close');
+      assert.equal(await inspect('return document.querySelector("#desktop-projects").open'), true, 'unsaved project draft blocks closing');
+      await click('#project-discard'); await closeProjects();
     }
   });
 
@@ -299,7 +310,22 @@ export async function checkMaintenanceFlows({ run, checked, click, fill, press, 
     }
     await open(); visuals.maintenanceWide = await geometry('#desktop-health'); contained(visuals.maintenanceWide); await screenshot('p7-maintenance-wide');
     await command('POST', '/window/rect', { width: 390, height: 844 }); visuals.maintenanceNarrow = await geometry('#desktop-health'); contained(visuals.maintenanceNarrow); await screenshot('p7-maintenance-narrow');
+    await inspect('document.querySelector("#maintenance-notice-filter").scrollIntoView({block:"start",behavior:"instant"})'); await screenshot('p7-maintenance-notices-narrow');
     await close(); await command('POST', '/window/rect', { width: 1200, height: 850 });
+  });
+
+  await checked('P7 maintenance links preserve drafts and connect both settings destinations without changing preferences', async () => {
+    const before = await state(), globalBefore = await projectInvoke('system_notifications_snapshot');
+    await open(); await click('#maintenance-watch'); await click('#maintenance-system-settings');
+    assert.equal(await inspect('return document.querySelector("#desktop-health").open'), true);
+    assert.match(await text('#maintenance-status'), /尚未保存/);
+    await click('#maintenance-discard'); await click('#maintenance-system-settings');
+    await until(() => inspect('return document.querySelector("#desktop-preferences").dataset.section==="notifications" && !document.querySelector("#system-notifications-project").disabled'), 'system notification settings reached');
+    assert.equal(await inspect('return document.querySelector("#desktop-health").open'), false);
+    await click('#system-notifications-project');
+    await until(() => inspect('return document.querySelector("#desktop-preferences").dataset.section==="projects" && !document.querySelector("#maintenance-watch").disabled'), 'project reminders reached');
+    assert.deepEqual(await state(), before); assert.deepEqual(await projectInvoke('system_notifications_snapshot'), globalBefore);
+    await screenshot('p7-maintenance-settings-linked'); await closePreferences();
   });
 
   await checked('P7 maintenance leaves project content intact, keeps zero model requests and exits with an owned watcher', async () => {
