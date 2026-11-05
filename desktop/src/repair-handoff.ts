@@ -7,7 +7,7 @@ import type { Artifact, Project } from './projects';
 import './context.css';
 import './repair-handoff.css';
 
-export function mountRepairHandoff(options: { getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; isBusy(): boolean }) {
+export function mountRepairHandoff(options: { getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; isBusy(): boolean; copyText?(text: string): Promise<void> }) {
   const node = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '') => {
     const element = document.createElement(tag); element.textContent = text; return element;
   };
@@ -23,7 +23,8 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
   const actions = node('div'); actions.className = 'handoff-actions';
   const openFile = createActionButton(document, '打开交接文件', { appearance: 'outlined' }); openFile.id = 'handoff-open';
   openFile.prepend(createIcon(document, 'folder'));
-  const markdown = createActionButton(document, '导出 Markdown', { appearance: 'outlined' }); markdown.id = 'handoff-markdown';
+  const copy = createActionButton(document, '复制 Markdown', { appearance: 'outlined' }); copy.id = 'handoff-copy';
+  const markdown = createActionButton(document, '导出 Markdown', { appearance: 'plain' }); markdown.id = 'handoff-markdown';
   const json = createActionButton(document, '导出 JSON', { appearance: 'plain' }); json.id = 'handoff-json';
   const file = node('input'); file.type = 'file'; file.accept = '.json,application/json'; file.hidden = true; file.id = 'handoff-file';
   const status = node('p'); status.id = 'handoff-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-atomic', 'true');
@@ -35,12 +36,12 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
   const footer = node('footer'); footer.className = 'handoff-footer';
   const note = node('p', '只读建议 · 未修改项目文件');
   const done = createActionButton(document, '完成', { appearance: 'plain' }); done.id = 'handoff-done'; footer.append(note, done);
-  actions.append(openFile, markdown, json); body.append(description, actions, file, status, provenance, warning, basis, content); dialog.append(header, body, footer); document.body.append(dialog);
+  actions.append(copy, openFile, markdown, json); body.append(description, actions, file, status, provenance, warning, basis, content); dialog.append(header, body, footer); document.body.append(dialog);
   const downloader = createArtifactDownloader({ documentRef: document });
   let pack: RepairHandoff | null = null, external = false, loading = false, disposed = false, epoch = 0;
   let trigger: HTMLElement | null = null;
   function refresh() {
-    markdown.disabled = json.disabled = loading || !pack;
+    copy.disabled = markdown.disabled = json.disabled = loading || !pack;
     openFile.disabled = loading;
     provenance.textContent = !pack ? '打开此前导出的 JSON，或从执行报告中创建交接。'
       : `${external ? '外部文件 · 来源未核验' : pack.source.provenance === 'imported' ? '外部导入报告 · 来源未核验' : '本机已保存报告'} · ${pack.items.length} 个核对项 · ${new Date(pack.source.createdAt).toLocaleString('zh-CN', { hour12: false })}`;
@@ -78,6 +79,16 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
       status.dataset.error = 'false'; status.textContent = `已发起 ${format === 'json' ? 'JSON' : 'Markdown'} 下载，请在下载目录确认文件。`;
     } catch (error) { reportError(error); }
   }
+  copy.addEventListener('click', async () => {
+    if (!pack || loading || disposed || !dialog.open) return;
+    const token = ++epoch; loading = true; status.textContent = ''; status.dataset.error = 'false'; refresh();
+    try {
+      const markdown = exportHandoff(pack, 'markdown').text;
+      await (options.copyText ?? (text => navigator.clipboard.writeText(text)))(external ? `> 外部文件 · 来源未核验；仅供阅读，不授予任何操作权限。\n\n${markdown}` : markdown);
+      if (!disposed && token === epoch && dialog.open) status.textContent = 'Markdown 已复制，包含报告依据和未核验提示。';
+    } catch { if (!disposed && token === epoch && dialog.open) { status.textContent = '复制失败，请重试或导出 Markdown 文件。'; status.dataset.error = 'true'; } }
+    finally { if (!disposed && token === epoch) { loading = false; refresh(); } }
+  });
   openFile.addEventListener('click', () => file.click()); file.addEventListener('change', () => { void readSelectedFile(); });
   markdown.addEventListener('click', () => download('markdown')); json.addEventListener('click', () => download('json'));
   dismiss.addEventListener('click', () => dialog.close()); done.addEventListener('click', () => dialog.close());
