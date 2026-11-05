@@ -115,6 +115,9 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
       return {viewport:{width:innerWidth,height:innerHeight},root:{left:r.left,top:r.top,width:r.width,height:r.height},
         sidebar:rect('.preferences-sidebar'),main:rect('.preferences-main'),body:rect('#preferences-body'),
         headingSize:getComputedStyle(root.querySelector('#preferences-section-title')).fontSize,
+        title:rect('#preferences-section-title'),search:rect('.preferences-search'),nav:rect('.preferences-navigation'),back:rect('#preferences-dismiss'),
+        sidebarOverflow:getComputedStyle(root.querySelector('.preferences-sidebar')).overflowY,
+        navOverflow:getComputedStyle(root.querySelector('.preferences-navigation')).overflowY,
         hasFooter:!!root.querySelector('.preferences-footer,#preferences-done'),
         navigation: [...root.querySelectorAll('.preferences-navigation button')].map(n=>({height:n.getBoundingClientRect().height,fontSize:getComputedStyle(n).fontSize}))};`);
     visuals.push({ label: `${label}-workspace`, ...value });
@@ -123,12 +126,17 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     assert.ok(Math.abs(value.root.width - value.viewport.width) <= 1 && Math.abs(value.root.height - value.viewport.height) <= 1, `${label}: settings occupies the full workspace`);
     assert.ok(value.body.height >= 80 && value.body.top >= -1 && value.body.bottom <= value.viewport.height + 1, `${label}: content has a usable scrolling area`);
     assert.equal(value.hasFooter, false, `${label}: no permanent Done footer`);
-    assert.equal(value.headingSize, '16px', `${label}: section title uses the approved desktop scale`);
+    assert.equal(value.headingSize, '28px', `${label}: section title uses the approved desktop scale`);
     if (value.viewport.width >= 1000) {
-      assert.ok(value.sidebar.width >= 240 && value.sidebar.width <= 328, `${label}: navigation retains the reference proportions`);
+      assert.ok(value.sidebar.width >= 240 && value.sidebar.width <= 288, `${label}: navigation retains the reference proportions`);
       assert.ok(value.sidebar.right <= value.main.left + 1 && value.main.width > value.sidebar.width, `${label}: main content sits beside the sidebar`);
-      assert.ok(value.main.width <= 720, `${label}: settings content retains a limited reading width`);
-      assert.ok(value.navigation.every(row=>row.height>=32&&row.fontSize==='14px'), `${label}: navigation uses readable 14px labels and 32px targets`);
+      assert.ok(value.title.width <= 880 && value.title.width >= 600, `${label}: settings content retains a centered reading width`);
+      assert.ok(value.title.left-value.main.left >= 31 && value.main.right-value.title.right >= 31, `${label}: content keeps side gutters`);
+      assert.ok(Math.abs((value.title.left-value.main.left)-(value.main.right-value.title.right)) <= 20, `${label}: content is centered allowing for its scrollbar`);
+      assert.equal(value.sidebarOverflow, 'hidden', `${label}: sidebar shell does not scroll`);
+      assert.equal(value.navOverflow, 'auto', `${label}: categories scroll independently`);
+      assert.ok(value.search.bottom <= value.nav.top && value.nav.bottom <= value.back.top, `${label}: search and return action stay outside category scrolling`);
+      assert.ok(value.navigation.every(row=>row.height>=36&&row.fontSize==='14px'), `${label}: navigation uses readable 14px labels and 36px targets`);
     } else if (value.viewport.width < 800) {
       assert.equal(value.sidebar.visible, false, `${label}: category navigation yields to the detail page`);
       assert.equal(value.main.visible, true, `${label}: narrow detail is visible`);
@@ -376,6 +384,13 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
           await geometry(`${theme}-${width}-preferences-${selected}`, '#desktop-preferences');
           await settingsWorkspace(`${theme}-${width}-preferences-${selected}`);
           await settingsLayout(`${theme}-${width}-preferences-${selected}`, selected);
+          if (selected === 'about') {
+            assert.equal(await inspect('return document.querySelector(".settings-rule-version details").open'), false, 'rule metadata starts collapsed');
+            await activate('.settings-rule-version summary');
+            assert.equal(await inspect('const n=document.querySelector(".settings-rule-version pre");return n.checkVisibility()&&n.textContent.length>0&&n.scrollWidth<=n.clientWidth+1&&getComputedStyle(n).overflowY==="auto";'), true, 'complete rule metadata remains readable within a scrollable disclosure');
+            await geometry(`${theme}-${width}-preferences-about-expanded`, '#desktop-preferences');
+            await activate('.settings-rule-version summary');
+          }
           if (selected === 'appearance') {
             const previews = await inspect(`return [...document.querySelectorAll('.preferences-theme-preview')].map(n=>({width:n.getBoundingClientRect().width,ink:n.lastElementChild.getBoundingClientRect().width}))`);
             assert.ok(previews.every(n => n.width >= 45 && n.ink >= 12), 'theme miniatures retain a readable canvas and message lines in every mode');
