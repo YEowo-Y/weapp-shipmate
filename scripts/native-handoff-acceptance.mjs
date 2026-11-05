@@ -40,6 +40,8 @@ export async function checkHandoffFlows({ run, checked, click, fill, press, insp
     assert.doesNotMatch(await text('#handoff-content'), /尚未打开交接内容/);
     assert.equal(await inspect('return document.querySelector("#handoff-basis").open'), false);
     assert.doesNotMatch(await text('#handoff-status'), /不受支持/);
+    await click('#handoff-copy');
+    await until(async () => /Markdown 已复制/.test(await text('#handoff-status')), 'native Markdown copy succeeds');
     await screenshot('p6-handoff-wide');
   });
   await checked('P6 JSON and Markdown downloads roundtrip without raw project paths or inputs', async () => {
