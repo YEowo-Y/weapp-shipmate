@@ -438,6 +438,7 @@ window.addEventListener("DOMContentLoaded", () => {
     },
   });
   maintenance = mountProjectMaintenance({
+    onNotifications: () => { health?.close(); window.setTimeout(() => preferences?.open($('#desktop-preferences-open'), 'notifications'), 0); },
     getProjectId: () => projects?.getActiveId() ?? null,
     onResult: async () => { if (projects && !await projects.refresh()) throw new Error('项目记录未能刷新'); },
     onOpenArtifact: async id => await projects?.openArtifact(id) ?? false,
@@ -470,7 +471,7 @@ window.addEventListener("DOMContentLoaded", () => {
   };
   let dataSettings: SettingsPanel | null = null;
   preferences = mountPreferences({
-    systemNotifications: mountSystemNotifications({ invoke }),
+    systemNotifications: mountSystemNotifications({ invoke, onProjectSettings: () => preferences?.open(null, 'projects') }),
     async getPanel(section) {
       if (section === 'projects') { await projects!.ready; return projectSettings; }
       const sessionWorkspace = await sessionsReady;
