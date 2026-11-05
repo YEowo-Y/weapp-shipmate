@@ -85,6 +85,28 @@ test('history restart path previews undo and recovery before separate explicit c
   }
 });
 
+test('history state filtering is local, preserves recovery actions and recovers from an empty selection', async () => {
+  const operations = ['applied', 'recovery_required', 'undone'].map((state, index) => ({ ...result(state), operationId: `op-${index}` }));
+  const h = harness({ invoke: cmd => cmd === 'project_repair_snapshot' ? { operations } : undefined });
+  h.app.openHistory(); await h.settle();
+  const calls = h.calls.length, select = h.node('repair-history-filter');
+  const change = value => { select.value = value; select.dispatchEvent(new h.document.defaultView.Event('change')); };
+  change('recovery_required');
+  assert.equal(h.node('repair-history-count').textContent, '1 / 3 条记录');
+  assert.equal(h.document.querySelectorAll('.project-repair-operation').length, 1);
+  assert.ok(h.document.querySelector('[data-repair-action="recovery-preview"]'));
+  assert.equal(h.calls.length, calls, 'filter does not load, prepare or write');
+  change('not_applied');
+  assert.match(h.node('repair-history').textContent, /此状态下没有/);
+  assert.equal(h.node('repair-history-reset').hidden, false);
+  await h.click('repair-history-reset');
+  assert.equal(h.node('repair-history-filter').value, 'all');
+  assert.equal(h.document.querySelectorAll('.project-repair-operation').length, 3);
+  change('undone'); await h.click('repair-history-refresh');
+  assert.equal(select.value, 'undone'); assert.equal(h.document.querySelectorAll('.project-repair-operation').length, 1);
+  h.dispose();
+});
+
 
 test('recheck association failure preserves completed file change and undo', async () => {
   const h = harness({ invoke: cmd => { if (cmd === 'project_repair_record_recheck') throw Error('文件在复检后改变'); } });
