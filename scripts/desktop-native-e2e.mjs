@@ -216,7 +216,7 @@ async function quit() {
   if (readingMode) readingFrontendErrors.push(...await inspect('return window.__readingAcceptanceErrors || []'));
   if (presentationMode) presentationFrontendErrors.push(...await inspect('return window.__presentationAcceptanceErrors || []'));
   await command('DELETE', ''); session = null;
-  if (memoryMode || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode) {
+  if (healthMode || repairMode || handoffMode || memoryMode || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode) {
     // DELETE /session can return before WebView2 finishes writing Preferences.
     // Wait only for this run's explicitly isolated profile; do not kill browsers.
     await until(async () => {
@@ -1059,7 +1059,7 @@ try {
   } else if (notificationsMode) {
     await checkSystemNotificationFlows({ run, checked, click, press, inspect, text, command, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, quit, launch, requests, ownedRuntimeProcesses });
   } else if (sourcesMode) {
-    await checkSourceFreshnessFlows({ run, checked, click, press, inspect, text, command, until, screenshot, projectInvoke, quit, launch, requests, sourceFixture, ownedRuntimeProcesses });
+    await checkSourceFreshnessFlows({ run, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, quit, launch, requests, sourceFixture, ownedRuntimeProcesses });
   } else if (maintenanceMode) {
     await checkMaintenanceFlows({ run, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, quit, launch, requests, isolatedDirectory, ownedRuntimeProcesses });
   } else if (memoryMode) {
