@@ -2,7 +2,7 @@ import { createActionButton } from '../design-previews/components/ui-kit.js';
 import './system-notifications.css';
 
 type Snapshot = { schemaVersion: 1; revision: number; enabled: boolean; permission: 'granted' | 'denied' | 'prompt' | 'unknown'; delivery: 'idle' | 'submitted' | 'failed' | 'disabled' | 'permission_required'; message: string | null; installationRequired: boolean; lastAttempt?: { kind: 'test' | 'notice'; noticeId: string | null; attemptedAt: number; outcome: 'submitted' | 'failed' | 'permission_required' } | null };
-type Options = { invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> };
+type Options = { invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>; onProjectSettings?(anchor: HTMLElement): void };
 
 /** Device settings are persisted natively; reading never requests permission or sends a notification. */
 export function mountSystemNotifications(options: Options) {
@@ -10,17 +10,22 @@ export function mountSystemNotifications(options: Options) {
   const button = (id: string, text: string) => { const el = createActionButton(document, text); el.id = id; return el; };
   const element = node('section'); element.className = 'system-notifications'; element.setAttribute('aria-labelledby', 'system-notifications-title');
   const title = node('h3', '系统通知'); title.id = 'system-notifications-title';
-  const description = node('p', '此设备默认关闭。明确启用后，应用可发送系统通知；部分系统会请求通知权限。应用内维护提醒仍单独设置。'); description.id = 'system-notifications-description';
+  const description = node('p', '仅在启用时请求系统权限；项目内提醒单独设置。'); description.id = 'system-notifications-description';
   const label = node('label'); label.className = 'system-notifications-toggle';
   const toggle = node('input'); toggle.id = 'system-notifications-enabled'; toggle.type = 'checkbox'; toggle.checked = false; toggle.setAttribute('role', 'switch'); toggle.setAttribute('aria-describedby', description.id);
   label.append(node('span', '允许应用发送系统通知'), toggle);
-  const permission = node('p'); permission.id = 'system-notifications-permission';
+  const details = node('dl'); details.className = 'system-notifications-details';
+  const permissionRow = node('div'), attemptRow = node('div');
+  const permission = node('dd'); permission.id = 'system-notifications-permission';
   const installation = node('p'); installation.id = 'system-notifications-installation';
-  const lastAttempt = node('p'); lastAttempt.id = 'system-notifications-last-attempt';
+  const lastAttempt = node('dd'); lastAttempt.id = 'system-notifications-last-attempt';
+  permissionRow.append(node('dt', '发送状态'), permission); attemptRow.append(node('dt', '最近尝试'), lastAttempt);
+  details.append(permissionRow, attemptRow);
   const actions = node('div'); actions.className = 'context-actions';
   const test = button('system-notifications-test', '发送测试通知'), reload = button('system-notifications-reload', '重新读取状态'); actions.append(test, reload);
+  const project = button('system-notifications-project', '项目提醒设置'); project.hidden = !options.onProjectSettings; actions.append(project);
   const status = node('p'); status.id = 'system-notifications-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-atomic', 'true');
-  element.append(title, description, label, permission, installation, lastAttempt, actions, status);
+  element.append(title, label, description, details, installation, actions, status);
   let snapshot: Snapshot | null = null, disposed = false, visible = false, epoch = 0, ready = false;
   let pending: Promise<void> | null = null;
   const current = (token: number) => !disposed && visible && token === epoch;
@@ -30,6 +35,7 @@ export function mountSystemNotifications(options: Options) {
     toggle.disabled = !visible || !ready || Boolean(pending);
     test.disabled = toggle.disabled || !snapshot?.enabled || snapshot.permission !== 'granted';
     reload.disabled = !visible || Boolean(pending);
+    project.disabled = disposed || !visible || Boolean(pending);
     element.setAttribute('aria-busy', String(Boolean(pending))); status.dataset.running = String(Boolean(pending));
     const permissions = { granted: '系统通知权限已允许', denied: '系统通知权限未允许；可在系统设置中调整后重新读取。', prompt: '尚未请求系统权限；启用时才会请求。', unknown: '系统权限状态暂不可用；请重新读取。' };
     permission.textContent = !snapshot ? '通知设置尚未读取' : snapshot.installationRequired
@@ -38,7 +44,7 @@ export function mountSystemNotifications(options: Options) {
     installation.hidden = !snapshot?.installationRequired;
     installation.textContent = 'Windows 系统通知需要安装版应用身份。此提示不是安装状态检测；接口成功也不代表通知已显示。';
     const attempt = snapshot?.lastAttempt;
-    lastAttempt.hidden = !attempt;
+    attemptRow.hidden = !attempt;
     const outcomes = { submitted: '已提交给系统，不代表实际显示', failed: '提交失败', permission_required: '权限未允许，未提交' };
     lastAttempt.textContent = attempt ? `最近${attempt.kind === 'test' ? '测试通知' : '维护通知'}尝试：${new Date(attempt.attemptedAt).toLocaleString('zh-CN')} · ${outcomes[attempt.outcome]}` : '';
   }
@@ -64,6 +70,7 @@ export function mountSystemNotifications(options: Options) {
   toggle.addEventListener('change', () => { const enabled = toggle.checked; if (toggle.disabled || !snapshot) { render(); return; } void operation('system_notifications_save', { expectedRevision: snapshot.revision, enabled }); });
   reload.addEventListener('click', () => { if (!reload.disabled) void operation('system_notifications_snapshot'); });
   test.addEventListener('click', () => { if (!test.disabled) void operation('system_notifications_test'); });
+  project.addEventListener('click', () => { if (!disposed && visible && !pending && !project.disabled && !project.hidden) options.onProjectSettings?.(project); });
   render();
   return {
     element,
