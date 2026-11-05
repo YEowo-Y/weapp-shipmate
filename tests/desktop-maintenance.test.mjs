@@ -11,18 +11,18 @@ const source = readFileSync(new URL('../desktop/src/maintenance.ts', import.meta
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 const snapshot = (extra = {}) => ({ projectId: 'a', revision: 0, watchEnabled: false, notificationsEnabled: false, state: 'off', message: '', runId: null, lastCheckedAt: null, notices: [], ...extra });
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
-function harness({ invoke: handle, open = async () => true, delayedListen, listenFailure, onResult } = {}) {
+function harness({ invoke: handle, open = async () => true, delayedListen, listenFailure, onResult, onNotifications } = {}) {
   const document = createPreviewDocument(), create = document.createElement.bind(document), nodes = [], calls = [];
-  document.createElement = tag => { const node = create(tag); node.listeners = {}; node.addEventListener = (name, handler) => { node.listeners[name] = handler; }; nodes.push(node); return node; };
+  document.createElement = tag => { const node = create(tag); node.listeners = {}; node.focus = () => { document.activeElement = node; }; node.contains = target => node === target || node.children.some(child => child.contains(target)); node.addEventListener = (name, handler) => { node.listeners[name] = handler; }; nodes.push(node); return node; };
   let project = 'a', listener, removed = 0, results = 0, revealed = 0, unread = 0;
   const context = vm.createContext({ document, createActionButton: (doc, text) => { const b = doc.createElement('wa-button'); b.textContent = text; return b; },
     invoke: async (name, args) => { calls.push({ name, args }); return handle ? handle(name, args) : snapshot({ projectId: args.projectId }); },
     listen: async (_, callback) => { listener = callback; if (listenFailure?.()) throw new Error('listen failed'); if (delayedListen) await delayedListen; return () => { removed++; }; },
   });
   vm.runInContext(script, context);
-  const app = context.mountProjectMaintenance({ getProjectId: () => project, onResult: async () => { results++; return onResult?.(); }, onOpenArtifact: open, onRevealReport: () => { revealed++; }, onUnread: count => { unread = count; } });
+  const app = context.mountProjectMaintenance({ onNotifications, getProjectId: () => project, onResult: async () => { results++; return onResult?.(); }, onOpenArtifact: open, onRevealReport: () => { revealed++; }, onUnread: count => { unread = count; } });
   const node = id => nodes.find(n => n.id === id);
-  return { app, node, calls, setProject: id => { project = id; }, event: value => listener({ payload: value }), removed: () => removed, results: () => results, revealed: () => revealed, unread: () => unread,
+  return { app, node, calls, document, setProject: id => { project = id; }, event: value => listener({ payload: value }), removed: () => removed, results: () => results, revealed: () => revealed, unread: () => unread,
     click: async id => { node(id).listeners.click(); await setImmediate(); },
     change: (id, value) => { node(id).checked = value; node(id).listeners.change(); },
     openNotice: async () => { node('maintenance-notices').children[0].children[0].listeners.click(); await setImmediate(); },
@@ -196,4 +196,42 @@ test('queued metadata refresh and late failures cannot affect a newly selected p
   h.event(snapshot({ state: 'watching', lastCheckedAt: 123 }));
   h.setProject('b'); await h.app.select(); pending.resolve(); await setImmediate();
   assert.equal(h.results(), 1); assert.doesNotMatch(h.node('maintenance-status').textContent, /未能刷新/);
+});
+
+test('maintenance shows the real check time and filters unread notices without native writes', async () => {
+  const notices = [
+    { id: 'unread', artifactId: 'a1', createdAt: 1000, newCount: 2, read: false },
+    { id: 'read', artifactId: 'a2', createdAt: 2000, newCount: 1, read: true },
+  ];
+  const h = harness({ invoke: (_name, args) => snapshot({ projectId: args.projectId, notices, lastCheckedAt: 1000 }) });
+  await h.app.select();
+  assert.match(h.node('maintenance-last-check').textContent, /最近预检记录/);
+  assert.match(h.node('maintenance-notice-count').textContent, /1 条未读.*2 条提醒/);
+  const before = h.calls.length;
+  const filter = h.node('maintenance-notice-filter');
+  filter.value = 'unread'; filter.listeners.change();
+  assert.equal(h.node('maintenance-notices').children.length, 1);
+  assert.equal(h.node('maintenance-notices').children[0].children[0].dataset.noticeId, 'unread');
+  h.node('maintenance-notices').children[0].children[0].focus();
+  h.event(snapshot({ notices: notices.map(n => ({ ...n, read: true })), lastCheckedAt: 1000 }));
+  assert.equal(h.document.activeElement, filter, 'removed focused unread notice returns focus to filter');
+  assert.match(h.node('maintenance-notices').textContent, /没有未读/);
+  await h.click('maintenance-notice-reset');
+  assert.equal(filter.value, 'all'); assert.equal(h.node('maintenance-notices').children.length, 2);
+  assert.equal(h.calls.length, before, 'filtering and resetting never send commands');
+  filter.value = 'unread'; filter.listeners.change(); h.setProject('b'); await h.app.select();
+  assert.equal(filter.value, 'all');
+});
+
+test('notification navigation keeps unsaved and pending maintenance settings in place', async () => {
+  let opened = 0; const pending = deferred();
+  const h = harness({ onNotifications: () => { opened++; }, invoke: name => name.endsWith('save') ? pending.promise : snapshot() });
+  await h.app.select(); assert.match(h.node('maintenance-last-check').textContent, /尚无/);
+  await h.click('maintenance-system-settings'); assert.equal(opened, 1);
+  h.change('maintenance-watch', true);
+  await h.click('maintenance-system-settings'); assert.equal(opened, 1); assert.match(h.node('maintenance-status').textContent, /尚未保存/);
+  await h.click('maintenance-save'); await h.click('maintenance-system-settings'); assert.equal(opened, 1);
+  pending.resolve(snapshot({ watchEnabled: true, revision: 1 })); await setImmediate();
+  await h.click('maintenance-system-settings'); assert.equal(opened, 2);
+  h.app.destroy(); await h.click('maintenance-system-settings'); assert.equal(opened, 2);
 });
