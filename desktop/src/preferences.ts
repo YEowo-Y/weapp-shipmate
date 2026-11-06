@@ -53,7 +53,12 @@ export function mountPreferences(options: SettingsOptions) {
     }
     if (dialog.open && document.activeElement === focusAtStart) reveal(target);
   }
-  function close() { if (!disposed && dialog.open && allowed()) dialog.close(); }
+  function close() {
+    if (disposed) return false;
+    if (dialog.open && !allowed()) return false;
+    if (dialog.open) dialog.close();
+    return true;
+  }
   dialog.addEventListener('cancel', event => { if (!allowed()) event.preventDefault(); });
   dialog.addEventListener('close', () => {
     active?.close(); active = null; epoch++; anchor?.setAttribute('aria-expanded', 'false');
