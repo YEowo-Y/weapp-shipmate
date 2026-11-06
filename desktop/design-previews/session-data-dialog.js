@@ -44,11 +44,15 @@ function createSessionDataSurface({ document: doc, trigger, capture, prepare, co
   const preview = element('p', 'session-workspace__import-preview'); preview.hidden = true; preview.setAttribute('role', 'status');
   importSection.append(element('h3', '', '追加导入'), element('p', '', '仅支持 Shipmate JSON 会话备份，最大 20 MiB。追加为独立副本，不覆盖现有会话；不会重放工具或历史审批。'), choose, file, preview);
   const feedback = element('p', 'session-workspace__status'); feedback.setAttribute('role', 'status'); feedback.setAttribute('aria-live', 'polite'); feedback.dataset.action = 'data-feedback';
-  body.append(scope, exportSection, importSection, feedback);
   const actions = element('div', 'session-workspace-dialog__actions');
   const cancel = action('完成', 'cancel'), confirm = action('追加导入', 'import-confirm', { appearance: 'accent' }); confirm.disabled = true;
-  if (embedded) { actions.append(confirm); importSection.append(actions); node.append(body); }
-  else { actions.append(cancel, confirm); node.append(header, body, actions); }
+  if (embedded) {
+    const group = element('div', 'session-workspace__data-group');
+    group.append(exportSection, importSection);
+    body.append(element('h4', '', '会话备份'), scope, group, feedback);
+    actions.append(choose, confirm); importSection.append(actions); node.append(body);
+  }
+  else { body.append(scope, exportSection, importSection, feedback); actions.append(cancel, confirm); node.append(header, body, actions); }
   let parsed = null, busy = false, active = false, destroyed = false, needsReload = false, readSequence = 0;
   const alive = () => active && !destroyed && !isDisposed();
   const reloadMessage = embedded
