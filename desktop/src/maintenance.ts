@@ -84,7 +84,7 @@ export function mountProjectMaintenance(options: Options) {
     notifications.input.checked = draft?.notificationsEnabled ?? snapshot?.notificationsEnabled ?? false;
     const disabled = !projectId || !ready || pending;
     watch.input.disabled = disabled; notifications.input.disabled = disabled;
-    save.disabled = disabled || !draft; discard.disabled = pending || !draft;
+    save.disabled = disabled || readFailed || !draft; discard.disabled = pending || !draft;
     retry.disabled = !projectId || pending;
     retry.textContent = ready && !readFailed ? '重试自动维护' : '重新加载';
     stop.disabled = disabled || !(snapshot?.state === 'pending' || (snapshot?.state === 'checking' && snapshot.runId));
@@ -155,8 +155,9 @@ export function mountProjectMaintenance(options: Options) {
       const sequence = eventSequence;
       const value = await invoke<Snapshot>('project_maintenance_snapshot', { projectId: id });
       if (!current(token, id)) return;
+      if (!value || value.projectId !== id) throw new Error('维护状态与当前项目不一致');
       const accepted = accept(value, token, id, sequence);
-      if (!accepted && !ready) throw new Error('维护状态与当前项目不一致');
+      if (!accepted && (!ready || sequence === eventSequence)) throw new Error('维护状态未更新');
       readFailed = false; message(drafts.has(id) ? unsavedMessage : '');
     } catch { if (current(token, id)) { readFailed = true; message('维护状态未能读取，已保留设置草稿。请重新加载。', true); } }
     finally { if (current(token, id)) { pending = false; render(); } }
@@ -177,7 +178,12 @@ export function mountProjectMaintenance(options: Options) {
       }
       if (saved) drafts.delete(id);
       message(saved ? '维护设置已保存。' : '');
-    } catch { if (current(token, id)) { if (saved) readFailed = true; message('操作未能完成，已保留设置草稿。请重试；版本冲突时先重新加载。', true); } }
+    } catch {
+      if (current(token, id)) {
+        if (saved) readFailed = true;
+        message(saved ? '维护设置未能保存，草稿已保留。请先重新加载，再核对并保存。' : '操作未能完成，已保留设置草稿。请重试。', true);
+      }
+    }
     finally { if (current(token, id)) { pending = false; render(); } }
   }
   async function openNotice(notice: Notice) {
