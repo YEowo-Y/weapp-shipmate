@@ -86,11 +86,16 @@ test('pending project save cannot close the settings panel and completion update
 
 test('refresh preserves a conflicting draft and original revision until explicit discard adopts the latest data', async () => {
   const h = harness(); await h.app.ready; h.app.settings.open();
-  h.node('project-name').value = '本地草稿'; h.update({ ...project('a', 2), name: '外部名称' }); await h.app.refresh();
+  h.node('project-name').value = '本地草稿'; h.update({ ...project('a', 2), name: '外部名称' });
   assert.equal(h.node('project-name').value, '本地草稿'); await h.fire('project-form', 'submit');
   assert.equal(h.calls.find(([cmd]) => cmd === 'project_save')[1].project.expectedRevision, 1);
   assert.match(h.node('project-status').textContent, /重新加载/); assert.equal(h.app.settings.canClose(), false);
   await h.fire('project-retry'); assert.equal(h.node('project-name').value, '本地草稿');
+  assert.equal(h.node('project-save').disabled, true);
+  assert.match(h.node('project-status').textContent, /放弃更改/);
+  await h.fire('project-form', 'submit');
+  assert.equal(h.calls.filter(([cmd]) => cmd === 'project_save').length, 1, 'a known stale revision cannot be resubmitted');
+  assert.equal(h.node('project-discard').disabled, false);
   await h.fire('project-discard'); assert.equal(h.node('project-name').value, '外部名称');
   h.node('project-name').value = '已解决'; await h.fire('project-form', 'submit');
   assert.equal(h.calls.filter(([cmd]) => cmd === 'project_save').at(-1)[1].project.expectedRevision, 2);
