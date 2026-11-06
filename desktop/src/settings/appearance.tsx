@@ -37,6 +37,6 @@ export function Appearance({ snapshot, store, hidden }: { snapshot: PreferencesS
       <p className="preferences-sample" aria-label="正文大小预览">先查看检查结果，再决定下一步。</p>
       <SettingChoices field="motion" name="desktop-motion" label="界面动效" hint="减少动画与渐变，执行状态仍以文字展示。" choices={[[ 'system', '跟随系统' ], [ 'reduce', '减少动效' ]]} snapshot={snapshot} store={store} />
     </div>
-    <div className="preferences-recovery"><div><span>恢复外观默认</span><p id="preferences-reset-description">仅恢复主题、正文大小和动效，不清除会话、项目资料或凭据。</p></div><Button id="preferences-reset" variant="outline" aria-label="恢复外观默认" aria-describedby="preferences-reset-description" onClick={store.reset}>恢复默认</Button></div>
+    <h4>恢复默认</h4><div className="preferences-group"><div className="settings-row"><span><strong>恢复外观默认</strong><small id="preferences-reset-description">仅恢复主题、正文大小和动效，不清除会话、项目资料或凭据。</small></span><Button id="preferences-reset" variant="outline" aria-label="恢复外观默认" aria-describedby="preferences-reset-description" onClick={store.reset}>恢复默认</Button></div></div>
   </section>;
 }
