@@ -133,6 +133,13 @@
   .desktop-tools { position:fixed; inset:0 0 0 auto; width:min(360px,100vw); height:100dvh; max-height:100dvh; box-shadow:-12px 0 48px #0002; }
   .desktop-header { padding-inline:16px; }
 }
+/* Scroll the middle of short desktop sidebars as one region. */
+@media (min-width: 641px) and (max-height: 600px) {
+  .desktop-navigation > .desktop-navigation-body { display:block; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+  #sessionHost, #sessionHost .session-workspace__recent { overflow:visible; }
+  #sessionHost .session-workspace--sidebar { height:auto; }
+  #sessionHost .session-workspace__recent { flex:none; }
+}
 @media (max-width: 640px) {
   .desktop-layout, .desktop-layout[data-tools-open="true"] { display:flex; flex-direction:column; }
   .desktop-sidebar { flex:0 0 auto; padding:10px 14px; border-right:0; border-bottom:1px solid var(--border); flex-direction:row; align-items:center; justify-content:space-between; overflow:visible; }
