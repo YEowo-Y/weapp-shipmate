@@ -11,7 +11,7 @@ const source = readFileSync(new URL('../desktop/src/maintenance.ts', import.meta
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 const snapshot = (extra = {}) => ({ projectId: 'a', revision: 0, watchEnabled: false, notificationsEnabled: false, state: 'off', message: '', runId: null, lastCheckedAt: null, notices: [], ...extra });
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
-function harness({ invoke: handle, open = async () => true, delayedListen, listenFailure, onResult, onNotifications } = {}) {
+function harness({ invoke: handle, open = async () => true, reveal = () => true, delayedListen, listenFailure, onResult, onNotifications } = {}) {
   const document = createPreviewDocument(), create = document.createElement.bind(document), nodes = [], calls = [];
   document.createElement = tag => { const node = create(tag); node.listeners = {}; node.focus = () => { document.activeElement = node; }; node.contains = target => node === target || node.children.some(child => child.contains(target)); node.addEventListener = (name, handler) => { node.listeners[name] = handler; }; nodes.push(node); return node; };
   let project = 'a', listener, removed = 0, results = 0, revealed = 0, unread = 0;
@@ -20,7 +20,7 @@ function harness({ invoke: handle, open = async () => true, delayedListen, liste
     listen: async (_, callback) => { listener = callback; if (listenFailure?.()) throw new Error('listen failed'); if (delayedListen) await delayedListen; return () => { removed++; }; },
   });
   vm.runInContext(script, context);
-  const app = context.mountProjectMaintenance({ onNotifications, getProjectId: () => project, onResult: async () => { results++; return onResult?.(); }, onOpenArtifact: open, onRevealReport: () => { revealed++; }, onUnread: count => { unread = count; } });
+  const app = context.mountProjectMaintenance({ onNotifications, getProjectId: () => project, onResult: async () => { results++; return onResult?.(); }, onOpenArtifact: open, onRevealReport: isCurrent => { revealed++; return reveal(isCurrent); }, onUnread: count => { unread = count; } });
   const node = id => nodes.find(n => n.id === id);
   return { app, node, calls, document, setProject: id => { project = id; }, event: value => listener({ payload: value }), removed: () => removed, results: () => results, revealed: () => revealed, unread: () => unread,
     click: async id => { node(id).listeners.click(); await setImmediate(); },
@@ -152,6 +152,28 @@ test('notices mark read only after successful report opening, with reveal and un
   assert.equal(h.calls.filter(c => c.name.endsWith('_read')).length, 0); assert.equal(h.revealed(), 0);
   succeeds = true; await h.openNotice(); assert.equal(h.calls.filter(c => c.name.endsWith('_read')).length, 1); assert.equal(h.revealed(), 1); assert.equal(h.unread(), 0);
 });
+test('a notice stays unread if navigation is blocked or the project changes before reveal', async () => {
+  const gate = deferred(), notice = { id: 'n1', artifactId: 'saved', createdAt: 1, newCount: 1, read: false };
+  let blocked = true;
+  const h = harness({
+    invoke: (_, args) => snapshot({ projectId: args.projectId, notices: args.projectId === 'a' ? [notice] : [] }),
+    reveal: async isCurrent => { if (blocked) return false; await gate.promise; return isCurrent(); },
+  });
+  await h.app.select();
+  h.change('maintenance-watch', true);
+  await h.openNotice();
+  assert.equal(h.revealed(), 0);
+  assert.equal(h.node('maintenance-watch').checked, true);
+  await h.click('maintenance-discard');
+  await h.openNotice();
+  assert.equal(h.revealed(), 1);
+  assert.equal(h.unread(), 1);
+  blocked = false; await h.openNotice();
+  h.setProject('b'); await h.app.select();
+  gate.resolve(); await setImmediate();
+  assert.equal(h.calls.some(call => call.name.endsWith('_read')), false);
+});
+
 test('listener is removed after normal and delayed destruction', async () => {
   const h = harness(); await h.app.select(); h.app.destroy(); assert.equal(h.removed(), 1);
   const pending = deferred(), delayed = harness({ delayedListen: pending.promise }); delayed.app.destroy(); pending.resolve(); await setImmediate(); assert.equal(delayed.removed(), 1);
