@@ -1081,7 +1081,7 @@ try {
   } else if (sourcesMode) {
     await checkSourceFreshnessFlows({ run, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, quit, launch, requests, sourceFixture, ownedRuntimeProcesses });
   } else if (maintenanceMode) {
-    await checkMaintenanceFlows({ run, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, quit, launch, requests, isolatedDirectory, ownedRuntimeProcesses });
+    await checkMaintenanceFlows({ run, projectDatabase, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, quit, launch, requests, isolatedDirectory, ownedRuntimeProcesses });
   } else if (memoryMode) {
     await checkMemoryFlows({ run, checked, click, fill, press, inspect, text, command, find, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, quit, launch, requests, connectedModel, send, finished, chooseOption });
   } else if (healthMode) {
