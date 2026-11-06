@@ -377,8 +377,10 @@ test('settings search locates a real control and retains the query for returning
   assert.equal(h.node('desktop-preferences').dataset.section, 'appearance'); assert.equal(h.document.activeElement, h.node('desktop-message-size-16'));
   assert.equal(h.node('preferences-search').value, '字体'); assert.equal(h.node('desktop-message-size-16').classList.contains('settings-search-highlight'), true);
   act(() => h.document.querySelector('.preferences-back-results').click()); assert.equal(h.node('preferences-section-title').textContent, '搜索结果');
+  assert.equal(h.document.activeElement.id, 'preferences-search', 'return restores keyboard input');
   search(h, 'no-matching-setting'); assert.match(h.document.querySelector('.preferences-results [role=status]').textContent, /未找到/); assert.equal(h.document.querySelectorAll('.preferences-search-result').length, 0);
   search(h, ''); assert.equal(h.node('preferences-section-title').textContent, '外观与阅读'); assert.deepEqual(h.writes, []);
+  assert.equal(h.document.querySelector('.preferences-layout').dataset.navigation, 'true', 'clearing the search keeps the categories and input available at narrow widths');
 });
 
 test('closing search and reopening settings at a requested section starts a fresh navigation visit', async () => {
@@ -453,7 +455,9 @@ test('pending embedded activation preserves focus the user moved to another sett
 
 test('settings search cannot hide a panel that has unfinished changes', async () => {
   const h = harness(); await act(async () => { h.app.open(h.anchor, 'models'); await setImmediate(); });
-  h.panels.models.setCanClose(false); search(h, '字体');
+  h.panels.models.setCanClose(false); h.click('preferences-categories');
+  assert.equal(h.document.querySelector('.preferences-layout').dataset.navigation, 'false', 'a blocked editor and its warning stay visible at narrow widths');
+  search(h, '字体');
   assert.equal(h.node('test-models-panel')?.id, h.panels.models.element.id);
   assert.equal(h.document.querySelector('.preferences-results'), null); assert.equal(h.callbacks.some(call => call.name === 'modelsClose'), false);
   assert.match(h.document.querySelector('[role=alert]').textContent, /保存|完成/);
