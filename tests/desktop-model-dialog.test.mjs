@@ -673,6 +673,11 @@ desktopTest('embedded model settings reuse one content tree and select without o
   assert.equal(element.querySelector('#desktop-model-title').textContent, '模型连接');
   assert.equal(element.querySelector('#desktop-model-close').hidden, true);
   assert.equal(app.document.querySelectorAll('#desktop-provider-key').length, 1);
+  assert.equal(element.querySelector('#desktop-provider-status').closest('.preferences-group'), element.querySelector('.desktop-connection-state'));
+  assert.equal(element.querySelector('#desktop-provider-refresh').closest('.preferences-group'), element.querySelector('.desktop-connection-state'));
+  assert.equal(element.querySelector('#desktop-provider-key').closest('form').classList.contains('preferences-group'), true);
+  assert.equal(element.querySelector('#desktop-provider-verify').closest('.preferences-group').contains(element.querySelector('#desktop-inference-status')), true);
+  assert.equal(element.querySelector('#desktop-model-search').closest('.preferences-group').contains(element.querySelector('.desktop-model-list')), true);
   assert.equal(app.loads, 1);
   const model = element.querySelector('[data-model-id="alpha"]'); model.focus(); model.click();
   assert.equal(app.selection.model, 'alpha');
