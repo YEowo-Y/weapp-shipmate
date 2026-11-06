@@ -648,6 +648,7 @@ desktopTest('home context reflects selected project and points unavailable direc
 test('desktop exposes one persistent settings entry while retaining business destinations', () => {
   const html = readFileSync(new URL('../desktop/index.html', import.meta.url), 'utf8');
   assert.equal((html.match(/id="desktop-preferences-open"/g) || []).length, 1);
+  assert.match(html, /<nav class="desktop-primary-navigation" aria-labelledby="desktop-workspace-heading">\s*<h2 id="desktop-workspace-heading">工作区<\/h2>/);
   for (const id of ['desktop-model-settings', 'desktop-data-settings', 'home-models', 'home-preferences']) assert.ok(!html.includes(`id="${id}"`), `${id} must not duplicate settings`);
   for (const value of ['models', 'data', 'preferences']) assert.ok(!html.includes(`<wa-dropdown-item value="${value}"`));
   assert.match(html, /<\/details>\s*<div class="desktop-sidebar-footer">\s*<button id="desktop-preferences-open"/);
