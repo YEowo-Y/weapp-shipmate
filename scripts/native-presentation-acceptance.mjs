@@ -145,7 +145,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
   const settingsLayout = async (label, selected) => {
     const value = await inspect(`const rect=n=>{const r=n.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width};};
       const rows=[...document.querySelectorAll('.preferences-field-row')].filter(n=>n.checkVisibility()).map(n=>({copy:rect(n.firstElementChild),control:rect(n.lastElementChild)}));
-      const shells=[...document.querySelectorAll('.preferences-dialog .desktop-model-layout,.preferences-dialog .project-form,.preferences-dialog .project-backup-settings-panel,.preferences-dialog .project-backup-settings-panel > .project-backup')].filter(n=>n.checkVisibility()).map(n=>({className:n.className,border:getComputedStyle(n).borderTopWidth,padding:getComputedStyle(n).paddingTop}));
+      const shells=[...document.querySelectorAll('.preferences-dialog .desktop-model-layout,.preferences-dialog .project-backup-settings-panel,.preferences-dialog .project-backup-settings-panel > .project-backup')].filter(n=>n.checkVisibility()).map(n=>({className:n.className,border:getComputedStyle(n).borderTopWidth,padding:getComputedStyle(n).paddingTop}));
       const fields=['project-name','project-directory','desktop-provider-key'].map(id=>document.getElementById(id)).filter(n=>n?.checkVisibility()).map(n=>{const label=document.querySelector('label[for="'+n.id+'"]');return {id:n.id,input:rect(n),label:label?rect(label):null};});
       return {width:innerWidth,rows,shells,fields};`);
     visuals.push({label:label+'-layout',...value});
@@ -169,7 +169,26 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
       assert.equal(parseFloat(border.right) > 0, value.width > 1100, label+': provider divider follows layout direction');
       if (value.width <= 1100) assert.ok(parseFloat(border.bottom) > 0 && parseFloat(border.bottom) <= 1, label+': stacked provider list has one horizontal hairline');
     }
-    if (selected === 'projects') assert.equal(value.fields.length, 2, label+': project name and directory fields are inspected');
+    if (selected === 'projects') {
+      assert.equal(value.fields.length, 2, label+': project name and directory fields are inspected');
+      assert.equal(await inspect("return parseFloat(getComputedStyle(document.querySelector('#project-form')).borderTopWidth)>0"), true, label+': project form has one grouped card');
+    }
+    const rowControls = { models: ['desktop-provider-refresh', 'desktop-provider-verify'], notifications: ['system-notifications-reload', 'system-notifications-test', 'system-notifications-project'], projects: ['project-open-data', 'project-open-results', 'maintenance-retry'], appearance: ['preferences-reset'], privacy: ['settings-revoke'] }[selected] || [];
+    const groupedRows = await inspect(`const rect=n=>{const r=n.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};return arguments[0].map(id=>document.getElementById(id)).filter(n=>n?.checkVisibility()).map(control=>{const row=control.closest('.settings-row');return {id:control.id,copy:rect(row.firstElementChild),control:rect(control),row:rect(row)};});`, [rowControls]);
+    if (selected !== 'models') assert.deepEqual(groupedRows.map(row=>row.id), rowControls, label+': required row actions remain visible');
+    for (const row of groupedRows) {
+      assert.ok(row.control.right <= row.row.right + 1 && row.control.left >= row.row.left - 1, label+': action fits grouped row '+row.id);
+      if (value.width >= 1000) assert.ok(row.control.left >= row.copy.right + 12, label+': action follows copy on the same row '+row.id);
+      else if (value.width <= 390) assert.ok(row.control.top >= row.copy.bottom + 10, label+': narrow action follows copy '+row.id);
+    }
+    if (selected === 'models') {
+      const fieldsPadded = await inspect("return [...document.querySelectorAll('.desktop-credentials-card .desktop-model-form-field')].filter(n=>n.checkVisibility()).every(n=>parseFloat(getComputedStyle(n).paddingTop)>=16&&parseFloat(getComputedStyle(n).paddingBottom)>=16)");
+      assert.equal(fieldsPadded, true, label+': credential fields have readable spacing inside their card');
+    }
+    if (selected === 'notifications' && value.width === 320) {
+      const longErrorFits = await inspect(`const node=document.querySelector('#system-notifications-last-attempt'),original=node.textContent,row=node.closest('.settings-row'),hidden=row.hidden;try { row.hidden=false;node.textContent='发送失败：'+'x'.repeat(240);const box=node.parentElement.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(node);return range.getClientRects().length>0&&[...range.getClientRects()].every(r=>r.left>=box.left-1&&r.right<=box.right+1); } finally { node.textContent=original;row.hidden=hidden; }`);
+      assert.equal(longErrorFits, true, label+': long notification errors wrap inside their row');
+    }
     if (selected === 'data') {
       const dataRows = await inspect(`const rect=n=>{const r=n.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};return ['project-export','project-import','project-storage-refresh','project-archive','settings-archives'].map(id=>{const control=document.getElementById(id),row=control.closest('.settings-row');return {id,copy:rect(row.firstElementChild),control:rect(control),row:rect(row)};});`);
       if (value.width === 320) {
