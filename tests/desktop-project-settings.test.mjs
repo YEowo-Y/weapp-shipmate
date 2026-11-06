@@ -40,7 +40,7 @@ function harness({ invoke: handle, canChangeProject = () => true } = {}) {
   document.body.append(app.settings.element, app.backupSettings.element);
   const settle = async () => { await setImmediate(); await setImmediate(); };
   const fire = async (id, event = 'click') => { node(id).dispatchEvent(new dom.window.Event(event, { bubbles: true, cancelable: true })); await settle(); };
-  return { app, calls, node, fire, settle, document, get dataRequests() { return dataRequests; }, update(value) { projects = projects.map(p => p.id === value.id ? value : p); }, async selectFile() { Object.defineProperty(node('project-import-file'), 'files', { configurable: true, value: [{ size: 2, text: async () => '{}' }] }); await fire('project-import-file', 'change'); } };
+  return { app, calls, node, fire, settle, document, get dataRequests() { return dataRequests; }, selectExternally(id) { activeProjectId = id; }, update(value) { projects = projects.map(p => p.id === value.id ? value : p); }, async selectFile() { Object.defineProperty(node('project-import-file'), 'files', { configurable: true, value: [{ size: 2, text: async () => '{}' }] }); await fire('project-import-file', 'change'); } };
 }
 
 test('embedded project controls use the existing form, picker and controller and return to legacy manager', async () => {
@@ -100,6 +100,42 @@ test('refresh preserves a conflicting draft and original revision until explicit
   h.node('project-name').value = '已解决'; await h.fire('project-form', 'submit');
   assert.equal(h.calls.filter(([cmd]) => cmd === 'project_save').at(-1)[1].project.expectedRevision, 2);
   assert.equal(h.app.settings.canClose(), true); h.app.destroy();
+});
+
+test('an external project switch preserves the old draft until discard without writing either project', async () => {
+  const h = harness(); await h.app.ready; h.app.settings.open();
+  h.node('project-name').value = '本地草稿';
+  h.selectExternally('b');
+  await h.app.refresh();
+  assert.equal(h.node('project-settings-select').value, 'b');
+  assert.equal(h.node('project-name').value, '本地草稿');
+  assert.equal(h.node('project-directory').value, project('a').directory);
+  assert.match(h.node('project-status').textContent, /当前项目已切换/);
+  assert.equal(h.node('project-save').disabled, true);
+  await h.fire('project-form', 'submit');
+  assert.equal(h.calls.some(([command]) => command === 'project_save'), false);
+  await h.app.refresh();
+  assert.equal(h.app.settings.canClose(), false);
+  await h.fire('project-discard');
+  assert.equal(h.node('project-name').value, 'b');
+  assert.equal(h.node('project-save').disabled, false);
+  h.app.destroy();
+});
+
+test('an external switch preserves a new project draft and saves it under its own id', async () => {
+  const h = harness(); await h.app.ready; h.app.settings.open();
+  await h.fire('project-new');
+  h.node('project-name').value = '新项目';
+  await h.fire('project-choose-directory');
+  h.selectExternally('b');
+  await h.app.refresh();
+  assert.equal(h.node('project-name').value, '新项目');
+  assert.equal(h.node('project-save').disabled, false);
+  await h.fire('project-form', 'submit');
+  const request = h.calls.find(([cmd]) => cmd === 'project_save')[1].project;
+  assert.equal(request.id, 'new-project');
+  assert.equal(request.expectedRevision, undefined);
+  h.app.destroy();
 });
 
 test('data settings reuse the real project backup controller without opening its legacy dialog', async () => {
