@@ -159,8 +159,22 @@ export async function checkSystemNotificationFlows({ run, checked, click, press,
     const artifact = await completedChange(network); firstNotice = (await maintenance()).notices[0];
     assert.equal(firstNotice.artifactId, artifact.id); assert.equal(firstNotice.newCount, 2);
     assert.deepEqual((await snapshot()).lastAttempt, before, 'system preference does not suppress app-local reminder persistence');
-    await openHealth(); await click(`[data-notice-id="${firstNotice.id}"]`);
-    await until(() => inspect('return !document.querySelector("#desktop-health").open && document.querySelector("#desktop-tools").open'), 'app-local notice opens saved report');
+    await open(); await click('#preferences-nav-projects');
+    const reminder = `[data-notice-id="${firstNotice.id}"]`;
+    await until(() => inspect('return document.querySelector(arguments[0])?.checkVisibility()', [reminder]), 'unread reminder in project settings');
+    await clickSetting('#maintenance-watch'); await clickSetting(reminder);
+    assert.match(await text('#maintenance-status'), /尚未保存/);
+    assert.equal((await maintenance()).notices.find(item => item.id === firstNotice.id).read, false);
+    assert.equal(await inspect('return document.querySelector("#desktop-preferences").open && !document.querySelector("#desktop-tools").open'), true);
+    await clickSetting('#maintenance-discard');
+    await inspect('const n=document.querySelector("#project-name"); n.value+=" 草稿"; n.dispatchEvent(new Event("input",{bubbles:true}));');
+    await clickSetting(reminder);
+    await until(() => inspect('return document.querySelector(".preferences-error")?.checkVisibility()'), 'project draft blocks report navigation');
+    assert.equal(await inspect('return document.querySelector("#project-name").value.endsWith(" 草稿") && !document.querySelector("#desktop-tools").open'), true);
+    assert.equal((await maintenance()).notices.find(item => item.id === firstNotice.id).read, false);
+    await clickSetting('#project-discard'); await clickSetting(reminder);
+    await until(() => inspect('return !document.querySelector("#desktop-preferences").open && document.querySelector("#desktop-tools").open && document.querySelector("#report").checkVisibility()'), 'saved report is visible after leaving settings');
+    await until(async () => (await maintenance()).notices.find(item => item.id === firstNotice.id).read, 'opened reminder marked read');
     assert.equal(await text('#report-title'), '代码预检'); await screenshot('p7-notifications-app-report'); await click('#desktop-tools-close');
   });
 
