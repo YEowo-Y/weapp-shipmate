@@ -137,6 +137,17 @@ test('project saved report entry rejects another project before native lookup', 
   const before = queries(); assert.equal(await app.controller.openArtifact('foreign'), false); assert.equal(queries(), before);
   assert.equal(await app.controller.openArtifact('own'), true); assert.equal(app.shown.at(-1).id, 'own');
 });
+test('an artifact lookup returning the wrong report does not reveal or confirm it', async () => {
+  let mismatched = false;
+  const app = harness({ artifacts: [{ id: 'own', projectId: 'a', createdAt: 1 }],
+    invoke: cmd => cmd === 'project_artifact' && mismatched ? { id: 'other', projectId: 'a' } : undefined });
+  await app.controller.ready;
+  const before = app.shown.length;
+  mismatched = true;
+  assert.equal(await app.controller.openArtifact('own'), false);
+  assert.equal(app.shown.length, before);
+});
+
 test('project startup restores scope and latest report, refresh does not replay unchanged report', async () => {
   const app = harness({ artifacts: [{ id: 'old', projectId: 'a', createdAt: 10 }, { id: 'new', projectId: 'a', createdAt: 20 }, { id: 'other', projectId: 'b', createdAt: 30 }] });
   await app.controller.ready;
