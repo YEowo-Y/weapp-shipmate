@@ -576,7 +576,8 @@ desktopTest('settings reuse the existing model and data panels and combine data 
   assert.equal(combined.canClose(), true); data.canClose = () => false; assert.equal(combined.canClose(), false);
   data.canClose = () => true; app.panels.backup.canClose = () => false; assert.equal(combined.canClose(), false);
   combined.close(); assert.deepEqual(calls, ['open', 'close']); assert.deepEqual(app.integration.settingsCalls, ['backupOpen', 'backupClose']);
-  const archives = combined.element.children[2]; archives.click(); options.onArchives(app.node('dir'));
+  const archiveSection = combined.element.children[2]; assert.equal(archiveSection.id, 'settings-session-archives');
+  const archives = archiveSection.children[1].children[0].children[1]; archives.click(); options.onArchives(app.node('dir'));
   assert.deepEqual(histories, [], 'neither archive entry may interrupt a pending project backup');
   app.panels.backup.canClose = () => true;
   archives.click(); assert.equal(histories[0].anchor, archives); assert.equal(histories[0].filter, 'archived');
