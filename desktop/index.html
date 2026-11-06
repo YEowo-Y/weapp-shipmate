@@ -153,12 +153,12 @@
       <div class="session-workspace-dialog__body scroll">
         <div class="project-section-heading"><h3 id="project-editor-title">项目设置</h3><wa-button id="project-new" appearance="plain" size="s"><span slot="start" data-icon="plus"></span>新建项目</wa-button></div>
         <form id="project-form" class="project-form">
-          <label for="project-name">项目名称</label><input id="project-name" required maxlength="120" autocomplete="off" placeholder="例如：门店小程序" />
-          <label for="project-directory">项目文件夹</label><div class="project-directory-field"><input id="project-directory" readonly required aria-describedby="project-directory-note" placeholder="请选择本机文件夹" /><wa-button id="project-choose-directory" appearance="outlined" size="s">选择位置</wa-button></div><p id="project-directory-note" class="desktop-field-hint"></p>
-          <label for="project-subject">主体类型</label><select id="project-subject"><option value="personal">个人</option><option value="individual_business">个体工商户</option><option value="enterprise">企业</option></select>
+          <div class="project-settings-field"><label for="project-name">项目名称</label><input id="project-name" required maxlength="120" autocomplete="off" placeholder="例如：门店小程序" /></div>
+          <div class="project-settings-field"><label for="project-directory">项目文件夹</label><div class="project-directory-field"><input id="project-directory" readonly required aria-describedby="project-directory-note" placeholder="请选择本机文件夹" /><wa-button id="project-choose-directory" appearance="outlined" size="s">选择位置</wa-button></div><p id="project-directory-note" class="desktop-field-hint"></p></div>
+          <div class="project-settings-field project-settings-subject"><label for="project-subject">主体类型</label><select id="project-subject"><option value="personal">个人</option><option value="individual_business">个体工商户</option><option value="enterprise">企业</option></select></div>
           <div class="project-form-actions"><wa-button id="project-save" type="submit" variant="neutral" appearance="accent" size="s">保存并打开项目</wa-button><wa-button id="project-export" appearance="outlined" size="s">导出项目数据</wa-button></div>
         </form>
-        <section class="project-association" aria-labelledby="project-association-title"><h3 id="project-association-title">当前会话的归属</h3><p class="desktop-field-hint">移动会话与草稿，不复制消息。旧会话默认保留在“未归属项目”。</p><label for="project-association-target">目标项目</label><div class="project-directory-field"><select id="project-association-target"></select><wa-button id="project-associate" appearance="outlined" size="s">移动当前会话</wa-button></div></section>
+        <section class="project-association" aria-labelledby="project-association-title"><h3 id="project-association-title">当前会话的归属</h3><div class="project-association-body"><p class="desktop-field-hint">移动会话与草稿，不复制消息。旧会话默认保留在“未归属项目”。</p><label for="project-association-target">目标项目</label><div class="project-directory-field"><select id="project-association-target"></select><wa-button id="project-associate" appearance="outlined" size="s">移动当前会话</wa-button></div></div></section>
         <section id="project-backup" class="project-backup" aria-labelledby="project-backup-title">
           <div class="project-section-heading"><h3 id="project-backup-title">项目备份</h3></div>
           <div class="preferences-group">
