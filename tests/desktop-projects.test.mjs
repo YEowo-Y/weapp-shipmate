@@ -43,7 +43,7 @@ function harness({ projects = [project('a'), project('b')], activeProjectId = 'a
   node('project-form').querySelector = selector => selector === '.project-form-actions' ? formActions : null;
   const backupHeading = doc.createElement('div'), backupActions = doc.createElement('div');
   node('project-backup').append(backupHeading, backupActions);
-  node('project-backup').querySelector = selector => ({ '.project-section-heading': backupHeading, '.project-form-actions': backupActions })[selector] ?? null;
+  node('project-backup').querySelector = selector => ({ '.project-section-heading': backupHeading, '#project-export-row': backupActions })[selector] ?? null;
   backupHeading.after = child => { child.parentNode = backupHeading.parentNode; child.parentNode.children.splice(child.parentNode.children.indexOf(backupHeading) + 1, 0, child); };
   doc.body.append(node('desktop-projects'));
   let current = activeProjectId;
