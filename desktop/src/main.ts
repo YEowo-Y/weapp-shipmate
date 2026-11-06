@@ -443,7 +443,12 @@ window.addEventListener("DOMContentLoaded", () => {
     getProjectId: () => projects?.getActiveId() ?? null,
     onResult: async () => { if (projects && !await projects.refresh()) throw new Error('项目记录未能刷新'); },
     onOpenArtifact: async id => await projects?.openArtifact(id) ?? false,
-    onRevealReport: () => { health?.close(); window.setTimeout(() => { preferences?.close(); tools.open($("#desktop-more"), $("#report")); }, 0); },
+    onRevealReport: async isCurrent => {
+      if (!isCurrent() || preferences?.close() === false) return false;
+      health?.close();
+      await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+      return isCurrent() && tools.open($("#desktop-more"), $("#report"));
+    },
     onUnread: count => {
       const control = $("#desktop-maintenance-open"), label = $("#desktop-maintenance-count");
       if (control) { control.hidden = count === 0; control.setAttribute('aria-label', `项目维护，${count} 条未读提醒`); }
