@@ -38,7 +38,9 @@ function harness({ projects = [project('a'), project('b')], activeProjectId = 'a
   const historySection = doc.createElement('section'); historySection.append(node('project-history'));
   node('project-history').closest = () => historySection;
   body.append(node('project-form'), node('project-backup'), node('project-status'), historySection);
-  node('project-form').append(node('project-export'));
+  const formActions = doc.createElement('div'); formActions.className = 'project-form-actions';
+  formActions.append(node('project-save'), node('project-export')); node('project-form').append(formActions);
+  node('project-form').querySelector = selector => selector === '.project-form-actions' ? formActions : null;
   const backupHeading = doc.createElement('div'), backupActions = doc.createElement('div');
   node('project-backup').append(backupHeading, backupActions);
   node('project-backup').querySelector = selector => ({ '.project-section-heading': backupHeading, '.project-form-actions': backupActions })[selector] ?? null;
@@ -122,7 +124,7 @@ test('project selection preserves drafts until explicit discard and still respec
   await app.controller.refresh(); app.node('desktop-project-select').value = 'b'; await app.fire('desktop-project-select', 'change');
   assert.equal(app.node('project-name').value, 'Draft a'); assert.equal(app.controller.getActiveId(), 'a');
   assert.equal(app.calls.some(([cmd]) => cmd === 'project_select'), false);
-  app.node('project-form').children.find(child => child.id === 'project-discard').events.click[0]();
+  app.node('project-form').querySelector('.project-form-actions').children.find(child => child.id === 'project-discard').events.click[0]();
   app.node('desktop-project-select').value = 'b'; await app.fire('desktop-project-select', 'change');
   assert.equal(app.controller.getActiveId(), 'a');
   allow = true; app.node('desktop-project-select').value = 'b'; await app.fire('desktop-project-select', 'change');
