@@ -54,11 +54,11 @@ export function mountProjects(options: Options) {
   const settingsSelector = document.createElement('select'); settingsSelector.id = 'project-settings-select';
   projectPicker.append(projectLabel, settingsSelector); body.prepend(projectPicker);
   const discard = document.createElement('button'); discard.type = 'button'; discard.id = 'project-discard'; discard.className = 'desktop-action'; discard.textContent = '放弃更改';
-  editor.append(discard);
+  editor.querySelector('.project-form-actions')!.append(discard);
   const openData = document.createElement('button'); openData.type = 'button'; openData.className = 'desktop-action'; openData.id = 'project-open-data'; openData.textContent = '管理项目备份与数据'; openData.hidden = true;
-  backupHome.append(openData);
   const openResults = document.createElement('button'); openResults.type = 'button'; openResults.className = 'desktop-action'; openResults.textContent = '查看运行历史'; openResults.id = 'project-open-results'; openResults.hidden = true;
-  body.append(openResults);
+  const related = document.createElement('div'); related.className = 'project-settings-links';
+  related.append(openData, openResults); body.append(related);
   let settingsOpen = false, backupSettingsOpen = false;
   let snapshot: ProjectSnapshot = { projects: [], activeProjectId: null, runs: [], artifacts: [] };
   let ready = false, pending = false, externalBusy = false, destroyed = false, pendingLatestRestore = false;
