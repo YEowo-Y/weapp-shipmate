@@ -5,7 +5,7 @@ import './maintenance.css';
 
 type Notice = { id: string; artifactId: string; createdAt: number; newCount: number; read: boolean };
 type Snapshot = { projectId: string; revision: number; watchEnabled: boolean; notificationsEnabled: boolean; state: 'off' | 'starting' | 'watching' | 'pending' | 'checking' | 'paused' | 'error'; message: string; runId: string | null; lastCheckedAt: number | null; notices: Notice[] };
-type Options = { getProjectId(): string | null; onResult(): Promise<unknown>; onOpenArtifact(id: string): Promise<boolean>; onRevealReport?(): void; onUnread?(count: number): void; onNotifications?(): void };
+type Options = { getProjectId(): string | null; onResult(): Promise<unknown>; onOpenArtifact(id: string): Promise<boolean>; onRevealReport(isCurrent: () => boolean): Promise<boolean> | boolean; onUnread?(count: number): void; onNotifications?(): void };
 const labels = { off: '自动维护已关闭', starting: '正在启动监听', watching: '正在监听文件变化', pending: '等待自动预检', checking: '自动预检执行中', paused: '自动维护已暂停', error: '自动维护需要处理' };
 
 export function mountProjectMaintenance(options: Options) {
@@ -187,16 +187,21 @@ export function mountProjectMaintenance(options: Options) {
     finally { if (current(token, id)) { pending = false; render(); } }
   }
   async function openNotice(notice: Notice) {
-    if (disposed || pending || !ready || !projectId) return;
+    if (disposed || !ready || !projectId || projectId !== options.getProjectId() || !canClose()) return;
     const id = projectId, token = epoch; pending = true; render();
     try {
       const opened = await options.onOpenArtifact(notice.artifactId);
       if (!current(token, id)) return;
       if (!opened) throw new Error('报告未打开');
-      options.onRevealReport?.();
+      // The settings close guard may now run; the artifact read has finished.
+      pending = false;
+      const reveal = options.onRevealReport(() => current(token, id));
+      if (!current(token, id)) return;
+      pending = true;
+      if (!await reveal || !current(token, id)) return;
       pending = false;
       if (!notice.read) await command('read', { noticeIds: [notice.id] });
-    } catch { if (current(token, id)) message('保存的报告未能打开，通知仍保留未读。请重试。', true); }
+    } catch { if (current(token, id)) message(notice.read ? '保存的报告未能打开，请重试。' : '保存的报告未能打开，通知仍保留未读。请重试。', true); }
     finally { if (current(token, id)) { pending = false; render(); } }
   }
   function discardChanges() {
