@@ -77,6 +77,50 @@ export async function checkMaintenanceFlows({ run, checked, click, fill, press, 
     processCounts.off = (await ownedRuntimeProcesses()).length;
   });
 
+  await checked('External project changes preserve each maintenance draft without starting a watcher', async () => {
+    await openPreferences(); await click('#preferences-nav-projects');
+    const waitForProject = id => until(() => inspect(`
+      const selector = document.querySelector('#project-settings-select');
+      return selector?.value === arguments[0] && !selector.disabled &&
+        document.querySelector('#maintenance-watch')?.checkVisibility() &&
+        !document.querySelector('#maintenance-watch').disabled;
+    `, [id]), 'maintenance settings ready for ' + id);
+    const externalSwitch = async id => {
+      await projectInvoke('project_select', { projectId: id });
+      await click('#project-retry');
+      await waitForProject(id);
+    };
+    await waitForProject(a);
+    const beforeA = await state(a);
+    await click('#maintenance-watch');
+    await externalSwitch(b);
+    const beforeB = await state(b);
+    assert.equal(await inspect('return document.querySelector("#maintenance-watch").checked'), false);
+    await click('#maintenance-notifications');
+    await externalSwitch(a);
+    assert.equal(await inspect('return document.querySelector("#maintenance-watch").checked'), true);
+    assert.equal(await inspect('return document.querySelector("#maintenance-notifications").checked'), false);
+    assert.match(await text('#maintenance-status'), /未保存/);
+    await inspect('document.querySelector("#maintenance-status").scrollIntoView({block:"center"})');
+    await screenshot('p7-restored-maintenance-draft');
+    await click('#maintenance-discard');
+    await externalSwitch(b);
+    assert.equal(await inspect('return document.querySelector("#maintenance-notifications").checked'), true);
+    await click('#maintenance-discard');
+    const verifyNotSaved = async before => {
+      const after = await state(before.projectId);
+      assert.equal(after.revision, before.revision);
+      assert.equal(after.watchEnabled, false);
+      assert.equal(after.notificationsEnabled, false);
+      assert.equal(after.state, 'off');
+    };
+    await verifyNotSaved(beforeB);
+    await externalSwitch(a);
+    assert.equal(await inspect('return document.querySelector("#maintenance-save").disabled'), true);
+    await verifyNotSaved(beforeA);
+    await closePreferences();
+  });
+
   await checked('P7 manual preflight establishes a real baseline and enabling watcher does not scan immediately', async () => {
     await click('#desktop-tools-toggle'); await click('#check-btn');
     await until(() => inspect('return document.querySelector("#status").classList.contains("ok") && !document.querySelector("#check-btn").disabled'), 'manual baseline preflight', 30000);
