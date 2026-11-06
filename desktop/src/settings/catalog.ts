@@ -4,9 +4,9 @@ export const settingsSections: { id: SettingsSection; label: string; icon: strin
   { id: 'appearance', label: '外观与阅读', icon: 'sliders-horizontal', group: '偏好' },
   { id: 'notifications', label: '通知', icon: 'bell', group: '偏好' },
   { id: 'shortcuts', label: '快捷键', icon: 'command', group: '偏好' },
-  { id: 'models', label: '模型与连接', icon: 'plug', group: '应用' },
-  { id: 'projects', label: '项目配置', icon: 'folder', group: '应用' },
-  { id: 'data', label: '数据与会话', icon: 'message-square', group: '应用' },
+  { id: 'models', label: '模型与连接', icon: 'plug', group: '工作区' },
+  { id: 'projects', label: '项目配置', icon: 'folder', group: '工作区' },
+  { id: 'data', label: '数据与会话', icon: 'message-square', group: '工作区' },
   { id: 'privacy', label: '隐私与权限', icon: 'shield', group: '应用' },
   { id: 'about', label: '关于', icon: 'info', group: '应用' },
 ];
