@@ -43,6 +43,9 @@ test('enable and disable persist using revision and restore after reopen; testin
 test('denied enable remains off; save failures retain authoritative state and can retry', async () => {
   let mode = 'fail'; const h = harness(name => { if (name.endsWith('_snapshot')) return snapshot(); if (mode === 'fail') throw new Error('write'); return snapshot({ permission: 'denied', enabled: false }); });
   await h.app.open(); await h.change(true); assert.equal(h.node('system-notifications-enabled').checked, false); assert.match(h.node('system-notifications-status').textContent, /重新读取/);
+  assert.equal(h.node('system-notifications-enabled').disabled, true, 'a failed save requires a fresh read before another change');
+  await h.change(true);
+  assert.equal(h.calls.filter(call => call.name.endsWith('_save')).length, 1);
   mode = 'denied'; await h.click('reload'); await h.change(true); assert.equal(h.node('system-notifications-enabled').checked, false); assert.match(h.node('system-notifications-status').textContent, /权限未允许/);
 });
 test('busy operations suppress duplicates; closing ignores late results and reopening waits then reloads', async () => {
