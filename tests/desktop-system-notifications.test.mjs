@@ -21,6 +21,14 @@ function harness(handle = async () => snapshot(), onProjectSettings) {
 test('mount has no side effects and opening reads only without permission request or sending', async () => {
   const h = harness(); assert.equal(h.calls.length, 0); assert.equal(h.node('system-notifications-enabled').checked, false); await h.app.open();
   assert.deepEqual(h.calls.map(c => c.name), ['system_notifications_snapshot']); assert.equal(h.node('system-notifications-test').disabled, true);
+  const toggleGroup = h.node('system-notifications-enabled').parentNode.parentNode;
+  assert.match(toggleGroup.className, /system-notifications-preferences/);
+  assert.equal(h.node('system-notifications-description').parentNode, toggleGroup);
+  const stateGroup = h.node('system-notifications-installation').parentNode;
+  assert.match(stateGroup.className, /system-notifications-state/);
+  assert.equal(h.node('system-notifications-permission').parentNode.parentNode.parentNode, stateGroup);
+  assert.equal(h.node('system-notifications-test').parentNode.parentNode, stateGroup);
+  assert.equal(h.node('system-notifications-status').parentNode, stateGroup);
   assert.match(h.node('system-notifications-permission').textContent, /Windows 通知设置和勿扰/); assert.match(h.node('system-notifications-installation').textContent, /不是安装状态检测/);
 });
 test('enable and disable persist using revision and restore after reopen; testing is explicit', async () => {
