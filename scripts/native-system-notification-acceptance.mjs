@@ -118,8 +118,9 @@ export async function checkSystemNotificationFlows({ run, checked, click, press,
     // A second actual native writer simulates a settings window race. UI must
     // keep the persisted newer setting until a deliberate refreshed operation.
     await projectInvoke('system_notifications_save', { expectedRevision: saved.revision, enabled: false });
-    await clickSetting('#system-notifications-enabled'); await ready();
-    assert.equal(await inspect('return document.querySelector("#system-notifications-status").dataset.error'), 'true');
+    await clickSetting('#system-notifications-enabled');
+    await until(() => inspect('return document.querySelector(".system-notifications").getAttribute("aria-busy") === "false" && document.querySelector("#system-notifications-status").dataset.error === "true"'), 'stale notification settings show the save conflict');
+    assert.deepEqual(await inspect(`return ['enabled','test','reload'].map(id=>document.getElementById('system-notifications-'+id).disabled)`), [true, true, false], 'stale controls require reloading before another save or test');
     assert.equal((await snapshot()).enabled, false); assert.equal((await snapshot()).lastAttempt, null);
     await screenshot('p7-notifications-cas-recovery'); await reload();
     assert.equal(await inspect('return document.querySelector("#system-notifications-enabled").checked'), false);
