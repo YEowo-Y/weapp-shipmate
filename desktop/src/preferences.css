@@ -87,8 +87,23 @@
 .preferences-dialog .desktop-model-list { max-height:300px; }
 .preferences-dialog .desktop-model-layout button:disabled { opacity:.5; cursor:default; }
 .preferences-dialog .desktop-model-layout :focus-visible { outline:2px solid var(--text-2); outline-offset:2px; }
-.preferences-dialog .desktop-inference-panel { margin-top:20px; padding-top:16px; border-top:1px solid var(--border); }
-.preferences-dialog .desktop-inference-panel h4 { margin:0; }
+.preferences-dialog .desktop-model-state-copy { flex:1 1 12em; min-width:0; }
+.preferences-dialog .desktop-model-state-copy p { margin:4px 0 0; }
+.preferences-dialog .desktop-model-actions:empty { display:none; }
+.desktop-connection-state:has(#desktop-provider-status[hidden]) { display:none; }
+.preferences-dialog .settings-row > .desktop-model-actions { margin:0; }
+.preferences-dialog .desktop-model-catalog > label { margin:48px 0 16px; }
+.preferences-dialog .desktop-catalog-card { padding-block:16px; }
+.preferences-dialog .desktop-model-form-field { padding:16px 0; }
+.preferences-dialog .desktop-model-form-field > label:first-child { margin-top:0; }
+.preferences-dialog .desktop-model-form-field + .desktop-model-form-field, .preferences-dialog .desktop-credentials-card > .desktop-model-actions { border-top:1px solid var(--border); }
+.preferences-dialog .desktop-credentials-card > .desktop-model-actions { margin:0; padding:16px 0; }
+.preferences-dialog .desktop-inference-panel { margin-top:48px; padding:0; border:0; }
+.preferences-dialog .desktop-inference-panel h4, .preferences-dialog .desktop-oauth-panel h4 { margin:0 0 16px; }
+.preferences-dialog .desktop-oauth-panel { margin-top:48px; }
+.preferences-dialog .desktop-oauth-card { padding-block:16px; }
+.preferences-dialog .desktop-oauth-card > .desktop-model-actions { margin-top:0; }
+.preferences-dialog .desktop-oauth-card > p:empty { display:none; }
 .preferences-dialog .project-settings-panel > .session-workspace-dialog__body, .preferences-dialog .session-workspace-data-panel > .session-workspace-dialog__body { margin:0; padding:0; max-height:none; overflow:visible; }
 .preferences-dialog .project-settings-panel h3, .preferences-dialog .project-backup-settings-panel h3, .preferences-dialog .session-workspace-data-panel h3, .preferences-dialog .maintenance-panel h3 { font-size:14px; line-height:20px; font-weight:600; }
 .preferences-dialog .session-workspace__data-description { margin:0 0 16px; }
@@ -103,16 +118,42 @@
 .preferences-dialog .project-settings-picker label { font-weight:600; }
 .preferences-dialog .project-settings-picker select { flex:1 1 240px; max-width:420px; margin-left:auto; }
 .preferences-dialog .project-settings-panel .project-section-heading { margin-bottom:16px; }
-.preferences-dialog .project-settings-links { display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:24px; padding-top:16px; border-top:1px solid var(--border); }
+.preferences-dialog .project-settings-links { margin-top:48px; }
+.preferences-dialog .project-settings-links h3 { margin:0 0 16px; }
+.preferences-dialog .project-settings-links .settings-row > button { flex-shrink:0; }
 .preferences-dialog .project-settings-panel .project-form-actions { gap:8px; }
 .preferences-dialog .project-settings-panel .project-status-row { margin-block:16px; }
 
-.preferences-dialog .project-settings-panel .project-form { padding:0; border:0; border-radius:0; background:transparent; margin-block:24px; }
+.preferences-dialog .project-settings-panel .project-form { padding:0 16px; border:1px solid var(--border); border-radius:16px; background:var(--surface); margin:0; }
+.preferences-dialog .project-settings-field { padding:16px 0; }
+.preferences-dialog .project-settings-field + .project-settings-field, .preferences-dialog .project-form > .project-form-actions { border-top:1px solid var(--border); }
+.preferences-dialog .project-settings-field > label { margin:0 0 8px; }
+.preferences-dialog .project-settings-subject { display:flex; align-items:center; justify-content:space-between; gap:16px 24px; }
+.preferences-dialog .project-settings-subject > label { margin:0; }
+.preferences-dialog .project-settings-subject > select { width:auto; max-width:60%; }
+.preferences-dialog .project-form > .project-form-actions { padding:16px 0; margin:0; }
+.preferences-dialog .project-association { margin-top:48px; padding:0; border:0; }
+.preferences-dialog .project-association > h3 { margin:0 0 16px; }
+.preferences-dialog .project-association-body { padding:16px; border:1px solid var(--border); border-radius:16px; background:var(--surface); }
+.preferences-dialog .project-association-body > p { margin:0 0 16px; }
+.preferences-dialog .project-association-body > label { margin:0 0 8px; }
 .preferences-dialog .project-backup-settings-panel { padding:0; border:0; border-radius:0; background:transparent; margin-block:0; }
 .preferences-dialog .project-backup-settings-panel > .project-backup { margin:0; padding:0; border:0; }
 .preferences-dialog .session-workspace-data-panel input[type=file], .preferences-dialog .project-backup-settings-panel input[type=file] { width:100%; min-width:0; max-width:100%; }
 .preferences-dialog .session-workspace-data-panel .session-workspace-dialog__actions { padding:16px 0 0; border:0; justify-content:flex-start; }
-.preferences-dialog .maintenance-panel { margin-top:32px; }
+.preferences-dialog .maintenance-panel { margin-top:48px; padding:0; border:0; }
+.preferences-dialog .maintenance-panel > h3 { margin:0 0 16px; }
+.preferences-dialog .maintenance-preferences > p:first-child { margin:16px 0 0; }
+.preferences-dialog .maintenance-toggle { padding:16px 0; min-height:24px; gap:24px; font-size:14px; }
+.preferences-dialog .maintenance-toggle + .maintenance-toggle { border-top:1px solid var(--border); }
+.preferences-dialog .maintenance-panel .context-actions { margin:0; padding:16px 0; border-top:1px solid var(--border); }
+.preferences-dialog .maintenance-runtime p { margin:0; }
+.preferences-dialog .maintenance-runtime #maintenance-last-check { margin-top:4px; }
+.preferences-dialog .maintenance-runtime-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.preferences-dialog .maintenance-notice-header { margin:48px 0 16px; }
+.preferences-dialog .maintenance-notice-header h4 { margin:0; }
+.preferences-dialog .maintenance-notice-group { padding-block:16px 0; }
+.preferences-dialog .maintenance-notice-group .context-actions wa-button { margin:0; }
 .preferences-dialog .settings-data > section + section { margin-top:48px; }
 .preferences-dialog .settings-data > section > h4 { margin:0 0 16px; }
 .project-backup .project-storage-heading { margin:48px 0 16px; }
@@ -149,11 +190,9 @@
 .preferences-dialog .settings-heading-actions p { margin:0; }
 .preferences-dialog .system-notifications-preferences .system-notifications-toggle { min-height:44px; padding:12px 0 4px; }
 .preferences-dialog .system-notifications-preferences > p { margin:0 0 16px; }
-.preferences-dialog .system-notifications-state .system-notifications-details { margin:0; border:0; }
-.preferences-dialog .system-notifications-state .system-notifications-details > div { padding:16px 0; }
-.preferences-dialog .system-notifications-state #system-notifications-installation { margin:0 0 16px; }
-.preferences-dialog .system-notifications .context-actions { margin:0; padding:16px 0; border-top:1px solid var(--border); }
-.preferences-dialog .system-notifications-state #system-notifications-status { margin:0 0 16px; }
+.preferences-dialog .system-notifications-state small { overflow-wrap:anywhere; }
+.preferences-dialog .system-notifications-state .settings-row > wa-button { flex-shrink:0; }
+.preferences-dialog .system-notifications > #system-notifications-status { margin:16px 0 0; }
 
 .preferences-dialog [hidden] { display:none !important; }
 body.desktop-app[data-motion=reduce] { --wa-transition-normal:0ms; --wa-transition-fast:0ms; --wa-transition-slow:0ms; }
@@ -184,9 +223,12 @@ body.desktop-app[data-motion=reduce] :is(#desktop-provider-status.is-busy,#deskt
   .preferences-dialog .preferences-navigation .settings-button { min-height:44px; }
 }
 @media(max-width:520px) {
-  .settings-data .settings-row { flex-direction:column; align-items:stretch; gap:12px; }
-  .settings-data .settings-row > span { flex-basis:auto; }
-  .settings-data .settings-row > :is(wa-button,button) { align-self:flex-start; }
+  .preferences-dialog .settings-row { flex-direction:column; align-items:stretch; gap:12px; }
+  .preferences-dialog .settings-row > :is(span,.desktop-model-state-copy) { flex-basis:auto; }
+  .preferences-dialog .settings-row > :is(wa-button,button) { align-self:flex-start; }
+  .preferences-dialog .settings-readonly-row { flex-direction:row; }
+  .preferences-dialog .project-settings-subject { flex-direction:column; align-items:stretch; gap:8px; }
+  .preferences-dialog .project-settings-subject > select { max-width:100%; }
   .preferences-dialog .preferences-main > .context-body { padding:24px 16px 32px; }
   .preferences-dialog .settings-button, .preferences-dialog wa-button::part(button) { min-height:44px; }
   .preferences-dialog .settings-row { gap:12px; padding:16px 0; }
