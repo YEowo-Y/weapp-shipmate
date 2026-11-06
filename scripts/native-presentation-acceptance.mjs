@@ -473,6 +473,52 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await fill('#desktopInput', '');
   });
 
+  await checked('Short sidebars keep sessions, save recovery and Settings reachable', async () => {
+    await command('POST', '/window/rect', { width: 1000, height: 720 });
+    const row = '#sessionHost [data-action=recent-session]';
+    const count = await inspect('return document.querySelectorAll(arguments[0]).length', [row]);
+    for (let i = 0; i < 14; i++) await activate('#sessionHost [data-action=new]');
+    assert.equal(await inspect('return document.querySelectorAll(arguments[0]).length', [row]), count + 14);
+    // Fail only a write to the disposable WebView's conversation store.
+    await inspect(`window.__sidebarPut = IDBObjectStore.prototype.put;
+      IDBObjectStore.prototype.put = function(...args) {
+        if (this.name === 'workspaces' && args[1] === 'desktop-local') throw new DOMException('Layout fixture', 'QuotaExceededError');
+        return window.__sidebarPut.apply(this, args);
+      };`);
+    const layouts = [];
+    try {
+      await fill('#desktopInput', '短窗口恢复验收草稿');
+      await until(() => inspect('return document.querySelector("#sessionHost [data-action=retry]").checkVisibility()'), 'save recovery visible');
+      for (const width of [1000, 600]) {
+        await command('POST', '/window/rect', { width, height: 480 });
+        if (width === 600 && !await inspect('return document.querySelector("#desktop-navigation").open')) await activate('#desktop-navigation > summary');
+        const layout = await inspect(`const last = document.querySelector('.session-workspace__recent > :last-child');
+          const scrollers = [];
+          for(let n=last.parentElement; n && n.id!=='desktop-navigation'; n=n.parentElement) {
+            if (/^(auto|scroll)$/.test(getComputedStyle(n).overflowY) && n.scrollHeight>n.clientHeight+1) scrollers.push(n.id||n.className);
+          }
+          const point = n => { const r=n.getBoundingClientRect(); return n.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)); };
+          const hit = n => { n.focus(); n.scrollIntoView({block:'nearest',behavior:'instant'}); return point(n); };
+          const footer=document.querySelector('#desktop-preferences-open'), fixedTop=footer.getBoundingClientRect().top;
+          return {width:innerWidth,height:innerHeight,scrollers,last:hit(last),retry:hit(document.querySelector('#sessionHost [data-action=retry]')),
+            backup:hit(document.querySelector('#sessionHost [data-action=backup]')),settings:point(footer),footerShift:footer.getBoundingClientRect().top-fixedTop};`);
+        layouts.push(layout);
+        await screenshot('sidebar-recovery-'+width);
+      }
+      await writeFile(resolve(run, 'sidebar-recovery.json'), JSON.stringify(layouts, null, 2));
+      for (const layout of layouts) {
+        assert.equal(layout.scrollers.length, 1, 'one scrolling region for sessions and recovery: '+JSON.stringify(layout));
+        assert.ok(layout.last && layout.retry && layout.backup && layout.settings && Math.abs(layout.footerShift)<1, 'controls remain reachable: '+JSON.stringify(layout));
+      }
+    } finally {
+      await inspect('IDBObjectStore.prototype.put=window.__sidebarPut; delete window.__sidebarPut;');
+    }
+    await activate('#sessionHost [data-action=retry]');
+    await until(() => inspect('return document.querySelector("#sessionHost .session-workspace__notice").hidden'), 'retry saves the draft');
+    await refresh();
+    await until(() => inspect('return document.querySelector("#desktopInput")?.value === "短窗口恢复验收草稿"'), 'recovered draft survives reload');
+  });
+
   await checked('Presentation navigation never changes source files, creates reports or submits model requests', async () => {
     const final = await snapshot(); assert.equal(final.runs.length, 0); assert.equal(final.artifacts.length, 0); assert.deepEqual(requests, []);
     assert.deepEqual((await readdir(directory)).sort(), Object.keys(files).sort());
