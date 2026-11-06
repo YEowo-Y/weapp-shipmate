@@ -69,7 +69,7 @@ export function mountSystemNotifications(options: Options) {
         if (command === 'system_notifications_test') message(value.delivery === 'submitted' ? '测试通知已提交给系统；是否显示请查看系统通知设置与勿扰状态。' : value.message ?? '测试通知未提交，请检查权限或稍后重试。', value.delivery !== 'submitted');
         else if (command === 'system_notifications_save') message(value.enabled ? '已保存：允许应用发送系统通知。是否显示由系统控制。' : value.permission === 'denied' ? '系统权限未允许，应用发送保持关闭。可调整系统设置后重试。' : '已保存：应用发送已关闭。', value.permission === 'denied' && args?.enabled === true);
         else message('已读取本机通知设置；未请求权限或发送通知。');
-      } catch { if (current(token)) { if (command === 'system_notifications_snapshot') ready = false; message('操作未能完成，保留上次已读取的设置。请重新读取状态后重试。', true); } }
+      } catch { if (current(token)) { if (command === 'system_notifications_snapshot' || command === 'system_notifications_save') ready = false; message('操作未能完成，保留上次已读取的设置。请重新读取状态后重试。', true); } }
       finally { pending = null; if (current(token)) render(); }
     })();
     pending = task; message(command === 'system_notifications_snapshot' ? '正在读取通知设置…' : command === 'system_notifications_test' ? '正在提交测试通知…' : '正在保存通知设置…'); render(); return task;
