@@ -142,7 +142,9 @@ test('storage read denial provides retry without writes; recovering reads the sa
 
 test('reset changes only appearance and preserves all unrelated keys and data', () => {
   const stored = new Map([[key, JSON.stringify({ ...defaults, theme: 'dark', messageSize: 18, motion: 'reduce' })], ['connection-config', 'untouched'], ['shipmate-preview-theme', 'dark']]);
-  const h = harness({ stored }); h.app.open(); h.click('preferences-reset');
+  const h = harness({ stored }); h.app.open();
+  assert.equal(h.node('preferences-reset').closest('.preferences-group').contains(h.node('preferences-reset-description')), true, 'recovery action stays with its scope explanation');
+  h.click('preferences-reset');
   assert.deepEqual(JSON.parse(h.stored.get(key)), defaults); assert.equal(stored.get('connection-config'), 'untouched'); assert.equal(stored.get('shipmate-preview-theme'), 'dark'); assert.equal(h.callbacks.length, 0); assert.match(h.node('preferences-status').textContent, /恢复.*默认/);
 });
 
@@ -470,7 +472,9 @@ test('the shortcut control saves its bounded preference and restores the default
   act(() => { select.value = 'mod-enter'; select.dispatchEvent(new h.window.Event('change', { bubbles: true })); });
   assert.equal(select.value, 'mod-enter'); assert.deepEqual(JSON.parse(h.stored.get('shipmate-desktop-shortcuts')), { version: 1, sendKey: 'mod-enter' });
   assert.equal(h.stored.has(key), false);
-  const reset = [...h.document.querySelectorAll('button')].find(node => node.textContent === '恢复默认发送方式'); act(() => reset.click());
+  const reset = [...h.document.querySelectorAll('button')].find(node => node.textContent === '恢复默认发送方式');
+  assert.equal(reset.closest('.preferences-group'), select.closest('.preferences-group'), 'send recovery stays with its setting');
+  act(() => reset.click());
   assert.equal(select.value, 'enter'); assert.deepEqual(JSON.parse(h.stored.get('shipmate-desktop-shortcuts')), { version: 1, sendKey: 'enter' });
 });
 
