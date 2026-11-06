@@ -25,7 +25,11 @@ export function mountSystemNotifications(options: Options) {
   const test = button('system-notifications-test', '发送测试通知'), reload = button('system-notifications-reload', '重新读取状态'); actions.append(test, reload);
   const project = button('system-notifications-project', '项目提醒设置'); project.hidden = !options.onProjectSettings; actions.append(project);
   const status = node('p'); status.id = 'system-notifications-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-atomic', 'true');
-  element.append(title, label, description, details, installation, actions, status);
+  const preferenceHeading = node('h4', '通知偏好'), stateHeading = node('h4', '状态与测试');
+  const preferenceGroup = node('div'); preferenceGroup.className = 'preferences-group system-notifications-preferences';
+  const stateGroup = node('div'); stateGroup.className = 'preferences-group system-notifications-state';
+  preferenceGroup.append(label, description); stateGroup.append(details, installation, actions, status);
+  element.append(title, preferenceHeading, preferenceGroup, stateHeading, stateGroup);
   let snapshot: Snapshot | null = null, disposed = false, visible = false, epoch = 0, ready = false;
   let pending: Promise<void> | null = null;
   const current = (token: number) => !disposed && visible && token === epoch;
