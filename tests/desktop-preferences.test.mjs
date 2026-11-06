@@ -79,8 +79,12 @@ test('version copy reports completion only after clipboard write and allows retr
   let fail = true; const writes = [];
   const h = harness({ overrides: { copyText: async text => { if (fail) throw Error('denied'); writes.push(text); } } });
   h.app.open(h.anchor, 'about'); await act(async () => { await setImmediate(); });
+  const copyButton = h.node('settings-copy-versions'), heading = copyButton.closest('.settings-section-heading');
+  assert.equal(heading.querySelector('h4').textContent, '上线船友');
+  assert.equal(copyButton.nextElementSibling.hidden, true, 'empty copy feedback does not reserve a row');
   h.click('settings-copy-versions'); await act(async () => { await setImmediate(); });
   assert.match(h.document.body.textContent, /复制失败/); assert.deepEqual(writes, []);
+  assert.equal(copyButton.nextElementSibling.hidden, false); assert.equal(copyButton.nextElementSibling.getAttribute('role'), 'status');
   fail = false; h.click('settings-copy-versions'); await act(async () => { await setImmediate(); });
   assert.deepEqual(writes, ['上线船友\n桌面应用 1.0.0\n检查核心 2.0.0\n项目规则 尚未加载']);
   assert.match(h.document.body.textContent, /版本信息已复制/);
