@@ -78,14 +78,17 @@ export function mountProjects(options: Options) {
   const active = () => snapshot.projects.find(project => project.id === snapshot.activeProjectId) ?? null;
   const blocked = () => pending || externalBusy || options.isBusy() || !ready || destroyed;
   const dirty = () => name.value !== (editing?.name ?? '') || directory.value !== (editing?.directory ?? '') || subject.value !== (editing?.subject ?? 'personal');
-  function staleEditor() {
+  function draftConflict() {
+    if (!editing) return '';
     const latest = active();
-    return !!editing && latest?.id === editing.id && latest.revision !== editing.revision;
+    if (editing.id !== latest?.id) return '当前项目已切换。请先复制需要保留的草稿，再点“放弃更改”查看当前项目。';
+    if (editing.revision !== latest.revision) return '此项目已有更新，当前草稿仍保留。请先复制需要保留的内容，再点“放弃更改”载入最新版本。';
+    return '';
   }
-  const staleDraftMessage = '此项目已有更新，当前草稿仍保留。请先复制需要保留的内容，再点“放弃更改”载入最新版本。';
   function canLeaveEditor() {
     if (pending) { message('正在处理项目操作，请稍候。'); return false; }
-    if (staleEditor()) { message(staleDraftMessage, true); return false; }
+    const conflict = draftConflict();
+    if (conflict) { message(conflict, true); return false; }
     if (dirty()) { message('项目有未保存的更改，请先保存或放弃更改。'); return false; }
     return true;
   }
@@ -93,8 +96,9 @@ export function mountProjects(options: Options) {
     return canLeaveEditor() && (options.canChangeProject?.() ?? true);
   }
   function updateDraftControls() {
-    el<HTMLButtonElement>('project-save').disabled = blocked() || staleEditor();
-    discard.disabled = blocked() || (!dirty() && !staleEditor());
+    const conflict = draftConflict();
+    el<HTMLButtonElement>('project-save').disabled = blocked() || !!conflict;
+    discard.disabled = blocked() || (!dirty() && !conflict);
   }
   function message(text: string, error = false) {
     status.textContent = text; status.dataset.tone = error ? 'error' : 'neutral';
@@ -142,8 +146,11 @@ export function mountProjects(options: Options) {
   function render(preserveEditor = false) {
     populateSelect(selector, snapshot.activeProjectId); populateSelect(target, snapshot.activeProjectId); populateSelect(settingsSelector, snapshot.activeProjectId);
     backupProject.textContent = active() ? `当前项目：${active()!.name}` : '未选择项目；可导入已有备份。';
-    if (preserveEditor) directoryNote(editing ? active() : null);
-    else fill(active());
+    if (preserveEditor) {
+      const draft = editing;
+      if (draft) el('project-editor-title').textContent = draft.id === snapshot.activeProjectId ? '项目设置' : `项目草稿：${draft.name}`;
+      directoryNote(draft && (snapshot.projects.find(project => project.id === draft.id) ?? draft));
+    } else fill(active());
     history.textContent = '';
     const rows = snapshot.runs.filter(run => run.projectId === snapshot.activeProjectId);
     el('project-history-title').textContent = active() ? `${active()!.name} · 运行与成果` : '未归属项目 · 运行与成果';
@@ -221,10 +228,10 @@ export function mountProjects(options: Options) {
     // project stays null. Reconcile against the trusted registry through the same CAS path.
     if ((changed || registryChanged) && !await options.beforeSelect(next.activeProjectId)) { ready = false; throw new Error('会话尚未保存或项目归属未能同步。请先处理会话保存提示，再重新加载项目。'); }
     // Run/history refreshes must not replace an open draft or reset a new-project editor.
-    const preserveEditor = (dialog.open || settingsOpen) && next.activeProjectId === snapshot.activeProjectId
-      && (!editing || dirty());
+    const preserveEditor = (dialog.open || settingsOpen) && (dirty() || (!editing && next.activeProjectId === snapshot.activeProjectId));
     snapshot = next; ready = true; render(preserveEditor);
-    if (staleEditor()) message(staleDraftMessage, true); else message('');
+    const conflict = draftConflict();
+    message(conflict, !!conflict);
     if (changed) options.onChange(active());
     if (changed || pendingLatestRestore) await showLatest();
     void backup?.refreshStorage();
@@ -263,7 +270,8 @@ export function mountProjects(options: Options) {
   listen(el('project-choose-directory'), 'click', () => { void operation(async () => { const path = await open({ directory: true, multiple: false }); if (!destroyed && typeof path === 'string') { directory.value = path; if (!name.value.trim()) name.value = path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''; } }); });
   listen(editor, 'submit', event => {
     event.preventDefault();
-    if (staleEditor()) { message(staleDraftMessage, true); return; }
+    const conflict = draftConflict();
+    if (conflict) { message(conflict, true); return; }
     if (!editor.reportValidity()) return;
     void operation(async () => {
       const project = await invoke<Project>('project_save', { project: { id: editing?.id ?? crypto.randomUUID(), name: name.value.trim(), directory: directory.value, subject: subject.value, ...(editing ? { expectedRevision: editing.revision } : {}) } });
