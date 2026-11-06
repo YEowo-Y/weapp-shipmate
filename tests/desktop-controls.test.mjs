@@ -556,9 +556,9 @@ desktopTest('maintenance results refresh saved records without replacing the rep
   assert.equal(opens.length, 0);
   app.projectOptions().onSnapshot();
   assert.equal(app.integration.selects, 2, 'a registry update lets the controller detect project changes');
-  app.maintenanceOptions().onRevealReport();
+  const reveal = app.maintenanceOptions().onRevealReport(() => true);
   assert.equal(app.integration.healthClosed, 1); assert.equal(opens.length, 0);
-  app.flushTimers(); assert.equal(app.integration.preferenceCloses, 1);
+  app.flushTimers(); await reveal; assert.equal(app.integration.preferenceCloses, 1);
   assert.equal(opens.length, 1, 'opening a saved notice is the explicit report action');
 });
 
