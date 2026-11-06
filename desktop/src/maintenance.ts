@@ -22,7 +22,7 @@ export function mountProjectMaintenance(options: Options) {
   const state = node('p'); state.id = 'maintenance-state'; state.setAttribute('role', 'status');
   const status = node('p'); status.id = 'maintenance-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-atomic', 'true');
   const actions = node('div'); actions.className = 'context-actions';
-  const save = button('maintenance-save', '保存维护设置'), retry = button('maintenance-retry', '重新加载'), stop = button('maintenance-stop', '停止本次自动预检'), discard = button('maintenance-discard', '放弃更改'); actions.append(save, discard, retry, stop);
+  const save = button('maintenance-save', '保存维护设置'), retry = button('maintenance-retry', '重新加载'), stop = button('maintenance-stop', '停止本次自动预检'), discard = button('maintenance-discard', '放弃更改'); actions.append(save, discard);
   const lastCheck = node('p'); lastCheck.id = 'maintenance-last-check';
   const noticeHeader = node('div'); noticeHeader.className = 'maintenance-notice-header';
   const noticeTitle = node('h4', '项目提醒');
@@ -35,7 +35,18 @@ export function mountProjectMaintenance(options: Options) {
   const notices = node('div'); notices.id = 'maintenance-notices';
   const notificationSettings = button('maintenance-system-settings', '系统通知设置'); notificationSettings.hidden = !options.onNotifications;
   const readAll = button('maintenance-read-all', '全部标为已读');
-  element.append(title, description, watch.label, notifications.label, state, lastCheck, actions, status, noticeHeader, count, notices, reset, readAll, notificationSettings);
+  const preferencesGroup = node('div'); preferencesGroup.className = 'preferences-group maintenance-preferences';
+  preferencesGroup.append(description, watch.label, notifications.label, actions, status);
+  const stateTitle = node('h4', '运行状态');
+  const stateGroup = node('div'); stateGroup.className = 'preferences-group maintenance-runtime';
+  const stateRow = node('div'); stateRow.className = 'settings-row';
+  const stateCopy = node('span'); stateCopy.append(state, lastCheck);
+  const stateActions = node('div'); stateActions.className = 'maintenance-runtime-actions'; stateActions.append(retry, stop);
+  stateRow.append(stateCopy, stateActions); stateGroup.append(stateRow);
+  const noticeGroup = node('div'); noticeGroup.className = 'preferences-group maintenance-notice-group';
+  const noticeActions = node('div'); noticeActions.className = 'context-actions'; noticeActions.append(reset, readAll, notificationSettings);
+  noticeGroup.append(count, notices, noticeActions);
+  element.append(title, preferencesGroup, stateTitle, stateGroup, noticeHeader, noticeGroup);
   let projectId: string | null = null, snapshot: Snapshot | null = null, epoch = 0, eventSequence = 0;
   let disposed = false, pending = false, dirty = false, ready = false, readFailed = false, unsubscribe: (() => void) | undefined;
   const synced = new Set<string>();
