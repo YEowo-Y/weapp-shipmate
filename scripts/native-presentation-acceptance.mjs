@@ -170,7 +170,20 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
       if (value.width <= 1100) assert.ok(parseFloat(border.bottom) > 0 && parseFloat(border.bottom) <= 1, label+': stacked provider list has one horizontal hairline');
     }
     if (selected === 'projects') assert.equal(value.fields.length, 2, label+': project name and directory fields are inspected');
-    if (selected === 'data') assert.equal(await inspect(`const root=document.querySelector('#project-backup');return root.firstElementChild.querySelector('h3')?.id==='project-backup-title'&&root.querySelector('#project-export').parentElement===root.querySelector('#project-import').parentElement;`), true, label+': project backup heading precedes its shared action row');
+    if (selected === 'data') {
+      const dataRows = await inspect(`const rect=n=>{const r=n.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};return ['project-export','project-import','project-storage-refresh','project-archive','settings-archives'].map(id=>{const control=document.getElementById(id),row=control.closest('.settings-row');return {id,copy:rect(row.firstElementChild),control:rect(control),row:rect(row)};});`);
+      if (value.width === 320) {
+        const longErrorFits = await inspect(`const node=document.querySelector('#project-storage-status'),original=node.textContent;try { node.textContent='容量读取失败：'+ 'C:/'+'x'.repeat(240)+'。可以重新读取。';const copy=node.parentElement,box=copy.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(node);return [...range.getClientRects()].every(r=>r.left>=box.left-1&&r.right<=box.right+1); } finally { node.textContent=original; }`);
+        assert.equal(longErrorFits, true, label+': long capacity errors wrap inside the narrow card');
+      }
+      visuals.push({label:label+'-data-rows',rows:dataRows});
+      await writeFile(resolve(run, 'presentation-visuals.json'), JSON.stringify(visuals, null, 2));
+      for (const row of dataRows) {
+        assert.ok(row.control.right <= row.row.right + 1, label+': data action fits its card '+row.id);
+        if (value.width >= 1000) assert.ok(row.control.left >= row.copy.right + 12, label+': data action follows its description on the same row '+row.id);
+        else if (value.width <= 390) assert.ok(row.control.top >= row.copy.bottom + 10, label+': narrow data action follows its description '+row.id);
+      }
+    }
     for (const field of value.fields) {
       assert.ok(field.label, label+': complex input retains its visible label');
       assert.ok(field.input.top >= field.label.bottom - 1, label+': complex form keeps label above input');
@@ -332,13 +345,13 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     assert.equal(await inspect('const radios=[...document.querySelectorAll("#desktop-preferences button[role=radio]")];return radios.length===8&&radios.every(n=>n.getAttribute("aria-label")&&n.closest("fieldset")?.querySelector("legend")?.textContent)'), true);
     await activate('#desktop-theme-system'); await press('\uE014');
     await until(() => inspect('return document.activeElement.id==="desktop-theme-light"&&document.activeElement.getAttribute("aria-checked")==="true"'), 'arrow key selects and focuses the next theme');
+    await until(async () => /保存/.test(await text('#preferences-status')), 'theme save feedback appears after keyboard selection');
     await activate('#desktop-theme-dark'); await activate('#desktop-message-size-18'); await activate('#desktop-motion-reduce');
     assert.equal(await inspect('return document.body.dataset.theme'), 'dark'); assert.equal(await inspect('return document.body.dataset.motion'), 'reduce');
     assert.equal(await inspect('return getComputedStyle(document.querySelector(".preferences-sample")).fontSize'), '18px');
     for (const [selector, size] of [['#desktop-preferences', '14px'], ['.preferences-field-copy p', '13px'], ['.preferences-choice', '13px'], ['#preferences-status', '12px']]) {
       assert.equal(await inspect('return getComputedStyle(document.querySelector(arguments[0])).fontSize', [selector]), size, `${selector}: reading size does not enlarge settings UI`);
     }
-    assert.match(await text('#preferences-status'), /保存/);
     for (const selected of ['notifications', 'models', 'appearance']) {
       await navigate(selected); assert.equal(await inspect('return document.activeElement.id'), 'preferences-section-title', 'section navigation focuses its readable destination');
       if (selected === 'notifications') assert.equal(await inspect('return document.querySelector("#system-notifications-enabled").checked'), false, 'viewing settings never enables system notifications');
