@@ -50,6 +50,13 @@ export async function checkSettingsWorkspaceFlows({ run, checked, click, fill, p
     await click('.preferences-search-result');
     await until(() => inspect('return document.querySelector("#desktop-preferences").dataset.section==="shortcuts"&&document.querySelector(".preferences-main").checkVisibility()&&document.querySelector("#settings-send-key").checkVisibility()&&document.activeElement.id==="settings-send-key"'), 'narrow search opens the visible shortcut detail and focuses its control');
     await screenshot('settings-search-narrow-detail');
+    await click('.preferences-back-results');
+    await until(() => inspect('const field=document.querySelector("#preferences-search");return field.checkVisibility()&&document.activeElement===field&&field.value==="发送消息"'), 'back to results restores the focused query');
+    for (const _character of typed) await press('\uE003');
+    assert.equal(await inspect('const field=document.querySelector("#preferences-search");return field.value===""&&field.checkVisibility()&&document.activeElement===field&&document.querySelector("#preferences-nav-shortcuts").checkVisibility()'), true, 'clearing the last character keeps search and categories accessible');
+    await screenshot('settings-search-narrow-cleared');
+    await click('#preferences-nav-about');
+    await until(() => inspect('return document.querySelector("#desktop-preferences").dataset.section==="about"'), 'a category opens after clearing results');
     evidence.push({ narrowSearchWidth: 320, typedPrefixes: prefixes, inputVisibleAndFocusedAfterEveryCharacter: true, detailVisible: true, focusedControl: 'settings-send-key' });
     await close();
     await command('POST', '/window/rect', { width: 1200, height: 900 });
@@ -117,6 +124,10 @@ export async function checkSettingsWorkspaceFlows({ run, checked, click, fill, p
     assert.equal(await inspect('return document.querySelector("#desktop-preferences").dataset.section'), 'projects');
     assert.equal(await inspect('return document.querySelector("#project-name").value'), '尚未保存的设置验收草稿');
     assert.match(await text('.preferences-error'), /保存|放弃/);
+    await command('POST', '/window/rect', { width: 390, height: 844 });
+    await click('#preferences-categories');
+    assert.equal(await inspect('const field=document.querySelector("#project-name");return field.checkVisibility()&&field.value==="尚未保存的设置验收草稿"&&document.querySelector(".preferences-error").checkVisibility()'), true, 'category navigation keeps the dirty form and its warning visible');
+    await command('POST', '/window/rect', { width: 1200, height: 900 });
     assert.equal((await snapshot()).projects.find(project => project.id === projectId).name, original.name);
     await click('#project-discard');
     const renamed = '设置工作区原生保存验收'; await fill('#project-name', renamed); await click('#project-save');
