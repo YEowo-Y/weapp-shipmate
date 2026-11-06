@@ -485,7 +485,14 @@ window.addEventListener("DOMContentLoaded", () => {
         const wrap = (id: string, child: HTMLElement) => { const host = document.createElement('section'); host.id = id; host.append(child); return host; };
         const archives = document.createElement('button'); archives.id = 'settings-archives'; archives.className = 'settings-button settings-button--outline'; archives.textContent = '查看归档会话';
         archives.addEventListener('click', () => { if (dataSettings?.canClose?.() !== false && workspace.close()) sessionWorkspace.openHistory(archives, 'archived'); });
-        element.append(wrap('settings-session-data', sessionData.element), wrap('settings-project-backup', backup.element), archives);
+        const archiveGroup = document.createElement('div'); archiveGroup.className = 'preferences-group';
+        const archiveRow = document.createElement('div'); archiveRow.className = 'settings-row';
+        const archiveCopy = document.createElement('span'); archiveCopy.textContent = '查看和管理已归档的会话';
+        archiveRow.append(archiveCopy, archives); archiveGroup.append(archiveRow);
+        const archiveTitle = document.createElement('h4'); archiveTitle.id = 'settings-session-archives-title'; archiveTitle.textContent = '归档会话';
+        const archiveSection = wrap('settings-session-archives', archiveTitle);
+        archiveSection.append(archiveGroup); archiveSection.setAttribute('aria-labelledby', archiveTitle.id);
+        element.append(wrap('settings-session-data', sessionData.element), wrap('settings-project-backup', backup.element), archiveSection);
         dataSettings = { element, open() { sessionData.open(); backup.open(); }, close() { sessionData.close(); backup.close(); }, canClose: () => sessionData.canClose() && backup.canClose() };
       }
       return dataSettings;
