@@ -38,7 +38,7 @@ export function SettingsView({ store, shortcuts, options, section, element, load
       <header className="preferences-sidebar-header"><h2 id="preferences-heading">设置</h2></header>
       <label className="preferences-search"><Icon name="search" /><input id="preferences-search" type="search" aria-label="搜索设置" placeholder="搜索设置" value={query} onFocus={() => { if (query.trim() && onCanNavigate()) setResultsOpen(true); }} onChange={event => { setQuery(event.target.value); if (onCanNavigate()) { setResultsOpen(!!event.target.value.trim()); } }} /></label>
       <nav className="preferences-navigation" aria-label="设置分类">
-        {['偏好', '应用'].map(group => <div className="preferences-nav-group" key={group}><p>{group}</p>{sections.filter(item => item.group === group).map(item => <Button key={item.id} id={`preferences-nav-${item.id}`} aria-current={section === item.id && !resultsOpen ? 'page' : undefined} onClick={() => choose(item.id)}><Icon name={item.icon} />{item.label}</Button>)}</div>)}
+        {[...new Set(sections.map(item => item.group))].map(group => <div className="preferences-nav-group" key={group}><p>{group}</p>{sections.filter(item => item.group === group).map(item => <Button key={item.id} id={`preferences-nav-${item.id}`} aria-current={section === item.id && !resultsOpen ? 'page' : undefined} onClick={() => choose(item.id)}><Icon name={item.icon} />{item.label}</Button>)}</div>)}
       </nav>
       <footer className="preferences-sidebar-footer"><Button id="preferences-dismiss" onClick={onClose}><Icon name="arrow-left" />返回应用</Button></footer>
     </aside>
