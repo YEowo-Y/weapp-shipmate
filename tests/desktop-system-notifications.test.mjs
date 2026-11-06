@@ -24,11 +24,13 @@ test('mount has no side effects and opening reads only without permission reques
   const toggleGroup = h.node('system-notifications-enabled').parentNode.parentNode;
   assert.match(toggleGroup.className, /system-notifications-preferences/);
   assert.equal(h.node('system-notifications-description').parentNode, toggleGroup);
-  const stateGroup = h.node('system-notifications-installation').parentNode;
+  const stateGroup = h.node('system-notifications-permission').parentNode.parentNode.parentNode;
   assert.match(stateGroup.className, /system-notifications-state/);
-  assert.equal(h.node('system-notifications-permission').parentNode.parentNode.parentNode, stateGroup);
+  assert.equal(h.node('system-notifications-installation').parentNode, h.node('system-notifications-permission').parentNode);
+  assert.equal(h.node('system-notifications-reload').parentNode, h.node('system-notifications-permission').parentNode.parentNode);
   assert.equal(h.node('system-notifications-test').parentNode.parentNode, stateGroup);
-  assert.equal(h.node('system-notifications-status').parentNode, stateGroup);
+  assert.equal(h.node('system-notifications-project').parentNode.hidden, true, 'a missing project callback hides the whole reminder row');
+  assert.equal(h.node('system-notifications-status').parentNode, h.app.element);
   assert.match(h.node('system-notifications-permission').textContent, /Windows 通知设置和勿扰/); assert.match(h.node('system-notifications-installation').textContent, /不是安装状态检测/);
 });
 test('enable and disable persist using revision and restore after reopen; testing is explicit', async () => {
