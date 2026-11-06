@@ -129,7 +129,21 @@ export async function checkSettingsWorkspaceFlows({ run, checked, click, fill, p
     assert.equal(await inspect('const field=document.querySelector("#project-name");return field.checkVisibility()&&field.value==="尚未保存的设置验收草稿"&&document.querySelector(".preferences-error").checkVisibility()'), true, 'category navigation keeps the dirty form and its warning visible');
     await command('POST', '/window/rect', { width: 1200, height: 900 });
     assert.equal((await snapshot()).projects.find(project => project.id === projectId).name, original.name);
+    const externalName = '另一窗口保存的项目名称';
+    await projectInvoke('project_save', { project: {
+      id: projectId, name: externalName, directory: original.directory,
+      subject: original.subject, expectedRevision: original.revision,
+    } });
+    await click('#project-save');
+    await until(async () => /其他操作更新/.test(await text('#project-status')), 'native save rejects the stale project revision');
+    await click('#project-retry');
+    await until(async () => /放弃更改/.test(await text('#project-status')), 'reload explains how to recover the preserved draft');
+    assert.equal(await inspect('return document.querySelector("#project-name").value'), '尚未保存的设置验收草稿');
+    assert.equal(await inspect('return document.querySelector("#project-save").disabled'), true);
+    assert.equal((await snapshot()).projects.find(project => project.id === projectId).name, externalName);
+    await screenshot('settings-project-revision-conflict');
     await click('#project-discard');
+    assert.equal(await inspect('return document.querySelector("#project-name").value'), externalName);
     const renamed = '设置工作区原生保存验收'; await fill('#project-name', renamed); await click('#project-save');
     await until(async () => (await snapshot()).projects.find(project => project.id === projectId).name === renamed, 'project rename persisted through native form');
     await until(() => inspect('return !document.querySelector("#project-save").disabled'), 'project save settled');
