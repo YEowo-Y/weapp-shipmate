@@ -5,7 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 // Real native SQLite, Node fs.watch and bundled scanner. Only timing fixtures
 // wrap a disposable runtime copy; scanner results are never fabricated.
-export async function checkMaintenanceFlows({ run, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, quit, launch, requests, isolatedDirectory, ownedRuntimeProcesses }) {
+export async function checkMaintenanceFlows({ run, projectDatabase, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, quit, launch, requests, isolatedDirectory, ownedRuntimeProcesses }) {
   const a = 'p7-maintenance-a', b = 'p7-maintenance-b';
   const directory = resolve(run, 'P7 自动维护项目 A'), otherDirectory = resolve(run, 'P7 自动维护项目 B');
   const baseSource = 'wx.getLocation({type:"wgs84"});\n';
@@ -119,6 +119,47 @@ export async function checkMaintenanceFlows({ run, checked, click, fill, press, 
     assert.equal(await inspect('return document.querySelector("#maintenance-save").disabled'), true);
     await verifyNotSaved(beforeA);
     await closePreferences();
+  });
+
+  await checked('A stale maintenance save requires a fresh read before merging the local draft', async () => {
+    const initial = await state();
+    const base = await projectInvoke('project_maintenance_save', {
+      projectId: a, expectedRevision: initial.revision, watchEnabled: false, notificationsEnabled: false,
+    });
+    await open(); await click('#maintenance-watch');
+
+    // A separate writer in the disposable acceptance database reproduces a change
+    // this WebView has not received. All recovery actions use the real UI and IPC.
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync(await realpath(projectDatabase));
+    try {
+      const key = 'project_maintenance:' + a;
+      const row = db.prepare('SELECT value FROM settings WHERE key=?').get(key);
+      const external = JSON.parse(row.value);
+      assert.equal(external.projectId, a);
+      assert.equal(external.revision, base.revision);
+      external.revision++; external.notificationsEnabled = true;
+      const updated = db.prepare('UPDATE settings SET value=? WHERE key=? AND value=?').run(JSON.stringify(external), key, row.value);
+      assert.equal(updated.changes, 1);
+    } finally { db.close(); }
+
+    await click('#maintenance-save');
+    await until(async () => /先重新加载/.test(await text('#maintenance-status')), 'rejected save offers reload');
+    assert.equal(await inspect('return document.querySelector("#maintenance-save").disabled'), true);
+    assert.equal(await inspect('return document.querySelector("#maintenance-watch").checked'), true);
+    await screenshot('p7-maintenance-save-conflict');
+    await click('#maintenance-retry');
+    await until(() => inspect('return !document.querySelector("#maintenance-save").disabled && document.querySelector("#maintenance-notifications").checked'), 'latest settings merge with the draft');
+    const fresh = await state();
+    assert.equal(fresh.revision, base.revision + 1);
+    assert.equal(fresh.watchEnabled, false);
+    await click('#maintenance-save');
+    await until(async () => {
+      const saved = await state();
+      return saved.revision === fresh.revision + 1 && saved.watchEnabled && saved.notificationsEnabled;
+    }, 'explicit save persists both changes');
+    await ready();
+    await saveSettings(false, false); await close();
   });
 
   await checked('P7 manual preflight establishes a real baseline and enabling watcher does not scan immediately', async () => {
