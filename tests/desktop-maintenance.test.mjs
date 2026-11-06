@@ -85,6 +85,43 @@ test('events preserve drafts and refresh metadata only on completion or changed 
   h.event(snapshot({ state: 'watching', lastCheckedAt: 123 })); assert.equal(h.results(), 1);
   h.event(snapshot({ state: 'watching', lastCheckedAt: 123 })); assert.equal(h.results(), 1);
 });
+test('maintenance drafts follow their project and preserve untouched settings changed elsewhere', async () => {
+  let externalNotifications = false;
+  const h = harness({ invoke: (name, args) => snapshot({
+    projectId: args.projectId,
+    revision: externalNotifications && args.projectId === 'a' ? 2 : 1,
+    notificationsEnabled: externalNotifications && args.projectId === 'a',
+    ...(name.endsWith('_save') && { watchEnabled: args.watchEnabled, notificationsEnabled: args.notificationsEnabled }),
+  }) });
+  await h.app.select();
+  h.change('maintenance-watch', true);
+  h.setProject('b'); await h.app.select();
+  assert.equal(h.node('maintenance-watch').checked, false);
+  assert.equal(h.app.canClose(), true);
+  h.change('maintenance-notifications', true);
+  h.setProject(null); await h.app.select();
+  externalNotifications = true;
+  h.setProject('a'); await h.app.select();
+  assert.equal(h.node('maintenance-watch').checked, true, 'restore the unsaved A switch');
+  assert.equal(h.node('maintenance-notifications').checked, true, 'adopt the latest untouched A switch');
+  assert.equal(h.calls.some(c => c.name.endsWith('_save')), false);
+  await h.click('maintenance-save');
+  const saves = h.calls.filter(c => c.name.endsWith('_save'));
+  assert.equal(saves.length, 1);
+  assert.deepEqual({ ...saves[0].args }, { projectId: 'a', expectedRevision: 2, watchEnabled: true, notificationsEnabled: true });
+  h.setProject('b'); await h.app.select();
+  assert.equal(h.node('maintenance-notifications').checked, true);
+  assert.match(h.node('maintenance-status').textContent, /未保存/);
+  h.change('maintenance-notifications', false);
+  assert.doesNotMatch(h.node('maintenance-status').textContent, /未保存/);
+  h.change('maintenance-notifications', true);
+  await h.click('maintenance-discard');
+  h.setProject('a'); await h.app.select();
+  h.setProject('b'); await h.app.select();
+  assert.equal(h.node('maintenance-notifications').checked, false);
+  assert.equal(h.app.canClose(), true);
+});
+
 test('project switch discards stale read and wrong-project responses', async () => {
   const pending = deferred();
   const h = harness({ invoke: (name, args) => name.endsWith('snapshot') && args.projectId === 'a' ? pending.promise : snapshot({ projectId: args.projectId }) });
