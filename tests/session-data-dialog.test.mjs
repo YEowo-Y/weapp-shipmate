@@ -18,11 +18,12 @@ function harness(options = {}) {
   function element(tag) {
     const listeners = new Map();
     return { tag, children: [], dataset: {}, value: '', ownerDocument: doc,
-      append(...children) { this.children.push(...children); }, setAttribute(name, value) { this[name] = value; },
+      append(...children) { for (const child of children) { child.remove(); child.parentNode = this; this.children.push(child); } },
+      setAttribute(name, value) { this[name] = value; },
       addEventListener(type, handler) { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(handler); },
       async fire(type, event = {}) { await Promise.all((listeners.get(type) || []).map(fn => fn({ preventDefault() {}, ...event }))); },
       updateComplete: rendered,
-      click() { return this.fire('click'); }, focus() { if (tag === 'wa-button' && !buttonsReady) throw new TypeError('Inner button has not rendered'); doc.activeElement = this; }, remove() {},
+      click() { return this.fire('click'); }, focus() { if (tag === 'wa-button' && !buttonsReady) throw new TypeError('Inner button has not rendered'); doc.activeElement = this; }, remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter(child => child !== this); this.parentNode = null; },
       showModal() { this.open = true; }, close() { this.open = false; void this.fire('close'); },
     };
   }
