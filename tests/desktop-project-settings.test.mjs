@@ -104,8 +104,12 @@ test('data settings reuse the real project backup controller without opening its
   assert.equal(backup.contains(h.node('project-export')), true); assert.match(h.node('project-backup-project').textContent, /a/);
   assert.equal(backup.firstElementChild.querySelector('h3')?.id, 'project-backup-title');
   assert.equal(backup.firstElementChild.nextElementSibling.id, 'project-backup-project');
-  assert.equal(h.node('project-export').parentElement, h.node('project-import').parentElement);
-  assert.equal(h.node('project-export').nextElementSibling.id, 'project-import');
+  assert.equal(h.node('project-export').closest('.settings-row').querySelector('strong').textContent, '导出项目备份');
+  assert.equal(h.node('project-import').closest('.settings-row').querySelector('strong').textContent, '恢复项目备份');
+  assert.equal(h.node('project-storage-refresh').closest('.settings-row').contains(h.node('project-storage-status')), true);
+  assert.equal(h.node('project-archive').closest('.settings-row').querySelector('strong').textContent, '归档当前项目');
+  assert.equal(h.node('project-import-review').previousElementSibling.contains(h.node('project-import')), true);
+  assert.equal(h.node('project-archive-review').previousElementSibling.contains(h.node('project-archive')), true);
   await h.selectFile(); assert.equal(h.node('project-import-review').hidden, false);
   await h.fire('project-import-directory'); await h.fire('project-import-confirm');
   assert.equal(h.calls.filter(([cmd]) => cmd === 'project_import').length, 1);
