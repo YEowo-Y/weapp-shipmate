@@ -108,13 +108,17 @@
 .preferences-dialog .project-settings-panel .project-status-row { margin-block:16px; }
 
 .preferences-dialog .project-settings-panel .project-form { padding:0; border:0; border-radius:0; background:transparent; margin-block:24px; }
-.preferences-dialog .project-backup-settings-panel { padding:0; border:0; border-radius:0; background:transparent; margin-block:32px; }
+.preferences-dialog .project-backup-settings-panel { padding:0; border:0; border-radius:0; background:transparent; margin-block:0; }
 .preferences-dialog .project-backup-settings-panel > .project-backup { margin:0; padding:0; border:0; }
 .preferences-dialog .session-workspace-data-panel input[type=file], .preferences-dialog .project-backup-settings-panel input[type=file] { width:100%; min-width:0; max-width:100%; }
 .preferences-dialog .session-workspace-data-panel .session-workspace-dialog__actions { padding:16px 0 0; border:0; justify-content:flex-start; }
 .preferences-dialog .maintenance-panel { margin-top:32px; }
-.preferences-dialog .settings-data > section + section { margin-top:32px; }
-.preferences-dialog .settings-row, .preferences-dialog .settings-keyboard-list > div { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 24px; padding:16px 0; margin:0; min-width:0; min-height:60px; box-sizing:border-box; }
+.preferences-dialog .settings-data > section + section { margin-top:48px; }
+.preferences-dialog .settings-data > section > h4 { margin:0 0 16px; }
+.project-backup .project-storage-heading { margin:48px 0 16px; }
+.project-backup .preferences-group > .project-backup-review { margin:0; padding:16px 0; border-top:1px solid var(--border); border-radius:0; background:transparent; }
+.project-backup .settings-row > wa-button { flex-shrink:0; }
+.preferences-dialog .settings-row, .project-backup .settings-row, .preferences-dialog .settings-keyboard-list > div { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 24px; padding:16px 0; margin:0; min-width:0; min-height:60px; box-sizing:border-box; }
 .settings-row + .settings-row, .settings-keyboard-list > div + div { border-top:1px solid var(--border); }
 .settings-row > span { flex:1 1 12em; min-width:0; }
 .settings-row > strong { min-width:0; max-width:100%; overflow-wrap:anywhere; }
@@ -180,6 +184,9 @@ body.desktop-app[data-motion=reduce] :is(#desktop-provider-status.is-busy,#deskt
   .preferences-dialog .preferences-navigation .settings-button { min-height:44px; }
 }
 @media(max-width:520px) {
+  .settings-data .settings-row { flex-direction:column; align-items:stretch; gap:12px; }
+  .settings-data .settings-row > span { flex-basis:auto; }
+  .settings-data .settings-row > :is(wa-button,button) { align-self:flex-start; }
   .preferences-dialog .preferences-main > .context-body { padding:24px 16px 32px; }
   .preferences-dialog .settings-button, .preferences-dialog wa-button::part(button) { min-height:44px; }
   .preferences-dialog .settings-row { gap:12px; padding:16px 0; }
