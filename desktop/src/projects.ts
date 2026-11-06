@@ -48,7 +48,7 @@ export function mountProjects(options: Options) {
   const exportButton = el('project-export');
   const backupProject = document.createElement('p'); backupProject.id = 'project-backup-project'; backupProject.className = 'desktop-field-hint';
   backupElement.querySelector('.project-section-heading')!.after(backupProject);
-  backupElement.querySelector('.project-form-actions')!.prepend(exportButton);
+  backupElement.querySelector('#project-export-row')!.append(exportButton);
   const projectPicker = document.createElement('div'); projectPicker.className = 'project-settings-picker';
   const projectLabel = document.createElement('label'); projectLabel.htmlFor = 'project-settings-select'; projectLabel.textContent = '当前项目';
   const settingsSelector = document.createElement('select'); settingsSelector.id = 'project-settings-select';
