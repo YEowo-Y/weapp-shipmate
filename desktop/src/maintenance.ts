@@ -48,7 +48,10 @@ export function mountProjectMaintenance(options: Options) {
   noticeGroup.append(count, notices, noticeActions);
   element.append(title, preferencesGroup, stateTitle, stateGroup, noticeHeader, noticeGroup);
   let projectId: string | null = null, snapshot: Snapshot | null = null, epoch = 0, eventSequence = 0;
-  let disposed = false, pending = false, dirty = false, ready = false, readFailed = false, unsubscribe: (() => void) | undefined;
+  let disposed = false, pending = false, ready = false, readFailed = false, unsubscribe: (() => void) | undefined;
+  type PreferenceDraft = Partial<Pick<Snapshot, 'watchEnabled' | 'notificationsEnabled'>>;
+  const drafts = new Map<string, PreferenceDraft>();
+  const unsavedMessage = '当前项目的维护设置尚未保存，请先保存或放弃更改。';
   const synced = new Set<string>();
   let renderedNotices = '';
   let refreshingResult = false, queuedResult: { token: number; id: string } | null = null;
@@ -67,10 +70,21 @@ export function mountProjectMaintenance(options: Options) {
       }
     } finally { refreshingResult = false; }
   }
+  function rememberEdits(base: Snapshot, watchEnabled: boolean, notificationsEnabled: boolean) {
+    const draft: PreferenceDraft = {};
+    if (watchEnabled !== base.watchEnabled) draft.watchEnabled = watchEnabled;
+    if (notificationsEnabled !== base.notificationsEnabled) draft.notificationsEnabled = notificationsEnabled;
+    if (Object.keys(draft).length) drafts.set(base.projectId, draft);
+    else drafts.delete(base.projectId);
+  }
   function render() {
+    const draft = projectId ? drafts.get(projectId) : undefined;
+    if (!draft && status.textContent === unsavedMessage) message('');
+    watch.input.checked = draft?.watchEnabled ?? snapshot?.watchEnabled ?? false;
+    notifications.input.checked = draft?.notificationsEnabled ?? snapshot?.notificationsEnabled ?? false;
     const disabled = !projectId || !ready || pending;
     watch.input.disabled = disabled; notifications.input.disabled = disabled;
-    save.disabled = disabled || !dirty; discard.disabled = pending || !dirty;
+    save.disabled = disabled || !draft; discard.disabled = pending || !draft;
     retry.disabled = !projectId || pending;
     retry.textContent = ready && !readFailed ? '重试自动维护' : '重新加载';
     stop.disabled = disabled || !(snapshot?.state === 'pending' || (snapshot?.state === 'checking' && snapshot.runId));
@@ -106,7 +120,8 @@ export function mountProjectMaintenance(options: Options) {
   function accept(value: Snapshot | null, token: number, id: string, sequence: number) {
     if (!current(token, id) || !value || value.projectId !== id || sequence !== eventSequence || (snapshot && value.revision < snapshot.revision)) return false;
     const previous = snapshot; snapshot = value; ready = true;
-    if (!dirty) { watch.input.checked = value.watchEnabled; notifications.input.checked = value.notificationsEnabled; }
+    const draft = drafts.get(id);
+    if (draft) rememberEdits(value, draft.watchEnabled ?? value.watchEnabled, draft.notificationsEnabled ?? value.notificationsEnabled);
     render();
     if (previous && (previous.lastCheckedAt !== value.lastCheckedAt || (previous.state === 'checking' && ['watching', 'paused', 'error', 'off'].includes(value.state)))) {
       void refreshResult(token, id);
@@ -142,12 +157,12 @@ export function mountProjectMaintenance(options: Options) {
       if (!current(token, id)) return;
       const accepted = accept(value, token, id, sequence);
       if (!accepted && !ready) throw new Error('维护状态与当前项目不一致');
-      readFailed = false; message('');
+      readFailed = false; message(drafts.has(id) ? unsavedMessage : '');
     } catch { if (current(token, id)) { readFailed = true; message('维护状态未能读取，已保留设置草稿。请重新加载。', true); } }
     finally { if (current(token, id)) { pending = false; render(); } }
   }
   async function command(name: string, args: Record<string, unknown> = {}, saved = false) {
-    if (disposed || pending || !ready || !projectId) return;
+    if (disposed || pending || !ready || !projectId || projectId !== options.getProjectId()) return;
     const id = projectId, token = epoch, sequence = eventSequence;
     pending = true; message(''); render();
     try {
@@ -160,8 +175,7 @@ export function mountProjectMaintenance(options: Options) {
       if (saved && !accepted && snapshot && value.revision > snapshot.revision) {
         snapshot = { ...snapshot, revision: value.revision, watchEnabled: value.watchEnabled, notificationsEnabled: value.notificationsEnabled };
       }
-      if (saved) dirty = false;
-      if (!dirty && snapshot) { watch.input.checked = snapshot.watchEnabled; notifications.input.checked = snapshot.notificationsEnabled; }
+      if (saved) drafts.delete(id);
       message(saved ? '维护设置已保存。' : '');
     } catch { if (current(token, id)) { if (saved) readFailed = true; message('操作未能完成，已保留设置草稿。请重试；版本冲突时先重新加载。', true); } }
     finally { if (current(token, id)) { pending = false; render(); } }
@@ -181,15 +195,16 @@ export function mountProjectMaintenance(options: Options) {
   }
   function discardChanges() {
     if (disposed || pending) return;
-    dirty = false; watch.input.checked = snapshot?.watchEnabled ?? false; notifications.input.checked = snapshot?.notificationsEnabled ?? false;
+    if (projectId) drafts.delete(projectId);
     message('已放弃未保存的维护设置。'); render();
   }
   function canClose() {
-    if (pending || dirty) { message(pending ? '正在处理维护操作，请稍候。' : '维护设置尚未保存，请先保存或放弃更改。'); return false; }
+    if (pending || (projectId && drafts.has(projectId))) { message(pending ? '正在处理维护操作，请稍候。' : unsavedMessage); return false; }
     return true;
   }
   for (const input of [watch.input, notifications.input]) input.addEventListener('change', () => {
-    dirty = watch.input.checked !== (snapshot?.watchEnabled ?? false) || notifications.input.checked !== (snapshot?.notificationsEnabled ?? false); render();
+    if (snapshot && projectId && current(epoch, projectId) && !pending) rememberEdits(snapshot, watch.input.checked, notifications.input.checked);
+    render();
   });
   filter.addEventListener('change', () => { if (!filter.disabled) render(); });
   reset.addEventListener('click', () => { if (!reset.disabled) { filter.value = 'all'; render(); filter.focus(); } });
@@ -207,8 +222,8 @@ export function mountProjectMaintenance(options: Options) {
       const id = options.getProjectId();
       if (id === projectId && (ready || pending)) return;
       if (id !== projectId) {
-        epoch++; eventSequence++; projectId = id; snapshot = null; pending = false; dirty = false; ready = false; readFailed = false;
-        watch.input.checked = false; notifications.input.checked = false; filter.value = 'all'; message(''); render();
+        epoch++; eventSequence++; projectId = id; snapshot = null; pending = false; ready = false; readFailed = false;
+        filter.value = 'all'; message(''); render();
       }
       await read();
     },
