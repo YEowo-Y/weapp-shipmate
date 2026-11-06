@@ -768,6 +768,25 @@ async function checkAgentFlows() {
 
 async function checkConnectionsFlows() {
   const dummyKey = 'fixture-native-oauth-key';
+  async function checkModelCards(state) {
+    for (const width of [320, 1000, 1440]) {
+      await command('POST', '/window/rect', { width, height: 1000 });
+      assert.equal(await inspect("return document.querySelector('.desktop-connection-state').checkVisibility()"), state !== 'oauth', state+': pending authorization does not leave an empty connection card');
+      const expected = state === 'oauth' ? ['desktop-oauth-code', 'desktop-provider-oauth-complete', 'desktop-provider-oauth-cancel'] : ['desktop-provider-refresh', 'desktop-provider-disconnect', 'desktop-provider-verify', 'desktop-model-search'];
+      assert.deepEqual(await inspect('return arguments[0].filter(id=>document.getElementById(id)?.checkVisibility())', [expected]), expected, state+': required controls are visible');
+      const result = await inspect(`const root=document.querySelector('.desktop-model-panel'),rect=n=>{const r=n.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom};};
+        const cards=[...root.querySelectorAll('.preferences-group')].filter(n=>n.checkVisibility());
+        const rows=[...root.querySelectorAll('.settings-row')].filter(n=>n.checkVisibility()).map(row=>({copy:rect(row.firstElementChild),actions:[...row.lastElementChild.children].filter(n=>n.checkVisibility()).map(rect)}));
+        return {overflow:document.querySelector('#preferences-body').scrollWidth-document.querySelector('#preferences-body').clientWidth,
+          cards:cards.map(n=>({box:rect(n),controls:[...n.querySelectorAll('input,select,wa-button,button')].filter(c=>c.checkVisibility()).map(rect)})),rows};`);
+      assert.ok(result.overflow<=1, state+': model settings fit '+width+'px');
+      for (const card of result.cards) for (const control of card.controls) assert.ok(control.left>=card.box.left-1&&control.right<=card.box.right+1, state+': controls fit their card at '+width+'px');
+      for (const row of result.rows) for (const action of row.actions) assert.ok(width===320?action.top>=row.copy.bottom+10:action.left>=row.copy.right+12, state+': status and actions follow the responsive layout at '+width+'px');
+      await inspect('document.querySelector(arguments[0]).scrollIntoView({block:"center",behavior:"instant"})', [state==='oauth'?'#desktop-oauth-code-form':'.desktop-connection-state']);
+      await screenshot('p4-'+state+'-cards-'+width);
+    }
+    await command('POST', '/window/rect', { width: 1000, height: 900 });
+  }
   async function openProvider() {
     await openModelSettings();
     await until(() => inspect('return !document.querySelector("[data-provider-id=openrouter]").disabled'), 'provider ready');
@@ -780,7 +799,7 @@ async function checkConnectionsFlows() {
     await openProvider(); await chooseOption('#desktop-provider-storage', 'system');
     await fill('#desktop-provider-key', dummyKey); await click('#desktop-provider-connect');
     await until(() => find('#desktop-preferences .desktop-model-panel [data-model-id="fixture/oauth-model"]'), 'fixture catalog connected');
-    await screenshot('p4-system-connected'); await click('#desktop-preferences .desktop-model-panel [data-model-id="fixture/oauth-model"]');
+    await screenshot('p4-system-connected'); await checkModelCards('connected'); await click('#desktop-preferences .desktop-model-panel [data-model-id="fixture/oauth-model"]');
   });
   await checked('Restart restores disconnected saved credential and explicit reconnect does not infer', async () => {
     const before = requests.length; await quit(); await launch(); await openProvider();
@@ -822,6 +841,7 @@ async function checkConnectionsFlows() {
   await checked('System OAuth fixture survives restart without repeating exchange or inference', async () => {
     await chooseOption('#desktop-provider-storage', 'system'); await click('#desktop-provider-oauth-manual');
     await until(() => inspect('return !document.querySelector("#desktop-oauth-code-form").hidden'), 'manual OAuth ready');
+    await checkModelCards('oauth');
     await fill('#desktop-oauth-code', 'fixture-native-oauth-success'); await click('#desktop-provider-oauth-complete');
     await until(() => find('#desktop-preferences .desktop-model-panel [data-model-id="fixture/oauth-model"]'), 'OAuth catalog');
     const exchanges = oauthExchanges, count = requests.length;
