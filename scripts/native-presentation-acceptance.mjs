@@ -384,6 +384,15 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
           await geometry(`${theme}-${width}-preferences-${selected}`, '#desktop-preferences');
           await settingsWorkspace(`${theme}-${width}-preferences-${selected}`);
           await settingsLayout(`${theme}-${width}-preferences-${selected}`, selected);
+          if (selected === 'data') {
+            const row = await inspect(`const section=document.querySelector('.session-workspace__data-group > section');
+              const copy=section.querySelector('p').getBoundingClientRect(),action=section.querySelector('[data-action="backup"]').getBoundingClientRect();
+              return {beside:action.left>=copy.right+12,below:action.top>=copy.bottom};`);
+            assert.ok(width >= 1000 ? row.beside : row.below, 'backup action follows the available row width');
+          }
+          if (selected === 'projects') {
+            assert.equal(await inspect('return document.querySelector("#project-save").parentElement === document.querySelector("#project-discard").parentElement'), true, 'save and discard belong to the same edit');
+          }
           if (selected === 'about') {
             assert.equal(await inspect('return document.querySelector(".settings-rule-version details").open'), false, 'rule metadata starts collapsed');
             await activate('.settings-rule-version summary');
