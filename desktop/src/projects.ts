@@ -58,7 +58,13 @@ export function mountProjects(options: Options) {
   const openData = document.createElement('button'); openData.type = 'button'; openData.className = 'desktop-action'; openData.id = 'project-open-data'; openData.textContent = '管理项目备份与数据'; openData.hidden = true;
   const openResults = document.createElement('button'); openResults.type = 'button'; openResults.className = 'desktop-action'; openResults.textContent = '查看运行历史'; openResults.id = 'project-open-results'; openResults.hidden = true;
   const related = document.createElement('div'); related.className = 'project-settings-links';
-  related.append(openData, openResults); body.append(related);
+  const relatedTitle = document.createElement('h3'); relatedTitle.textContent = '项目资料';
+  const relatedGroup = document.createElement('div'); relatedGroup.className = 'preferences-group';
+  for (const [label, control] of [['备份与数据', openData], ['运行记录', openResults]] as const) {
+    const row = document.createElement('div'); row.className = 'settings-row';
+    const copy = document.createElement('span'); copy.textContent = label; row.append(copy, control); relatedGroup.append(row);
+  }
+  related.append(relatedTitle, relatedGroup); related.hidden = true; body.append(related);
   let settingsOpen = false, backupSettingsOpen = false;
   let snapshot: ProjectSnapshot = { projects: [], activeProjectId: null, runs: [], artifacts: [] };
   let ready = false, pending = false, externalBusy = false, destroyed = false, pendingLatestRestore = false;
@@ -326,12 +332,14 @@ export function mountProjects(options: Options) {
         historyHome.hidden = true; openResults.hidden = !options.onOpenResults;
         settingsElement.append(body);
         backupElement.hidden = true; openData.hidden = !options.onOpenData;
+        (openData.parentNode as HTMLElement).hidden = openData.hidden; (openResults.parentNode as HTMLElement).hidden = openResults.hidden;
+        related.hidden = openData.hidden && openResults.hidden;
         controls();
       },
       close() {
         if (!settingsOpen || !canLeaveEditor()) return;
         settingsOpen = false; dialog.append(body); backupElement.hidden = false; openData.hidden = true;
-        historyHome.hidden = false; openResults.hidden = true;
+        historyHome.hidden = false; openResults.hidden = true; related.hidden = true;
       },
       canClose: canLeaveEditor,
     },
