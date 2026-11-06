@@ -78,15 +78,24 @@ export function mountProjects(options: Options) {
   const active = () => snapshot.projects.find(project => project.id === snapshot.activeProjectId) ?? null;
   const blocked = () => pending || externalBusy || options.isBusy() || !ready || destroyed;
   const dirty = () => name.value !== (editing?.name ?? '') || directory.value !== (editing?.directory ?? '') || subject.value !== (editing?.subject ?? 'personal');
+  function staleEditor() {
+    const latest = active();
+    return !!editing && latest?.id === editing.id && latest.revision !== editing.revision;
+  }
+  const staleDraftMessage = '此项目已有更新，当前草稿仍保留。请先复制需要保留的内容，再点“放弃更改”载入最新版本。';
   function canLeaveEditor() {
     if (pending) { message('正在处理项目操作，请稍候。'); return false; }
+    if (staleEditor()) { message(staleDraftMessage, true); return false; }
     if (dirty()) { message('项目有未保存的更改，请先保存或放弃更改。'); return false; }
     return true;
   }
   function canChangeProject() {
     return canLeaveEditor() && (options.canChangeProject?.() ?? true);
   }
-  function updateDraftControls() { discard.disabled = blocked() || !dirty(); }
+  function updateDraftControls() {
+    el<HTMLButtonElement>('project-save').disabled = blocked() || staleEditor();
+    discard.disabled = blocked() || (!dirty() && !staleEditor());
+  }
   function message(text: string, error = false) {
     status.textContent = text; status.dataset.tone = error ? 'error' : 'neutral';
     resultsStatus.textContent = text; resultsStatus.dataset.tone = error ? 'error' : 'neutral';
@@ -98,7 +107,7 @@ export function mountProjects(options: Options) {
     selector.disabled = disabled; settingsSelector.disabled = disabled; updateDraftControls();
     resultsRetry.disabled = pending || externalBusy || options.isBusy(); resultsClose.disabled = pending;
     resultsDialog.setAttribute('aria-busy', String(pending));
-    for (const id of ['project-new', 'project-choose-directory', 'project-save', 'project-associate', 'project-association-target', 'project-name', 'project-directory', 'project-subject']) {
+    for (const id of ['project-new', 'project-choose-directory', 'project-associate', 'project-association-target', 'project-name', 'project-directory', 'project-subject']) {
       (el(id) as HTMLButtonElement).disabled = disabled;
     }
     el<HTMLButtonElement>('project-export').disabled = disabled || !active();
@@ -214,7 +223,8 @@ export function mountProjects(options: Options) {
     // Run/history refreshes must not replace an open draft or reset a new-project editor.
     const preserveEditor = (dialog.open || settingsOpen) && next.activeProjectId === snapshot.activeProjectId
       && (!editing || dirty());
-    snapshot = next; ready = true; render(preserveEditor); message('');
+    snapshot = next; ready = true; render(preserveEditor);
+    if (staleEditor()) message(staleDraftMessage, true); else message('');
     if (changed) options.onChange(active());
     if (changed || pendingLatestRestore) await showLatest();
     void backup?.refreshStorage();
@@ -253,6 +263,7 @@ export function mountProjects(options: Options) {
   listen(el('project-choose-directory'), 'click', () => { void operation(async () => { const path = await open({ directory: true, multiple: false }); if (!destroyed && typeof path === 'string') { directory.value = path; if (!name.value.trim()) name.value = path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''; } }); });
   listen(editor, 'submit', event => {
     event.preventDefault();
+    if (staleEditor()) { message(staleDraftMessage, true); return; }
     if (!editor.reportValidity()) return;
     void operation(async () => {
       const project = await invoke<Project>('project_save', { project: { id: editing?.id ?? crypto.randomUUID(), name: name.value.trim(), directory: directory.value, subject: subject.value, ...(editing ? { expectedRevision: editing.revision } : {}) } });
