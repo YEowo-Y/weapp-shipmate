@@ -46,20 +46,28 @@ test('maintenance blocks leaving unsaved or pending settings and explicitly disc
 });
 
 test('failed maintenance save reloads a conflict revision without discarding the draft or restarting the watcher', async () => {
-  let conflict = true, revision = 1;
+  let conflict = true, revision = 1, wrongProject = false;
   const h = harness({ invoke: (name, args) => {
     if (name.endsWith('save')) {
       if (conflict) { revision = 2; throw Error('revision conflict'); }
-      return snapshot({ revision: args.expectedRevision + 1, watchEnabled: args.watchEnabled });
+      return snapshot({ revision: args.expectedRevision + 1, watchEnabled: args.watchEnabled, notificationsEnabled: args.notificationsEnabled });
     }
-    return snapshot({ revision });
+    return snapshot({ projectId: wrongProject ? 'b' : 'a', revision, notificationsEnabled: revision > 1 });
   } });
   await h.app.select(); h.change('maintenance-watch', true); await h.click('maintenance-save');
   assert.equal(h.node('maintenance-retry').textContent, '重新加载'); assert.equal(h.app.canClose(), false);
-  await h.click('maintenance-retry'); assert.equal(h.node('maintenance-watch').checked, true);
+  assert.equal(h.node('maintenance-save').disabled, true);
+  await h.click('maintenance-save');
+  assert.equal(h.calls.filter(c => c.name.endsWith('_save')).length, 1);
+  wrongProject = true; await h.click('maintenance-retry');
+  assert.equal(h.node('maintenance-save').disabled, true, 'an unrelated snapshot cannot unlock saving');
+  wrongProject = false; await h.click('maintenance-retry');
+  assert.equal(h.node('maintenance-watch').checked, true);
+  assert.equal(h.node('maintenance-notifications').checked, true);
   assert.equal(h.calls.some(call => call.name === 'project_maintenance_retry'), false);
   conflict = false; await h.click('maintenance-save');
-  assert.equal(h.calls.filter(call => call.name.endsWith('save')).at(-1).args.expectedRevision, 2);
+  const saved = h.calls.filter(call => call.name.endsWith('save')).at(-1);
+  assert.deepEqual({ ...saved.args }, { projectId: 'a', expectedRevision: 2, watchEnabled: true, notificationsEnabled: true });
   assert.equal(h.app.canClose(), true);
 });
 test('maintenance defaults off, synchronizes once and reloads failed reads explicitly', async () => {
@@ -71,10 +79,10 @@ test('maintenance defaults off, synchronizes once and reloads failed reads expli
   await h.app.select(); assert.equal(h.calls.filter(c => c.name.endsWith('sync')).length, 1);
   assert.equal(h.results(), 0); assert.equal(h.calls.filter(c => c.name.endsWith('snapshot')).length, 2);
 });
-test('failed save preserves draft and checking can be disabled by saving', async () => {
+test('failed save preserves the off draft and keeps the running check stoppable', async () => {
   const h = harness({ invoke: name => { if (name.endsWith('save')) throw new Error('CAS'); return snapshot({ watchEnabled: true, state: 'checking', runId: 'auto-1' }); } });
   await h.app.select(); h.change('maintenance-watch', false); await h.click('maintenance-save');
-  assert.equal(h.node('maintenance-watch').checked, false); assert.equal(h.node('maintenance-save').disabled, false);
+  assert.equal(h.node('maintenance-watch').checked, false); assert.equal(h.node('maintenance-save').disabled, true);
   assert.match(h.node('maintenance-status').textContent, /草稿/);
   assert.equal(h.calls.find(c => c.name.endsWith('save')).args.watchEnabled, false);
   assert.equal(h.node('maintenance-stop').disabled, false);
