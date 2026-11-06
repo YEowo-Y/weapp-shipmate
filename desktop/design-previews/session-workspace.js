@@ -57,7 +57,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     const label = element('h2', '', '会话'); label.id = `session-workspace-${instanceId}-recent`;
     recent.setAttribute('role', 'group'); recent.setAttribute('aria-labelledby', label.id);
     heading.append(label, rename);
-    root.append(create, title, heading, recent, saved, notice);
+    root.append(notice, create, title, heading, recent, saved);
   } else root.append(title, create, rename, saved, notice);
   host.append(root);
   input.disabled = sendButton.disabled = create.disabled = rename.disabled = title.disabled = true;
