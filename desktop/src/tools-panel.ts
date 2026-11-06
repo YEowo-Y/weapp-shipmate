@@ -4,7 +4,7 @@ export function mountToolsPanel(options: { beforeOpen?(): boolean } = {}) {
   const toggle = document.querySelector<HTMLButtonElement>('#desktop-tools-toggle');
   const closeButton = document.querySelector<HTMLButtonElement>('#desktop-tools-close');
   const layout = document.querySelector<HTMLElement>('.desktop-layout');
-  if (!panel || !toggle || !layout) return { open(_trigger?: HTMLElement, _focusTarget?: HTMLElement) {}, close() {}, destroy() {} };
+  if (!panel || !toggle || !layout) return { open(_trigger?: HTMLElement, _focusTarget?: HTMLElement) { return false; }, close() {}, destroy() {} };
 
   const narrow = window.matchMedia('(max-width: 860px)');
   let expanded = false;
@@ -25,11 +25,12 @@ export function mountToolsPanel(options: { beforeOpen?(): boolean } = {}) {
     restoreFocus();
   };
   const open = (trigger: HTMLElement = toggle, focusTarget?: HTMLElement) => {
-    if (destroyed || options.beforeOpen?.() === false) return;
+    if (destroyed || options.beforeOpen?.() === false) return false;
     returnFocus = trigger;
     if (!expanded) { show(); reflect(true); }
     if (focusTarget && panel.contains(focusTarget)) focusTarget.focus();
     else focusPanel();
+    return true;
   };
   const onToggle = () => {
     if (expanded) { close(); return; }
