@@ -192,10 +192,10 @@ export function mountProjects(options: Options) {
   }
   async function showArtifact(id: string, reveal = false) {
     const artifact = await invoke<Artifact>('project_artifact', { artifactId: id });
-    if (!destroyed && artifact.projectId === snapshot.activeProjectId) {
-      if (reveal) { dialog.close(); if (resultsDialog.open) resultsDialog.close(); }
-      options.onArtifact(artifact, reveal);
-    }
+    if (destroyed) return;
+    if (artifact.id !== id || artifact.projectId !== snapshot.activeProjectId) throw new Error('报告与当前项目记录不一致，请重新加载。');
+    if (reveal) { dialog.close(); if (resultsDialog.open) resultsDialog.close(); }
+    options.onArtifact(artifact, reveal);
   }
   async function showLatest() {
     const latest = snapshot.artifacts.filter(item => item.projectId === snapshot.activeProjectId && item.provenance !== 'imported').sort((a, b) => b.createdAt - a.createdAt)[0];
