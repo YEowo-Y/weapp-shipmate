@@ -5,26 +5,58 @@ import { createRequire } from 'node:module';
 import vm from 'node:vm';
 import { createPreviewDocument } from './helpers/preview-dom.mjs';
 import { deriveWorkflow } from '../src/workflow.mjs';
+import { createWorkflowArtifact } from '../desktop/design-previews/workflow-artifact.js';
 const require = createRequire(new URL('../desktop/package.json', import.meta.url));
 const ts = require('typescript');
 const source = readFileSync(new URL('../desktop/src/workflow.ts', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '');
 const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } }).outputText;
 const project = {id:'a',name:'Project A',revision:2,contextRevision:1,subject:'personal',facts:{businessType:'门店',hasPayment:null,collectsSensitive:null,hasServerDomain:null}};
+test('workflow exports saved snapshot without drafts or native writes and reports retryable download failures', async () => {
+  const h = harness(); h.controller.open(h.node('trigger')); await h.settle();
+  h.node('workflow-businessType').value = 'unsaved private draft'; await h.fire('workflow-businessType','input');
+  const before = h.calls.length;
+  await h.fire('workflow-export');
+  assert.equal(h.downloads.length, 1);
+  assert.match(h.downloads[0].text, /实际业务：门店/);
+  assert.doesNotMatch(h.downloads[0].text, /unsaved private draft/);
+  assert.match(h.node('workflow-status').textContent, /已发起下载/);
+  assert.equal(h.calls.length, before);
+  h.setDownloadOK(false); await h.fire('workflow-export');
+  assert.match(h.node('workflow-status').textContent, /无法下载/);
+  h.setDownloadOK(true); await h.fire('workflow-export');
+  assert.match(h.node('workflow-status').textContent, /已发起下载/);
+  h.controller.destroy(); assert.equal(h.disposed(), true);
+  await h.fire('workflow-export'); assert.equal(h.downloads.length, 3);
+});
+
+test('workflow export guards no project, failed loading, busy state and stale project events', async () => {
+  for (const config of [{current:null}, {fail:true}]) {
+    const h=harness(config);h.controller.open(h.node('trigger'));await h.settle();await h.fire('workflow-export');
+    assert.equal(h.downloads.length,0);assert.equal(h.node('workflow-export').disabled,true);
+  }
+  const h=harness();h.controller.open(h.node('trigger'));await h.settle();
+  h.controller.setBusy(true);await h.fire('workflow-export');assert.equal(h.downloads.length,0);
+  h.controller.setBusy(false);h.setCurrent({...project,id:'b',name:'Project B'});
+  await h.fire('workflow-export');assert.equal(h.downloads.length,0);
+  assert.equal(h.node('workflow-content').hidden,true);
+});
+
 function harness({ current = project, fail = false, custom } = {}) {
-  const doc = createPreviewDocument(), nodes = new Map(), calls = [];
+  const doc = createPreviewDocument(), nodes = new Map(), calls = [], downloads = [];
+  let downloadOK = true, disposed = false;
   const descendants = root => root.children.flatMap(child => [child, ...descendants(child)]);
   const create = doc.createElement.bind(doc);
   doc.createElement = tag => Object.assign(create(tag), {value:'',disabled:false,open:false,events:{},addEventListener(type,fn){(this.events[type]??=[]).push(fn);},removeEventListener(){},focus(){doc.activeElement=this;},scrollIntoView(){this.scrolled=true;},showModal(){this.open=true;},close(){this.open=false;this.events.close?.forEach(fn=>fn({}));},contains(other){return other===this || descendants(this).includes(other);},querySelectorAll(selector){return descendants(this).filter(child=>selector==='details[open]'?child.tag==='details'&&child.open:selector.split(',').includes(child.tag));}});
   const node = id => { if(!nodes.has(id))nodes.set(id,doc.createElement('div'));return nodes.get(id); };
   doc.querySelector = query=>node(query.slice(1));doc.getElementById=id=>[...nodes.values()].flatMap(root=>[root,...descendants(root)]).find(item=>item.id===id)??nodes.get(id);doc.body=doc.createElement('body');
   const snapshot = {project,catalog:{schemaVersion:1,stages:[{stage:'registration',title:'注册账号'}],rules:[]},rulesVersion:'v1',confirmations:[]};
-  const context={document:doc,URL,deriveWorkflow,createIcon:()=>doc.createElement('svg'),openUrl:async()=>{},invoke:async(cmd,args)=>{calls.push([cmd,args]);if(custom){const result=await custom(cmd,args);if(result!==undefined)return result;}if(fail)throw Error('storage unavailable');return snapshot;}};
+  const context={document:doc,URL,deriveWorkflow,createWorkflowArtifact,createArtifactDownloader:()=>({download:artifact=>{downloads.push(artifact);return downloadOK;},dispose:()=>{disposed=true;}}),createIcon:()=>doc.createElement('svg'),openUrl:async()=>{},invoke:async(cmd,args)=>{calls.push([cmd,args]);if(custom){const result=await custom(cmd,args);if(result!==undefined)return result;}if(fail)throw Error('storage unavailable');return snapshot;}};
   vm.createContext(context);vm.runInContext(`${script}\nglobalThis.mount=mountWorkflow`,context);
   let changes=0, externalBusy=false;
   const controller=context.mount({getProject:()=>current,isBusy:()=>externalBusy,onProjectChanged:async()=>{changes++;}});
   const settle=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
   const fire=async(id,event='click')=>{node(id).events[event]?.forEach(fn=>fn({preventDefault(){}}));await settle();};
-  return {controller,node,calls,doc,snapshot,settle,fire,changes:()=>changes,setExternalBusy:v=>{externalBusy=v;},setFail:v=>{fail=v;},setCurrent:v=>{current=v;}};
+  return {controller,node,calls,doc,snapshot,settle,fire,downloads,setDownloadOK:value=>{downloadOK=value;},disposed:()=>disposed,changes:()=>changes,setExternalBusy:v=>{externalBusy=v;},setFail:v=>{fail=v;},setCurrent:v=>{current=v;}};
 }
 test('workflow has a project-empty state and never invents a native project',async()=>{
   const app=harness({current:null});app.controller.open(app.node('trigger'));await app.settle();assert.match(app.node('workflow-status').textContent,/选择或创建项目/);assert.equal(app.calls.length,0);assert.equal(app.node('workflow-content').hidden,true);
