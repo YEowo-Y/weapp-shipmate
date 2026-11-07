@@ -1,6 +1,7 @@
 // Pure projection of trusted catalog + user facts. No scan can confirm an official stage.
 const SUBJECTS = ["personal", "individual_business", "enterprise"];
 const terminal = state => state === "confirmed" || state === "not_applicable";
+const contentDependent = rule => Boolean(rule.signal?.length || Object.keys(rule.match || {}).length);
 const applicable = (rule, subject) => subject
   ? rule.subject_type?.includes(subject)
   : SUBJECTS.every(value => rule.subject_type?.includes(value));
@@ -59,10 +60,10 @@ export function deriveWorkflow({ project, catalog, rulesVersion, confirmations =
       url: source.official_url, lastVerified: source.last_verified || null, quote: source.source_quote || null,
     }));
     return { id, title: stage.title, status,
-      coverage: { ruleCount: rules.length, conditionalRuleCount: rules.filter(rule => rule.signal?.length).length,
+      coverage: { ruleCount: rules.length, conditionalRuleCount: rules.filter(contentDependent).length,
         note: !rules.length ? "暂无细化规则，请按官方指引人工核对。" : "规则覆盖有限；自动扫描发现不代表官方阶段已完成。" },
       items: rules.map(rule => ({ ruleId: rule.id, title: rule.title, stage: rule.stage, severity: rule.severity,
-        requires: rule.requires || [], conditional: Boolean(rule.signal?.length), signal: rule.signal || [], official_url: rule.official_url || null })),
+        requires: rule.requires || [], conditional: contentDependent(rule), signal: rule.signal?.length ? rule.signal : [...(rule.match?.api || []), ...(rule.match?.config_key || [])], official_url: rule.official_url || null })),
       sources, confirmation: latest, blockedBy: [],
       applicability: applies, action: stale ? "项目事实或规则已变化，请重新核对并确认。" : applies === null
         ? "补充项目事实，或按官方要求人工核对适用性。" : applies === false
