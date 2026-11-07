@@ -439,13 +439,15 @@ window.addEventListener("DOMContentLoaded", () => {
     },
   });
   maintenance = mountProjectMaintenance({
-    onNotifications: () => { health?.close(); window.setTimeout(() => preferences?.open($('#desktop-preferences-open'), 'notifications'), 0); },
+    onNotifications: () => {
+      if (health?.close() === false) return;
+      window.setTimeout(() => preferences?.open($('#desktop-preferences-open'), 'notifications'), 0);
+    },
     getProjectId: () => projects?.getActiveId() ?? null,
     onResult: async () => { if (projects && !await projects.refresh()) throw new Error('项目记录未能刷新'); },
     onOpenArtifact: async id => await projects?.openArtifact(id) ?? false,
     onRevealReport: async isCurrent => {
-      if (!isCurrent() || preferences?.close() === false) return false;
-      health?.close();
+      if (!isCurrent() || preferences?.close() === false || health?.close() === false) return false;
       await new Promise<void>(resolve => window.setTimeout(resolve, 0));
       return isCurrent() && tools.open($("#desktop-more"), $("#report"));
     },
@@ -466,6 +468,7 @@ window.addEventListener("DOMContentLoaded", () => {
     onHistory: showResults,
     onSources: () => sources?.open($("#desktop-more")),
     maintenance: maintenance.element,
+    canClose: () => maintenance!.canClose(),
     returnFocus: () => $("#desktop-more"),
   });
   void projects.ready.then(() => maintenance?.select());
