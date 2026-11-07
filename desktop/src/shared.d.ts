@@ -32,6 +32,9 @@ declare module '*chat-context.js' {
     prepare<T extends { model: string; messages: { role: string; content: string }[] }>(request: T, freshMemory?: Item[]): T;
   };
 }
+declare module '*workflow-artifact.js' {
+  export function createWorkflowArtifact(snapshot: { project: unknown; catalog: unknown; rulesVersion: string; confirmations: unknown[] }, exportedAt?: number): { text: string; filename: string; mimeType: string };
+}
 declare module '*workflow.mjs' {
   type Source = { url: string; lastVerified: string | null; quote: string | null };
   type Confirmation = { stageId: string; state: string; note: string; recordedAt: number; contextRevision: number; rulesVersion: string };
