@@ -458,6 +458,18 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
       await close('#desktop-preferences');
     }
   });
+  await checked('Run history returns focus to the home entry at wide and compact widths', async () => {
+    const back = '#desktop-project-results button[aria-label="返回工作区"]';
+    for (const width of [1000, 390]) {
+      await command('POST', '/window/rect', { width, height: 850 });
+      await home(); await activate('#home-results');
+      await until(() => inspect('return document.activeElement === document.querySelector(arguments[0]) && document.activeElement.checkVisibility()', [back]), 'run history return button focused');
+      if (width === 1000) await activate(back);
+      else await close('#desktop-project-results');
+      await until(() => inspect('const home = document.querySelector("#home-results"); return !document.querySelector("#desktop-project-results").open && home.checkVisibility() && document.activeElement === home'), `run history returns keyboard focus to home at ${width}px`);
+      if (width === 390) await screenshot('home-results-return-focus-390');
+    }
+  });
   await checked('Project results are a nonmodal workspace with a usable empty state and stable return navigation', async () => {
     await command('POST', '/window/rect', { width:1000, height:850 }); await home();
     await activate('#desktop-results-open');
@@ -465,6 +477,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     assert.equal(await inspect('return document.querySelector("#desktop-project-results").contains(document.querySelector("#project-history"))'), true);
     assert.equal(await inspect('return document.querySelector("#desktop-results-open").getAttribute("aria-current")'), 'page');
     await geometry('results-empty', '#desktop-project-results'); await close('#desktop-project-results');
+    await until(() => inspect('return document.activeElement === document.querySelector("#desktop-results-open")'), 'run history returns keyboard focus to the sidebar entry');
     await openPreferences(); await navigate('projects');
     assert.equal(await inspect('return document.querySelector("#project-history").checkVisibility()'), false);
     await activate('#project-open-results');
