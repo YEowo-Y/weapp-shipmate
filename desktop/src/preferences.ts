@@ -68,7 +68,11 @@ export function mountPreferences(options: SettingsOptions) {
   });
   dialog.addEventListener('keydown', event => {
     if (event.key !== 'Tab' || event.defaultPrevented || event.ctrlKey || event.altKey || event.metaKey) return;
-    const controls = [...dialog.querySelectorAll<HTMLElement>('button,input,select,textarea,a[href],wa-button,wa-switch,[tabindex="0"]')].filter(el => !el.hasAttribute('disabled') && !el.closest('[hidden]') && el.getClientRects().length);
+    const controls = [...dialog.querySelectorAll<HTMLElement>('button,input,select,textarea,a[href],summary,wa-button,wa-switch,[tabindex="0"]')].filter(el => {
+      const collapsed = el.closest('details:not([open])');
+      return !el.hasAttribute('disabled') && !el.closest('[hidden]') && el.getClientRects().length &&
+        (!collapsed || collapsed.querySelector('summary') === el);
+    });
     const first = controls[0], last = controls[controls.length - 1];
     const target = event.shiftKey && document.activeElement === first ? last : !event.shiftKey && document.activeElement === last ? first : null;
     if (target) { event.preventDefault(); target.focus(); }
