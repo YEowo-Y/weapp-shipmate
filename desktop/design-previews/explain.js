@@ -67,6 +67,8 @@ function renderResult(root, container, output) {
     triage.append(node('h3', '处理重点'));
     const controls = node('div', '', 'rj-triage__filters');
     const hint = node('p', '分类可重叠；缺少官方来源表示未收录官方链接。筛选仅影响显示，复制、下载和加入会话始终包含完整结果。', 'rj-triage__hint');
+    const help = node('details', '', 'rj-triage__help');
+    help.append(node('summary', '筛选与导出说明'), hint);
     const status = node('p', '', 'rj-triage__status');
     status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite'); status.setAttribute('aria-atomic', 'true');
     const empty = node('div', '', 'rj-triage__empty');
@@ -93,7 +95,7 @@ function renderResult(root, container, output) {
       controls.append(button); buttons.set(filter.key, button);
     }
     reset.addEventListener('click', () => { select(filters[0]); buttons.get('all').focus({ preventScroll: true }); });
-    triage.append(controls, hint, status, empty);
+    triage.append(controls, help, status, empty);
     select(filters[0]);
   }
   output.notes.forEach(note => container.append(node('p', note, 'rj-result__note')));
