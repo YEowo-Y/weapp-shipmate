@@ -64,6 +64,8 @@ node bin/weapp-shipmate.mjs guide --subject 个人 --no-sensitive --domain --no-
 
 主体支持个人、个体户/个体工商户和企业。`--sensitive` / `--domain` / `--payment`表示确认涉及，`--no-*`表示明确否，不确定则不传；同一事实的正反开关不能同时传。`--include-drafts`显式包含草案规则；`--checklist`与`--blockers-only`仍保留解析和扫描范围等检查限制。
 
+规则报告的可选 `confidence` 字段保留规则库的 `high` / `medium` / `low`，Markdown 与可勾选清单显示为高/中/低。这是规则维护者对规则准确性的把握，不是命中概率或过审保证，也不改变严重度。流程导航项、合成检查及缺少字段的历史报告不补造评级；低置信规则仍只通过显式包含草案显示。
+
 历史GitHub tag或tarball可以用于复现历史版本，但不应作为当前修复后的候选。构建和验证入口见[首跑说明](docs/14-first-run-and-trial.md)。
 
 </details>
