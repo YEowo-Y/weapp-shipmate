@@ -19,7 +19,11 @@ function harness(isNarrow = false) {
     children = [];
     open = false;
     modal = false;
-    focus() { doc.activeElement = this; }
+    isConnected = true;
+    visible = true;
+    checkVisibility() { return this.visible && this.isConnected; }
+    matches(selector) { return selector === ':disabled' && this.disabled === true; }
+    focus() { if (this.checkVisibility()) doc.activeElement = this; }
     contains(node) { return node === this || this.children.includes(node); }
     setAttribute(key, value) { this.attributes[key] = value; }
     querySelector() { return this.children[0]; }
@@ -33,6 +37,7 @@ function harness(isNarrow = false) {
     }
   }
   const panel = new Element(), toggle = new Element(), close = new Element(), action = new Element(), layout = new Element();
+  const task = new Element();
   const report = { textContent: 'Existing report', state: 'running' };
   panel.children = [close, action, report];
   doc = new EventTarget();
@@ -48,7 +53,7 @@ function harness(isNarrow = false) {
   vm.runInNewContext(script, context);
   const controller = context.mountToolsPanel();
   return {
-    panel, toggle, close, action, report, layout, doc, win, controller,
+    panel, toggle, close, action, task, report, layout, doc, win, controller,
     click: element => element.dispatchEvent(new Event('click')),
     flush: () => { while (queued.length) queued.shift()(); },
     resize(value) { media.matches = value; media.dispatchEvent(new Event('change')); },
@@ -157,22 +162,43 @@ desktopTest('pagehide removes handlers and destroy is idempotent', () => {
   assert.equal(h.escape().defaultPrevented, false);
 });
 
- desktopTest('task entry opens configuration and close returns to that task rather than the global toggle', () => {
+desktopTest('task entry opens configuration and close returns to that task rather than the global toggle', () => {
   const h = harness();
-  h.controller.open(h.action, h.action);
+  h.controller.open(h.task, h.action);
   assert.equal(h.doc.activeElement, h.action);
   assert.equal(h.panel.open, true);
   h.controller.close(); h.flush();
-  assert.equal(h.doc.activeElement, h.action);
+  assert.equal(h.doc.activeElement, h.task);
   h.controller.destroy();
   h.controller.open(h.toggle);
   assert.equal(h.panel.open, false);
 });
 
+desktopTest('closing tools restores usable focus when the report entry is collapsed or removed', () => {
+  for (const reason of ['collapsed', 'removed']) {
+    const h = harness();
+    h.controller.open(h.task);
+    if (reason === 'collapsed') h.task.visible = false;
+    else h.task.isConnected = false;
+    h.controller.close(); h.flush();
+    assert.equal(h.doc.activeElement, h.toggle, reason);
+  }
+});
+
+desktopTest('report reading inherits the outer tools entry or a usable fallback', () => {
+  const h = harness();
+  h.controller.open(h.task);
+  assert.equal(h.controller.getReturnFocus(), h.task);
+  h.task.disabled = true;
+  assert.equal(h.controller.getReturnFocus(), h.toggle);
+  h.controller.open(h.action);
+  assert.equal(h.controller.getReturnFocus(), h.toggle);
+});
+
 desktopTest('a hidden homepage trigger falls back to the persistent tools toggle on close', () => {
   const h = harness();
-  h.action.closest = () => ({ hidden: true });
-  h.controller.open(h.action, h.action);
+  h.task.visible = false;
+  h.controller.open(h.task, h.action);
   h.controller.close(); h.flush();
   assert.equal(h.doc.activeElement, h.toggle);
 });
