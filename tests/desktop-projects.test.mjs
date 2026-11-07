@@ -21,6 +21,8 @@ function harness({ projects = [project('a'), project('b')], activeProjectId = 'a
     showModal() { this.open = true; }, close() { this.open = false; this.events.close?.forEach(fn => fn({})); },
     events: {}, addEventListener(type, fn) { (this.events[type] ??= []).push(fn); }, removeEventListener() {},
     append(...children) { for (const child of children) { if (child.parentNode) child.remove(); child.parentNode = this; this.children.push(child); } },
+    focus() { doc.activeElement = this; }, getClientRects() { return [{}]; },
+    contains(other) { return this === other || this.children.some(child => child.contains?.(other)); },
     prepend(...children) { for (const child of [...children].reverse()) { if (child.parentNode) child.remove(); child.parentNode = this; this.children.unshift(child); } },
   });
   const nodes = new Map(), calls = [], changes = [], shown = [], reveals = [], registry = [], pending = [], snapshots = [];
@@ -57,7 +59,7 @@ function harness({ projects = [project('a'), project('b')], activeProjectId = 'a
   let backupOptions;
   const context = { document: doc, invoke, mountProjectBackup: options => { backupOptions = options; return { sync() {}, async refreshStorage() {}, canClose() { return true; }, close() {}, destroy() {} }; }, open: async () => 'C:/chosen', crypto: { randomUUID: () => 'new-project' }, setTimeout, clearTimeout, URL, Blob };
   vm.createContext(context); vm.runInContext(`${script}\nglobalThis.mount = mountProjects;`, context);
-  const controller = context.mount({ beforeSelect, onRegistry: ids => { registry.push(ids); return onRegistry(ids); }, onChange: p => changes.push(p), onSnapshot: value => snapshots.push(value), onArtifact: (a, reveal) => { shown.push(a); reveals.push({ reveal, dialogOpen: node('desktop-projects').open }); if (reveal) node('report').focus(); }, isBusy: () => false, onPending: v => pending.push(v), associateSession });
+  const controller = context.mount({ beforeSelect, onRegistry: ids => { registry.push(ids); return onRegistry(ids); }, onChange: p => changes.push(p), onSnapshot: value => snapshots.push(value), onArtifact: (a, revealFrom) => { shown.push(a); reveals.push({ revealFrom, dialogOpen: node('desktop-projects').open }); if (revealFrom) node('report').focus(); }, isBusy: () => false, onPending: v => pending.push(v), associateSession });
   return { controller, calls, changes, shown, reveals, registry, pending, snapshots, node, doc, backupOptions, async fire(id, type = 'click') { for (const fn of node(id).events[type] ?? []) fn({ preventDefault() {} }); for (let i = 0; i < 20; i++) await Promise.resolve(); } };
 }
 
@@ -203,13 +205,26 @@ test('saved new project remains available when its conversation switch fails', a
 
 test('history opens report after closing project dialog while startup restoration stays unobtrusive', async () => {
   const app = harness({ runs: [{ id: 'r', projectId: 'a', kind: 'guide', state: 'succeeded', startedAt: 100 }], artifacts: [{ id: 'report', runId: 'r', projectId: 'a', createdAt: 100, rulesVersion: '{}' }] });
-  await app.controller.ready; assert.equal(app.reveals[0].reveal, false);
+  await app.controller.ready; assert.equal(app.reveals[0].revealFrom, undefined);
+  const managerTrigger = app.node('home-project-manage'); managerTrigger.focus();
   await app.controller.pickFolder();
   const button = app.node('project-history').children[0].children.find(node => node.tag === 'button');
   button.events.click[0](); for (let i = 0; i < 20; i++) await Promise.resolve();
-  assert.equal(app.reveals[1].reveal, true); assert.equal(app.reveals[1].dialogOpen, false);
+  assert.equal(app.reveals[1].revealFrom, managerTrigger); assert.equal(app.reveals[1].dialogOpen, false);
   app.node('desktop-projects').events.close[0](); assert.equal(app.doc.activeElement, app.node('report'), 'queued close event must not steal focus from report');
 });
+test('saved reports use the run history entry and fall back to project management without one', async () => {
+  const app = harness({ runs: [{ id: 'r', projectId: 'a', kind: 'guide', state: 'succeeded', startedAt: 100 }], artifacts: [{ id: 'report', runId: 'r', projectId: 'a', createdAt: 100 }] });
+  await app.controller.ready;
+  for (const trigger of [app.node('home-results'), app.node('desktop-results-open'), null]) {
+    assert.equal(app.controller.results.open(trigger), true);
+    const button = app.node('project-history').children[0].children.find(node => node.tag === 'button');
+    button.events.click[0](); for (let i = 0; i < 20; i++) await Promise.resolve();
+    assert.equal(app.controller.results.element.open, false);
+    assert.equal(app.reveals.at(-1).revealFrom, trigger ?? app.node('desktop-project-manage'));
+  }
+});
+
 test('latest artifact loading failure remains retryable after snapshot restoration', async () => {
   let failed = true;
   const app = harness({ artifacts: [{ id: 'report', projectId: 'a', createdAt: 100 }], invoke: async cmd => { if (cmd === 'project_artifact' && failed) throw Error('artifact temporarily unavailable'); } });
