@@ -317,7 +317,7 @@ window.addEventListener("DOMContentLoaded", () => {
     },
   });
   reader = mountReportReader({
-    openPage: (page, trigger) => workspace.open(page, trigger),
+    openPage: (page, trigger) => workspace.open(page, trigger === $('#read-report') ? tools.getReturnFocus() : trigger),
     getArtifact: () => lastSuccessful?.artifact ?? null,
     getProject: () => projects?.getActive() ?? null,
     getRulesVersion: () => projects?.getRulesVersion() ?? null,
@@ -435,9 +435,9 @@ window.addEventListener("DOMContentLoaded", () => {
     associateSession: async projectId => sessions ? sessions.associateCurrentSession(projectId) : false,
     onChange: applyProject,
     onSnapshot: () => { health?.refresh(); void maintenance?.select(); },
-    onArtifact: (artifact, reveal) => {
+    onArtifact: (artifact, revealFrom) => {
       showArtifact(artifact);
-      if (reveal) window.setTimeout(() => { preferences?.close(); tools.open($("#desktop-project-manage"), $("#report")); }, 0);
+      if (revealFrom) window.setTimeout(() => { preferences?.close(); tools.open(revealFrom, $("#report")); }, 0);
     },
   });
   maintenance = mountProjectMaintenance({
