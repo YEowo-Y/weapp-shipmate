@@ -2,7 +2,7 @@ import { queryExplain } from './explain-transport.js';
 import { validateExplainInput, validateExplainResult } from './explain-contract.js';
 import { createIcon } from './components/icons.js';
 import { createExplainArtifact } from './explain-artifact.js';
-import { formatRuleActions } from './guide-artifact.js';
+import { formatRuleActions, formatRuleConfidence } from './guide-artifact.js';
 import { createArtifactDownloader } from './artifact-download.js';
 
 export const REJECTION_SAMPLE = '您的小程序使用了地理位置接口，但未在《用户隐私保护指引》中声明收集"位置信息"的相关条款，请补充后重新提交。';
@@ -44,6 +44,7 @@ function renderResult(root, container, output) {
     const summary = node('summary');
     summary.append(createIcon(root, 'file-text'), node('span', '官方原文与规则依据'));
     evidence.append(summary);
+    if (formatRuleConfidence(item)) evidence.append(node('p', formatRuleConfidence(item), 'rj-rule__meta'));
     if (item.source_quote) evidence.append(node('blockquote', item.source_quote));
     evidence.append(node('p', `规则 ${item.ruleId}`, 'rj-rule__meta'));
     evidence.append(node('p', `仓库核验日期：${item.last_verified || '未记录'} · 未实时核验`, 'rj-rule__meta'));
