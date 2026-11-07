@@ -4,7 +4,7 @@ export function mountToolsPanel(options: { beforeOpen?(): boolean } = {}) {
   const toggle = document.querySelector<HTMLButtonElement>('#desktop-tools-toggle');
   const closeButton = document.querySelector<HTMLButtonElement>('#desktop-tools-close');
   const layout = document.querySelector<HTMLElement>('.desktop-layout');
-  if (!panel || !toggle || !layout) return { open(_trigger?: HTMLElement, _focusTarget?: HTMLElement) { return false; }, close() {}, destroy() {} };
+  if (!panel || !toggle || !layout) return { open(_trigger?: HTMLElement, _focusTarget?: HTMLElement) { return false; }, getReturnFocus: () => toggle, close() {}, destroy() {} };
 
   const narrow = window.matchMedia('(max-width: 860px)');
   let expanded = false;
@@ -17,7 +17,9 @@ export function mountToolsPanel(options: { beforeOpen?(): boolean } = {}) {
   };
   const show = () => narrow.matches ? panel.showModal() : panel.show();
   const focusPanel = () => (closeButton ?? panel.querySelector<HTMLElement>('button, input, select, textarea, a[href], [tabindex="0"]'))?.focus();
-  const restoreFocus = () => (returnFocus.closest?.("[hidden]") ? toggle : returnFocus).focus();
+  const getReturnFocus = () => returnFocus.isConnected && !panel.contains(returnFocus) &&
+    !returnFocus.matches(':disabled') && returnFocus.checkVisibility({ visibilityProperty: true }) ? returnFocus : toggle;
+  const restoreFocus = () => getReturnFocus().focus();
   const close = () => {
     if (!expanded) return;
     reflect(false);
@@ -87,5 +89,5 @@ export function mountToolsPanel(options: { beforeOpen?(): boolean } = {}) {
   document.addEventListener('keydown', onKeydown);
   narrow.addEventListener('change', onBreakpoint);
   window.addEventListener('pagehide', destroy);
-  return { open, close, destroy };
+  return { open, close, getReturnFocus, destroy };
 }
