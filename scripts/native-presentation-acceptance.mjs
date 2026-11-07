@@ -38,7 +38,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await until(() => inspect('return document.querySelector("#session-empty").checkVisibility()'), 'home visible');
     await inspect('document.querySelector("#desktopScroll").scrollTop=0');
   };
-  const openPreferences = async () => { await activate('#desktop-preferences-open'); await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'preferences open'); };
+  const openPreferences = async () => { await activate('#desktop-preferences-open'); await until(() => inspect('return document.querySelector("#desktop-preferences").open && Boolean(document.querySelector("#preferences-body"))'), 'preferences ready'); };
   const sections = {
     appearance: ['外观与阅读', '#preferences-appearance'], notifications: ['通知', '.system-notifications'],
     shortcuts: ['快捷键', '#settings-send-key'], models: ['模型与连接', '.desktop-model-panel'],
@@ -244,14 +244,25 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await command('POST', '/window/rect', { width: 320, height: 844 });
     if (await inspect('return document.querySelector("#desktop-navigation").open')) await activate('#desktop-navigation > summary');
     assert.equal(await inspect('const r=document.querySelector("#desktop-preferences-open").getBoundingClientRect();return r.left>=-1&&r.right<=innerWidth+1&&r.top>=-1&&r.bottom<=innerHeight+1'), true);
+    const rendererRequests = () => inspect(`return performance.getEntriesByType('resource')
+      .filter(entry => /\\/assets\\/settings-renderer-[\\w-]+\\.js$/.test(new URL(entry.name).pathname))
+      .map(entry => ({url:entry.name, initiator:entry.initiatorType, startTime:entry.startTime}));`);
+    const beforeOpen = await rendererRequests();
+    assert.deepEqual(beforeOpen, [], 'the home screen does not load the settings renderer');
     await openPreferences(); await section('appearance');
     assert.equal(await text('#preferences-heading'), '设置');
+    const firstOpen = await rendererRequests();
+    assert.equal(firstOpen.length, 1, 'first opening loads the settings renderer once');
     for (const selected of Object.keys(sections).filter(id => id !== 'appearance').concat('appearance')) {
       await navigate(selected);
       await geometry(`settings-section-${selected}-320`, '#desktop-preferences');
     }
     await close('#desktop-preferences'); assert.equal(await inspect('return document.activeElement.id'), 'desktop-preferences-open');
-    await openPreferences(); await section('appearance'); await close('#desktop-preferences');
+    await openPreferences(); await section('appearance');
+    const reopened = await rendererRequests();
+    assert.deepEqual(reopened, firstOpen, 'reopening reuses the first settings renderer request');
+    await writeFile(resolve(run, 'settings-renderer-requests.json'), JSON.stringify({beforeOpen, firstOpen, reopened}, null, 2));
+    await close('#desktop-preferences');
     await command('POST', '/window/rect', { width: 1200, height: 900 });
   });
   await checked('Missing model and quick picker management lead to settings without losing the draft or connecting automatically', async () => {
