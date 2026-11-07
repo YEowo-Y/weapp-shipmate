@@ -37,6 +37,7 @@ type Options = {
   onCheck(): void; onReport(id: string): Promise<boolean>; onRevealReport?(): void; onManage(): void;
   onSources?(): void; onHistory?(): void;
   maintenance?: HTMLElement;
+  canClose?(): boolean;
   returnFocus?(): HTMLElement | null;
 };
 
@@ -67,7 +68,7 @@ export function mountProjectHealth(options: Options) {
   actions.append(check, report, manage); if (history) actions.append(history);
   if (options.onSources) {
     const sources = button('health-sources', '规则来源');
-    sources.addEventListener('click', () => { dialog.close(); options.onSources?.(); });
+    sources.addEventListener('click', () => { if (close()) options.onSources?.(); });
     actions.append(sources);
   }
   const footer = node('footer'); footer.className = 'health-footer';
@@ -77,6 +78,12 @@ export function mountProjectHealth(options: Options) {
   if (options.maintenance) body.append(options.maintenance);
   dialog.append(header, body, footer); document.body.append(dialog);
   let loading = false, disposed = false, epoch = 0, trigger: HTMLElement | null = null;
+  function close() {
+    if (!dialog.open) return true;
+    if (options.canClose?.() === false) return false;
+    dialog.close();
+    return true;
+  }
   function refresh() {
     if (disposed) return;
     const state = deriveProjectHealth(options.getSnapshot()), blocked = loading || options.isBusy();
@@ -117,24 +124,26 @@ export function mountProjectHealth(options: Options) {
   }
   check.addEventListener('click', () => {
     if (loading || options.isBusy() || !deriveProjectHealth(options.getSnapshot()).canCheck) return;
-    dialog.close(); options.onCheck();
+    if (close()) options.onCheck();
   });
   report.addEventListener('click', async () => {
     const state = deriveProjectHealth(options.getSnapshot());
-    if (loading || options.isBusy() || !state.report) return;
+    if (loading || options.isBusy() || !state.report || options.canClose?.() === false) return;
     const token = ++epoch; loading = true; message('正在打开保存的报告…'); refresh();
     try {
       const ok = await options.onReport(state.report.id);
       if (disposed || token !== epoch || !dialog.open) return;
       if (!ok || state.project?.id !== options.getSnapshot()?.activeProjectId) throw new Error('Report unavailable');
-      dialog.close(); options.onRevealReport?.();
+      if (close()) options.onRevealReport?.();
+      else message('');
     } catch { if (!disposed && token === epoch && dialog.open) message('报告未能打开。原始记录仍保留，请重试或查看运行历史。', true); }
     finally { if (!disposed && token === epoch) { loading = false; refresh(); } }
   });
-  manage.addEventListener('click', () => { if (!loading && !options.isBusy()) { dialog.close(); options.onManage(); } });
-  history?.addEventListener('click', () => { if (!loading && !options.isBusy()) { dialog.close(); options.onHistory?.(); } });
+  manage.addEventListener('click', () => { if (!loading && !options.isBusy() && close()) options.onManage(); });
+  history?.addEventListener('click', () => { if (!loading && !options.isBusy() && close()) options.onHistory?.(); });
   reload.addEventListener('click', () => { void read(); });
-  dismiss.addEventListener('click', () => dialog.close()); done.addEventListener('click', () => dialog.close());
+  dismiss.addEventListener('click', close); done.addEventListener('click', close);
+  dialog.addEventListener('cancel', event => { if (options.canClose?.() === false) event.preventDefault(); });
   dialog.addEventListener('close', () => {
     epoch++; loading = false; trigger?.setAttribute('aria-expanded', 'false');
     const visible = trigger?.isConnected && !trigger.hidden && (!trigger.getClientRects || trigger.getClientRects().length > 0);
@@ -154,7 +163,7 @@ export function mountProjectHealth(options: Options) {
     },
     refresh,
     restoreMaintenance() { if (!disposed && options.maintenance) body.append(options.maintenance); },
-    close() { if (dialog.open) dialog.close(); },
+    close,
     destroy() { disposed = true; epoch++; dialog.remove(); },
   };
 }
