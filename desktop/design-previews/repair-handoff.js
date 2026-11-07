@@ -1,11 +1,11 @@
 import { validateGuideItem } from './guide-contract.js';
-import { escapeMarkdown as escape, formatRuleActions } from './guide-artifact.js';
+import { escapeMarkdown as escape, formatRuleActions, formatRuleConfidence } from './guide-artifact.js';
 import { validateMatchEvidence } from './explain-contract.js';
 export { formatRuleActions };
 
 export const MAX_HANDOFF_BYTES = 512 * 1024;
 const kinds = { check: '代码预检发现', guide: '上线要求核对', explain: '拒因规则匹配' };
-const ruleKeys = ['ruleId', 'title', 'stage', 'severity', 'why', 'requires', 'warn', 'official_url', 'source_quote', 'last_verified', 'manual_required', 'note', 'action_categories'];
+const ruleKeys = ['ruleId', 'title', 'stage', 'severity', 'why', 'requires', 'warn', 'official_url', 'source_quote', 'last_verified', 'manual_required', 'note', 'action_categories', 'confidence'];
 const sourceKeys = ['artifactId', 'runId', 'projectId', 'projectRevision', 'contextRevision', 'kind', 'title', 'createdAt', 'toolVersion', 'rulesVersion'];
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 const keys = (value, names) => record(value) && Object.keys(value).length === names.length && names.every(key => Object.hasOwn(value, key));
@@ -96,6 +96,7 @@ export function renderHandoffSections(value) {
       `问题 / 核对项：${item.conditional ? '条件自查，适用性尚未确认' : kinds[s.kind]} · ${{ blocker: '阻断', warning: '警告', info: '提示' }[r.severity]} · ${escape(r.ruleId)}`, '',
       `依据：${escape(r.why || '未提供具体发现依据，请人工核对适用性。')}`, '');
     lines.push(`操作类型：${formatRuleActions(r)}`, '');
+    if (formatRuleConfidence(r, s.provenance === 'imported')) lines.push(formatRuleConfidence(r, s.provenance === 'imported'), '');
     if (item.rejectSummary) lines.push(`匹配拒因：${escape(item.rejectSummary)}（${escape(item.rejectId ?? '未记录编号')}）`, '');
     if (item.relevance) lines.push(`匹配相关性：${item.relevance === 'direct' ? '直接相关' : '可能相关'}（不表示已确认违规）`, '', `匹配依据：${[...item.matchEvidence.aliases, ...item.matchEvidence.codes, ...item.matchEvidence.partialAliases].map(escape).join('、')}`, '');
     if (r.source_quote) lines.push(`规则摘录：${escape(r.source_quote)}`, '');
