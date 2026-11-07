@@ -22,7 +22,7 @@ function harness({ open = async () => null, invoke = async () => 'report', write
       element.click = () => element.listeners.click?.(); return element;
     },
   };
-  for (const id of ['stop-tool', 'pick-btn', 'check-btn', 'guide-btn', 'subject', 'status', 'dir', 'report', 'report-title', 'report-note', 'copy-report', 'copy-status', 'handoff-report', 'read-report', 'repair-report', 'desktop-repair-history', 'save-report', 'start-check', 'start-guide', 'start-explain', 'home-report', 'home-report-summary', 'desktop-menu-report', 'home-project-name', 'home-project-summary', 'home-project-manage', 'desktop-preferences-open', 'home-sources', 'sessionHost']) {
+  for (const id of ['stop-tool', 'pick-btn', 'check-btn', 'guide-btn', 'subject', 'status', 'dir', 'report', 'report-title', 'report-note', 'copy-report', 'copy-status', 'handoff-report', 'read-report', 'repair-report', 'desktop-repair-history', 'save-report', 'start-check', 'start-guide', 'start-explain', 'home-report', 'home-report-summary', 'home-results', 'desktop-results-open', 'desktop-menu-report', 'home-project-name', 'home-project-summary', 'home-project-manage', 'desktop-preferences-open', 'home-sources', 'sessionHost']) {
     nodes.set(`#${id}`, Object.assign(id === 'report' ? createPreviewDocument().createElement('div') : {}, {
       disabled: id === 'check-btn', value: 'personal', textContent: '', className: '',
       scrollTop: 0, scrollLeft: 0, attributes: {}, listeners: {},
@@ -39,11 +39,12 @@ function harness({ open = async () => null, invoke = async () => 'report', write
     .replace(/^import .*;\r?\n/gm, '');
   const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
   let project = null, sessionOptions, projectOptions, maintenanceOptions, healthOptions, notificationOptions, preferencesOptions, readerOptions, repairOptions;
-  const integration = { selects: 0, refreshes: 0, healthClosed: 0, maintenanceRestores: 0, sourceOpens: 0, readerOpens: [], readerCloses: 0, repairOpens: [], repairSyncs: 0, projectOpens: 0, preferenceOpens: [], preferenceSections: [], preferenceCloses: 0, settingsCalls: [], shortcuts: null };
+  const integration = { selects: 0, refreshes: 0, healthClosed: 0, maintenanceRestores: 0, sourceOpens: 0, readerOpens: [], readerCloses: 0, resultsOpens: [], repairOpens: [], repairSyncs: 0, projectOpens: 0, preferenceOpens: [], preferenceSections: [], preferenceCloses: 0, settingsCalls: [], shortcuts: null };
   const panel = name => ({ element: document.createElement('section'), open() { integration.settingsCalls.push(`${name}Open`); }, close() { integration.settingsCalls.push(`${name}Close`); }, canClose: () => true });
   const maintenance = { element: document.createElement('section'), select: async () => { integration.selects++; }, refresh: async () => {}, canClose: () => true, destroy() {} };
   const projects = {
     ready: Promise.resolve(), isReady: () => projectReady, getActive: () => project, getActiveId: () => project?.id ?? null, getRulesVersion: () => rulesVersion,
+    results: { open(anchor) { integration.resultsOpens.push(anchor); } },
     settings: panel('project'), backupSettings: panel('backup'), getSnapshot: () => ({ projects: project ? [project] : [] }),
     refresh: async () => { integration.refreshes++; return true; }, setBusy() {}, openManager: () => { integration.projectOpens++; },
     async pickFolder() {
@@ -682,6 +683,15 @@ desktopTest('global settings and home source actions open their existing surface
   await app.click('home-sources');
   assert.equal(app.integration.sourceOpens, 1);
   assert.equal(executions, 0);
+});
+
+desktopTest('run history returns to the control that opened it from home or the sidebar', () => {
+  const app = harness();
+  for (const id of ['home-results', 'desktop-results-open']) {
+    app.click(id);
+    app.flushTimers();
+    assert.equal(app.integration.resultsOpens.at(-1), app.node(id), id);
+  }
 });
 
 desktopTest('maintenance configuration opens the project settings category after closing its dialog', () => {
