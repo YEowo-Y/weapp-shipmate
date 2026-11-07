@@ -75,6 +75,7 @@ export function ruleToItem(r) {
     title: r.title,
     stage: r.stage,
     severity: r.severity,
+    ...(r.confidence !== undefined ? { confidence: r.confidence } : {}),
     why: r.why || null,
     requires: r.requires ? [...r.requires] : [],
     warn: r.warn || null,
