@@ -19,6 +19,8 @@
 
 设置界面的 React 渲染模块在首次打开设置时加载，后续打开复用该模块。设备外观偏好在启动时应用。2026-11-07 构建的启动 JavaScript 从约 1,011 kB 降为 708 kB，gzip 从约 331 kB 降为 233 kB。聊天传输的混合导入提示已消除，主脚本仍超过 500 kB。测量与验证日志位于 `.omx/artifacts/desktop-startup-p8/`。
 
+桌面构建现包含启动包体门禁：合计所有 JavaScript 入口及其静态依赖，超过 750,000 字节或各文件 gzip 合计 250,000 字节时构建失败；设置渲染模块进入静态启动依赖时也会失败。这两项上限基于上述实测值预留约 6%–7% 余量，静态拆包不会绕过合计检查。每次成功构建输出 `desktop/dist/.vite/bundle-budget.json`，记录最终产物大小和启动归属；现有 CI 的桌面构建及 Tauri 构建均执行此门禁。2026-11-07 验证包含 7 项定向测试和实际 Vite 提前导入设置模块的失败实验，生产 JavaScript/CSS 的 SHA-256 与改动前一致，证据位于 `.omx/artifacts/desktop-modules-p8/`。该门禁仅约束静态启动 JavaScript，不代表 CSS、首次业务操作所需资源或实际启动耗时已优化。
+
 | 边界 | 当前实现 | 依据 |
 |---|---|---|
 | 规则内核 | Node.js、YAML 规则、CLI、stdio MCP 服务端 | [根依赖](../package.json)、[CLI](../src/cli.mjs)、[MCP](../src/mcp.mjs) |
