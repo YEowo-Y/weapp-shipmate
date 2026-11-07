@@ -17,6 +17,8 @@
 
 ## 当前技术栈
 
+设置界面的 React 渲染模块在首次打开设置时加载，后续打开复用该模块。设备外观偏好在启动时应用。2026-11-07 构建的启动 JavaScript 从约 1,011 kB 降为 708 kB，gzip 从约 331 kB 降为 233 kB。聊天传输的混合导入提示已消除，主脚本仍超过 500 kB。测量与验证日志位于 `.omx/artifacts/desktop-startup-p8/`。
+
 | 边界 | 当前实现 | 依据 |
 |---|---|---|
 | 规则内核 | Node.js、YAML 规则、CLI、stdio MCP 服务端 | [根依赖](../package.json)、[CLI](../src/cli.mjs)、[MCP](../src/mcp.mjs) |
