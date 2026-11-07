@@ -8,7 +8,7 @@ import { createIcon } from './components/icons.js';
 import { GUIDE_TOOL_NAME, GUIDE_SUBJECTS, validateGuideInput, validateGuideResult } from './guide-contract.js';
 import { createGuideArtifact } from './guide-artifact.js';
 import { createArtifactDownloader } from './artifact-download.js';
-import { SUPPORTED_CHAT_PROVIDERS } from './chat-transport.js';
+import { streamChat, SUPPORTED_CHAT_PROVIDERS } from './chat-transport.js';
 
 export const CONVERSATION_STATES = Object.freeze({
   IDLE: 'idle',
@@ -318,7 +318,7 @@ export function createConversationController(options = {}) {
       return { ok: true, runId: run.id };
     }
     if (live) {
-      const transport = options.transport || (args => import('./chat-transport.js').then(module => module.streamChat(args)));
+      const transport = options.transport || streamChat;
       Promise.resolve().then(() => {
         if (activeRun !== run) return;
         return transport({ ...live, signal: run.abort.signal, onToolEvent(event) {
