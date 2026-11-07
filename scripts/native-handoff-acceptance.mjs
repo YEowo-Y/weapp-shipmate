@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parseHandoff } from '../desktop/design-previews/repair-handoff.js';
+import { loadData } from '../src/data.mjs';
 
 // Real WebView2 interactions and native persisted tools; never mocks invoke.
 export async function checkHandoffFlows({ run, checked, click, fill, press, inspect, text, command, find, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, quit, launch, requests }) {
@@ -32,11 +33,16 @@ export async function checkHandoffFlows({ run, checked, click, fill, press, insp
     await until(() => inspect('return document.querySelector("#status").classList.contains("ok")'), 'actual preflight complete');
     const result = await snapshot(); assert.equal(result.runs.length, 1); assert.equal(result.runs[0].state, 'succeeded');
     source = await projectInvoke('project_artifact', { artifactId: result.artifacts[0].id });
-    assert.ok(source.data.result.items.length > 0);
+    const confidenceByRule = new Map(loadData().rules.map(rule => [rule.id, rule.confidence]));
+    assert.ok(source.data.result.items.some(item => item.confidence));
+    for (const item of source.data.result.items) assert.equal(item.confidence, confidenceByRule.get(item.ruleId), item.ruleId);
+    assert.match(await text('#report'), /规则置信度：[高中低]/);
     await click('#handoff-report');
     await until(async () => (await text('#handoff-source')).includes(source.id), 'source-linked handoff');
     assert.match(await text('#handoff-provenance'), /本机已保存/);
     assert.match(await text('#handoff-content'), /期望结果[\s\S]*验证步骤/);
+    assert.match(await text('#handoff-content'), /规则置信度：[高中低]/);
+    assert.match(await text('#handoff-content'), /不是命中概率或过审保证/);
     assert.doesNotMatch(await text('#handoff-content'), /尚未打开交接内容/);
     assert.equal(await inspect('return document.querySelector("#handoff-basis").open'), false);
     assert.doesNotMatch(await text('#handoff-status'), /不受支持/);
@@ -51,10 +57,12 @@ export async function checkHandoffFlows({ run, checked, click, fill, press, insp
     const data = await until(async () => { try { return await readFile(jsonPath, 'utf8'); } catch { return null; } }, 'JSON downloaded');
     saved = parseHandoff(data); assert.equal(saved.source.artifactId, source.id); assert.equal(saved.source.runId, source.runId);
     assert.equal(saved.items.length, source.data.result.items.length);
+    assert.deepEqual(saved.items.map(item => item.rule.confidence), source.data.result.items.map(item => item.confidence));
     assert.equal(saved.source.contextRevision, source.contextRevision);
     assert.equal(data.includes(directory), false); assert.equal(data.includes('inputSummary'), false); assert.equal(data.includes('raw report'), false);
     const md = await until(async () => { try { return await readFile(resolve(downloads, `shipmate-handoff-${source.createdAt}.md`), 'utf8'); } catch { return null; } }, 'Markdown downloaded');
     assert.match(md, /未修改项目文件.*未验证修复结果/);
+    assert.match(md, /规则置信度：[高中低]/);
     await close(); await click('#desktop-tools-close');
   });
   await checked('P6 external reopen is readonly; malformed and oversized files retain valid content and recover', async () => {
