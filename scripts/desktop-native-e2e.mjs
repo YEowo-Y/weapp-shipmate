@@ -1229,9 +1229,11 @@ try {
     assert.ok(await inspect('return document.querySelector("#rjResultHeading").getBoundingClientRect().top < innerHeight / 2'), 'result starts in the upper half of the viewport');
     assert.ok(await inspect('return document.querySelectorAll("#rjResultItems .rj-rule").length > 0'));
     assert.equal(await inspect('return document.querySelectorAll("#rjResultItems details[open]").length'), 0);
-    await click('#rjResultItems summary');
-    assert.ok(await inspect('return document.querySelector("#rjResultItems details").open'));
-    assert.match(await text('#rjResultItems'), /仓库核验日期/);
+    await click('#rjResultItems .rj-evidence > summary');
+    assert.ok(await inspect('return document.querySelector("#rjResultItems .rj-evidence").open'));
+    assert.match(await text('#rjResultItems .rj-evidence'), /仓库核验日期/);
+    assert.ok(await inspect('const evidence=document.querySelector("#rjResultItems .rj-evidence");return [...evidence.querySelectorAll("p")].some(p=>p.checkVisibility() && /规则置信度：[高中低]/.test(p.textContent))'));
+    assert.match(await text('#rjResultItems .rj-evidence'), /不是命中概率或过审保证/);
     await screenshot('explain-result');
     await press('\uE00C');
     await until(() => inspect('return document.activeElement.id === "start-explain"'), 'lookup returns to home trigger');
@@ -1258,7 +1260,7 @@ try {
     await click('[data-rj-reset]');
     assert.equal(await inspect('return document.activeElement.dataset.rjFilter'), 'all');
     assert.equal(await find('#rjResultItems .rj-rule'), firstRule, 'filtering reuses existing rule elements');
-    assert.equal(await inspect('return document.querySelector("#rjResultItems details").open'), true);
+    assert.equal(await inspect('return document.querySelector("#rjResultItems .rj-evidence").open'), true);
     await click('[data-rj-filter="manual"]');
     await press('\uE00C'); await openExplainFromMenu();
     assert.equal(await inspect('return document.querySelector("[data-rj-filter=manual]").getAttribute("aria-pressed")'), 'true');
@@ -1361,6 +1363,9 @@ try {
     await until(() => inspect('return document.querySelector("#status").classList.contains("ok")'), 'native local guide report');
     const report = await text('#report');
     assert.ok(report.length > 50);
+    assert.match(report, /规则置信度：高/);
+    assert.match(report, /规则置信度：中/);
+    assert.match(report, /不是命中概率或过审保证/);
     assert.equal(await inspect('return Boolean(document.querySelector("#report h1") && document.querySelector("#report li"))'), true, 'real tool Markdown has semantic headings and lists');
     assert.equal(await inspect('return document.querySelector("#report").tagName'), 'DIV');
     await screenshot('tools-with-report');
