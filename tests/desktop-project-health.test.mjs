@@ -47,7 +47,7 @@ test('health distinguishes unknown basis and changed rules, directory missing, a
   }
 });
 
-function harness({ load = async () => true, openReport = async () => true, withMaintenance = false, onHistory, onManage = () => {} } = {}) {
+function harness({ load = async () => true, openReport = async () => true, withMaintenance = false, canClose, onHistory, onSources, onRevealReport, onManage = () => {} } = {}) {
   const document = createPreviewDocument(), create = document.createElement.bind(document), nodes = [];
   document.createElement = tag => {
     const node = create(tag); node.listeners = {}; node.isConnected = true; node.classList = { add() {} };
@@ -62,7 +62,7 @@ function harness({ load = async () => true, openReport = async () => true, withM
   vm.runInContext(script, context);
   const fallback = document.createElement('button');
   const maintenance = withMaintenance ? document.createElement('section') : undefined;
-  const app = context.mountProjectHealth({ getSnapshot: () => current, isBusy: () => busy, reload: load, onCheck: () => { checks++; }, onReport: async id => { reports.push(id); return openReport(id); }, onManage, onHistory, maintenance, returnFocus: () => fallback });
+  const app = context.mountProjectHealth({ getSnapshot: () => current, isBusy: () => busy, reload: load, onCheck: () => { checks++; }, onReport: async id => { reports.push(id); return openReport(id); }, onManage, onHistory, onSources, onRevealReport, canClose, maintenance, returnFocus: () => fallback });
   const node = id => nodes.find(item => item.id === id), anchor = document.createElement('button');
   return { app, node, anchor, fallback, document, maintenance, checks: () => checks, reports, setSnapshot(value) { current = value; app.refresh(); }, setBusy(value) { busy = value; app.refresh(); }, click: id => node(id).listeners.click() };
 }
@@ -102,6 +102,67 @@ test('health failed report opening is recoverable and never closes the dialog', 
   await h.click('health-report'); assert.equal(h.node('desktop-health').open, true);
   assert.match(h.node('health-status').textContent, /报告.*重试/);
   h.app.destroy(); assert.equal(h.document.body.children.length, 0);
+});
+
+test('health keeps unsaved maintenance settings visible across close and navigation actions', async () => {
+  let dirty = true;
+  const destinations = [];
+  const h = harness({
+    withMaintenance: true, canClose: () => !dirty,
+    onManage: () => destinations.push('manage'), onHistory: () => destinations.push('history'),
+    onSources: () => destinations.push('sources'), onRevealReport: () => destinations.push('report'),
+  });
+  const dialog = h.node('desktop-health');
+  h.app.open(h.anchor); await setImmediate();
+  for (const id of ['health-done', 'health-dismiss', 'health-project', 'health-history', 'health-sources', 'health-check', 'health-report']) {
+    await h.click(id);
+    assert.equal(dialog.open, true, id);
+  }
+  assert.equal(h.checks(), 0);
+  assert.deepEqual(h.reports, []);
+  assert.deepEqual(destinations, []);
+  assert.equal(h.app.close(), false);
+  assert.equal(dialog.open, true);
+
+  const escape = () => {
+    const event = new globalThis.Event('cancel', { cancelable: true });
+    dialog.listeners.cancel?.(event);
+    if (!event.defaultPrevented && dialog.open) dialog.close();
+  };
+  escape();
+  assert.equal(dialog.open, true);
+  dirty = false;
+  escape();
+  assert.equal(dialog.open, false);
+  assert.equal(h.document.activeElement, h.anchor);
+
+  h.app.open(h.anchor); await setImmediate();
+  assert.equal(h.app.close(), true);
+  assert.equal(dialog.open, false);
+  dirty = true;
+  assert.equal(h.app.close(), true);
+});
+
+test('health rechecks a maintenance draft created while the saved report is loading', async () => {
+  let dirty = false, finishRead, revealed = 0;
+  const h = harness({
+    withMaintenance: true, canClose: () => !dirty,
+    openReport: () => new Promise(resolve => { finishRead = resolve; }),
+    onRevealReport: () => { revealed++; },
+  });
+  h.app.open(h.anchor); await setImmediate();
+  const pending = h.click('health-report');
+  assert.deepEqual(h.reports, ['report-a']);
+  dirty = true; finishRead(true); await pending;
+  assert.equal(h.node('desktop-health').open, true);
+  assert.equal(revealed, 0);
+  assert.equal(h.node('health-report').disabled, false);
+
+  dirty = false;
+  const retry = h.click('health-report');
+  finishRead(true); await retry;
+  assert.equal(revealed, 1);
+  assert.equal(h.node('desktop-health').open, false);
 });
 
 test('health returns focus to a visible fallback when reading notices hides the original shortcut', async () => {
