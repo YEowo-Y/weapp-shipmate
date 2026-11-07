@@ -87,6 +87,11 @@ function matchBasis(item) {
   return `匹配依据：${escapeMarkdownInline(parts.join("；"))}`;
 }
 
+function confidenceLabel(item) {
+  const label = new Map([['high', '高'], ['medium', '中'], ['low', '低']]).get(item.confidence);
+  return label ? `规则置信度：${label}（规则维护者对规则准确性的把握，不是命中概率或过审保证）` : '';
+}
+
 export function toMarkdown(result, { hiddenNonBlockerCount = 0 } = {}) {
   const lines = [];
   const title = result.command === "check" ? "上线预检清单" : "上线导航清单";
@@ -117,6 +122,7 @@ export function toMarkdown(result, { hiddenNonBlockerCount = 0 } = {}) {
     for (const it of sorted) {
       lines.push(`### ${SEV_ICON[it.severity] || "•"} ${it.title}  \`${it.ruleId}\``);
       appendActionCategories(lines, it);
+      if (confidenceLabel(it)) lines.push(`- ${confidenceLabel(it)}`);
       if (it.why) lines.push(`- 为什么：${it.why}`);
       for (const r of it.requires || []) lines.push(`- [ ] ${r}`);
       if (it.manual_required) lines.push(`- 👤 需人工确认/处理`);
@@ -147,6 +153,7 @@ export function toMarkdown(result, { hiddenNonBlockerCount = 0 } = {}) {
       lines.push(`### ${SEV_ICON[it.severity] || "•"} ${it.title}  \`${it.ruleId}\``);
       if (it.signal?.length) lines.push(`- 自查：若你的小程序涉及【${it.signal.join(" / ")}】`);
       appendActionCategories(lines, it);
+      if (confidenceLabel(it)) lines.push(`- ${confidenceLabel(it)}`);
       if (it.why) lines.push(`- 为什么：${it.why}`);
       for (const r of it.requires || []) lines.push(`- [ ] ${r}`);
       if (it.manual_required) lines.push(`- 👤 需人工确认/处理`);
@@ -185,6 +192,7 @@ export function toChecklist(result, { hiddenNonBlockerCount = 0 } = {}) {
       const todos = it.requires?.length ? it.requires : it.warn ? [it.warn] : [];
       const labels = [relevanceLabel(it), actionLabels(it)].filter(Boolean).join(" · ");
       for (const t of todos) actions.push(`- [ ] ${icon} ${t}  （${it.ruleId}${labels ? `；${labels}` : ""}）`);
+      if (todos.length && confidenceLabel(it)) actions.push(`  - ${confidenceLabel(it)}`);
       if (matchBasis(it)) actions.push(`  - ${matchBasis(it)}`);
     }
     return actions;
@@ -215,6 +223,7 @@ export function toChecklist(result, { hiddenNonBlockerCount = 0 } = {}) {
       const cond = it.signal?.length ? `若涉及【${it.signal.join(" / ")}】：` : "";
       const todos = it.requires?.length ? it.requires : it.warn ? [it.warn] : [];
       for (const t of todos) actions.push(`- [ ] ${icon} ${cond}${t}  （${it.ruleId}${actionLabels(it) ? `；${actionLabels(it)}` : ""}）`);
+      if (todos.length && confidenceLabel(it)) actions.push(`  - ${confidenceLabel(it)}`);
     }
     if (actions.length) {
       lines.push("## 可能适用 · 自查（取决于你的业务）", ...actions, "");
@@ -261,6 +270,7 @@ export function toExplain(result, { hiddenNonBlockerCount = 0 } = {}) {
     for (const it of sorted) {
       lines.push(`### ${SEV_ICON[it.severity] || "•"} ${it.title}  \`${it.ruleId}\``);
       appendActionCategories(lines, it);
+      if (confidenceLabel(it)) lines.push(`- ${confidenceLabel(it)}`);
       if (it.why) lines.push(`- 为什么：${it.why}`);
       for (const r of it.requires || []) lines.push(`- [ ] ${r}`);
       if (it.manual_required) lines.push(`- 👤 需人工确认/处理`);
