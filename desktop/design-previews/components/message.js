@@ -1,7 +1,7 @@
 import { validateAgentResult } from '../agent-contract.js';
 import { STAGES } from '../stages.js';
 import { validateGuideResult } from '../guide-contract.js';
-import { formatRuleActions } from '../guide-artifact.js';
+import { formatRuleActions, formatRuleConfidence } from '../guide-artifact.js';
 import { validateDemoResult } from '../demo-result.js';
 import { getReviewPresentation, getToolPresentation, getToolPhase, getToolOutputPresentation, getRunPresentation, formatTraceLabel } from './presentation.js';
 import { createIcon } from './icons.js';
@@ -251,6 +251,7 @@ export function createGuideResultCard(doc, result, context = {}) {
           const link = element(doc, 'a', '', '查看官方来源');
           link.href = item.official_url; link.target = '_blank'; link.rel = 'noopener noreferrer'; row.append(link);
         } else row.append(element(doc, 'span', 'component-caption', '尚无可展示的官方来源'));
+        if (formatRuleConfidence(item, imported)) row.append(element(doc, 'small', 'component-caption', formatRuleConfidence(item, imported)));
         row.append(element(doc, 'small', 'component-caption', `${imported ? '备份记录的核验日期' : '规则收录的核验日期'}：${item.last_verified || '未记录'} · 非本次实时核验`));
         list.append(row);
       }
