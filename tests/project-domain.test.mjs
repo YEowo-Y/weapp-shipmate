@@ -105,6 +105,23 @@ test("all file read/stat and nested directory failures invalidate scope, not jus
   } finally { fs.readdirSync = original; syncBuiltinESMExports(); }
 });
 
+test("workflow and guide mark the same source-dependent requirements as conditional", () => {
+  for (const subject of ["personal", "individual_business", "enterprise"]) {
+    const guide = runGuide({subject_type:subject});
+    const workflow = derive({project:{...project,subject}});
+    const conditional = new Set(guide.selfCheck.map(item => item.ruleId));
+    for (const stage of workflow.stages) {
+      for (const item of stage.items) {
+        assert.equal(item.conditional, conditional.has(item.ruleId), subject + ": " + item.ruleId);
+      }
+      assert.equal(stage.coverage.conditionalRuleCount, stage.items.filter(item => item.conditional).length);
+    }
+    const location = workflow.stages.flatMap(stage => stage.items).find(item => item.ruleId === "privacy.getLocation");
+    assert.ok(location.signal.includes("wx.getLocation"));
+    assert.equal(workflow.stages[0].status, "pending");
+  }
+});
+
 test("confirmation invalidates on context/rules changes, pending revokes confirmation", () => {
   const record = { stageId: "registration", state: "confirmed", contextRevision: 0, rulesVersion: "rules-a", recordedAt: 1 };
   assert.equal(derive({ confirmations: [record] }).stages[0].status, "confirmed");
