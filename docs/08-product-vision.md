@@ -112,12 +112,13 @@
 
 当前可复现实测（2026-07-17）：`npm run accuracy` 覆盖 89 条人工标注，**TP=55 / FP=0 / FN=0，precision=recall=1.000**；这只证明已标注语料上的表现，不外推为所有真实项目零误报/零漏报。
 
+2026-11-07 已交付 confidence 显性化：JSON 保留可选原始值，Markdown、桌面依据和交接导出显示同一含义；不将缺值补为高置信，不改变严重度或匹配。兼容性与验证记录见 [报告置信度契约](24-rule-confidence.md)。
+
 仍属后续演进而非当前能力：
 
 | 待演进项 | 触发与边界 |
 |---|---|
 | 逐规则 YAML 内嵌正/反例 | 当集中 labels/fixture pins 已难以定位规则级回归时，再评估 schema 与迁移成本 |
-| confidence 显性化 | JSON/Markdown 要形成一致契约并补回归测试后再暴露，不提前声称用户可见 |
 | 抑制留痕 | 需要明确注释语法、审计记录与“不静默消失”报告语义后实施 |
 
 后续规则扩充继续受现有数字地基约束：每批同时报告新增覆盖、逐字核验和 precision，不能用扩覆盖掩盖准确性下降。
@@ -226,7 +227,7 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 | 阶段 | 范围 | 为什么这么排 |
 |---|---|---|
 | **P2.0 ✅** | 薄外壳 + 大脑 sidecar(Tauri 2,vanilla TS) | 已发布;证明 sidecar 边界、外壳可丢 |
-| **P2.0.5(可穿插，部分已交付)** | `corpus/labels.json` + `scripts/accuracy.mjs` + CI 红线已落地；逐规则 YAML 内嵌反例、confidence 显性化与 suppression 留痕仍按 §4.2 后续触发 | **纯大脑层、零 UI 风险、直接兑现 make-or-break**；现有准确率数字已成为后续规则扩充的门禁，与 P2.1 可并行 |
+| **P2.0.5(可穿插，部分已交付)** | `corpus/labels.json` + `scripts/accuracy.mjs` + CI 红线已落地；confidence 显性化已交付；逐规则 YAML 内嵌反例与 suppression 留痕仍按 §4.2 后续触发 | 准确性契约与报告可解释性；显示变更须通过桌面验收，现有准确率数字继续约束后续规则扩充，与 P2.1 可并行 |
 | **P2.1** | 前端换骨:React+shadcn,四区 IA + ⌘K(mock 数据、无 LLM);本地字体;收紧 CSP | 可独立回退但并非零风险：新依赖、CSP/Tauri 权限和信息架构都须重新审批与验证。触发点以 outreach 信息架构反馈和 `EVOLUTION_ROADMAP.md` M1 为准；视觉规范源 = `desktop/design-previews/` 14 屏 + 用户 Claude design 稿 |
 | **P2.2** | 大脑接成内置 MCP + 确定性流 UI(8 阶段 + 交接闸门 + check 接真实文件夹 + SQLite + 无 key 首启分流),**仍无 LLM** | 这一阶段单独就是个可发布的诚实产品;零 LLM 风险、零担保暴露;最可砍 |
 | **P2.3** | BYO-key 对话 + 接地 agent loop(provider 适配 + keychain broker + 5 问访谈 + 护栏 + 绿/灰双标) | 辅助层叠在已正确的确定性核心上 |
@@ -399,7 +400,7 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 | login-after-experience | 不得未体验即强制授权登录 / 注册墙 | 部分 | ✅ | ✅ login.after-experience |
 | logout-option-discoverable | 含账户系统须提供易发现的"退出"选项 | 否 | ⚠️ | ⚠️ 阻塞:需渲染复核(Playwright 桥不可用) |
 | cat-ai-content-labeling | AI 生成内容须显著标注"AI 生成"(2026 高频,通用义务) | 否 | ✅ | 🔜 下一批 |
-| info-match-recall-gaps | 隐私 match 召回补齐(getRealtimePhoneNumber/getFuzzyLocation 等)+ 三条 confidence medium→high | **是** | ✅ | ✅ fixtures/recall-apis + match 扩(confidence 显性化仍待做) |
+| info-match-recall-gaps | 隐私 match 召回补齐(getRealtimePhoneNumber/getFuzzyLocation 等)+ 三条 confidence medium→high | **是** | ✅ | ✅ fixtures/recall-apis + match 扩；confidence 显性化见 [docs/24](24-rule-confidence.md) |
 
 > **T0 剩余 4 项裁决(2026-07-02)**:不卡 v0.1.0 预览发布——3 项 🔜 走 curl 逐字流水线入 0.1.1,logout 待 Playwright 恢复;预览版价值在既有 63 条。
 
