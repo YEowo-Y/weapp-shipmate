@@ -502,7 +502,11 @@ async function workflowDialog() {
   await openNavigation(); await click('#desktop-workflow-open');
   await until(() => inspect('const d=document.querySelector("#desktop-workflow");return d?.open && d.getAttribute("aria-busy")!=="true";'), 'workflow dialog ready');
 }
-async function closeWorkflow() { await press('\uE00C'); await until(() => inspect('return !document.querySelector("#desktop-workflow").open'), 'workflow dialog closed'); }
+async function closeWorkflow() {
+  await until(() => inspect('return document.querySelector("#desktop-workflow").getAttribute("aria-busy")!=="true"'), 'workflow operation settled before closing');
+  await press('\uE00C');
+  await until(() => inspect('return !document.querySelector("#desktop-workflow").open'), 'workflow dialog closed');
+}
 async function checkWorkflowFlows() {
   const a = workflowProjectA, b = workflowProjectB;
   const snapshot = () => projectInvoke('project_snapshot');
@@ -532,6 +536,18 @@ async function checkWorkflowFlows() {
     stageId = String(state.catalog.stages[0].stage);
     assert.equal(state.catalog.stages.length, 8);
     await until(() => inspect('return document.querySelector("#desktop-workflow").getAttribute("aria-busy")!=="true"'), 'facts form settled');
+  });
+  await checked('Workflow labels source-dependent rules as conditional before any scan or confirmation', async () => {
+    const before = await snapshot(), state = await workflow();
+    const stage = '#workflow-stages [data-stage="privacy"]';
+    if (!await inspect('return document.querySelector(arguments[0]).open', [stage])) await click(`${stage} > summary`);
+    const items = await inspect('return [...document.querySelectorAll(arguments[0]+" > ul > li")].map(el=>({title:el.querySelector("strong")?.textContent,hint:el.querySelector(".desktop-field-hint")?.textContent}))', [stage]);
+    const location = items.find(item => item.title === '地理位置隐私声明');
+    assert.ok(location); assert.match(location.hint, /条件线索.*wx.getLocation.*判断是否适用/);
+    const after = await snapshot();
+    assert.deepEqual(after.runs, before.runs); assert.deepEqual(after.artifacts, before.artifacts);
+    assert.deepEqual((await workflow()).confirmations, state.confirmations);
+    await screenshot('p3-conditional-source-rules');
   });
   await checked('Unknown facts and incomplete prerequisites cannot be confirmed or marked not applicable', async () => {
     const before = await workflow();
@@ -1294,6 +1310,10 @@ try {
     assert.ok(await inspect('return new Set([...document.querySelectorAll(".rj-triage__filter")].map(b => b.getBoundingClientRect().top)).size > 1'), 'filters wrap at narrow widths');
     assert.ok(await inspect('const body=document.querySelector("#desktop-explain .session-workspace-dialog__body").getBoundingClientRect(), rule=document.querySelector(".rj-rule:not([hidden]) > p").getBoundingClientRect(); return rule.top < body.bottom - 16'), 'first rule explanation starts within the narrow viewport');
     await screenshot('explain-narrow');
+    await click('.rj-triage__help > summary');
+    assert.equal(await inspect('return document.querySelector(".rj-triage__hint").checkVisibility()'), true);
+    assert.match(await text('.rj-triage__hint'), /筛选仅影响显示/);
+    await click('.rj-triage__help > summary');
     await press('\uE00C');
     await until(() => inspect('return document.activeElement.id === "desktop-more"'), 'narrow lookup dismissal');
     await command('POST', '/window/rect', { width: 1280, height: 850 });
@@ -1311,7 +1331,7 @@ try {
     assert.ok(savedRejection.includes('https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/'), 'saved report retains the official privacy source');
     assert.match(await text('#report-reader-provenance'), /保存于/);
     await screenshot('home-saved-rejection-report');
-    await click('#report-reader-done');
+    await click('#report-reader-dismiss');
     await until(() => inspect('return !document.querySelector("#desktop-report-reader").open && document.activeElement.id === "home-report"'), 'saved rejection report restores home focus');
     await click('#desktop-more');
     await press('\uE015'); // Home -> history
@@ -1350,7 +1370,7 @@ try {
     await click('#home-report');
     await until(() => inspect('return document.querySelector("#desktop-report-reader").open'), 'home report opens the reading dialog');
     assert.equal(await inspect('return document.activeElement.id'), 'report-reader-dismiss');
-    await click('#report-reader-done');
+    await click('#report-reader-dismiss');
     await until(() => inspect('return !document.querySelector("#desktop-report-reader").open'), 'home reading closes');
     assert.equal(await inspect('return document.activeElement.id'), 'home-report');
     await click('#desktop-tools-toggle');
@@ -1499,7 +1519,7 @@ try {
     await screenshot('oauth-manual-narrow');
     await command('POST', '/window/rect', { width: 1000, height: 720 });
     await press('\uE00C');
-    assert.equal(await inspect('return document.querySelector("#desktop-oauth-code").value'), '');
+    await until(() => inspect('return !document.querySelector("#desktop-preferences").open && document.querySelector("#desktop-oauth-code").value === ""'), 'closing settings clears the unsent authorization code');
     await openModelSettings();
     await until(() => inspect('return !document.querySelector("#desktop-oauth-code-form").hidden && !document.querySelector("#desktop-provider-oauth-reopen").hidden'), 'OAuth restored after reopen');
     assert.equal(await inspect('return document.querySelector("#desktop-oauth-code").value'), '');
@@ -1555,12 +1575,12 @@ try {
     await click(anchor);
     await click('.desktop-picker-manage');
     await settingsConnectionsReady();
-    await until(() => inspect('return document.querySelector("#desktop-preferences").open && document.activeElement.id === "desktop-model-search"'), 'connected settings focuses search');
+    await until(() => inspect('return document.querySelector("#desktop-preferences").open && document.activeElement.id === "preferences-section-title"'), 'connected settings focuses its section heading');
     assert.match(await text('.desktop-model-note'), /无需 API 密钥/);
     assert.doesNotMatch(await text('.desktop-model-note'), /密钥仅保留/);
     assert.doesNotMatch(await text('#desktopConversationStatus'), /请先连接/);
     await command('POST', '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [{ type: 'keyDown', value: '\uE00C' }, { type: 'keyUp', value: '\uE00C' }] }] });
-    assert.equal(await inspect('return document.activeElement.matches("#desktopComposer .agent-composer__model")'), true);
+    await until(() => inspect('return document.activeElement.matches("#desktopComposer .agent-composer__model")'), 'closing model management restores the composer model trigger');
   });
   await checked('Connected empty catalogs explain the next step and recover through the existing refresh action', async () => {
     emptyCatalog = true;
