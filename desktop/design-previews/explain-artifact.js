@@ -1,10 +1,11 @@
 import { validateExplainInput, validateExplainResult } from './explain-contract.js';
-import { escapeMarkdown, formatRuleActions } from './guide-artifact.js';
+import { escapeMarkdown, formatRuleActions, formatRuleConfidence } from './guide-artifact.js';
 
 function renderRule(item) {
   const lines = [`### ${escapeMarkdown(item.title)}`, '',
     `规则 ID：${escapeMarkdown(item.ruleId)}`, '',
     `级别：${{ blocker: '阻断', warning: '警告', info: '提示' }[item.severity]}`, '', `操作类型：${formatRuleActions(item)}`, ''];
+  if (formatRuleConfidence(item)) lines.push(formatRuleConfidence(item), '');
   if (item.matchEvidence) lines.push(`匹配依据：${[...item.matchEvidence.aliases, ...item.matchEvidence.codes, ...item.matchEvidence.partialAliases].map(escapeMarkdown).join('、')}`, '');
   for (const [field, label] of [['why', '原因'], ['warn', '提醒'], ['note', '说明']]) {
     if (item[field]) lines.push(`${label}：${escapeMarkdown(item[field])}`, '');
