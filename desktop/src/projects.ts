@@ -7,7 +7,7 @@ export type Project = { id: string; name: string; directory: string; subject: st
 export type Run = { id: string; projectId: string | null; kind: 'check' | 'guide' | 'explain'; state: 'running' | 'succeeded' | 'failed' | 'canceled' | 'interrupted'; startedAt: number; finishedAt: number | null; error: string | null; projectRevision: number | null; contextRevision?: number | null; toolVersion: string; rulesVersion: string; inputSummary: string; provenance?: 'imported'; sourceState?: string };
 export type Artifact = { id: string; runId: string; projectId: string | null; kind: 'check' | 'guide' | 'explain'; title: string; markdown: string; data?: { schemaVersion: 1; kind: 'check' | 'guide' | 'explain'; result: unknown; scope: unknown } | null; createdAt: number; projectRevision: number | null; contextRevision?: number | null; toolVersion: string; rulesVersion: string; inputSummary: string; provenance?: 'imported' };
 export type ProjectSnapshot = { rulesVersion?: string | null; projects: Project[]; activeProjectId: string | null; runs: Run[]; artifacts: Omit<Artifact, 'markdown' | 'data'>[] };
-type Options = { onRegistry(ids: string[]): void | Promise<void>; beforeSelect(id: string | null): Promise<boolean>; onChange(project: Project | null): void; onSnapshot?(snapshot: ProjectSnapshot): void; onArtifact(artifact: Artifact, reveal?: boolean): void; isBusy(): boolean; associateSession(id: string | null): Promise<boolean>; onPending?(value: boolean): void; canChangeProject?(): boolean; onOpenData?(): void; onOpenResults?(): void; openResultsPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean };
+type Options = { onRegistry(ids: string[]): void | Promise<void>; beforeSelect(id: string | null): Promise<boolean>; onChange(project: Project | null): void; onSnapshot?(snapshot: ProjectSnapshot): void; onArtifact(artifact: Artifact, revealFrom?: HTMLElement): void; isBusy(): boolean; associateSession(id: string | null): Promise<boolean>; onPending?(value: boolean): void; canChangeProject?(): boolean; onOpenData?(): void; onOpenResults?(): void; openResultsPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean };
 const stateLabels = { running: '执行中', succeeded: '已完成', failed: '失败', canceled: '已取消', interrupted: '意外中断' };
 const date = (value: number) => new Date(value).toLocaleString('zh-CN', { hour12: false });
 
@@ -175,7 +175,11 @@ export function mountProjects(options: Options) {
         } catch { rules.textContent = '规则摘要格式不可读取；可导出原始记录核对。'; }
         details.append(summary, input, version, rules); row.append(details);
         const button = document.createElement('button'); button.type = 'button'; button.className = 'desktop-action'; button.textContent = '查看保存的报告';
-        button.addEventListener('click', () => { void operation(async () => { await showArtifact(artifact.id, true); }); }); row.append(button);
+        button.addEventListener('click', () => {
+          const trigger = (resultsDialog.open ? resultsTrigger : opener) ?? el('desktop-project-manage');
+          void operation(() => showArtifact(artifact.id, trigger));
+        });
+        row.append(button);
       }
       history.append(row);
     }
@@ -190,12 +194,12 @@ export function mountProjects(options: Options) {
     controls();
     options.onSnapshot?.(snapshot);
   }
-  async function showArtifact(id: string, reveal = false) {
+  async function showArtifact(id: string, revealFrom?: HTMLElement) {
     const artifact = await invoke<Artifact>('project_artifact', { artifactId: id });
     if (destroyed) return;
     if (artifact.id !== id || artifact.projectId !== snapshot.activeProjectId) throw new Error('报告与当前项目记录不一致，请重新加载。');
-    if (reveal) { dialog.close(); if (resultsDialog.open) resultsDialog.close(); }
-    options.onArtifact(artifact, reveal);
+    if (revealFrom) { dialog.close(); if (resultsDialog.open) resultsDialog.close(); }
+    options.onArtifact(artifact, revealFrom);
   }
   async function showLatest() {
     const latest = snapshot.artifacts.filter(item => item.projectId === snapshot.activeProjectId && item.provenance !== 'imported').sort((a, b) => b.createdAt - a.createdAt)[0];
