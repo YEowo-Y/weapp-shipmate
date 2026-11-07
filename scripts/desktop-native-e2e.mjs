@@ -244,7 +244,7 @@ async function settingsConnectionsReady() {
 async function openSettingsSection(section) {
   if (!await inspect('return document.querySelector("#desktop-preferences").open')) {
     await openNavigation(); await click('#desktop-preferences-open');
-    await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'global settings');
+    await until(() => inspect('return document.querySelector("#desktop-preferences").open && Boolean(document.querySelector("#preferences-body"))'), 'global settings ready');
   }
   if (!await inspect('return document.querySelector(arguments[0]).checkVisibility()', [`#preferences-nav-${section}`])) await click('#preferences-categories');
   await click(`#preferences-nav-${section}`);
@@ -1147,6 +1147,22 @@ try {
   } else if (projectsMode) {
     await checkProjectFlows();
   } else if (releaseSmoke) {
+    const settingsRendererRequests = () => inspect('return performance.getEntriesByType("resource").filter(entry => { const path = new URL(entry.name).pathname; return path.includes("/assets/settings-renderer-") && path.endsWith(".js"); }).map(entry => entry.name)');
+    await checked('Installed release loads settings on demand and reuses the packaged renderer', async () => {
+      const beforeOpen = await settingsRendererRequests();
+      assert.deepEqual(beforeOpen, [], 'startup leaves the settings renderer unloaded');
+      await openSettingsSection('appearance');
+      assert.equal(await text('#preferences-heading'), '设置');
+      const firstOpen = await settingsRendererRequests();
+      assert.equal(firstOpen.length, 1, 'the packaged renderer is fetched on first open');
+      await closeSettings();
+      await openSettingsSection('appearance');
+      const reopened = await settingsRendererRequests();
+      assert.deepEqual(reopened, firstOpen, 'reopening reuses the loaded renderer');
+      await screenshot('release-settings');
+      await writeFile(resolve(run, 'release-settings-requests.json'), JSON.stringify({ beforeOpen, firstOpen, reopened }, null, 2));
+      await closeSettings();
+    });
     await checked('Installed release generates a real guide without Node on PATH', async () => {
       await click('#start-guide'); await click('#guide-btn');
       await until(() => inspect('return document.querySelector("#status").classList.contains("ok") && !document.querySelector("#guide-btn").disabled'), 'installed guide completes');
@@ -1196,6 +1212,7 @@ try {
     });
     await checked('Installed release shuts down its broker and restarts cleanly', async () => {
       await quit(); await launch();
+      assert.deepEqual(await settingsRendererRequests(), [], 'restart still defers settings loading');
       await click('#start-guide'); await click('#guide-btn');
       await until(() => inspect('return document.querySelector("#status").classList.contains("ok")'), 'installed guide after restart');
       assert.ok((await text('#report')).length > 50);
