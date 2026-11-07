@@ -12,9 +12,14 @@ export function formatRuleActions(item) {
   const labels = { code: '改代码', console: '后台配置', materials: '材料准备', manual_check: '人工核对' };
   return (item.action_categories || []).map(value => labels[value]).filter(Boolean).join('、') || '人工核对';
 }
+export function formatRuleConfidence(item, imported = false) {
+  const label = new Map([['high', '高'], ['medium', '中'], ['low', '低']]).get(item.confidence);
+  return label ? `${imported ? '备份记录的' : ''}规则置信度：${label}（规则维护者对规则准确性的把握，不是命中概率或过审保证）` : '';
+}
 function renderItem(item, conditional, imported) {
   const lines = [`#### ${escapeMarkdown(item.title)}`, '', `规则 ID：${escapeMarkdown(item.ruleId)}`, '',
     `级别：${{ blocker: '阻断', warning: '警告', info: '提示' }[item.severity]}；${conditional ? '是否适用尚未确认，请按业务自查。' : '按所填输入列出，仍需逐项确认。'}`, ''];
+  if (formatRuleConfidence(item, imported)) lines.push(formatRuleConfidence(item, imported), '');
   for (const [field, label] of [['why', '原因'], ['warn', '提醒'], ['note', '说明']]) {
     if (item[field]) lines.push(`${label}：${escapeMarkdown(item[field])}`, '');
   }
