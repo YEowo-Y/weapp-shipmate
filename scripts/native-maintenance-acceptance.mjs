@@ -173,6 +173,32 @@ export async function checkMaintenanceFlows({ run, projectDatabase, checked, cli
     await observeUnchanged('enable only starts watcher and preserves baseline', async () => ({ runs: (await checksFor()).length, notices: (await state()).notices.length }), { runs: 1, notices: 0 });
   });
 
+  await checked('Project health keeps unsaved maintenance settings across close and navigation actions', async () => {
+    const before = await state(), runs = await checksFor();
+    await open(); await click('#maintenance-notifications');
+    const assertDraft = async action => {
+      assert.equal(await inspect('return document.querySelector("#desktop-health").matches(":modal") && document.querySelectorAll("dialog[open]").length === 1'), true, action);
+      assert.equal(await inspect('return document.querySelector("#maintenance-notifications").checked'), !before.notificationsEnabled, action);
+      assert.match(await text('#maintenance-status'), /尚未保存/, action);
+    };
+    await press('\uE00C');
+    await assertDraft('Escape');
+    for (const selector of ['#health-dismiss', '#health-done', '#health-project', '#health-history', '#health-sources', '#health-check', '#health-report']) {
+      assert.equal(await inspect('return document.querySelector(arguments[0]).disabled', [selector]), false, selector);
+      await click(selector);
+      await assertDraft(selector);
+    }
+    await inspect('document.querySelector("#maintenance-status").scrollIntoView({block:"center"})');
+    await screenshot('p7-health-maintenance-draft');
+    await click('#maintenance-discard');
+    assert.equal(await inspect('return document.querySelector("#maintenance-notifications").checked'), before.notificationsEnabled);
+    await click('#health-project');
+    await until(() => inspect('return !document.querySelector("#desktop-health").open && document.querySelector("#desktop-preferences").open && document.querySelector("#desktop-preferences").dataset.section === "projects" && document.querySelector("#project-form").checkVisibility()'), 'discard allows navigation to project settings');
+    await closePreferences();
+    assert.equal((await state()).revision, before.revision);
+    assert.deepEqual(await checksFor(), runs);
+  });
+
   await checked('P7 actual source change creates a comparable report and one source-linked new-problem notice', async () => {
     lastArtifact = await completedChange(() => change(directory, 'app.js', requestSource));
     assert.deepEqual(lastArtifact.data.scope, baseline.data.scope);
