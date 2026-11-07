@@ -98,7 +98,7 @@ export function mountWorkflow(options: Options) {
       const actions = document.createElement('ul');
       for (const item of stage.items) {
         const entry = document.createElement('li'); entry.append(text('strong', item.title));
-        if (item.conditional) entry.append(text('p', `条件线索：${item.signal.join('、')}；请人工判断是否适用。`, 'desktop-field-hint'));
+        if (item.conditional) entry.append(text('p', item.signal.length ? `条件线索：${item.signal.join('、')}；请人工判断是否适用。` : '请先核对是否使用相关接口、组件或配置；条件成立时再处理本项要求。', 'desktop-field-hint'));
         for (const requirement of item.requires) entry.append(text('p', requirement)); actions.append(entry);
       }
       row.append(actions);
