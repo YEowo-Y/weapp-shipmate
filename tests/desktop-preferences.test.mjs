@@ -307,6 +307,22 @@ test('dialog boundary cycles Tab between its first and last visible controls', (
   pressTab(last, false); assert.equal(h.document.activeElement, first); pressTab(first, true); assert.equal(h.document.activeElement, last);
 });
 
+test('collapsed credential details remain the last keyboard stop in settings', async () => {
+  const h = harness();
+  const details = h.document.createElement('details'), summary = h.document.createElement('summary');
+  const field = h.document.createElement('input');
+  summary.textContent = '更改密钥或授权方式'; details.append(summary, field); h.panels.models.element.append(details);
+  await act(async () => { h.app.open(h.anchor, 'models'); await setImmediate(); });
+  const first = h.node('preferences-search');
+  act(() => { summary.focus(); summary.dispatchEvent(new h.window.KeyboardEvent('keydown', {key:'Tab',bubbles:true,cancelable:true})); });
+  assert.equal(h.document.activeElement, first);
+  act(() => first.dispatchEvent(new h.window.KeyboardEvent('keydown', {key:'Tab',shiftKey:true,bubbles:true,cancelable:true})));
+  assert.ok(h.document.activeElement === summary);
+  details.open = true;
+  act(() => { field.focus(); field.dispatchEvent(new h.window.KeyboardEvent('keydown', {key:'Tab',bubbles:true,cancelable:true})); });
+  assert.equal(h.document.activeElement, first);
+});
+
 test('busy embedded changes block navigation, close actions and Escape until the controller allows leaving', async () => {
   const h = harness(); await act(async () => { h.app.open(h.anchor, 'models'); await setImmediate(); });
   h.panels.models.setCanClose(false); h.click('preferences-nav-data');
