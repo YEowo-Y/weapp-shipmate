@@ -581,6 +581,40 @@ async function checkWorkflowFlows() {
     await until(async () => /待重检|需.*重新|已失效/.test(await text('#workflow-stages')), 'stale confirmation visible');
     await screenshot('p3-stale-confirmation'); await closeWorkflow();
   });
+  await checked('Workflow downloads saved facts, stale confirmation and rule materials without saving the draft', async () => {
+    const before = await snapshot(), saved = await workflow();
+    const record = saved.confirmations.find(item => item.stageId === stageId && item.state === 'confirmed');
+    const rule = saved.catalog.rules.find(item => item.id === 'privacy.getLocation');
+    assert.ok(record?.note && rule?.official_url && rule.requires.length);
+    const downloads = resolve(run, 'workflow-downloads');
+    await mkdir(downloads);
+    await command('POST', '/ms/cdp/execute', { cmd: 'Browser.setDownloadBehavior', params: { behavior: 'allow', downloadPath: downloads } });
+    await workflowDialog();
+    await click('#workflow-facts-open');
+    const draft = '未保存的工作流导出草稿';
+    await fill('#workflow-businessType', draft);
+    await click('#workflow-export');
+    const markdown = await until(async () => {
+      const file = (await readdir(downloads)).find(name => /^shipmate-workflow-\d+\.md$/.test(name));
+      return file && readFile(resolve(downloads, file), 'utf8');
+    }, 'workflow Markdown download');
+    assert.ok(markdown.includes(saved.project.facts.businessType));
+    assert.ok(!markdown.includes(draft));
+    assert.match(markdown, /涉及支付：是/);
+    assert.match(markdown, /收集敏感信息：尚未确认/);
+    assert.match(markdown, /状态：待重检/);
+    assert.ok(markdown.includes(record.note));
+    assert.ok(markdown.includes(rule.requires[0]));
+    assert.ok(markdown.includes(rule.official_url));
+    const after = await snapshot(), reloaded = await workflow();
+    assert.deepEqual(after.runs, before.runs);
+    assert.deepEqual(after.artifacts, before.artifacts);
+    assert.deepEqual(reloaded.project, saved.project);
+    assert.deepEqual(reloaded.confirmations, saved.confirmations);
+    assert.equal(await inspect('return document.querySelector("#workflow-businessType").value'), draft);
+    await screenshot('p3-workflow-export');
+    await closeWorkflow();
+  });
   await checked('Two projects have independent facts and manual progress', async () => {
     const directory = resolve(run, '工作流项目 B'); await mkdir(directory);
     await projectInvoke('project_save', { project: { id: b, name: '验收工作流 B', directory, subject: 'enterprise' } });
