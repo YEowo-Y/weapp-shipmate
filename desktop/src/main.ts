@@ -409,14 +409,16 @@ window.addEventListener("DOMContentLoaded", () => {
     onOpenArtifact: artifact => { showArtifact(artifact); tools.open($("#desktop-project-manage"), $("#report")); },
     onToolResults: async () => { await projects?.refresh(); },
   }).then(value => { sessions = value; updateCopyControl(); return value; });
-  const showResults = () => {
+  const showResults = (trigger = $('#desktop-results-open')) => {
     preferences?.close();
     window.setTimeout(() => {
-      if (!$<HTMLDialogElement>('#desktop-preferences')?.open) projects?.results.open($('#desktop-results-open'));
+      if (!$<HTMLDialogElement>('#desktop-preferences')?.open) projects?.results.open(trigger);
     }, 0);
   };
-  $('#desktop-results-open')?.addEventListener('click', showResults);
-  $('#home-results')?.addEventListener('click', showResults);
+  for (const id of ['desktop-results-open', 'home-results']) {
+    const trigger = $(`#${id}`);
+    trigger?.addEventListener('click', () => showResults(trigger));
+  }
   projects = mountProjects({
     onOpenResults: showResults,
     openResultsPage: (page, trigger) => workspace.open(page, trigger, { canLeave: () => projects?.results.canClose() ?? true }),
