@@ -26,7 +26,7 @@ function data(value, depth = 0, budget = { remaining: 500, chars: 16384 }) {
   if (Array.isArray(value)) return value.length <= (budget.maxArray || 100) && value.every(item => data(item, depth + 1, budget));
   return record(value) && Object.keys(value).length <= 32 && Object.entries(value).every(([key, item]) => key.length <= 128 && !['__proto__', 'constructor', 'prototype'].includes(key) && data(item, depth + 1, budget));
 }
-const itemKeys = ['ruleId', 'title', 'stage', 'severity', 'why', 'requires', 'official_url', 'last_verified', 'manual_required', 'warn', 'source_quote', 'note', 'conditional', 'signal', 'action_categories'];
+const itemKeys = ['ruleId', 'title', 'stage', 'severity', 'why', 'requires', 'official_url', 'last_verified', 'manual_required', 'warn', 'source_quote', 'note', 'conditional', 'signal', 'action_categories', 'confidence'];
 function item(value) {
   if (!keys(value, itemKeys, ['ruleId', 'title', 'stage', 'severity', 'requires', 'manual_required'])) return false;
   if (!['ruleId', 'title', 'stage'].every(key => text(value[key], 512) && value[key].trim()) || !['info', 'warning', 'blocker'].includes(value.severity) || typeof value.manual_required !== 'boolean' || !strings(value.requires)) return false;
@@ -35,6 +35,7 @@ function item(value) {
   if (!value.ruleId.startsWith('flow.') && !['why', 'official_url', 'last_verified'].every(key => Object.hasOwn(value, key))) return false;
   if (Object.hasOwn(value, 'official_url') && !source(value.official_url)) return false;
   if (Object.hasOwn(value, 'last_verified') && value.last_verified !== null && (typeof value.last_verified !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.last_verified) || !Number.isFinite(Date.parse(value.last_verified)) || new Date(value.last_verified).toISOString().slice(0, 10) !== value.last_verified)) return false;
+  if (Object.hasOwn(value, 'confidence') && !['high', 'medium', 'low'].includes(value.confidence)) return false;
   if (Object.hasOwn(value, 'conditional') && typeof value.conditional !== 'boolean') return false;
   if (Object.hasOwn(value, 'action_categories')) {
     const categories = value.action_categories;
