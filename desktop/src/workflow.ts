@@ -3,6 +3,8 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import { deriveWorkflow } from '../../src/workflow.mjs';
 import { createIcon } from '../design-previews/components/icons.js';
 import type { Project, ProjectFacts } from './projects';
+import { createWorkflowArtifact } from '../design-previews/workflow-artifact.js';
+import { createArtifactDownloader } from '../design-previews/artifact-download.js';
 import './workflow.css';
 
 type Snapshot = { project: Project; catalog: unknown; rulesVersion: string; confirmations: unknown[] };
@@ -13,6 +15,7 @@ const labels: Record<string, string> = { confirmed: '人工已确认', not_appli
 export function mountWorkflow(options: Options) {
   const el = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!;
   const dialog = el<HTMLDialogElement>('desktop-workflow');
+  const downloader = createArtifactDownloader({ documentRef: document });
   const status = el('workflow-status');
   const content = el('workflow-content');
   let snapshot: Snapshot | null = null, pending = false, busy = false, destroyed = false, epoch = 0;
@@ -35,6 +38,7 @@ export function mountWorkflow(options: Options) {
   function controls() {
     dialog.setAttribute('aria-busy', String(pending));
     for (const field of content.querySelectorAll<HTMLInputElement>('input,textarea,select,button,wa-button')) field.disabled = blocked() || !snapshot || snapshot.project.id !== options.getProject()?.id || field.dataset.workflowBlocked === 'true';
+    el<HTMLButtonElement>('workflow-export').disabled = blocked() || !snapshot || snapshot.project.id !== options.getProject()?.id;
     el<HTMLButtonElement>('workflow-retry').disabled = blocked();
     el<HTMLButtonElement>('workflow-save-facts').disabled = blocked() || !snapshot || snapshot.project.id !== options.getProject()?.id || factsConflict(snapshot);
   }
@@ -139,7 +143,10 @@ export function mountWorkflow(options: Options) {
     message('正在读取项目事实与上线阶段…');
     const next = await invoke<Snapshot>('project_workflow', { projectId: current.id });
     if (destroyed || token !== epoch || options.getProject()?.id !== current.id) return;
-    snapshot = next; render(); message(factsConflict(next) ? '已保存事实已变化，草稿已保留。请在项目事实中处理冲突后再保存。' : '', factsConflict(next));
+    if (next.project.id !== current.id) throw new Error('返回的项目与当前选择不符，请重新加载。');
+    snapshot = next;
+    try { render(); } catch (error) { invalidate(); throw error; }
+    message(factsConflict(next) ? '已保存事实已变化，草稿已保留。请在项目事实中处理冲突后再保存。' : '', factsConflict(next));
   }
   async function operation(action: () => Promise<void>) {
     if (blocked()) return;
@@ -205,6 +212,15 @@ export function mountWorkflow(options: Options) {
     for (const key of ['hasPayment', 'collectsSensitive', 'hasServerDomain'] as const) { const value = el<HTMLSelectElement>(`workflow-${key}`).value; facts[key] = value === 'unknown' ? null : value === 'true'; }
     void operation(async () => { await invoke('project_facts_save', { projectId: basis.project.id, expectedRevision: basis.project.revision, facts }); const draft = draftFor(basis.project.id); draft.facts = {}; delete draft.factsBasis; await saved(); });
   });
+  listen(el('workflow-export'), 'click', () => {
+    if (blocked() || !dialog.open || !snapshot) return;
+    const basis = currentBasis();
+    if (!basis) return;
+    try {
+      const requested = downloader.download(createWorkflowArtifact(basis));
+      message(requested ? '已发起下载，清单包含已保存的事实与确认记录。' : '无法下载准备清单，请重试。', !requested);
+    } catch { message('无法下载准备清单，请重新加载后重试。', true); }
+  });
   listen(el('workflow-retry'), 'click', () => { void refresh(); });
   listen(el('workflow-close'), 'click', () => { if (!pending) dialog.close(); });
   listen(dialog, 'close', () => { if (!dialog.open && !options.openPage && !destroyed && (document.activeElement === document.body || dialog.contains(document.activeElement))) opener?.focus({preventScroll:true}); });
@@ -213,6 +229,6 @@ export function mountWorkflow(options: Options) {
     refresh, element: dialog, canClose: () => !pending,
     close() { if (!pending && dialog.open) dialog.close(); },
     setBusy(value: boolean) { busy = value; if (snapshot && snapshot.project.id !== options.getProject()?.id) { invalidate(); reloadAfterPending = true; } controls(); drainReload(); },
-    destroy() { destroyed = true; epoch++; drafts.clear(); for (const dispose of listeners) dispose(); if (dialog.open) dialog.close(); },
+    destroy() { destroyed = true; epoch++; downloader.dispose(); drafts.clear(); for (const dispose of listeners) dispose(); if (dialog.open) dialog.close(); },
   };
 }
