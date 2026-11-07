@@ -1,8 +1,28 @@
 # 14 · 首跑、验包与五人试用
 
-更新：2026-10-25。用户已确认“暂未准备，先完成可交付候选与试用材料”。本轮验收范围是候选交付件及试用材料；可信签名和五人真实执行待用户安排，不伪造完成，也不阻止本轮材料交接。Windows候选安装包已构建、验包，并在本机完成安装、7项原生运行验收和卸载。下文记录实际文件和hash；这不是干净Windows环境或真人试用，不表示已签名或公开分发。
+更新：2026-11-07。用户已确认“暂未准备，先完成可交付候选与试用材料”。最新 Windows 候选已构建、验包，并在本机完成安装、8 项原生运行验收和卸载。可信签名、干净 Windows 首装和五人真实执行仍待验；未公开发布或联系参与者。10 月 25 日的分发调查及旧候选记录保留为历史证据。
 
-## 当前分发事实
+## 最新本地候选（2026-11-07）
+
+交付目录：`.omx/artifacts/windows-candidate-20261107/`。运行源码为 `4eab7d3b54a5fac0a851936b3dcfd8f82c9c2278`，构建开始时工作树干净；随后修改的验收脚本独立提交为 `3013824`，未改动安装包内的产品代码。桌面版本仍为 0.1.0，随包 CLI 为 0.2.0-rc.3；独立名称为 `Weapp Shipmate Candidate 20261107`，数据标识为 `com.weappshipmate.candidate.20261107`。
+
+| 产物 | 大小 | SHA256 |
+| --- | --- | --- |
+| `Weapp-Shipmate-Candidate-20261107-0.1.0-x64-setup.exe` | 28,244,333 bytes | `67aba2b89d5ef7555b8d85a8f0510b28984a276b2690394d01f1c9bfa17ce077` |
+| `weapp-shipmate-trial-kit.zip` | 11,617 bytes；14 个文件、5 份空记录 | `a3a99a84a7ce0908d4d801ab6aeb8cb11208987ec52aa90902d6c7ff1fc87439` |
+| `Weapp-Shipmate-Candidate-20261107.zip` | 28,963,194 bytes；26 个文件 | `f8fd2a3d4cb89427b5080ed117bca24edf4ae0e2a803d62e33f6c42032f92b9b` |
+
+交付 ZIP 包含安装器、试用材料、说明、来源和签名检查、安装/卸载记录、日志、截图及逐文件 SHA256；已重新读取 ZIP 的全部条目并核对内容哈希。Windows Authenticode 为 `NotSigned`。安装目录中实际运行的 EXE 哈希为 `b05bdaab1ce99086010ca7dcc4a59b14be345def26728c334e110c66aef9551b`。
+
+本机 8 项安装版检查通过：启动、权限/CSP、设置首次加载与重开复用、真实清单、拒因查询、服务商目录及空密钥限制、外部页面原生调用拦截、退出和重启。子进程 PATH 只有 Windows 目录，使用实际随包 Node、规则和 broker，无模型请求或网络测试 preload。设置和清单截图已复核。证据原目录为 `.omx/artifacts/desktop-model-native/run-2026-11-07T17-54-27-057Z/`，交付包中的 `native-evidence/` 保存本次结果及截图；设置模块启动时未请求，首次打开请求一次，重开未重复请求。
+
+首次自动化使用旧 WebDriver 155，因本机 WebView2 为 157.0.4341.42 无法创建会话；经现有脚本安装匹配驱动，对同一安装器重跑通过，保留两次日志。验收脚本同步改为等待设置内容加载完成，避免只等待弹窗打开后访问尚未挂载的控件。
+
+安装、卸载退出码均为 0；卸载后 EXE 与 runtime 已移除。为等待真实卸载完成，本次使用 NSIS `_?=` 参数，独立安装目录仅残留 `uninstall.exe`，应用数据保留。全量 1,589 项 Node 测试、lint、NSIS 生产构建和恢复后的默认 Tauri 构建通过；练习项目预检按预期退出 2，五份参与者记录仍为空。未重复 Rust 测试，未将旧 GitHub CI 或历史原生检查数量计入本轮。
+
+本轮机器已有 WebView2，尚未验证干净首装、WebView2 下载失败、可信签名、SmartScreen 信誉、升级数据兼容、真实账号或真人试用。公开分发状态没有重新查询；下节只记载 10 月 25 日的观察。
+
+## 历史分发调查（2026-10-25）
 
 2026-10-25 15:32 UTC，以现有授权GitHub只读API和公开npm registry复核：
 
@@ -28,7 +48,7 @@ rc.3 MCPB于2026-10-25只读实物核验：212142 bytes，SHA256 `9d0084bb19faf1
 
 Claude Desktop自带Node，可免用户单独安装，但仍须满足包和宿主版本要求；MCPB不是独立GUI。[MCPB官方说明](https://github.com/modelcontextprotocol/mcpb/blob/70fe3b34cd6dff1b3bba046638edc72a6467a4fb/README.md#L11-L32)
 
-## 本地安装器准备（维护者）
+## 历史候选与本地安装器准备（2026-10-25）
 
 本轮由主代理核对 `desktop/src-tauri/tauri.conf.json`：productName为`weapp-shipmate-desktop`，桌面版本`0.1.0`，identifier为`com.weappshipmate.desktop`；bundle开启、targets=all、resources含runtime/。beforeBuildCommand执行`npm run prepare:runtime && npm run build`；未配置Windows签名或webviewInstallMode。不要把CLI的rc.3版本写成桌面版本。
 
