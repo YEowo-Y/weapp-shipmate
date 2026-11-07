@@ -35,6 +35,9 @@
 .rj-triage__filter:hover { background: var(--surface-3); color: var(--text); }
 .rj-triage__filter[aria-pressed="true"] { background: var(--surface); border-color: var(--border-2); color: var(--text); }
 .rj-triage__count { font-variant-numeric: tabular-nums; min-width: 1ch; }
+.rj-triage__help { margin-top: 8px; }
+.rj-triage__help summary { min-height: 44px; box-sizing: border-box; padding-block: 10px; cursor: pointer; font-size: 12px; color: var(--text-2); }
+.rj-triage__help summary:focus-visible { outline: 2px solid var(--text-2); outline-offset: 3px; }
 .rj-triage__hint { margin: 12px 0 8px; color: var(--text-2); font-size: 12px; line-height: 1.7; text-wrap: pretty; }
 .rj-triage__status { margin: 0; color: var(--text-2); font-size: 12px; line-height: 1.7; font-variant-numeric: tabular-nums; }
 .rj-triage__empty { padding-top: 14px; font-size: 13px; line-height: 1.7; }
