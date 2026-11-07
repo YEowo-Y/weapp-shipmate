@@ -1,6 +1,8 @@
 /* Adapted from supplied Codex screenshots: fixed sidebar and centered settings content. */
 .context-dialog.preferences-dialog { position:fixed; inset:0; box-sizing:border-box; width:100%; max-width:none; height:100dvh; max-height:none; margin:0; padding:0; border:0; border-radius:0; box-shadow:none; background:var(--bg); color:var(--text); font-size:14px; }
 .preferences-dialog::backdrop { background:var(--bg); }
+.preferences-load { margin:clamp(24px, 6vw, 80px); }
+.preferences-load button + button { margin-inline-start:12px; }
 .preferences-layout { display:grid; grid-template-columns:288px minmax(0,1fr); width:100%; height:100%; min-height:0; box-sizing:border-box; flex:1; }
 .preferences-sidebar { display:flex; flex-direction:column; min-height:0; min-width:0; padding:20px 12px 12px; border-right:1px solid var(--border); background:var(--surface); overflow:hidden; box-sizing:border-box; }
 .preferences-sidebar-header { flex:none; margin-bottom:20px; }
