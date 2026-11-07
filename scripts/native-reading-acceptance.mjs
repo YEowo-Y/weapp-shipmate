@@ -52,10 +52,10 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     await click(selector);
   };
   const openMenu = async () => { await click('#desktop-more'); await click('#desktop-actions wa-dropdown-item[value="report"]'); await readerReady(); };
-  const fromHistory = async artifact => {
+  const openHistoryReport = async (artifact, entry = '#desktop-results-open') => {
     await closeTools();
-    if (!await inspect('return document.querySelector("#desktop-results-open").checkVisibility()')) await click('#desktop-navigation > summary');
-    await click('#desktop-results-open');
+    if (entry === '#desktop-results-open' && !await inspect('return document.querySelector("#desktop-navigation").open')) await click('#desktop-navigation > summary');
+    await activate(entry);
     await until(() => inspect('return document.querySelector("#desktop-project-results").open'), 'results workspace opened');
     await click('#project-results-retry');
     await until(() => inspect('return !document.querySelector("#project-results-retry").disabled && !document.querySelector("#desktop-project-select").disabled'), 'project history refreshed');
@@ -63,6 +63,9 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     assert.ok(index >= 0, 'saved run remains in real project history');
     await activate(`#project-history .project-run:nth-child(${index + 1}) > button`);
     await until(() => inspect('return !document.querySelector("#desktop-project-results").open && document.querySelector("#desktop-tools").open && !document.querySelector("#read-report").disabled'), 'saved report loaded through history');
+  };
+  const fromHistory = async (artifact, entry) => {
+    await openHistoryReport(artifact, entry);
     await activate('#read-report'); await readerReady();
     assert.equal(await text('#report-reader-title'), artifact.title);
     assert.equal(await inspect('return document.querySelector(".report-reader-body").scrollTop'), 0, 'each opened report starts at its overview, not a previous reading position');
@@ -225,6 +228,19 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     await geometry('toolbar-reader-resize'); await closeReader();
     assert.equal(await inspect('return document.activeElement!==document.body && document.activeElement.checkVisibility()'), true);
     await closeTools(); await command('POST', '/window/rect', { width: 1200, height: 850 });
+  });
+  await checked('Saved reports return keyboard focus to the history entry or a visible tools toggle', async () => {
+    const before = await snapshot();
+    for (const [width, entry, target] of [[1200, '#home-results', '#home-results'], [390, '#desktop-results-open', '#desktop-tools-toggle']]) {
+      await command('POST', '/window/rect', { width, height: 850 });
+      const returned = () => until(() => inspect('const target=document.querySelector(arguments[0]); return !document.querySelector("#desktop-tools").open && !document.querySelector("#desktop-report-reader").open && target.checkVisibility() && document.activeElement === target', [target]), `report exit returns focus to ${target} at ${width}px`);
+      await openHistoryReport(artifacts.check, entry); await closeTools(); await returned();
+      await fromHistory(artifacts.check, entry); await closeReader(); await returned();
+      if (width === 390) await screenshot('reading-history-return-focus-390');
+    }
+    const after = await snapshot();
+    assert.deepEqual(after.runs, before.runs); assert.deepEqual(after.artifacts, before.artifacts);
+    await command('POST', '/window/rect', { width: 1200, height: 850 });
   });
   await checked('Refresh and native restart retain all real reports without running tools again', async () => {
     const before = await snapshot(); await refresh();
