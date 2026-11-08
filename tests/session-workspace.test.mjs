@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import { createIcon } from '../desktop/design-previews/components/icons.js';
 import { sessionMatch } from '../desktop/design-previews/session-search.js';
 import { createSessionPersistence } from '../desktop/design-previews/session-persistence.js';
-import { createActionButton } from './helpers/ui-action.mjs';
+import { createActionButton, bindActionMenu } from './helpers/ui-action.mjs';
 
 const source = readFileSync(new URL('../desktop/design-previews/session-workspace.js', import.meta.url), 'utf8');
 function node(doc, tag = 'div') {
@@ -32,7 +32,7 @@ function harness({ loaded = null, loadError = false, saveError = false, layout, 
   const store = { async load() { if (loadError) throw new Error('offline'); return { revision: 3, snapshot: loaded }; },
     async save(snapshot, revision) { if (typeof saveError === 'function' ? saveError() : saveError) throw Object.assign(new Error('Conflict'), { code: 'conflict' }); writes.push(JSON.parse(JSON.stringify(snapshot))); return { revision: revision + 1 }; }, close() {} };
   const context = vm.createContext({ createSessionStore: () => store, createSessionPersistence, sessionMatch,
-    normalizeSessionSnapshot: value => JSON.parse(JSON.stringify(value)), createIcon, createActionButton,
+    normalizeSessionSnapshot: value => JSON.parse(JSON.stringify(value)), createIcon, createActionButton, bindActionMenu,
     openSessionDataDialog(options) { dataDialogs.push(options); return { node: node(doc, 'dialog') }; },
     createSessionDataPanel(options) {
       const panel = { options, element: node(doc, 'section'), opens: 0, closes: 0, destroyed: false,
@@ -59,6 +59,59 @@ function harness({ loaded = null, loadError = false, saveError = false, layout, 
 const tick = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
 const find = (root, action) => [root, ...root.children.flatMap(child => flatten(child))].find(item => item.dataset.action === action);
 const flatten = root => [root, ...root.children.flatMap(child => flatten(child))];
+
+function rowMenu(app, id, action) {
+  const row = flatten(app.host).find(item => item.dataset.action === 'recent-session' && item.dataset.sessionId === id);
+  const menu = row.parentNode.children[1].children[0];
+  menu.fire('wa-select', { detail: { item: { value: action } } });
+  menu.fire('wa-after-hide');
+  return menu;
+}
+
+test('sidebar menus rename another conversation without switching or losing the current draft', async () => {
+  const app = harness({ layout: 'sidebar' }), workspace = await app.mounting;
+  workspace.createSession(); app.args.input.value = 'keep this draft';
+  rowMenu(app, 'session-1', 'rename');
+  const surface = app.doc.body.children.at(-1), form = flatten(surface).find(item => item.tag === 'form');
+  form.children[0].value = 'Renamed first'; form.fire('submit'); await tick();
+  assert.equal(workspace.getCurrentSession().id, 'session-2');
+  assert.equal(app.args.input.value, 'keep this draft');
+  await workspace.flush();
+  assert.equal(app.writes.at(-1).sessions.find(item => item.id === 'session-1').title, 'Renamed first');
+  assert.equal(app.doc.activeElement['aria-label'], '会话操作：Renamed first');
+  workspace.destroy();
+});
+
+test('sidebar archive retains drafts, switches only the active target, and restores through history', async () => {
+  const app = harness({ layout: 'sidebar' }), workspace = await app.mounting;
+  app.args.input.value = 'first draft'; workspace.createSession(); app.args.input.value = 'second draft';
+  rowMenu(app, 'session-1', 'archive'); await tick();
+  assert.equal(workspace.getCurrentSession().id, 'session-2');
+  assert.equal(app.args.input.value, 'second draft');
+  assert.equal(app.writes.at(-1).sessions.find(item => item.id === 'session-1').draft, 'first draft');
+  rowMenu(app, 'session-2', 'archive'); await tick();
+  assert.equal(workspace.getCurrentSession().id, 'session-3');
+  assert.equal(app.doc.activeElement.dataset.sessionId, 'session-3');
+  workspace.openHistory(undefined, 'archived');
+  find(app.doc.body.children.at(-1), 'restore-session').click(); await tick();
+  assert.ok(app.writes.at(-1).sessions.some(item => !item.archived && item.draft === 'second draft'));
+  workspace.destroy();
+});
+
+test('sidebar archive conflict preserves the row, current draft and a reachable recovery dialog', async () => {
+  const app = harness({ layout: 'sidebar' }), workspace = await app.mounting;
+  await workspace.flush(); app.setSaveError(true); app.args.input.value = 'unsaved';
+  const menu = rowMenu(app, 'session-1', 'archive'); await tick();
+  assert.equal(workspace.getCurrentSession().archived, undefined);
+  assert.equal(app.args.input.value, 'unsaved');
+  assert.ok(menu.parentNode);
+  const surface = app.doc.body.children.at(-1);
+  assert.equal(surface['aria-label'], '未能完成归档');
+  assert.equal(app.doc.activeElement, find(surface, 'cancel'));
+  find(surface, 'cancel').click(); await tick();
+  assert.equal(app.doc.activeElement, menu.children[0]);
+  app.setSaveError(false); await workspace.flush(); workspace.destroy();
+});
 
 test('a failed data dialog initialization keeps later close callbacks safe and surfaces the original error', async () => {
   const app = harness(), workspace = await app.mounting;
