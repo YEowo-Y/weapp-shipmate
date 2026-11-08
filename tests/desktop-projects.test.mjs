@@ -35,7 +35,8 @@ function harness({ projects = [project('a'), project('b')], activeProjectId = 'a
       }); nodes.set(id, element);
     } return nodes.get(id);
   };
-  doc.querySelector = selector => node(selector.slice(1)); doc.body = doc.createElement('body');
+  doc.querySelector = selector => selector === '#sessionHost .session-workspace__recent' ? null : node(selector.slice(1)); doc.body = doc.createElement('body');
+  node('desktop-project-folders').insertBefore = function(child, before) { if (child.parentNode) child.remove(); const index = this.children.indexOf(before); child.parentNode = this; this.children.splice(index < 0 ? this.children.length : index, 0, child); };
   const body = doc.createElement('div'); node('desktop-projects').append(body);
   const historySection = doc.createElement('section'); historySection.append(node('project-history'));
   node('project-history').closest = () => historySection;
@@ -57,7 +58,7 @@ function harness({ projects = [project('a'), project('b')], activeProjectId = 'a
     if (cmd === 'project_artifact') return { ...artifacts.find(a => a.id === args.artifactId), markdown: 'saved source' };
   };
   let backupOptions;
-  const context = { document: doc, invoke, mountProjectBackup: options => { backupOptions = options; return { sync() {}, async refreshStorage() {}, canClose() { return true; }, close() {}, destroy() {} }; }, open: async () => 'C:/chosen', crypto: { randomUUID: () => 'new-project' }, setTimeout, clearTimeout, URL, Blob };
+  const context = { document: doc, createIcon, invoke, mountProjectBackup: options => { backupOptions = options; return { sync() {}, async refreshStorage() {}, canClose() { return true; }, close() {}, destroy() {} }; }, open: async () => 'C:/chosen', crypto: { randomUUID: () => 'new-project' }, setTimeout, clearTimeout, URL, Blob };
   vm.createContext(context); vm.runInContext(`${script}\nglobalThis.mount = mountProjects;`, context);
   const controller = context.mount({ beforeSelect, onRegistry: ids => { registry.push(ids); return onRegistry(ids); }, onChange: p => changes.push(p), onSnapshot: value => snapshots.push(value), onArtifact: (a, revealFrom) => { shown.push(a); reveals.push({ revealFrom, dialogOpen: node('desktop-projects').open }); if (revealFrom) node('report').focus(); }, isBusy: () => false, onPending: v => pending.push(v), associateSession });
   return { controller, calls, changes, shown, reveals, registry, pending, snapshots, node, doc, backupOptions, async fire(id, type = 'click') { for (const fn of node(id).events[type] ?? []) fn({ preventDefault() {} }); for (let i = 0; i < 20; i++) await Promise.resolve(); } };
