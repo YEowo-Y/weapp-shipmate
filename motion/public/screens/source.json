@@ -1,0 +1,419 @@
+{
+  "projectId": "tutorial-project",
+  "fixture": "Temporary scanner-only example; actual native UI; no source execution or model request.",
+  "captures": {
+    "tutorial-home": {
+      "file": "home.png",
+      "sha256": "769a618e3d4a1aef24bcce077f4c0e48412208a8101fb8fe7375d1a53d49f3c3",
+      "image": {
+        "width": 1500,
+        "height": 1275
+      },
+      "targets": {
+        "project": {
+          "css": {
+            "height": 32,
+            "width": 165.33334350585938,
+            "x": 10,
+            "y": 95.98958587646484
+          },
+          "selector": "#desktop-project-select",
+          "visible": true,
+          "pixels": {
+            "x": 15,
+            "y": 143.98437881469727,
+            "width": 248.00001525878906,
+            "height": 48
+          }
+        },
+        "start": {
+          "css": {
+            "height": 32,
+            "width": 107.08333587646484,
+            "x": 830.25,
+            "y": 317.25
+          },
+          "selector": "#start-check",
+          "visible": true,
+          "pixels": {
+            "x": 1245.375,
+            "y": 475.875,
+            "width": 160.62500381469727,
+            "height": 48
+          }
+        },
+        "workflow": {
+          "css": {
+            "height": 44,
+            "width": 338,
+            "x": 266,
+            "y": 593.1666870117188
+          },
+          "selector": "#home-workflow",
+          "visible": true,
+          "pixels": {
+            "x": 399,
+            "y": 889.7500305175781,
+            "width": 507,
+            "height": 66
+          }
+        }
+      },
+      "viewport": {
+        "dpr": 1.5,
+        "height": 850,
+        "width": 1000
+      }
+    },
+    "tutorial-tools": {
+      "file": "tools.png",
+      "sha256": "6f995c1d1e32e854594b1ba7bead113f6016fd0cd5e552ecd912c598b1e0120f",
+      "image": {
+        "width": 1500,
+        "height": 1275
+      },
+      "targets": {
+        "directory": {
+          "css": {
+            "height": 63.79166793823242,
+            "width": 247.33334350585938,
+            "x": 716.6666870117188,
+            "y": 158.98959350585938
+          },
+          "selector": "#dir",
+          "visible": true,
+          "pixels": {
+            "x": 1075.0000305175781,
+            "y": 238.48439025878906,
+            "width": 371.00001525878906,
+            "height": 95.68750190734863
+          }
+        },
+        "run": {
+          "css": {
+            "height": 32,
+            "width": 102,
+            "x": 716.6666870117188,
+            "y": 280.78125
+          },
+          "selector": "#check-btn",
+          "visible": true,
+          "pixels": {
+            "x": 1075.0000305175781,
+            "y": 421.171875,
+            "width": 153,
+            "height": 48
+          }
+        },
+        "subject": {
+          "css": {
+            "height": 36,
+            "width": 179.33334350585938,
+            "x": 784.6666870117188,
+            "y": 234.78125
+          },
+          "selector": "#subject",
+          "visible": true,
+          "pixels": {
+            "x": 1177.0000305175781,
+            "y": 352.171875,
+            "width": 269.00001525878906,
+            "height": 54
+          }
+        }
+      },
+      "viewport": {
+        "dpr": 1.5,
+        "height": 850,
+        "width": 1000
+      }
+    },
+    "tutorial-tools-result": {
+      "file": "tools-result.png",
+      "sha256": "fee8e861159fc56f8444c8106efa5e80653a8a134943094f2a7f86b2ee5091c6",
+      "image": {
+        "width": 1500,
+        "height": 1275
+      },
+      "targets": {
+        "handoff": {
+          "css": {
+            "height": 32,
+            "width": 76,
+            "x": 815.75,
+            "y": 464.5625
+          },
+          "selector": "#handoff-report",
+          "visible": true,
+          "pixels": {
+            "x": 1223.625,
+            "y": 696.84375,
+            "width": 114,
+            "height": 48
+          }
+        },
+        "report": {
+          "css": {
+            "height": 32,
+            "width": 107.08333587646484,
+            "x": 700.6666870117188,
+            "y": 464.5625
+          },
+          "selector": "#read-report",
+          "visible": true,
+          "pixels": {
+            "x": 1051.0000305175781,
+            "y": 696.84375,
+            "width": 160.62500381469727,
+            "height": 48
+          }
+        },
+        "status": {
+          "css": {
+            "height": 37.6875,
+            "width": 269.3333435058594,
+            "x": 700.6666870117188,
+            "y": 373.47918701171875
+          },
+          "selector": "#status",
+          "visible": true,
+          "pixels": {
+            "x": 1051.0000305175781,
+            "y": 560.2187805175781,
+            "width": 404.00001525878906,
+            "height": 56.53125
+          }
+        }
+      },
+      "viewport": {
+        "dpr": 1.5,
+        "height": 850,
+        "width": 1000
+      }
+    },
+    "tutorial-report": {
+      "file": "report.png",
+      "sha256": "ddbdf11c3a1fcca2812ebee093c25d69a1fffb5f73c99e228bac89a6045e5095",
+      "image": {
+        "width": 1500,
+        "height": 1275
+      },
+      "targets": {
+        "handoff": {
+          "css": {
+            "height": 36,
+            "width": 103.33333587646484,
+            "x": 864.6666870117188,
+            "y": 798
+          },
+          "selector": "#report-reader-handoff",
+          "visible": true,
+          "pixels": {
+            "x": 1297.0000305175781,
+            "y": 1197,
+            "width": 155.00000381469727,
+            "height": 54
+          }
+        },
+        "items": {
+          "css": {
+            "height": 1098.104248046875,
+            "width": 488.66668701171875,
+            "x": 464,
+            "y": 420.66668701171875
+          },
+          "selector": "#report-reader-content",
+          "visible": true,
+          "pixels": {
+            "x": 696,
+            "y": 631.0000305175781,
+            "width": 733.0000305175781,
+            "height": 1647.1563720703125
+          }
+        },
+        "summary": {
+          "css": {
+            "height": 28,
+            "width": 696.6666870117188,
+            "x": 256,
+            "y": 148.6666717529297
+          },
+          "selector": "#report-reader-summary",
+          "visible": true,
+          "pixels": {
+            "x": 384,
+            "y": 223.00000762939453,
+            "width": 1045.0000305175781,
+            "height": 42
+          }
+        }
+      },
+      "viewport": {
+        "dpr": 1.5,
+        "height": 850,
+        "width": 1000
+      }
+    },
+    "tutorial-handoff": {
+      "file": "handoff.png",
+      "sha256": "e2be5a94f2c0b850d79c3be5fc5bcb73e039ff1495a0e4f802fdd1046ee0c4bf",
+      "image": {
+        "width": 1500,
+        "height": 1275
+      },
+      "targets": {
+        "basis": {
+          "css": {
+            "height": 42.84375,
+            "width": 655.3333740234375,
+            "x": 164.6666717529297,
+            "y": 229.5625
+          },
+          "selector": "#handoff-basis",
+          "visible": true,
+          "pixels": {
+            "x": 247.00000762939453,
+            "y": 344.34375,
+            "width": 983.0000610351562,
+            "height": 64.265625
+          }
+        },
+        "content": {
+          "css": {
+            "height": 1447.1875,
+            "width": 655.3333740234375,
+            "x": 164.6666717529297,
+            "y": 284.40625
+          },
+          "selector": "#handoff-content",
+          "visible": true,
+          "pixels": {
+            "x": 247.00000762939453,
+            "y": 426.609375,
+            "width": 983.0000610351562,
+            "height": 2170.78125
+          }
+        },
+        "copy": {
+          "css": {
+            "height": 36,
+            "width": 118.36458587646484,
+            "x": 164.6666717529297,
+            "y": 143.11459350585938
+          },
+          "selector": "#handoff-copy",
+          "visible": true,
+          "pixels": {
+            "x": 247.00000762939453,
+            "y": 214.67189025878906,
+            "width": 177.54687881469727,
+            "height": 54
+          }
+        },
+        "export": {
+          "css": {
+            "height": 36,
+            "width": 118.36458587646484,
+            "x": 430.3645935058594,
+            "y": 143.11459350585938
+          },
+          "selector": "#handoff-markdown",
+          "visible": true,
+          "pixels": {
+            "x": 645.5468902587891,
+            "y": 214.67189025878906,
+            "width": 177.54687881469727,
+            "height": 54
+          }
+        }
+      },
+      "viewport": {
+        "dpr": 1.5,
+        "height": 850,
+        "width": 1000
+      }
+    },
+    "tutorial-workflow": {
+      "file": "workflow.png",
+      "sha256": "bbd9403dad3b1d99452a3ba1538a62b2b29f72aab445c65211180054e76bdbb7",
+      "image": {
+        "width": 1500,
+        "height": 1275
+      },
+      "targets": {
+        "export": {
+          "css": {
+            "height": 34,
+            "width": 105.33333587646484,
+            "x": 469.66668701171875,
+            "y": 359.25
+          },
+          "selector": "#workflow-export",
+          "visible": true,
+          "pixels": {
+            "x": 704.5000305175781,
+            "y": 538.875,
+            "width": 158.00000381469727,
+            "height": 51
+          }
+        },
+        "facts": {
+          "css": {
+            "height": 347.5,
+            "width": 702,
+            "x": 256,
+            "y": 417.25
+          },
+          "selector": "#workflow-facts",
+          "visible": true,
+          "pixels": {
+            "x": 384,
+            "y": 625.875,
+            "width": 1053,
+            "height": 521.25
+          }
+        },
+        "next": {
+          "css": {
+            "height": 59.19791793823242,
+            "width": 702,
+            "x": 256,
+            "y": 288.0520935058594
+          },
+          "selector": "#workflow-next",
+          "visible": true,
+          "pixels": {
+            "x": 384,
+            "y": 432.07814025878906,
+            "width": 1053,
+            "height": 88.79687690734863
+          }
+        },
+        "overview": {
+          "css": {
+            "height": 26.39583396911621,
+            "width": 702,
+            "x": 256,
+            "y": 249.65625
+          },
+          "selector": "#workflow-overview",
+          "visible": true,
+          "pixels": {
+            "x": 384,
+            "y": 374.484375,
+            "width": 1053,
+            "height": 39.593750953674316
+          }
+        }
+      },
+      "viewport": {
+        "dpr": 1.5,
+        "height": 850,
+        "width": 1000
+      }
+    }
+  },
+  "captureRunStartedAtUtc": "2026-11-08T09:09:54.723Z",
+  "nativeRun": "run-2026-11-08T09-09-54-723Z",
+  "validationNote": "Capture steps passed; initial viewer focus error was found during final cleanup and fixed separately. This receipt proves screenshot origin, not final native acceptance."
+}
