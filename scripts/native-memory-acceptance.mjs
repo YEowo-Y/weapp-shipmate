@@ -94,7 +94,7 @@ export async function checkMemoryFlows({ run, checked, click, fill, press, inspe
     await projectDialog(); await click('#project-retry');
     await until(() => inspect('return document.querySelector("#desktop-project-select").options.length === 3 && !document.querySelector("#project-retry").disabled'), 'memory projects loaded');
     await closeProjects(); await selectProject(a);
-    await click('#home-memory'); await ready(); assert.match(await text('#memory-scope'), /P7 项目记忆 A/);
+    await click('#desktop-memory-open'); await ready(); assert.match(await text('#memory-scope'), /P7 项目记忆 A/);
     entry = await create(a, '交付用语', 'P7_MEMORY_FIRST：交付说明使用简明中文。');
     assert.ok(entry.createdAt > 0); assert.ok(entry.updatedAt >= entry.createdAt);
     await fill('#memory-search', 'P7_MEMORY_FIRST');
