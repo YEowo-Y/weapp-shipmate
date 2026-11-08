@@ -1253,7 +1253,7 @@ try {
     const sidebar = await inspect(`const element = document.querySelector('.desktop-sidebar');
       const token = getComputedStyle(element).getPropertyValue('--ds-sidebar-width').trim();
       return { width: element.getBoundingClientRect().width, expected: token ? parseFloat(token) : 228 };`);
-    assert.ok(sidebar.width >= 200 && sidebar.width <= 280, 'Sidebar keeps room for the main workspace');
+    assert.ok(sidebar.width >= 264 && sidebar.width <= 304, 'Sidebar fits the project list and the primary navigation rail');
     assert.ok(Math.abs(sidebar.width - sidebar.expected) < 1, 'Sidebar follows the active design token');
     assert.ok(await inspect('return document.querySelector(".desktop-sidebar-footer").getBoundingClientRect().bottom >= innerHeight - 24'), 'Settings remain anchored at the bottom of the sidebar');
     await click('#start-check');
