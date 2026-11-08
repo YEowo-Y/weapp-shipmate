@@ -1,4 +1,4 @@
-import { createHandoff, handoffWarnings, formatRuleActions, type RepairHandoff } from '../design-previews/repair-handoff.js';
+import { createHandoff, handoffWarnings, formatRuleActions, formatRuleConfidence, type RepairHandoff } from '../design-previews/repair-handoff.js';
 import { createActionButton } from '../design-previews/components/ui-kit.js';
 import { createIcon } from '../design-previews/components/icons.js';
 import { renderMessageText } from '../design-previews/components/message-markdown.js';
@@ -7,7 +7,7 @@ import './context.css';
 import './report-reader.css';
 
 // createHandoff validates these fields before this presentation-only narrowing.
-type ReadingItem = { conditional: boolean; rejectSummary: string | null; relevance?: 'direct' | 'possible'; matchEvidence?: { aliases: string[]; codes: string[]; partialAliases: string[] }; rule: { ruleId: string; title: string; severity: 'blocker' | 'warning' | 'info'; why?: string | null; requires: string[]; official_url?: string | null; source_quote?: string | null; last_verified?: string | null; manual_required: boolean; warn?: string | null; note?: string | null; action_categories?: string[] } };
+type ReadingItem = { conditional: boolean; rejectSummary: string | null; relevance?: 'direct' | 'possible'; matchEvidence?: { aliases: string[]; codes: string[]; partialAliases: string[] }; rule: { ruleId: string; title: string; severity: 'blocker' | 'warning' | 'info'; why?: string | null; requires: string[]; official_url?: string | null; source_quote?: string | null; last_verified?: string | null; manual_required: boolean; warn?: string | null; note?: string | null; action_categories?: string[]; confidence?: 'high' | 'medium' | 'low' } };
 type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(): void; onRepair?(): void; onOpenSource?(url: string): Promise<unknown>; returnFocus?(): HTMLElement | null };
 
 // The export contract intentionally omits run notes and business signals. Validate
@@ -121,6 +121,8 @@ export function mountReportReader(options: Options) {
       if (r.official_url) { const link = node('a', '查看官方依据（在浏览器中打开）'); link.href = r.official_url; link.target = '_blank'; link.rel = 'noopener noreferrer'; article.append(link); }
       else article.append(node('p', '此项未提供官方链接，请自行核对。'));
       const evidence = node('details'); evidence.className = 'report-reader-evidence'; evidence.append(node('summary', '规则摘录与资料记录'));
+      const confidence = formatRuleConfidence(r, source.provenance === 'imported');
+      if (confidence) evidence.append(node('p', confidence));
       if (r.source_quote) evidence.append(node('blockquote', r.source_quote));
       evidence.append(node('p', `资料记录日期：${r.last_verified || '未记录'} · 未实时核验`));
       article.append(evidence); content.append(article);
