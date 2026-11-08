@@ -68,6 +68,7 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
       if (selected.size > MAX_HANDOFF_BYTES) throw new Error('请选择不超过 512 KiB 的交接 JSON 文件。');
       const result = parseHandoff(await selected.text());
       if (disposed || token !== epoch || !dialog.open) return;
+      result.source.provenance = 'imported';
       display(result, true); status.textContent = '已打开交接文件；未修改项目或历史成果。';
     } catch (error) { if (!disposed && token === epoch && dialog.open) reportError(error); }
     finally { if (!disposed && token === epoch) { loading = false; refresh(); } }
