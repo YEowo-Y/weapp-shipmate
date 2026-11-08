@@ -1,7 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64" fill="none">
   <title>上线船友 · 双帆同行</title>
-  <rect x="0.5" y="0.5" width="63" height="63" rx="16" fill="#203E4C" stroke="#496574"/>
-  <path d="M11 40C21 30 29 18 36 8C33 18 32 26 33 33C24 34 17 37 11 40Z" fill="#FBF7ED"/>
-  <path d="M39 17C45 20 50 25 54 31C47 31 41 32 36 34C36 27 37 22 39 17Z" fill="#9BD3DD"/>
-  <path d="M10 45C22 43 40 38 55 35C50 44 40 51 30 53C23 54 16 51 10 45Z" fill="#FBF7ED"/>
+  <rect x=".5" y=".5" width="63" height="63" rx="15" fill="#272726" stroke="#555552"/>
+  <path fill="#FAF9F6" d="M11 40C19 31 29 17 36 8L32 33L11 40ZM39 18L53 31L36 35L39 18ZM10 45L54 35C49 44 39 51 29 53C22 54 15 50 10 45Z"/>
 </svg>
