@@ -1,3 +1,5 @@
+<img src="desktop/public/brand/shipmate.svg" alt="" width="64" height="64">
+
 # weapp-shipmate · 上线船友
 
 > **你写代码，我陪你上线。**
