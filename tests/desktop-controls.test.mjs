@@ -22,7 +22,7 @@ function harness({ open = async () => null, invoke = async () => 'report', write
       element.click = () => element.listeners.click?.(); return element;
     },
   };
-  for (const id of ['stop-tool', 'pick-btn', 'check-btn', 'guide-btn', 'subject', 'status', 'dir', 'report', 'report-title', 'report-note', 'copy-report', 'copy-status', 'handoff-report', 'read-report', 'repair-report', 'desktop-repair-history', 'save-report', 'start-check', 'start-guide', 'start-explain', 'home-report', 'home-report-summary', 'home-results', 'desktop-results-open', 'desktop-menu-report', 'home-project-name', 'home-project-summary', 'home-project-manage', 'desktop-preferences-open', 'home-sources', 'sessionHost']) {
+  for (const id of ['stop-tool', 'pick-btn', 'check-btn', 'guide-btn', 'subject', 'status', 'dir', 'report', 'report-title', 'report-note', 'copy-report', 'copy-status', 'handoff-report', 'read-report', 'repair-report', 'desktop-repair-history', 'save-report', 'start-check', 'start-guide', 'start-explain', 'home-report', 'home-report-summary', 'home-results', 'desktop-results-open', 'desktop-menu-report', 'home-project-name', 'home-project-summary', 'home-project-manage', 'desktop-preferences-open', 'home-sources', 'desktop-memory-open', 'desktop-sources-open', 'desktop-maintenance-open', 'desktop-maintenance-count', 'sessionHost']) {
     nodes.set(`#${id}`, Object.assign(id === 'report' ? createPreviewDocument().createElement('div') : {}, {
       disabled: id === 'check-btn', value: 'personal', textContent: '', className: '',
       scrollTop: 0, scrollLeft: 0, attributes: {}, listeners: {},
@@ -650,11 +650,25 @@ desktopTest('home context reflects selected project and points unavailable direc
 test('desktop exposes one persistent settings entry while retaining business destinations', () => {
   const html = readFileSync(new URL('../desktop/index.html', import.meta.url), 'utf8');
   assert.equal((html.match(/id="desktop-preferences-open"/g) || []).length, 1);
-  assert.match(html, /<nav class="desktop-primary-navigation" aria-labelledby="desktop-workspace-heading">\s*<h2 id="desktop-workspace-heading">工作区<\/h2>/);
+  assert.match(html, /<nav class="desktop-primary-navigation" aria-label="主要功能">/);
   for (const id of ['desktop-model-settings', 'desktop-data-settings', 'home-models', 'home-preferences']) assert.ok(!html.includes(`id="${id}"`), `${id} must not duplicate settings`);
   for (const value of ['models', 'data', 'preferences']) assert.ok(!html.includes(`<wa-dropdown-item value="${value}"`));
-  assert.match(html, /<\/details>\s*<div class="desktop-sidebar-footer">\s*<button id="desktop-preferences-open"/);
+  assert.match(html, /<div class="desktop-sidebar-footer">\s*<button id="desktop-preferences-open"/);
   for (const id of ['desktop-home-open', 'desktop-workflow-open', 'home-health', 'home-memory', 'home-sources', 'home-report']) assert.ok(html.includes(`id="${id}"`));
+});
+
+desktopTest('left rail opens existing destinations and the reminder shortcut remains after reading notices', async () => {
+  const memories = [];
+  const app = harness({ sessions: { openMemory: anchor => memories.push(anchor) } });
+  await Promise.resolve();
+  app.click('desktop-memory-open'); app.click('desktop-sources-open');
+  assert.equal(memories[0], app.node('desktop-memory-open'));
+  assert.equal(app.integration.sourceOpens, 1);
+  app.maintenanceOptions().onUnread(3);
+  assert.equal(app.node('desktop-maintenance-open').attributes['aria-label'], '项目维护，3 条未读提醒');
+  app.maintenanceOptions().onUnread(0);
+  assert.notEqual(app.node('desktop-maintenance-open').hidden, true);
+  assert.equal(app.node('desktop-maintenance-open').title, '项目提醒');
 });
 
 desktopTest('history shortcuts and sidebar navigation release the workpage through its pending guard', async () => {
