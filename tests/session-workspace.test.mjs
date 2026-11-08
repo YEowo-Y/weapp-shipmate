@@ -190,6 +190,18 @@ test('sessionMatch searches titles first and returns a message location and boun
   workspace.destroy();
 });
 
+test('history distinguishes same-title conversations without searching or revealing draft text', () => {
+  const saved = { title: '上线准备', draft: '未公开口令', messages: [
+    { role: 'user', text: '先做预检' }, { role: 'user', text: '核对  隐私声明' }, { role: 'assistant', id: 'reply', text: '检查完成' },
+  ] };
+  assert.equal(sessionMatch(saved, '上线').snippet, '核对 隐私声明');
+  assert.equal(sessionMatch(saved, '未公开口令').matched, false);
+  assert.equal(sessionMatch(saved, '检查').messageId, 'reply');
+  assert.equal(sessionMatch({ ...saved, messages: [] }, '').snippet, '有未发送的草稿');
+  const long = sessionMatch({ ...saved, messages: [{ role: 'user', text: '🚢'.repeat(100) }] }, '');
+  assert.equal(long.snippet, '🚢'.repeat(72) + '…');
+});
+
 test('opening the current history result does not stop the run or return focus to the history trigger', async () => {
   const app = harness(); const workspace = await app.mounting;
   workspace.openHistory();
@@ -332,7 +344,9 @@ test('history message matches expose their snippet as an accessible description'
   const row = find(dialog, 'session'); const snippet = row.children.find(item => item.tag === 'small');
   assert.ok(snippet.id); assert.equal(row['aria-describedby'], snippet.id);
   search.value = 'Saved'; search.fire('input');
-  assert.equal(find(dialog, 'session')['aria-describedby'], undefined);
+  const titleMatch = find(dialog, 'session'), preview = titleMatch.children.find(item => item.tag === 'small');
+  assert.equal(preview.textContent, 'Find needle in this answer');
+  assert.equal(titleMatch['aria-describedby'], preview.id);
   workspace.destroy();
 });
 
