@@ -1,7 +1,7 @@
 import { validateGuideItem } from './guide-contract.js';
 import { escapeMarkdown as escape, formatRuleActions, formatRuleConfidence } from './guide-artifact.js';
 import { validateMatchEvidence } from './explain-contract.js';
-export { formatRuleActions };
+export { formatRuleActions, formatRuleConfidence };
 
 export const MAX_HANDOFF_BYTES = 512 * 1024;
 const kinds = { check: '代码预检发现', guide: '上线要求核对', explain: '拒因规则匹配' };
