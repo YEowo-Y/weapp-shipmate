@@ -76,6 +76,14 @@
 .session-workspace__recent .session-workspace__button{width:100%;min-width:0;flex-shrink:0;padding:8px 10px;text-align:left;min-height:36px;gap:8px}
 .session-workspace__recent .session-workspace__button span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .session-workspace__recent .app-icon{color:var(--text-3)}
+.session-workspace__recent-entry{position:relative;min-width:0}
+.session-workspace__recent-entry > .session-workspace__button{padding-right:38px}
+.session-workspace__recent-actions{position:absolute;right:2px;top:50%;transform:translateY(-50%)}
+.session-workspace__recent-entry [data-action="session-actions"]{opacity:0;transition:opacity var(--ds-dur-state)}
+.session-workspace__recent-entry:hover [data-action="session-actions"],
+.session-workspace__recent-entry:focus-within [data-action="session-actions"]{opacity:1}
+.session-workspace__recent-entry [data-action="session-actions"]::part(base){min-height:28px;width:28px;padding:4px;border:0;background:var(--surface)}
+@media(hover:none),(pointer:coarse){.session-workspace__recent-entry [data-action="session-actions"]{opacity:1}}
 .session-workspace__recent [aria-current="true"]{background:var(--surface-3)}
 .session-workspace--sidebar>.session-workspace__status{flex:none;padding:10px 10px 2px;overflow-wrap:anywhere}
 .session-workspace--sidebar>.session-workspace__notice{flex:none;font-size:12px;overflow-wrap:anywhere}
