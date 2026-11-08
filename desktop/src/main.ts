@@ -364,6 +364,8 @@ window.addEventListener("DOMContentLoaded", () => {
   $("#desktop-home-open")?.addEventListener("click", showHome);
   $("#home-sources")?.addEventListener("click", () => sources?.open($("#home-sources")));
   $("#home-memory")?.addEventListener("click", () => sessions?.openMemory($("#home-memory")));
+  $("#desktop-memory-open")?.addEventListener("click", () => sessions?.openMemory($("#desktop-memory-open")));
+  $("#desktop-sources-open")?.addEventListener("click", () => sources?.open($("#desktop-sources-open")));
   $("#home-project-manage")?.addEventListener("click", () => projects?.openManager());
   const actionMenu = $("#desktop-actions");
   if (actionMenu) bindActionMenu(actionMenu, value => {
@@ -456,7 +458,7 @@ window.addEventListener("DOMContentLoaded", () => {
     },
     onUnread: count => {
       const control = $("#desktop-maintenance-open"), label = $("#desktop-maintenance-count");
-      if (control) { control.hidden = count === 0; control.setAttribute('aria-label', `项目维护，${count} 条未读提醒`); }
+      if (control) { control.setAttribute('aria-label', `项目维护，${count} 条未读提醒`); control.title = count ? `项目提醒 · ${count} 条未读` : '项目提醒'; }
       if (label) label.textContent = `${count} 条提醒`;
     },
   });
