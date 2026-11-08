@@ -575,6 +575,32 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await until(() => inspect('return document.querySelector("#desktopInput")?.value === "短窗口恢复验收草稿"'), 'recovered draft survives reload');
   });
 
+  await checked('Shipmate branding loads and workspace motion follows device and app preferences', async () => {
+    await command('POST', '/window/rect', { width: 1000, height: 850 });
+    await home();
+    assert.equal(await inspect('const logo=document.querySelector(".desktop-brand-mark");return logo.checkVisibility() && logo.naturalWidth>0 && logo.src===document.querySelector("link[rel=icon]").href'), true);
+    const emulate = features => command('POST', '/ms/cdp/execute', {
+      cmd: 'Emulation.setEmulatedMedia', params: { features },
+    });
+    const checkHeader = async expected => {
+      await openWorkflow();
+      assert.equal(await inspect('return getComputedStyle(document.querySelector("#desktop-workflow > header")).animationName'), expected);
+      await close('#desktop-workflow');
+    };
+    try {
+      await emulate([{ name: 'prefers-reduced-motion', value: 'no-preference' }]);
+      await openPreferences(); await section('appearance'); await activate('#desktop-motion-system'); await close('#desktop-preferences');
+      await checkHeader('shipmate-arrive');
+      await emulate([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+      await checkHeader('none');
+      await emulate([{ name: 'prefers-reduced-motion', value: 'no-preference' }]);
+      await openPreferences(); await section('appearance'); await activate('#desktop-motion-reduce'); await close('#desktop-preferences');
+      await checkHeader('none');
+    } finally {
+      await emulate([]);
+    }
+  });
+
   await checked('Presentation navigation never changes source files, creates reports or submits model requests', async () => {
     const final = await snapshot(); assert.equal(final.runs.length, 0); assert.equal(final.artifacts.length, 0); assert.deepEqual(requests, []);
     assert.deepEqual((await readdir(directory)).sort(), Object.keys(files).sort());
