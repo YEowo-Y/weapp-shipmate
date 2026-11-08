@@ -65,6 +65,11 @@ export async function mountDesktopSessions(options: { onOpenArtifact?: (artifact
           } catch { if (!disposed && revision === selectionRevision) status.textContent = '无法核验或打开此本机报告：成果缺失、关联不匹配或运行不在当前历史范围。请在项目历史中重试，或在原设备导出报告、在本机重新检查。会话备份不会恢复完整成果。'; }
         },
       },
+      onSessionOpen(session) {
+        node('#session-empty').hidden = session.messages.length > 0;
+        const drawer = document.querySelector<HTMLDetailsElement>('#desktop-navigation');
+        if (drawer?.open && window.matchMedia('(max-width: 640px)').matches) drawer.open = false;
+      },
       onSessionChange(session) {
         context.select(session);
         activeProjectId = session.projectId ?? null; selectionRevision++;
