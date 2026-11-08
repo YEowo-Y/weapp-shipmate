@@ -13,6 +13,7 @@ import { createProjectExplain } from "./project-explain";
 import { mountWorkflow } from "./workflow";
 import { mountRepairHandoff } from "./repair-handoff";
 import { mountReportReader } from "./report-reader";
+import { mountTutorials } from "./tutorials";
 import { mountProjectRepair } from "./project-repair";
 import { mountProjectHealth } from "./project-health";
 import { mountProjectMaintenance } from "./maintenance";
@@ -32,6 +33,7 @@ let workflow: ReturnType<typeof mountWorkflow> | null = null;
 let explainPanel: ReturnType<typeof mountExplainDialog> | null = null;
 let handoff: ReturnType<typeof mountRepairHandoff> | null = null;
 let reader: ReturnType<typeof mountReportReader> | null = null;
+let tutorials: ReturnType<typeof mountTutorials> | null = null;
 let repair: ReturnType<typeof mountProjectRepair> | null = null;
 let health: ReturnType<typeof mountProjectHealth> | null = null;
 let maintenance: ReturnType<typeof mountProjectMaintenance> | null = null;
@@ -331,7 +333,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   $("#handoff-report").addEventListener('click', () => handoff?.open($("#handoff-report"), true));
   $("#repair-report").addEventListener('click', () => { if (lastSuccessful) repair?.openForArtifact(lastSuccessful.artifact, $("#repair-report")); });
-  window.addEventListener('pagehide', () => { reader?.destroy(); handoff?.destroy(); repair?.destroy(); }, { once: true });
+  window.addEventListener('pagehide', () => { reader?.destroy(); handoff?.destroy(); repair?.destroy(); tutorials?.destroy(); }, { once: true });
   const nativeExplain = createProjectExplain({
     invoke, getProjectId: () => projects?.getActiveId() ?? null,
     isReady: () => Boolean(projects?.isReady()), isBusy: () => busy, setBusy,
@@ -368,6 +370,10 @@ window.addEventListener("DOMContentLoaded", () => {
   const actionMenu = $("#desktop-actions");
   if (actionMenu) bindActionMenu(actionMenu, value => {
     if (value === "home") showHome();
+    if (value === "tutorials") {
+      tutorials ??= mountTutorials({ returnFocus: () => $("#desktop-more") });
+      tutorials.open($("#desktop-more"));
+    }
     if (value === "history" && workspace.close()) sessions?.openHistory($("#desktop-more"));
     if (value === "archived" && workspace.close()) sessions?.openHistory($("#desktop-more"), "archived");
     if (value === "report") showReport($("#desktop-more"));
