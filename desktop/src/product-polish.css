@@ -131,7 +131,6 @@
   border-bottom: 1px solid transparent;
   background: var(--ds-canvas);
 }
-.desktop-header { border-bottom-color: var(--ds-hairline); }
 .desktop-header h1 { font-size: var(--ds-text-ui-strong); font-weight: var(--ds-weight-medium); color: var(--ds-ink-1); letter-spacing: -.005em; }
 .desktop-header .desktop-action { min-height: var(--ds-control-sm); padding: 6px 10px; color: var(--ds-ink-2); border-radius: var(--ds-radius-md); }
 .desktop-header .desktop-action:hover, .desktop-header .desktop-action[aria-expanded="true"] { background: var(--ds-hover); color: var(--ds-ink-1); }
@@ -174,6 +173,8 @@
 .desktop-app .markdown-table th { font-weight: var(--ds-weight-medium); color: var(--ds-ink-2); background: var(--ds-sunken); }
 
 .desktop-conversation .msg--user .msg__text { font-size: var(--ds-text-body); line-height: 1.6; }
+.desktop-conversation .msg--agent .msg__text { font-family: var(--ds-font-reading); }
+.desktop-conversation .msg--agent .msg__text :is(button, table) { font-family: var(--ds-font-sans); }
 .desktop-conversation .msg__meta { font-size: var(--ds-text-caption); color: var(--ds-ink-3); }
 .desktop-conversation [data-component="message-actions"] .message-action { color: var(--ds-ink-3); }
 .desktop-conversation [data-component="message-actions"] .message-action:is(:hover, :focus-visible):not(:disabled) { color: var(--ds-ink-1); }
