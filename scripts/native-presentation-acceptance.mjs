@@ -578,7 +578,11 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
   await checked('Shipmate branding loads and workspace motion follows device and app preferences', async () => {
     await command('POST', '/window/rect', { width: 1000, height: 850 });
     await home();
-    assert.equal(await inspect('const logo=document.querySelector(".desktop-brand-mark");return logo.checkVisibility() && logo.naturalWidth>0 && logo.src===document.querySelector("link[rel=icon]").href'), true);
+    await openPreferences();
+    await navigate('about');
+    await until(() => inspect('const logo=document.querySelector(".settings-product-name img");return logo?.checkVisibility() && logo.naturalWidth>0 && logo.src===document.querySelector("link[rel=icon]").href'), 'About displays the product icon beside its name');
+    await screenshot('presentation-about-product');
+    await close('#desktop-preferences');
     const emulate = features => command('POST', '/ms/cdp/execute', {
       cmd: 'Emulation.setEmulatedMedia', params: { features },
     });
