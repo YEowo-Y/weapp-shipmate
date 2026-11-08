@@ -59,15 +59,10 @@
   align-items: center;
   padding: 2px var(--ds-space-2) var(--ds-space-5);
 }
-.desktop-brand::before {
-  content: "";
+.desktop-brand-mark {
+  display: block;
   grid-row: 1 / span 2;
   width: 28px; height: 28px;
-  border-radius: var(--ds-radius-md);
-  background:
-    radial-gradient(circle at 30% 28%, rgb(255 255 255 / .35), transparent 55%),
-    var(--ds-accent);
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / .08);
 }
 .desktop-brand strong { font-family: var(--ds-font-display); font-size: 15px; font-weight: var(--ds-weight-strong); letter-spacing: var(--ds-tracking-heading); line-height: 1.25; }
 .desktop-brand > span { font-size: var(--ds-text-caption); color: var(--ds-ink-3); line-height: 1.3; }
@@ -325,7 +320,7 @@
   .desktop-layout, .desktop-layout[data-tools-open="true"] { display: flex; }
   .desktop-sidebar { padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--ds-hairline); }
   .desktop-brand { grid-template-columns: 24px auto; padding: 0; column-gap: 8px; }
-  .desktop-brand::before { width: 24px; height: 24px; grid-row: auto; border-radius: var(--ds-radius-sm); }
+  .desktop-brand-mark { width: 24px; height: 24px; grid-row: auto; }
   .desktop-sidebar-footer { border-top: 0; padding-top: 0; margin-top: 0; }
   .desktop-navigation[open] > .desktop-navigation-body { border: 0; border-radius: var(--ds-radius-lg); background: var(--ds-raised); box-shadow: var(--ds-shadow-popover); }
   .desktop-header { min-height: 48px; padding: 6px 12px; }
@@ -338,6 +333,31 @@
   .desktop-app wa-button::part(button) { min-height: var(--ds-control-touch); }
 }
 
+/* Keep the page itself stationary so keyboard focus and scroll position are stable. */
+@media (prefers-reduced-motion: no-preference) {
+  .desktop-app[data-motion="system"] .workspace-page[open] > header {
+    animation: shipmate-arrive var(--ds-dur-surface) var(--ds-ease-out);
+  }
+  .desktop-app[data-motion="system"] #status:is(.ok, .error) {
+    animation: shipmate-arrive var(--ds-dur-state) var(--ds-ease-out);
+  }
+  .desktop-app[data-motion="system"] #start-check [slot="end"] {
+    transition: transform var(--ds-dur-state) var(--ds-ease-out);
+  }
+  .desktop-app[data-motion="system"] #start-check:focus-within:not([disabled]) [slot="end"] {
+    transform: translateX(3px);
+  }
+  @media (hover: hover) {
+    .desktop-app[data-motion="system"] #start-check:hover:not([disabled]) [slot="end"] {
+      transform: translateX(3px);
+    }
+  }
+}
+@keyframes shipmate-arrive {
+  from { opacity: .65; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* 7. Preferences: motion + forced colors ---------------------------- */
 @media (prefers-reduced-motion: reduce) {
   .desktop-sidebar .desktop-action, .session-workspace__button, .home-start-grid > article, .container :is(select, button),
@@ -348,7 +368,7 @@
   .home-project, .home-start-grid > article, .desktop-tools .controls, .container :is(select, button),
   .desktop-project-switcher select, .session-workspace--sidebar > .session-workspace__button[data-action="new"] { border: 1px solid CanvasText; box-shadow: none; }
   .desktop-layout:not(:has(.desktop-conversation[data-workspace-open="true"], #session-empty:not([hidden]))) .session-workspace__recent [aria-current="true"] { outline: 2px solid Highlight; }
-  .desktop-brand::before { forced-color-adjust: none; background: Highlight; }
+  .desktop-brand-mark { forced-color-adjust: none; }
 }
 
 /* 8. open-claude-ui adaptations (MIT, Caho1/open-claude-ui@c1f923ae) ---------
