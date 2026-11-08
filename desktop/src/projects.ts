@@ -216,7 +216,7 @@ export function mountProjects(options: Options) {
         const group = document.createElement('div'); group.className = 'project-folder';
         const button = document.createElement('button'); button.type = 'button'; button.className = 'desktop-action project-folder-row'; button.dataset.projectId = project.id;
         const label = document.createElement('span'); label.className = 'project-folder-name';
-        button.append(createIcon(document, 'chevron-right'), createIcon(document, 'folder'), label); group.append(button);
+        button.append(createIcon(document, 'folder'), label); group.append(button);
         listen(button, 'click', () => {
           if (blocked()) return;
           const id = project.id || null;
