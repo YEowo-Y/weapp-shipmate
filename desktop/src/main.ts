@@ -400,7 +400,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   $("#sessionHost")?.addEventListener("click", (event: MouseEvent) => {
     const target = event.target as HTMLElement;
-    if (target.closest('[data-action="new"], [data-action="recent-session"]') && navigation && compactNavigation?.matches) navigation.open = false;
+    if (target.closest('[data-action="new"]') && navigation && compactNavigation?.matches) navigation.open = false;
   });
   resetReport();
   updateStopControl();
