@@ -295,6 +295,41 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await activate('#start-check'); await until(() => inspect('return document.activeElement.id==="check-btn"'), 'saved project focuses explicit run action'); await closeTools();
     assert.equal((await snapshot()).runs.length, 0); await geometry('project-home', '#session-empty');
   });
+  await checked('Project folders contain scoped sessions and the header menu renames without losing drafts', async () => {
+    await command('POST', '/window/rect', { width: 1200, height: 850 });
+    const folder = '.project-folder-row[aria-current="true"]';
+    assert.equal(await inspect('return document.querySelector(arguments[0]).parentElement.contains(document.querySelector(".session-workspace__recent"))', [folder]), true);
+    await activate(folder); assert.equal(await inspect('return document.querySelector(".session-workspace__recent").checkVisibility()'), false);
+    await press('\uE007'); assert.equal(await inspect('return document.querySelector(".session-workspace__recent").checkVisibility()'), true);
+    const draft = '文件夹切换与菜单重命名保留草稿';
+    await fill('#desktopInput', draft);
+    await activate('#desktop-more'); await screenshot('navigation-actions-menu');
+    await click('#desktop-actions wa-dropdown-item[value="rename"]');
+    await until(() => inspect('return document.querySelector("dialog[data-kind=rename]")?.open'), 'rename opens after menu closes');
+    await fill('[aria-label="会话名称"]', '项目导航验收');
+    await click('.session-workspace-dialog[data-kind=rename] [data-action=confirm]');
+    await until(() => inspect('return !document.querySelector("dialog[data-kind=rename]") && document.activeElement.id==="desktop-more"'), 'header rename focus returns');
+    assert.equal(await text('#session-title'), '项目导航验收');
+    await selectProject(null); await selectProject(projectId);
+    assert.equal(await inspect('return document.querySelector("#desktopInput").value'), draft);
+    assert.equal(await text('#session-title'), '项目导航验收');
+    await screenshot('navigation-project-folders');
+    await activate('#desktop-more'); await click('#desktop-actions wa-dropdown-item[value="archived"]');
+    await until(() => inspect('return document.querySelector("dialog[data-kind=history]")?.open'), 'archive history opens after menu closes');
+    assert.equal(await inspect('return document.querySelector("[data-action=filter-archived]").getAttribute("aria-pressed")'), 'true');
+    await click('[data-action=filter-active]'); await fill('[aria-label="搜索会话"]', '项目导航验收');
+    await click('[data-action=archive-session]');
+    await until(() => inspect('return !document.querySelector(".session-workspace__results [data-action=session]") && !document.querySelector("[data-action=filter-archived]").disabled'), 'archive saved before removing the row');
+    await click('[data-action=filter-archived]'); await click('[data-action=restore-session]');
+    await until(() => inspect('return !document.querySelector(".session-workspace__results [data-action=session]") && !document.querySelector("[data-action=filter-active]").disabled'), 'restored session leaves archives');
+    await click('[data-action=filter-active]'); await click('.session-workspace__results [data-action=session]');
+    await until(() => inspect('return !document.querySelector("dialog[data-kind=history]")'), 'restored session selected');
+    assert.equal(await inspect('return document.querySelector("#desktopInput").value'), draft);
+    await activate('#desktop-more'); await click('#desktop-actions wa-dropdown-item[value="history"]');
+    await until(() => inspect('return document.querySelector("dialog[data-kind=history]")?.open'), 'header search opens');
+    await close('dialog[data-kind=history]');
+    await fill('#desktopInput', '');
+  });
   await checked('Home secondary entries reach real features without executing work or contacting models', async () => {
     for (const [entry, dialog] of [['#start-explain', '#desktop-explain'], ['#home-health', '#desktop-health'], ['#home-memory', '#desktop-memory'], ['#home-sources', '#desktop-source-freshness']]) {
       await home(); await activate(entry); await until(() => inspect('return document.querySelector(arguments[0])?.open', [dialog]), `${entry} opens ${dialog}`);
