@@ -12,7 +12,7 @@ let workspaceSequence = 0;
 // The caller owns its mounted composer and passes its existing input/send nodes.
 export async function mountSessionWorkspace({ host, input, sendButton, scroll, list, status, jumpButton,
   initialMessages = [], workspace = 'my-miniprogram', storageLabel = '已保存在此浏览器', layout = 'toolbar', projectScoped = false,
-  onEvent, onSessionChange, onOpenDataSettings, projectNavigation, conversationOptions = {} }) {
+  onEvent, onSessionChange, onOpenDataSettings, projectNavigation, navigationHeader, conversationOptions = {} }) {
   const doc = host.ownerDocument, win = doc.defaultView;
   const instanceId = ++workspaceSequence;
   const element = (tag, className = '', text) => {
@@ -41,7 +41,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
   const sidebar = layout === 'sidebar';
   const root = element('div', `session-workspace${sidebar ? ' session-workspace--sidebar' : ''}`);
   const title = button(sidebar ? '搜索历史' : '历史会话', 'history', sidebar ? 'search' : 'clock');
-  const create = button('新建会话', 'new', 'plus');
+  const create = button('新建会话', 'new', sidebar ? 'pencil' : 'plus');
   const rename = button(sidebar ? '重命名当前会话' : '重命名', 'rename', 'pencil');
   const recent = sidebar ? element('div', 'session-workspace__recent') : null;
   const recentRows = new Map();
@@ -59,7 +59,10 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     heading.append(label, rename);
     if (projectNavigation) {
       recent.removeAttribute('aria-labelledby'); recent.setAttribute('aria-label', '当前项目的会话');
-      root.append(notice, create, title, projectNavigation, recent, saved);
+      if (navigationHeader) {
+        navigationHeader.append(title);
+        root.append(navigationHeader, notice, create, projectNavigation, recent, saved);
+      } else root.append(notice, create, title, projectNavigation, recent, saved);
     } else root.append(notice, create, title, heading, recent, saved);
   } else root.append(title, create, rename, saved, notice);
   host.append(root);
