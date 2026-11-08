@@ -12,7 +12,7 @@ let workspaceSequence = 0;
 // The caller owns its mounted composer and passes its existing input/send nodes.
 export async function mountSessionWorkspace({ host, input, sendButton, scroll, list, status, jumpButton,
   initialMessages = [], workspace = 'my-miniprogram', storageLabel = '已保存在此浏览器', layout = 'toolbar', projectScoped = false,
-  onEvent, onSessionChange, onOpenDataSettings, conversationOptions = {} }) {
+  onEvent, onSessionChange, onOpenDataSettings, projectNavigation, conversationOptions = {} }) {
   const doc = host.ownerDocument, win = doc.defaultView;
   const instanceId = ++workspaceSequence;
   const element = (tag, className = '', text) => {
@@ -57,7 +57,10 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     const label = element('h2', '', '会话'); label.id = `session-workspace-${instanceId}-recent`;
     recent.setAttribute('role', 'group'); recent.setAttribute('aria-labelledby', label.id);
     heading.append(label, rename);
-    root.append(notice, create, title, heading, recent, saved);
+    if (projectNavigation) {
+      recent.removeAttribute('aria-labelledby'); recent.setAttribute('aria-label', '当前项目的会话');
+      root.append(notice, create, title, projectNavigation, recent, saved);
+    } else root.append(notice, create, title, heading, recent, saved);
   } else root.append(title, create, rename, saved, notice);
   host.append(root);
   input.disabled = sendButton.disabled = create.disabled = rename.disabled = title.disabled = true;
@@ -344,9 +347,9 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     const session = { id: `session-${++sessionSequence}`, title: '新会话', draft: '', messages: [], references: [], pendingScenario: 'normal', autoTitle: true, ...(projectScoped ? { projectId: activeProjectId } : {}) };
     sessions.unshift(session); currentSessionId = session.id; restore(); schedule(); input.focus(); return session;
   }
-  function renameSession() {
+  function renameSession(trigger = projectNavigation ? create : rename) {
     if (disposed || mutationBusy) return;
-    const session = current(); const surface = dialog('重命名会话', rename, 'rename');
+    const session = current(); const surface = dialog('重命名会话', trigger, 'rename');
     const field = element('input'); field.type = 'text'; field.value = session.title; field.maxLength = 80; field.setAttribute('aria-label', '会话名称');
     const form = element('form'), submit = actionButton('保存', 'confirm', { type: 'submit', appearance: 'accent' });
     const error = element('p', 'session-workspace__field-error'); error.setAttribute('role', 'status');
@@ -509,7 +512,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     disposed = true; dataSettings?.destroy(); activeDialog?.close(); root.remove();
     void Promise.resolve(persistence?.flush()).finally(() => { persistence?.dispose(); store.close(); });
   }
-  bind(title, 'click', () => openHistory()); bind(create, 'click', createSession); bind(rename, 'click', renameSession);
+  bind(title, 'click', () => openHistory()); bind(create, 'click', createSession); bind(rename, 'click', () => renameSession());
   bind(retry, 'click', () => { void persistence?.retry(); }); bind(backup, 'click', () => download()); bind(reload, 'click', confirmReload);
   for (const type of ['input', 'select', 'scroll']) bind(input, type, schedule);
   bind(scroll, 'scroll', schedule, { passive: true }); bind(list, 'toggle', schedule, true); bind(list, 'input', schedule);
@@ -521,5 +524,5 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     else win.location.reload();
   });
   bind(win, 'pagehide', event => { if (event.persisted) { conversation.stop(); void flush(); } else destroy(); });
-  return { conversation, flush, openHistory, openData, getDataSettingsPanel, createSession, getCurrentSession: current, isTemporary: () => temporaryMode, selectProject, associateCurrentSession, setKnownProjects, destroy };
+  return { conversation, flush, openHistory, openData, getDataSettingsPanel, createSession, renameSession, getCurrentSession: current, isTemporary: () => temporaryMode, selectProject, associateCurrentSession, setKnownProjects, destroy };
 }
