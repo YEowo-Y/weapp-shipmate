@@ -1809,6 +1809,10 @@ try {
     await click('#desktop-navigation > summary');
     await click('.session-workspace [data-action="history"]');
     await until(() => inspect('return document.querySelector("dialog[data-kind=history]")?.open'), 'history opened from the compact sidebar');
+    const searchStyle = await inspect(`const input = document.querySelector('[aria-label="搜索会话"]');
+      const style = getComputedStyle(input), frame = getComputedStyle(input.parentElement);
+      return { border: style.borderTopWidth, outline: style.outlineStyle, shadow: style.boxShadow, frame: frame.outlineWidth };`);
+    assert.deepEqual(searchStyle, { border: '0px', outline: 'none', shadow: 'none', frame: '2px' });
     const results = await text('.session-workspace__results');
     assert.match(results, /有未发送的草稿/);
     assert.ok(!results.includes('第二会话独立草稿'));
@@ -1822,6 +1826,14 @@ try {
     await click('.session-workspace [data-action="history"]');
     await fill('[aria-label="搜索会话"]', '不存在的会话原生验收');
     assert.equal(await inspect('return document.querySelectorAll(".session-workspace__results [data-action=session]").length'), 0);
+    await press('\uE004');
+    assert.equal(await inspect('return document.activeElement.dataset.action'), 'clear-search');
+    assert.equal(await inspect('return getComputedStyle(document.querySelector(".session-workspace__search")).outlineStyle'), 'none');
+    await screenshot('history-clear-focus');
+    await press('\uE007');
+    assert.equal(await inspect('return document.activeElement.getAttribute("aria-label")'), '搜索会话');
+    assert.equal(await inspect('return document.querySelector("[aria-label=搜索会话]").value'), '');
+    await fill('[aria-label="搜索会话"]', '不存在的会话原生验收');
     await screenshot('history-empty');
     await click('.session-workspace-dialog[data-kind] [data-action="clear-empty"]');
     assert.equal(await inspect('return document.activeElement.getAttribute("aria-label")'), '搜索会话');
