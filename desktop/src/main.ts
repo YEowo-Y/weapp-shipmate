@@ -368,6 +368,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const actionMenu = $("#desktop-actions");
   if (actionMenu) bindActionMenu(actionMenu, value => {
     if (value === "home") showHome();
+    if (value === "rename" && workspace.close()) sessions?.renameSession($("#desktop-more"));
     if (value === "history" && workspace.close()) sessions?.openHistory($("#desktop-more"));
     if (value === "archived" && workspace.close()) sessions?.openHistory($("#desktop-more"), "archived");
     if (value === "report") showReport($("#desktop-more"));
