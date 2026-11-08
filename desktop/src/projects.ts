@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { mountProjectBackup } from './project-backup';
+import { createIcon } from '../design-previews/components/icons.js';
 
 export type ProjectFacts = { businessType: string; hasPayment: boolean | null; collectsSensitive: boolean | null; hasServerDomain: boolean | null };
 export type Project = { id: string; name: string; directory: string; subject: string; revision: number; createdAt: number; updatedAt: number; directoryAvailable: boolean; facts?: ProjectFacts; contextRevision?: number };
@@ -15,6 +16,9 @@ const date = (value: number) => new Date(value).toLocaleString('zh-CN', { hour12
 export function mountProjects(options: Options) {
   const el = <T extends HTMLElement>(id: string) => document.querySelector<T>(`#${id}`)!;
   const selector = el<HTMLSelectElement>('desktop-project-select');
+  const folders = el('desktop-project-folders');
+  const folderRows = new Map<string, { group: HTMLElement; button: HTMLButtonElement; label: HTMLElement }>();
+  let displayedProjectId: string | null | undefined;
   const dialog = el<HTMLDialogElement>('desktop-projects');
   const editor = el<HTMLFormElement>('project-form');
   const name = el<HTMLInputElement>('project-name');
@@ -109,6 +113,7 @@ export function mountProjects(options: Options) {
   function controls() {
     const disabled = blocked();
     selector.disabled = disabled; settingsSelector.disabled = disabled; updateDraftControls();
+    for (const { button } of folderRows.values()) button.disabled = disabled;
     resultsRetry.disabled = pending || externalBusy || options.isBusy(); resultsClose.disabled = pending;
     resultsDialog.setAttribute('aria-busy', String(pending));
     for (const id of ['project-new', 'project-choose-directory', 'project-associate', 'project-association-target', 'project-name', 'project-directory', 'project-subject']) {
@@ -145,6 +150,7 @@ export function mountProjects(options: Options) {
   }
   function render(preserveEditor = false) {
     populateSelect(selector, snapshot.activeProjectId); populateSelect(target, snapshot.activeProjectId); populateSelect(settingsSelector, snapshot.activeProjectId);
+    renderFolders();
     backupProject.textContent = active() ? `当前项目：${active()!.name}` : '未选择项目；可导入已有备份。';
     if (preserveEditor) {
       const draft = editing;
@@ -193,6 +199,46 @@ export function mountProjects(options: Options) {
     el('project-comparison').textContent = '选择同一项目的两份预检。只有检查范围与依据一致时才可比较；旧版纯文本报告无法比较。';
     controls();
     options.onSnapshot?.(snapshot);
+  }
+  function renderFolders() {
+    const recent = document.querySelector<HTMLElement>('#sessionHost .session-workspace__recent');
+    const entries = [...snapshot.projects, { id: '', name: '未归属项目', directory: '' }];
+    // Preserve the live conversation list and focused project buttons during refreshes.
+    for (const [id, row] of folderRows) {
+      if (!entries.some(project => project.id === id)) {
+        if (recent && row.group.contains(recent)) folders.before(recent);
+        row.group.remove(); folderRows.delete(id);
+      }
+    }
+    for (const [index, project] of entries.entries()) {
+      let row = folderRows.get(project.id);
+      if (!row) {
+        const group = document.createElement('div'); group.className = 'project-folder';
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'desktop-action project-folder-row'; button.dataset.projectId = project.id;
+        const label = document.createElement('span'); label.className = 'project-folder-name';
+        button.append(createIcon(document, 'chevron-right'), createIcon(document, 'folder'), label); group.append(button);
+        listen(button, 'click', () => {
+          if (blocked()) return;
+          const id = project.id || null;
+          if (snapshot.activeProjectId === id) {
+            const list = document.querySelector<HTMLElement>('#sessionHost .session-workspace__recent');
+            if (list) { list.hidden = !list.hidden; button.setAttribute('aria-expanded', String(!list.hidden)); }
+          } else if (canChangeProject()) void operation(() => select(id));
+        });
+        row = { group, button, label }; folderRows.set(project.id, row);
+      }
+      if (folders.children[index] !== row.group) folders.insertBefore(row.group, folders.children[index] ?? null);
+      row.label.textContent = project.name; row.button.title = project.directory ? `${project.name}\n${project.directory}` : project.name;
+      const selected = (project.id || null) === snapshot.activeProjectId;
+      row.button.setAttribute('aria-current', String(selected));
+      if (selected && recent) {
+        if (displayedProjectId !== snapshot.activeProjectId) recent.hidden = false;
+        if (recent.parentElement !== row.group) row.group.append(recent);
+        recent.setAttribute('aria-label', `${project.name}的会话`); recent.removeAttribute('aria-labelledby');
+      }
+      row.button.setAttribute('aria-expanded', String(selected && !!recent && !recent.hidden));
+    }
+    displayedProjectId = snapshot.activeProjectId;
   }
   async function showArtifact(id: string, revealFrom?: HTMLElement) {
     const artifact = await invoke<Artifact>('project_artifact', { artifactId: id });
