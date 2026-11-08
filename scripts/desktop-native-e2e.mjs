@@ -297,7 +297,10 @@ async function chooseOption(selector, value) {
   await inspect('const node=document.querySelector(arguments[0]); if(node.disabled || !Array.from(node.options).some(o=>o.value===arguments[1])) throw new Error("Unavailable option"); node.value=arguments[1];node.dispatchEvent(new Event("change",{bubbles:true}));', [selector, value]);
 }
 async function selectProject(id) {
-  await chooseOption('#desktop-project-select', id ?? '');
+  await openNavigation();
+  const selector = `.project-folder-row[data-project-id=${JSON.stringify(id ?? '')}]`;
+  await inspect('document.querySelector(arguments[0]).scrollIntoView({block:"nearest"})', [selector]);
+  if (!await inspect('const n=document.querySelector(arguments[0]); return n.getAttribute("aria-current")==="true" && n.getAttribute("aria-expanded")==="true"', [selector])) await click(selector);
   await until(() => inspect('const n=document.querySelector("#desktop-project-select"); return !n.disabled && n.value===arguments[0]', [id ?? '']), 'project selection saved');
 }
 async function projectDialog() { await openNavigation(); await click('#desktop-project-manage'); await until(() => inspect('return document.querySelector("#desktop-projects").open'), 'project dialog open'); }
@@ -1819,7 +1822,8 @@ try {
     assert.equal(await inspect('return document.querySelector("#desktopInput").value'), '原生重启后草稿保留');
   });
   await checked('Rename validates inline, clears errors on input and persists the title', async () => {
-    await click('.session-workspace [data-action="rename"]');
+    await click('#desktop-more'); await click('#desktop-actions wa-dropdown-item[value="rename"]');
+    await until(() => inspect('return document.querySelector("dialog[data-kind=rename]")?.open'), 'rename opens after menu closes');
     await fill('[aria-label="会话名称"]', '   ');
     await click('.session-workspace-dialog[data-kind] [data-action="confirm"]');
     assert.equal(await inspect('return document.querySelector("[aria-label=会话名称]").getAttribute("aria-invalid")'), 'true');
@@ -1829,17 +1833,18 @@ try {
     assert.notEqual(await inspect('return document.querySelector("[aria-label=会话名称]").getAttribute("aria-invalid")'), 'true');
     await screenshot('rename-ready');
     await press('\uE007');
-    await until(() => inspect('return !document.querySelector(".session-workspace-dialog[data-kind]") && document.activeElement.dataset.action === "rename"'), 'rename saves and restores focus');
+    await until(() => inspect('return !document.querySelector(".session-workspace-dialog[data-kind]") && document.activeElement.id === "desktop-more"'), 'rename saves and restores focus');
     assert.equal((await text('.session-workspace [data-action="recent-session"][aria-current="true"]')).trim(), '原生验收：设置与历史');
     await until(async () => (await text('.session-workspace [data-action="save-status"]')).includes('已保存'), 'renamed title persisted');
   });
   await checked('Open-source rename save submits its external native form and restores the trigger', async () => {
     for (const title of ['原生验收：开源表单保存', '原生验收：设置与历史']) {
-      await click('.session-workspace [data-action="rename"]');
+      await click('#desktop-more'); await click('#desktop-actions wa-dropdown-item[value="rename"]');
+      await until(() => inspect('return document.querySelector("dialog[data-kind=rename]")?.open'), 'rename opens after menu closes');
       assert.equal(await inspect('const action=document.querySelector(".session-workspace-dialog[data-kind] [data-action=confirm]"); const form=document.getElementById(action.getAttribute("form")); return Boolean(action.shadowRoot?.querySelector("button") && form?.tagName === "FORM" && !form.contains(action));'), true);
       await fill('[aria-label="会话名称"]', title);
       await click('.session-workspace-dialog[data-kind] [data-action="confirm"]');
-      await until(() => inspect('return !document.querySelector(".session-workspace-dialog[data-kind]") && document.activeElement.dataset.action === "rename"'), 'open-source save closes and restores focus');
+      await until(() => inspect('return !document.querySelector(".session-workspace-dialog[data-kind]") && document.activeElement.id === "desktop-more"'), 'open-source save closes and restores focus');
       assert.equal((await text('.session-workspace [data-action="recent-session"][aria-current="true"]')).trim(), title);
     }
     assert.equal(await inspect('return document.querySelector("#desktopInput").value'), '原生重启后草稿保留');
