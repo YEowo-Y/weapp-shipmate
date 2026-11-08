@@ -81,6 +81,25 @@ export async function checkHandoffFlows({ run, checked, click, fill, press, insp
     assert.deepEqual(await snapshot(), before);
     await screenshot('p6-handoff-reopened');
   });
+  await checked('P6 re-exported external files retain provenance in JSON, Markdown and reopening', async () => {
+    const forwarded = resolve(downloads, 'forwarded');
+    await mkdir(forwarded);
+    await command('POST', '/ms/cdp/execute', { cmd: 'Browser.setDownloadBehavior', params: { behavior: 'allow', downloadPath: forwarded } });
+    await click('#handoff-json'); await click('#handoff-markdown');
+    const forwardedJson = resolve(forwarded, `shipmate-handoff-${source.createdAt}.json`);
+    const json = await until(async () => { try { return await readFile(forwardedJson, 'utf8'); } catch { return null; } }, 'forwarded JSON downloaded');
+    const pack = parseHandoff(json);
+    assert.equal(pack.source.provenance, 'imported');
+    assert.deepEqual(pack.items, saved.items);
+    assert.deepEqual(pack.source, { ...saved.source, provenance: 'imported' });
+    const markdown = await until(async () => { try { return await readFile(resolve(forwarded, `shipmate-handoff-${source.createdAt}.md`), 'utf8'); } catch { return null; } }, 'forwarded Markdown downloaded');
+    assert.match(markdown, /外部导入报告.*未在本机核验/);
+    assert.match(markdown, /备份记录的规则置信度/);
+    await upload(forwardedJson);
+    await until(async () => (await text('#handoff-status')).startsWith('已打开'), 'forwarded file reopened');
+    assert.match(await text('#handoff-content'), /外部导入报告.*未在本机核验/);
+    await screenshot('p6-handoff-forwarded');
+  });
   await checked('P6 narrow layout contains content and Web Awesome keyboard focus', async () => {
     await command('POST', '/window/rect', { width: 390, height: 844 });
     await inspect('document.querySelector("#handoff-done").focus()'); await press('\uE004');
