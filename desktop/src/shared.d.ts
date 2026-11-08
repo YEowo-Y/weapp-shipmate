@@ -2,6 +2,7 @@
 declare module '*repair-handoff.js' {
   export type RepairHandoff = { format: 'shipmate-repair-handoff'; version: 1; source: { artifactId: string; runId: string; projectId: string | null; projectRevision: number | null; contextRevision: number | null; kind: 'check' | 'guide' | 'explain'; title: string; createdAt: number; toolVersion: string; rulesVersion: string; provenance?: 'imported' }; scan: { complete: boolean; filesScanned: number } | null; items: unknown[] };
   export function formatRuleActions(item: { action_categories?: string[] }): string;
+  export function formatRuleConfidence(item: { confidence?: 'high' | 'medium' | 'low' }, imported?: boolean): string;
   export const MAX_HANDOFF_BYTES: number;
   export function createHandoff(artifact: unknown): RepairHandoff;
   export function parseHandoff(text: string): RepairHandoff;
