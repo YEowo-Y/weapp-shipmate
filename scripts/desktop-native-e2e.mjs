@@ -1798,6 +1798,26 @@ try {
     assert.equal(await inspect('return document.querySelector("#session-empty").hidden'), true);
     await screenshot('sidebar-session-restore');
   });
+  await checked('Reopening the current conversation from Home restores chat and keeps its draft', async () => {
+    const activeRow = '.session-workspace [data-action="recent-session"][aria-current="true"]';
+    await click('#desktop-home-open');
+    assert.equal(await inspect('return document.querySelector("#session-empty").hidden'), false);
+    await click(activeRow);
+    assert.equal(await inspect('return document.querySelector("#session-empty").hidden'), true);
+    await command('POST', '/window/rect', { width: 390, height: 844 });
+    await click('#desktop-home-open');
+    await click('#desktop-navigation > summary');
+    await click('.session-workspace [data-action="history"]');
+    await until(() => inspect('return document.querySelector("dialog[data-kind=history]")?.open'), 'history opened from the compact sidebar');
+    const results = await text('.session-workspace__results');
+    assert.match(results, /有未发送的草稿/);
+    assert.ok(!results.includes('第二会话独立草稿'));
+    await screenshot('history-conversation-previews');
+    await click('.session-workspace__results [data-action=session][aria-current=true]');
+    assert.equal(await inspect('return document.querySelector("#session-empty").hidden && !document.querySelector("#desktop-navigation").open'), true);
+    assert.equal(await inspect('return document.querySelector("#desktopInput").value'), '原生重启后草稿保留');
+    await command('POST', '/window/rect', { width: 1000, height: 900 });
+  });
   await checked('History supports empty recovery, keyboard selection and two-stage Escape', async () => {
     await click('.session-workspace [data-action="history"]');
     await fill('[aria-label="搜索会话"]', '不存在的会话原生验收');
