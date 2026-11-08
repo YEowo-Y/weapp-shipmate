@@ -9,6 +9,7 @@
   /* Type ramp — 4 UI sizes + 2 reading + 3 headings. CJK-first stack, Latin falls back to Segoe UI Variable. */
   --ds-font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Noto Sans CJK SC", system-ui, sans-serif;
   --ds-font-display: "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+  --ds-font-reading: Georgia, "Songti SC", "Noto Serif CJK SC", SimSun, serif;
   --ds-font-mono: "Cascadia Code", "Cascadia Mono", ui-monospace, "SFMono-Regular", Consolas, "Microsoft YaHei UI", monospace;
   --ds-text-caption: 11px;   /* timestamps, counters, legal */
   --ds-text-meta: 12px;      /* hints, section labels, badges */
