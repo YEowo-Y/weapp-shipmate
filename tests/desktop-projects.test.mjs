@@ -1,5 +1,6 @@
 import { Blob } from 'node:buffer';
 import test from 'node:test';
+import { bindActionMenu } from './helpers/ui-action.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -302,7 +303,7 @@ async function archivedSessionHarness(loaded = null) {
     if (expectedRevision !== revision || failReconcile && hasReconciled) throw Object.assign(Error('other window updated history'), { code: 'conflict' });
     snapshot = JSON.parse(JSON.stringify(value)); return { revision: ++revision };
   }, close() {} };
-  const context = vm.createContext({ createSessionStore: () => store, createSessionPersistence, createIcon, sessionMatch,
+  const context = vm.createContext({ createSessionStore: () => store, createSessionPersistence, createIcon, sessionMatch, bindActionMenu,
     normalizeSessionSnapshot: value => normalizeSessionSnapshot(JSON.parse(JSON.stringify(value))),
     createActionButton: (doc, label) => Object.assign(doc.createElement('button'), { textContent: label }),
     mountConversation(options) { let messages = options.initialMessages; return { stop() {}, destroy() {}, getMessages: () => messages, getDraftState: () => ({ draft: input.value }), getViewState: () => null, getModelSelection: () => null,
