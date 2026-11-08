@@ -1,6 +1,4 @@
-<img src="desktop/public/brand/shipmate.svg" alt="" width="64" height="64">
-
-# weapp-shipmate · 上线船友
+# <img src="desktop/public/brand/shipmate.svg" alt="" width="32" height="32" align="absmiddle"> 上线船友 · weapp-shipmate
 
 > **你写代码，我陪你上线。**
 
