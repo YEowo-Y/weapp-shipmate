@@ -183,7 +183,7 @@
 .desktop-conversation [data-component="message-actions"] .message-action:is(:hover, :focus-visible):not(:disabled) { color: var(--ds-ink-1); }
 .jump-latest { border-radius: var(--ds-radius-pill); box-shadow: var(--ds-shadow-popover); background: var(--ds-raised); color: var(--ds-ink-1); font-size: var(--ds-text-ui); }
 
-/* Composer: clay send, calm hint. */
+/* Composer actions share the workspace accent. */
 #desktopComposer { padding-top: var(--ds-space-2); }
 #desktopComposer .agent-composer {
   --composer-bg: var(--ds-raised);
@@ -339,7 +339,7 @@
     animation: shipmate-arrive var(--ds-dur-surface) var(--ds-ease-out);
   }
   .desktop-app[data-motion="system"] #status:is(.ok, .error) {
-    animation: shipmate-arrive var(--ds-dur-state) var(--ds-ease-out);
+    animation: shipmate-result var(--ds-dur-state) var(--ds-ease-out);
   }
   .desktop-app[data-motion="system"] #start-check [slot="end"] {
     transition: transform var(--ds-dur-state) var(--ds-ease-out);
@@ -352,6 +352,10 @@
       transform: translateX(3px);
     }
   }
+}
+@keyframes shipmate-result {
+  from { opacity: .75; }
+  to { opacity: 1; }
 }
 @keyframes shipmate-arrive {
   from { opacity: .65; transform: translateY(3px); }
