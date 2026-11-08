@@ -53,7 +53,7 @@ export async function checkMaintenanceFlows({ run, projectDatabase, checked, cli
   };
   const observations = [], visuals = {}, processCounts = {};
   const openPreferences = async () => {
-    await click('#desktop-preferences-open'); await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'preferences dialog');
+    await click('#desktop-preferences-open'); await until(() => inspect('return document.querySelector("#desktop-preferences").open && Boolean(document.querySelector("#preferences-body"))'), 'preferences content ready');
   };
   const closePreferences = async () => { await click('#preferences-content-dismiss'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'preferences closed'); };
   const appearance = () => inspect('return {theme:document.body.dataset.theme,size:document.body.style.getPropertyValue("--message-font-size"),motion:document.body.dataset.motion};');
@@ -69,7 +69,7 @@ export async function checkMaintenanceFlows({ run, projectDatabase, checked, cli
     await until(() => inspect('return document.querySelector("#desktop-project-select").options.length===3 && !document.querySelector("#project-retry").disabled'), 'maintenance projects loaded');
     await closeProjects(); await selectProject(a); await open();
     const initial = await state(); assert.equal(initial.watchEnabled, false); assert.equal(initial.notificationsEnabled, false); assert.equal(initial.state, 'off'); assert.deepEqual(initial.notices, []);
-    assert.equal(await inspect('return document.querySelector("#desktop-maintenance-open").hidden'), true);
+    assert.equal(await inspect('return document.querySelector("#desktop-maintenance-open").hidden'), false);
     assert.equal(await inspect('return document.querySelector("#maintenance-watch").checked || document.querySelector("#maintenance-notifications").checked'), false);
     await screenshot('p7-maintenance-default-off'); await close();
     await change(directory, 'app.js', `${baseSource}// changed while disabled\n`);
@@ -218,12 +218,12 @@ export async function checkMaintenanceFlows({ run, projectDatabase, checked, cli
     await inspect('document.querySelector("#maintenance-notices").scrollIntoView({block:"center",behavior:"instant"})');
     await screenshot('p7-maintenance-notice'); await click('#maintenance-read-all');
     await until(async () => (await state()).notices.every(item => item.read), 'read state persisted');
-    await until(() => inspect('return document.querySelector("#desktop-maintenance-open").hidden'), 'read notices hide maintenance shortcut');
+    await until(() => inspect('return document.querySelector("#desktop-maintenance-count").textContent==="0 条提醒"'), 'read notices clear the reminder count');
     assert.match(await text('#maintenance-notices'), /没有未读/);
     await click('#maintenance-notice-reset');
     assert.deepEqual(await inspect('return [...document.querySelectorAll("#maintenance-notices [data-notice-id]")].map(n=>n.dataset.noticeId)'), [firstNotice.id]);
     await close();
-    assert.equal(await inspect('return document.activeElement.id'), 'desktop-more', 'hidden unread shortcut falls back to a visible keyboard target');
+    assert.equal(await inspect('return document.activeElement.id'), 'desktop-maintenance-open', 'reading notices retains the persistent reminder trigger');
     await open();
     await click(`[data-notice-id="${firstNotice.id}"]`);
     await until(() => inspect('return !document.querySelector("#desktop-health").open && document.querySelector("#desktop-tools").open'), 'notice opens its saved report');
