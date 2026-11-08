@@ -51,22 +51,6 @@
   background: var(--ds-sidebar);
   border-right: 1px solid var(--ds-hairline);
 }
-.desktop-brand {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  grid-template-rows: auto auto;
-  column-gap: 10px;
-  align-items: center;
-  padding: 2px var(--ds-space-2) var(--ds-space-5);
-}
-.desktop-brand-mark {
-  display: block;
-  grid-row: 1 / span 2;
-  width: 28px; height: 28px;
-}
-.desktop-brand strong { font-family: var(--ds-font-display); font-size: 15px; font-weight: var(--ds-weight-strong); letter-spacing: var(--ds-tracking-heading); line-height: 1.25; }
-.desktop-brand > span { font-size: var(--ds-text-caption); color: var(--ds-ink-3); line-height: 1.3; }
-
 /* Nav rows: 32px, 13px, ghost hover, filled selected. */
 .desktop-sidebar .desktop-action,
 .session-workspace--sidebar > .session-workspace__button,
@@ -319,8 +303,6 @@
 @media (max-width: 640px) {
   .desktop-layout, .desktop-layout[data-tools-open="true"] { display: flex; }
   .desktop-sidebar { padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--ds-hairline); }
-  .desktop-brand { grid-template-columns: 24px auto; padding: 0; column-gap: 8px; }
-  .desktop-brand-mark { width: 24px; height: 24px; grid-row: auto; }
   .desktop-sidebar-footer { border-top: 0; padding-top: 0; margin-top: 0; }
   .desktop-navigation[open] > .desktop-navigation-body { border: 0; border-radius: var(--ds-radius-lg); background: var(--ds-raised); box-shadow: var(--ds-shadow-popover); }
   .desktop-header { min-height: 48px; padding: 6px 12px; }
@@ -372,7 +354,6 @@
   .home-project, .home-start-grid > article, .desktop-tools .controls, .container :is(select, button),
   .desktop-project-switcher select, .session-workspace--sidebar > .session-workspace__button[data-action="new"] { border: 1px solid CanvasText; box-shadow: none; }
   .desktop-layout:not(:has(.desktop-conversation[data-workspace-open="true"], #session-empty:not([hidden]))) .session-workspace__recent [aria-current="true"] { outline: 2px solid Highlight; }
-  .desktop-brand-mark { forced-color-adjust: none; }
 }
 
 /* 8. open-claude-ui adaptations (MIT, Caho1/open-claude-ui@c1f923ae) ---------
