@@ -3,7 +3,7 @@
 .desktop-home { width:100%; max-width:760px; margin:0 auto; padding:24px 4px; box-sizing:border-box; container-type:inline-size; color:var(--text); font-size:14px; line-height:1.5; }
 .desktop-home[hidden] { display:none; }
 .home-heading { margin:16px 0 32px; }
-.home-heading h2 { margin:0; font-size:28px; font-weight:500; line-height:1.4; letter-spacing:-.02em; }
+.home-heading h2 { margin:0; font-family:var(--ds-font-reading); font-size:var(--ds-text-display); font-weight:500; line-height:1.4; letter-spacing:-.02em; }
 .home-heading p { margin:8px 0 0; color:var(--text-2); font-size:14px; }
 .desktop-home h3,.desktop-home h4 { margin:0; font-size:14px; font-weight:600; line-height:20px; }
 .desktop-home p { overflow-wrap:anywhere; }
