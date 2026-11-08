@@ -1,6 +1,6 @@
 import { mountConversation } from './conversation.js';
 import { createIcon } from './components/icons.js';
-import { createActionButton } from './components/ui-kit.js';
+import { createActionButton, bindActionMenu } from './components/ui-kit.js';
 import { createSessionStore, normalizeSessionSnapshot } from './session-store.js';
 import { createSessionPersistence } from './session-persistence.js';
 import { sessionMatch } from './session-search.js';
@@ -126,7 +126,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     // Session identity stays stable while a reply streams, including the focused row.
     const visible = sessions.filter(session => !session.archived && inScope(session));
     for (const [id, entry] of recentRows) {
-      if (!visible.some(session => session.id === id)) { entry.row.remove(); recentRows.delete(id); }
+      if (!visible.some(session => session.id === id)) { entry.dispose(); entry.container.remove(); recentRows.delete(id); }
     }
     for (let index = 0; index < visible.length; index++) {
       const session = visible[index];
@@ -135,15 +135,33 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
         const row = button(session.title, 'recent-session', 'message-square');
         row.dataset.sessionId = session.id;
         row.addEventListener('click', () => selectSession(session.id));
-        recent.insertBefore(row, recent.children[index] || null);
-        entry = { row, title: session.title, active: null };
+        const container = element('div', 'session-workspace__recent-entry');
+        const menu = element('wa-dropdown'); menu.setAttribute('placement', 'bottom-end');
+        const trigger = actionButton('会话操作', 'session-actions', { icon: 'ellipsis', appearance: 'plain' });
+        trigger.setAttribute('slot', 'trigger');
+        const renameItem = element('wa-dropdown-item', '', '重命名'); renameItem.setAttribute('value', 'rename');
+        const archiveItem = element('wa-dropdown-item', '', '归档'); archiveItem.setAttribute('value', 'archive');
+        archiveItem.title = '归档并保留内容；当前回复将停止';
+        archiveItem.disabled = temporaryMode;
+        menu.append(trigger, renameItem, archiveItem);
+        const dispose = bindActionMenu(menu, action => {
+          if (disposed || mutationBusy) return;
+          if (action === 'rename') renameSession(trigger, session.id);
+          else if (action === 'archive') void archiveFromSidebar(session.id, trigger);
+        });
+        const actions = element('div', 'session-workspace__recent-actions'); actions.append(menu);
+        container.append(row, actions);
+        recent.insertBefore(container, recent.children[index] || null);
+        entry = { row, container, trigger, dispose, title: null, active: null };
         recentRows.set(session.id, entry);
       }
-      if (recent.children[index] !== entry.row) recent.insertBefore(entry.row, recent.children[index] || null);
+      if (recent.children[index] !== entry.container) recent.insertBefore(entry.container, recent.children[index] || null);
       if (entry.title !== session.title) {
         entry.row.lastElementChild.textContent = session.title;
         entry.row.title = session.title;
         entry.row.setAttribute('aria-label', session.title);
+        entry.trigger.setAttribute('aria-label', `会话操作：${session.title}`);
+        entry.trigger.title = `会话操作：${session.title}`;
         entry.title = session.title;
       }
       const active = session.id === currentSessionId;
@@ -293,22 +311,8 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
           if (mutationBusy || disposed) return;
           setMutationBusy(true); feedback.textContent = '正在保存会话…'; render();
           try {
-            conversation.stop();
-            if (!await flush()) throw new Error('save');
-            if (disposed) return;
-            const snapshot = normalizeSessionSnapshot(capture());
-            const target = snapshot.sessions.find(item => item.id === session.id); target.archived = !session.archived;
-            if (target.archived && snapshot.currentSessionId === target.id) {
-              let next = snapshot.sessions.find(item => !item.archived && inScope(item));
-              if (!next) {
-                next = { id: `session-${++snapshot.sessionSequence}`, title: '新会话', draft: '', messages: [], references: [], pendingScenario: 'normal', autoTitle: true, ...(projectScoped ? { projectId: activeProjectId } : {}) };
-                snapshot.sessions.unshift(next);
-              }
-              snapshot.currentSessionId = next.id;
-            }
-            remember(snapshot);
-            await commitSnapshot(snapshot);
-            feedback.textContent = target.archived ? '已归档，消息和草稿仍保留。可在「已归档」中恢复。' : '已恢复到活动会话。';
+            const archived = await changeArchived(session.id);
+            feedback.textContent = archived ? '已归档，消息和草稿仍保留。可在「已归档」中恢复。' : '已恢复到活动会话。';
           } catch (error) { feedback.textContent = error?.code === 'apply-failed'
             ? '会话更改已保存，但界面未能更新。请关闭此弹窗并重新载入，不要重复操作。'
             : '操作未完成，原会话未归档或更改。请先处理保存错误后重试。'; }
@@ -344,15 +348,55 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     });
     render(); search.focus();
   }
+  async function changeArchived(id) {
+    conversation.stop();
+    if (!await flush()) throw new Error('save');
+    if (disposed) return;
+    const snapshot = normalizeSessionSnapshot(capture());
+    const target = snapshot.sessions.find(item => item.id === id && inScope(item));
+    if (!target) throw new Error('session-unavailable');
+    target.archived = !target.archived;
+    if (target.archived && snapshot.currentSessionId === target.id) {
+      let next = snapshot.sessions.find(item => !item.archived && inScope(item));
+      if (!next) {
+        next = { id: `session-${++snapshot.sessionSequence}`, title: '新会话', draft: '', messages: [], references: [], pendingScenario: 'normal', autoTitle: true, ...(projectScoped ? { projectId: activeProjectId } : {}) };
+        snapshot.sessions.unshift(next);
+      }
+      snapshot.currentSessionId = next.id;
+    }
+    remember(snapshot);
+    await commitSnapshot(snapshot);
+    return target.archived;
+  }
+  async function archiveFromSidebar(id, trigger) {
+    if (disposed || mutationBusy || temporaryMode) return;
+    setMutationBusy(true);
+    let failure;
+    try { await changeArchived(id); }
+    catch (error) { failure = error; }
+    finally { setMutationBusy(false); }
+    if (disposed) return;
+    if (failure) {
+      const surface = dialog('未能完成归档', trigger);
+      surface.body.append(element('p', '', failure.code === 'apply-failed'
+        ? '会话更改已保存，但界面未能更新。请关闭此弹窗并重新载入，不要重复操作。'
+        : '会话仍保留在列表中。请先处理保存错误，再重试归档。'));
+      surface.cancel.focus();
+    } else {
+      (recentRows.get(currentSessionId)?.row || create).focus();
+    }
+  }
   function createSession() {
     if (disposed || mutationBusy) return;
     conversation.stop(); capture();
     const session = { id: `session-${++sessionSequence}`, title: '新会话', draft: '', messages: [], references: [], pendingScenario: 'normal', autoTitle: true, ...(projectScoped ? { projectId: activeProjectId } : {}) };
     sessions.unshift(session); currentSessionId = session.id; restore(); schedule(); input.focus(); return session;
   }
-  function renameSession(trigger = projectNavigation ? create : rename) {
+  function renameSession(trigger = projectNavigation ? create : rename, sessionId = currentSessionId) {
     if (disposed || mutationBusy) return;
-    const session = current(); const surface = dialog('重命名会话', trigger, 'rename');
+    const session = sessions.find(item => item.id === sessionId && inScope(item));
+    if (!session) return;
+    const surface = dialog('重命名会话', trigger, 'rename');
     const field = element('input'); field.type = 'text'; field.value = session.title; field.maxLength = 80; field.setAttribute('aria-label', '会话名称');
     const form = element('form'), submit = actionButton('保存', 'confirm', { type: 'submit', appearance: 'accent' });
     const error = element('p', 'session-workspace__field-error'); error.setAttribute('role', 'status');
@@ -395,6 +439,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     }
     mutationBusy = value;
     create.disabled = rename.disabled = title.disabled = value;
+    for (const entry of recentRows.values()) entry.trigger.disabled = entry.row.disabled = value;
   }
   async function commitSnapshot(snapshot) {
     restoring = true;
@@ -512,6 +557,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     if (disposed) return;
     conversation.stop(); capture(); schedule(); conversation.destroy();
     for (const [node, type, handler, options] of bindings) node.removeEventListener(type, handler, options);
+    for (const entry of recentRows.values()) entry.dispose();
     disposed = true; dataSettings?.destroy(); activeDialog?.close(); root.remove();
     void Promise.resolve(persistence?.flush()).finally(() => { persistence?.dispose(); store.close(); });
   }
