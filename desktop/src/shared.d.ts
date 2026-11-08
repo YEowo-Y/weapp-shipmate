@@ -85,7 +85,7 @@ declare module '*model-connection-client.js' {
 }
 declare module '*session-workspace.js' {
   export function mountSessionWorkspace(options: {
-    projectScoped?: boolean; layout?: 'sidebar'; projectNavigation?: HTMLElement; host: HTMLElement; input: HTMLTextAreaElement; sendButton: HTMLButtonElement;
+    projectScoped?: boolean; layout?: 'sidebar'; projectNavigation?: HTMLElement; navigationHeader?: HTMLElement; host: HTMLElement; input: HTMLTextAreaElement; sendButton: HTMLButtonElement;
     scroll: HTMLElement; list: HTMLElement; status: HTMLElement; jumpButton: HTMLElement;
     workspace: string; storageLabel: string; conversationOptions: { requireModel: boolean; allowRecords: boolean; getSendShortcut?: () => 'enter' | 'mod-enter'; transport: (args: import('*chat-transport.js').ChatArgs) => Promise<void>; onModelRequired: () => void; onOpenArtifact?: (artifactId: string, expected: { runId: string; kind: 'check' | 'guide' | 'explain'; projectRevision: number; contextRevision: number }) => void | Promise<void> };
     onOpenDataSettings?: (anchor: HTMLElement) => void;
