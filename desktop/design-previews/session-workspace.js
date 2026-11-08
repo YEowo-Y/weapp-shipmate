@@ -12,7 +12,7 @@ let workspaceSequence = 0;
 // The caller owns its mounted composer and passes its existing input/send nodes.
 export async function mountSessionWorkspace({ host, input, sendButton, scroll, list, status, jumpButton,
   initialMessages = [], workspace = 'my-miniprogram', storageLabel = '已保存在此浏览器', layout = 'toolbar', projectScoped = false,
-  onEvent, onSessionChange, onOpenDataSettings, projectNavigation, navigationHeader, conversationOptions = {} }) {
+  onEvent, onSessionChange, onSessionOpen, onOpenDataSettings, projectNavigation, navigationHeader, conversationOptions = {} }) {
   const doc = host.ownerDocument, win = doc.defaultView;
   const instanceId = ++workspaceSequence;
   const element = (tag, className = '', text) => {
@@ -244,6 +244,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
   function selectSession(id, match) {
     const session = sessions.find(item => item.id === id); if (!session || !inScope(session) || disposed || mutationBusy) return;
     if (id !== currentSessionId) { conversation.stop(); capture(); currentSessionId = id; restore(); }
+    onSessionOpen?.(session);
     if (match?.messageId) {
       const article = [...list.children].find(node => node.dataset.messageId === match.messageId);
       if (article) {
