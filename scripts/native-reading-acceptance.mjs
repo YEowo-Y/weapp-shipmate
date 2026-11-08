@@ -96,6 +96,10 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
         assert.ok(row.visibleParagraphs.some(value => value.includes(`业务自查线索：${signals.join('、')}`)), 'conditional signals remain in visible article text');
       }
       if (rule.note) assert.ok(row.visibleParagraphs.some(value => value.includes(rule.note)), 'rule notes are not hidden in evidence');
+      if (rule.confidence) {
+        const label = { high: '高', medium: '中', low: '低' }[rule.confidence];
+        assert.ok(row.text.includes(`规则置信度：${label}（规则维护者对规则准确性的把握`));
+      } else assert.ok(!row.text.includes('规则置信度'));
       if (rule.manual_required) assert.match(row.text, /按操作类型处理后核对实际结果，并记录验证依据/);
       if (item.rejectSummary) assert.ok(row.text.includes(item.rejectSummary));
       assert.deepEqual(row.links.map(link => link.href), rule.official_url ? [new URL(rule.official_url).href] : []);
@@ -139,7 +143,7 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
   const appearance = async theme => {
     await closeTools();
     await activate('#desktop-preferences-open');
-    await until(() => inspect('return document.querySelector("#desktop-preferences").open'), 'appearance preferences open');
+    await until(() => inspect('return document.querySelector("#desktop-preferences").open && document.querySelector("#desktop-theme-system")?.checkVisibility()'), 'appearance preferences rendered');
     await activate(`#desktop-theme-${theme}`); await activate('#desktop-message-size-18'); await activate('#desktop-motion-reduce');
     await click('#preferences-content-dismiss'); await until(() => inspect('return !document.querySelector("#desktop-preferences").open'), 'appearance saved');
     assert.equal(await inspect('return document.body.dataset.theme'), theme);
@@ -181,6 +185,12 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     await press('\uE004'); assert.equal(await inspect('return document.querySelector("#desktop-report-reader").contains(document.activeElement)'), true);
     await activate('#report-reader-content article:first-child .report-reader-evidence > summary');
     assert.match(await text('#report-reader-content article:first-child .report-reader-evidence'), /资料记录日期.*未实时核验/);
+    const confidenceIndex = createHandoff(artifacts.check).items.findIndex(item => item.rule.confidence);
+    assert.ok(confidenceIndex >= 0, 'real preflight includes a rule with recorded confidence');
+    const evidenceSelector = `[data-reader-item="${confidenceIndex}"] .report-reader-evidence`;
+    if (confidenceIndex !== 0) await activate(`${evidenceSelector} > summary`);
+    assert.equal(await inspect('return document.querySelector(arguments[0] + " > p").checkVisibility()', [evidenceSelector]), true);
+    await screenshot('reading-rule-confidence');
     await closeReader(); assert.equal(await inspect('return document.activeElement.checkVisibility()'), true); await closeTools();
     await activate('#home-report'); await readerReady(); await closeReader();
     assert.equal(await inspect('return document.activeElement.id'), 'home-report');
@@ -229,9 +239,9 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     assert.equal(await inspect('return document.activeElement!==document.body && document.activeElement.checkVisibility()'), true);
     await closeTools(); await command('POST', '/window/rect', { width: 1200, height: 850 });
   });
-  await checked('Saved reports return keyboard focus to the history entry or a visible tools toggle', async () => {
+  await checked('Saved reports return keyboard focus to their visible history entry', async () => {
     const before = await snapshot();
-    for (const [width, entry, target] of [[1200, '#home-results', '#home-results'], [390, '#desktop-results-open', '#desktop-tools-toggle']]) {
+    for (const [width, entry, target] of [[1200, '#home-results', '#home-results'], [390, '#desktop-results-open', '#desktop-results-open']]) {
       await command('POST', '/window/rect', { width, height: 850 });
       const returned = () => until(() => inspect('const target=document.querySelector(arguments[0]); return !document.querySelector("#desktop-tools").open && !document.querySelector("#desktop-report-reader").open && target.checkVisibility() && document.activeElement === target', [target]), `report exit returns focus to ${target} at ${width}px`);
       await openHistoryReport(artifacts.check, entry); await closeTools(); await returned();
