@@ -22,6 +22,32 @@
   <body data-theme="light" class="desktop-app">
     <div class="desktop-layout">
       <aside class="desktop-sidebar" aria-label="会话导航">
+        <nav class="desktop-primary-navigation" aria-label="主要功能">
+          <button id="desktop-home-open" class="desktop-action" type="button" aria-label="工作台" title="工作台"><span data-icon="house"></span></button>
+          <button id="desktop-workflow-open" class="desktop-action" type="button" aria-label="上线进度" title="上线进度" aria-controls="desktop-workspace"><span data-icon="list-checks"></span></button>
+          <button id="desktop-results-open" class="desktop-action" type="button" aria-label="运行与报告" title="运行与报告" aria-controls="desktop-workspace"><span data-icon="file-text"></span></button>
+          <button id="desktop-memory-open" class="desktop-action" type="button" aria-label="项目记忆" title="项目记忆" aria-haspopup="dialog"><span data-icon="message-square"></span></button>
+          <button id="desktop-sources-open" class="desktop-action" type="button" aria-label="规则来源" title="规则来源" aria-haspopup="dialog"><span data-icon="book-open"></span></button>
+          <wa-dropdown id="desktop-actions" placement="right-start">
+            <button slot="trigger" class="desktop-action" id="desktop-more" type="button" aria-label="更多功能" title="更多功能"><span data-icon="ellipsis"></span></button>
+            <div class="desktop-menu-heading">会话管理</div>
+            <wa-dropdown-item value="rename"><span slot="icon" data-icon="pencil"></span>重命名会话</wa-dropdown-item>
+            <wa-dropdown-item value="history"><span slot="icon" data-icon="search"></span>搜索会话历史</wa-dropdown-item>
+            <wa-dropdown-item value="archived"><span slot="icon" data-icon="folder"></span>已归档会话</wa-dropdown-item>
+            <div class="desktop-menu-heading desktop-menu-heading--separated">项目与成果</div>
+            <wa-dropdown-item value="home"><span slot="icon" data-icon="house"></span>工作台</wa-dropdown-item>
+            <wa-dropdown-item value="explain"><span slot="icon" data-icon="circle-question-mark"></span>拒因反查</wa-dropdown-item>
+            <wa-dropdown-item value="report" id="desktop-menu-report" disabled><span slot="icon" data-icon="book-open"></span>查看当前报告</wa-dropdown-item>
+            <wa-dropdown-item value="handoff"><span slot="icon" data-icon="share-2"></span>修复交接</wa-dropdown-item>
+            <wa-dropdown-item value="repairs" id="desktop-repair-history" disabled><span slot="icon" data-icon="rotate-ccw"></span>本机修复记录</wa-dropdown-item>
+            <wa-dropdown-item value="health"><span slot="icon" data-icon="activity"></span>项目维护与重检</wa-dropdown-item>
+            <wa-dropdown-item value="memory"><span slot="icon" data-icon="file-text"></span>项目记忆</wa-dropdown-item>
+            <wa-dropdown-item value="sources"><span slot="icon" data-icon="book-open"></span>规则来源</wa-dropdown-item>
+          </wa-dropdown>
+          <div class="desktop-sidebar-footer">
+            <button id="desktop-preferences-open" class="desktop-action" type="button" aria-label="设置" title="设置" aria-haspopup="dialog" aria-controls="desktop-preferences"><span data-icon="sliders-horizontal"></span></button>
+          </div>
+        </nav>
         <details class="desktop-navigation" id="desktop-navigation">
           <summary><span data-icon="clock"></span>会话与历史</summary>
           <div class="desktop-navigation-body">
@@ -31,42 +57,20 @@
               <div id="desktop-project-folders"></div>
               <p id="desktop-project-status" role="status" aria-live="polite"></p>
             </section>
-            <nav class="desktop-primary-navigation" aria-labelledby="desktop-workspace-heading">
-              <h2 id="desktop-workspace-heading">工作区</h2>
-              <button id="desktop-home-open" class="desktop-action" type="button"><span data-icon="house"></span><span>工作台</span></button>
-              <button id="desktop-workflow-open" class="desktop-action" type="button" aria-controls="desktop-workspace"><span data-icon="list-checks"></span><span>上线进度</span></button>
-              <button id="desktop-results-open" class="desktop-action" type="button" aria-controls="desktop-workspace"><span data-icon="file-text"></span><span>运行与报告</span></button>
+            <nav id="sessionHost" aria-label="本地会话">
+              <div id="desktop-sidebar-heading" class="desktop-sidebar-heading">
+                <span class="desktop-sidebar-title">Shipmate</span>
+                <button id="desktop-maintenance-open" class="desktop-action" type="button" aria-label="项目提醒" title="项目提醒" aria-haspopup="dialog" aria-controls="desktop-health"><span data-icon="bell"></span><span id="desktop-maintenance-count" class="visually-hidden">0 条提醒</span></button>
+              </div>
             </nav>
-            <nav id="sessionHost" aria-label="本地会话"></nav>
           </div>
         </details>
-        <div class="desktop-sidebar-footer">
-          <button id="desktop-preferences-open" class="desktop-action" type="button" aria-haspopup="dialog" aria-controls="desktop-preferences"><span data-icon="sliders-horizontal"></span><span>设置</span></button>
-        </div>
       </aside>
       <main class="conversation-shell desktop-conversation" aria-labelledby="session-title">
         <header class="desktop-header">
           <h1 id="session-title">新会话</h1>
           <div class="workbench-header-actions">
-            <button id="desktop-maintenance-open" class="desktop-action" type="button" aria-haspopup="dialog" aria-controls="desktop-health" hidden><span data-icon="activity"></span><span id="desktop-maintenance-count">0 条提醒</span></button>
             <button id="desktop-tools-toggle" class="desktop-action" type="button" aria-controls="desktop-tools" aria-expanded="false"><span data-icon="list-checks"></span><span>项目工具</span></button>
-            <wa-dropdown id="desktop-actions" placement="bottom-end">
-              <button slot="trigger" class="desktop-action" id="desktop-more" type="button" aria-label="更多功能"><span data-icon="ellipsis"></span></button>
-              <div class="desktop-menu-heading">当前会话</div>
-              <wa-dropdown-item value="rename"><span slot="icon" data-icon="pencil"></span>重命名会话</wa-dropdown-item>
-              <wa-dropdown-item value="history"><span slot="icon" data-icon="search"></span>搜索会话历史</wa-dropdown-item>
-              <wa-dropdown-item value="archived"><span slot="icon" data-icon="folder"></span>已归档会话</wa-dropdown-item>
-              <div class="desktop-menu-heading desktop-menu-heading--separated">项目与成果</div>
-              <wa-dropdown-item value="home"><span slot="icon" data-icon="house"></span>工作台</wa-dropdown-item>
-              <wa-dropdown-item value="explain"><span slot="icon" data-icon="circle-question-mark"></span>拒因反查</wa-dropdown-item>
-              <wa-dropdown-item value="report" id="desktop-menu-report" disabled><span slot="icon" data-icon="book-open"></span>查看当前报告</wa-dropdown-item>
-              <wa-dropdown-item value="handoff"><span slot="icon" data-icon="share-2"></span>修复交接</wa-dropdown-item>
-              <wa-dropdown-item value="repairs" id="desktop-repair-history" disabled><span slot="icon" data-icon="rotate-ccw"></span>本机修复记录</wa-dropdown-item>
-              <wa-dropdown-item value="health"><span slot="icon" data-icon="activity"></span>项目维护与重检</wa-dropdown-item>
-              <wa-dropdown-item value="memory"><span slot="icon" data-icon="file-text"></span>项目记忆</wa-dropdown-item>
-              <wa-dropdown-item value="sources"><span slot="icon" data-icon="book-open"></span>规则来源</wa-dropdown-item>
-            </wa-dropdown>
-            <wa-tooltip for="desktop-more" without-arrow>更多功能</wa-tooltip>
           </div>
         </header>
         <section id="desktop-workspace" class="desktop-workspace" aria-label="项目工作区" hidden></section>
