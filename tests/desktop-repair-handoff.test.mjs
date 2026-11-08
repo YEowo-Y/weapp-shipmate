@@ -15,6 +15,7 @@ let ts;
 try { ts = requireDesktop('typescript'); } catch { /* Optional for CLI-only installation. */ }
 const desktopTest = (name, fn) => test(name, { skip: !ts && 'Install desktop dependencies' }, fn);
 function harness({ copyText = async () => {} } = {}) {
+  const downloads = [];
   const document = createPreviewDocument(), create = document.createElement.bind(document), nodes = [];
   document.createElement = tag => {
     const node = create(tag); node.listeners = {}; node.isConnected = true; node.classList = { add() {} };
@@ -28,13 +29,13 @@ function harness({ copyText = async () => {} } = {}) {
   };
   document.body = document.createElement('body');
   const source = readFileSync(new URL('../desktop/src/repair-handoff.ts', import.meta.url), 'utf8').replace(/^import .*\r?\n/gm, '').replace('export function', 'function');
-  const context = vm.createContext({ ...contract, Error, document, createIcon, renderMessageText, createActionButton: (doc, label) => { const node = doc.createElement('wa-button'); node.textContent = label; return node; }, createArtifactDownloader: () => ({ download: () => true, dispose() {} }) });
+  const context = vm.createContext({ ...contract, Error, document, createIcon, renderMessageText, createActionButton: (doc, label) => { const node = doc.createElement('wa-button'); node.textContent = label; return node; }, createArtifactDownloader: () => ({ download: value => { downloads.push(value); return true; }, dispose() {} }) });
   vm.runInContext(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, context);
   const artifact = { id: 'source-1', runId: 'run-1', projectId: null, projectRevision: null, contextRevision: null, kind: 'guide', title: '上线清单', createdAt: 1792700000000, toolVersion: 'test', rulesVersion: 'rules', ...runProjectTool('guide', { subject: 'personal' }) };
   const app = context.mountRepairHandoff({ getArtifact: () => artifact, getProject: () => null, getRulesVersion: () => 'rules', isBusy: () => false, copyText });
   const node = id => nodes.find(node => node.id === id), trigger = document.createElement('button');
   const select = text => { node('handoff-file').files = [{ size: 100, text }]; node('handoff-file').listeners.change(); };
-  return { app, artifact, node, trigger, select, document };
+  return { app, artifact, node, trigger, select, document, downloads };
 }
 desktopTest('handoff replaces the empty state and does not duplicate content on reopen', () => {
   const h = harness(); h.app.open(h.trigger, true);
@@ -55,6 +56,35 @@ desktopTest('restored project report retains imported provenance in reading and 
   assert.match(contract.exportHandoff(pack, 'markdown').text, /外部.*未.*核验/);
   assert.equal(contract.parseHandoff(contract.exportHandoff(pack, 'json').text).source.provenance, 'imported');
 });
+desktopTest('external handoff keeps unverified provenance through copy, downloads and reopening', async () => {
+  const copied = [];
+  const h = harness({ copyText: async value => { copied.push(value); } });
+  const original = contract.createHandoff(h.artifact);
+  h.app.open(h.trigger, true);
+  h.node('handoff-json').listeners.click();
+  assert.equal(JSON.parse(h.downloads[0].text).source.provenance, undefined);
+  h.select(async () => contract.exportHandoff(original, 'json').text);
+  await setImmediate();
+  h.node('handoff-json').listeners.click();
+  h.node('handoff-markdown').listeners.click();
+  const exported = contract.parseHandoff(h.downloads[1].text);
+  assert.equal(exported.source.provenance, 'imported');
+  assert.deepEqual(exported.items, original.items);
+  assert.match(h.downloads[2].text, /外部导入报告.*未在本机核验/);
+  assert.match(h.downloads[2].text, /备份记录的规则置信度/);
+  await h.node('handoff-copy').listeners.click();
+  assert.match(copied[0], /外部文件.*来源未核验/);
+  assert.match(copied[0], /备份记录的规则置信度/);
+  h.select(async () => h.downloads[1].text);
+  await setImmediate();
+  assert.match(h.node('handoff-content').textContent, /外部导入报告/);
+  h.node('desktop-handoff').close();
+  h.app.open(h.trigger, true);
+  h.node('handoff-json').listeners.click();
+  assert.equal(JSON.parse(h.downloads[3].text).source.provenance, undefined);
+  assert.equal(h.artifact.provenance, undefined);
+});
+
 desktopTest('late file read cannot replace a newer report after close and reopen', async () => {
   const h = harness(); h.app.open(h.trigger, true);
   let finish;
@@ -78,7 +108,7 @@ desktopTest('invalid import preserves prior content and valid retry remains exte
   assert.match(h.node('handoff-status').textContent, /已保留/);
   h.select(async () => contract.exportHandoff(contract.createHandoff(h.artifact), 'json').text); await setImmediate();
   assert.match(h.node('handoff-provenance').textContent, /外部文件.*未核验/);
-  assert.equal(h.node('handoff-content').textContent, previous);
+  assert.match(h.node('handoff-content').textContent, /外部导入报告.*未在本机核验/);
   assert.equal(h.node('handoff-status').dataset.error, 'false');
 });
 desktopTest('destroy invalidates pending file reads without updating detached content', async () => {
