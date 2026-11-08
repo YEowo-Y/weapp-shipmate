@@ -239,7 +239,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
   await checked('A single persistent settings entry opens one readable section and remains reachable on narrow screens', async () => {
     assert.equal(await inspect('return document.querySelectorAll("#desktop-preferences-open").length'), 1);
     assert.equal(await inspect('return document.querySelectorAll("#desktop-model-settings,#desktop-data-settings,#home-models,#home-preferences").length'), 0);
-    assert.equal(await text('#desktop-preferences-open'), '设置');
+    assert.equal(await inspect('return document.querySelector("#desktop-preferences-open").getAttribute("aria-label")'), '设置');
     assert.equal(await inspect('return document.querySelector("#desktop-preferences-open").closest("#desktop-navigation")'), null);
     await command('POST', '/window/rect', { width: 320, height: 844 });
     if (await inspect('return document.querySelector("#desktop-navigation").open')) await activate('#desktop-navigation > summary');
@@ -295,7 +295,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await activate('#start-check'); await until(() => inspect('return document.activeElement.id==="check-btn"'), 'saved project focuses explicit run action'); await closeTools();
     assert.equal((await snapshot()).runs.length, 0); await geometry('project-home', '#session-empty');
   });
-  await checked('Project folders contain scoped sessions and the header menu renames without losing drafts', async () => {
+  await checked('Project folders contain scoped sessions and the sidebar menu renames without losing drafts', async () => {
     await command('POST', '/window/rect', { width: 1200, height: 850 });
     const folder = '.project-folder-row[aria-current="true"]';
     assert.equal(await inspect('return document.querySelector(arguments[0]).parentElement.contains(document.querySelector(".session-workspace__recent"))', [folder]), true);
@@ -329,6 +329,31 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await until(() => inspect('return document.querySelector("dialog[data-kind=history]")?.open'), 'header search opens');
     await close('dialog[data-kind=history]');
     await fill('#desktopInput', '');
+  });
+  await checked('Left rail and top quick actions stay reachable and return focus at desktop and compact widths', async () => {
+    for (const width of [1200, 390, 320]) {
+      await command('POST', '/window/rect', { width, height: 850 });
+      if (width <= 640 && !await inspect('return document.querySelector("#desktop-navigation").open')) await activate('#desktop-navigation > summary');
+      await activate('#desktop-sidebar-heading [data-action=history]');
+      await until(() => inspect('return document.querySelector("dialog[data-kind=history]")?.open'), 'top search opens history');
+      await close('dialog[data-kind=history]');
+      assert.equal(await inspect('return document.activeElement.matches("#desktop-sidebar-heading [data-action=history]")'), true);
+      for (const [entry, dialog] of [['#desktop-memory-open', '#desktop-memory'], ['#desktop-sources-open', '#desktop-source-freshness'], ['#desktop-maintenance-open', '#desktop-health']]) {
+        await activate(entry); await until(() => inspect('return document.querySelector(arguments[0])?.open', [dialog]), entry + ' opens');
+        await close(dialog);
+        assert.equal(await inspect('return document.activeElement.id'), entry.slice(1));
+      }
+      await activate('#desktop-more'); await screenshot('sidebar-rail-menu-' + width);
+      await press('\uE00C');
+      await until(() => inspect('return !document.querySelector("#desktop-actions").open'), 'rail menu closes');
+      await activate('#desktop-home-open');
+      if (width <= 640) await activate('#desktop-navigation > summary');
+      const folderStyle = await inspect(`const row=document.querySelector('.project-folder-row[aria-current="true"]'), list=document.querySelector('.session-workspace__recent'), c=getComputedStyle(list);
+        return {icons:row.querySelectorAll('svg').length,border:c.borderLeftWidth,pageOverflow:document.documentElement.scrollWidth-innerWidth};`);
+      assert.equal(folderStyle.icons, 1); assert.equal(folderStyle.border, '0px'); assert.ok(folderStyle.pageOverflow <= 1);
+      await screenshot('sidebar-rail-' + width);
+    }
+    await command('POST', '/window/rect', { width: 1200, height: 850 });
   });
   await checked('Home secondary entries reach real features without executing work or contacting models', async () => {
     for (const [entry, dialog] of [['#start-explain', '#desktop-explain'], ['#home-health', '#desktop-health'], ['#home-memory', '#desktop-memory'], ['#home-sources', '#desktop-source-freshness']]) {
