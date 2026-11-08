@@ -76,7 +76,7 @@
         <section id="desktop-workspace" class="desktop-workspace" aria-label="项目工作区" hidden></section>
         <div id="desktopScroll" class="conversation-scroll scroll" tabindex="0" aria-label="会话记录">
           <section id="session-empty" class="desktop-home" aria-labelledby="desktop-home-title">
-            <header class="home-heading"><h2 id="desktop-home-title">一起推进你的项目</h2><p>从一次预检开始，也可以在下方继续聊。</p></header>
+            <header class="home-heading"><img src="/brand/shipmate.svg" alt="" width="30" height="30"><h2 id="desktop-home-title">一起推进你的项目</h2></header>
             <section class="home-project" aria-labelledby="home-project-name">
               <span data-icon="folder" aria-hidden="true"></span>
               <div><h3 id="home-project-name">未选择项目</h3><p id="home-project-summary">选择项目后可预检代码；也可先按主体整理上线清单。</p></div>
@@ -84,13 +84,10 @@
             </section>
             <section aria-labelledby="home-start-title">
               <div class="home-section-heading"><h3 id="home-start-title">下一步</h3><span>本机执行 · 无需模型</span></div>
-              <div class="home-start-grid">
-                <article class="home-primary-task">
-                  <div><h4><span data-icon="folder" aria-hidden="true"></span>项目预检</h4><p>检查配置、隐私声明与域名。</p></div>
-                  <wa-button id="start-check" variant="neutral" appearance="accent" size="s" aria-controls="desktop-tools"><span id="start-check-label">配置预检</span><span slot="end" data-icon="arrow-right"></span></wa-button>
-                </article>
-                <article><wa-button id="start-guide" appearance="plain" size="s" aria-controls="desktop-tools"><span slot="start" data-icon="list-checks"></span>整理上线清单<span slot="end" data-icon="chevron-right"></span></wa-button></article>
-                <article><wa-button id="start-explain" appearance="plain" size="s" aria-haspopup="dialog"><span slot="start" data-icon="circle-question-mark"></span>查询审核拒因<span slot="end" data-icon="chevron-right"></span></wa-button></article>
+              <div class="home-start-actions">
+                <wa-button id="start-check" variant="neutral" appearance="accent" size="s" aria-controls="desktop-tools" title="检查配置、隐私声明与域名"><span id="start-check-label">配置预检</span><span slot="end" data-icon="arrow-right"></span></wa-button>
+                <wa-button id="start-guide" appearance="plain" size="s" aria-controls="desktop-tools"><span slot="start" data-icon="list-checks"></span>整理上线清单</wa-button>
+                <wa-button id="start-explain" appearance="plain" size="s" aria-haspopup="dialog"><span slot="start" data-icon="circle-question-mark"></span>查询审核拒因</wa-button>
               </div>
             </section>
             <section class="home-continue" aria-labelledby="home-continue-title">
@@ -98,12 +95,6 @@
               <article class="home-report" aria-labelledby="home-report-title">
                 <span data-icon="file-text" aria-hidden="true"></span><div><h4 id="home-report-title">当前报告</h4><p id="home-report-summary">尚未生成报告。运行工具后，可阅读并加入当前会话。</p></div><wa-button id="home-report" appearance="plain" size="s" aria-controls="desktop-report-reader" disabled>阅读报告<span slot="end" data-icon="arrow-right"></span></wa-button>
               </article>
-              <div class="home-destinations">
-                <wa-button id="home-workflow" appearance="plain" size="s" aria-controls="desktop-workflow"><span slot="start" data-icon="list-checks"></span><span class="home-destination-copy"><strong>查看上线进度</strong></span><span slot="end" data-icon="chevron-right"></span></wa-button>
-                <wa-button id="home-health" appearance="plain" size="s" aria-haspopup="dialog" aria-controls="desktop-health"><span slot="start" data-icon="activity"></span><span class="home-destination-copy"><strong>项目维护</strong></span><span slot="end" data-icon="chevron-right"></span></wa-button>
-                <wa-button id="home-memory" appearance="plain" size="s" aria-haspopup="dialog"><span slot="start" data-icon="file-text"></span><span class="home-destination-copy"><strong>项目记忆</strong></span><span slot="end" data-icon="chevron-right"></span></wa-button>
-                <wa-button id="home-sources" appearance="plain" size="s" aria-haspopup="dialog"><span slot="start" data-icon="book-open"></span><span class="home-destination-copy"><strong>规则依据</strong></span><span slot="end" data-icon="chevron-right"></span></wa-button>
-              </div>
             </section>
           </section>
           <div id="desktopMessages" class="conv__inner"></div>
