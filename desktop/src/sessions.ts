@@ -33,6 +33,7 @@ export async function mountDesktopSessions(options: { onOpenArtifact?: (artifact
       list: node('#desktopMessages'), status, jumpButton: node('#desktopJump'),
       onOpenDataSettings: options.onOpenDataSettings ? (anchor: HTMLElement) => { if (!disposed) options.onOpenDataSettings?.(anchor); } : undefined,
       layout: 'sidebar', projectScoped: true, workspace: 'desktop-local', storageLabel: '已保存在此设备',
+      projectNavigation: node('#desktop-project-navigation'),
       conversationOptions: {
         requireModel: true, allowRecords: true, getSendShortcut: readSendKey,
         async transport(args) {
