@@ -39,6 +39,34 @@ function harness(options = {}) {
   const node = id => nodes.find(n => n.id === id);
   return { app, node, nodes, document, trigger, fallback, get artifact() { return artifact; }, set artifact(value) { artifact = value; }, get reads() { return reads; }, get handoffs() { return handoffs; } };
 }
+test('reader shows recorded confidence in evidence and distinguishes imported provenance', () => {
+  for (const [confidence, label] of [['high', '高'], ['medium', '中'], ['low', '低']]) {
+    for (const imported of [false, true]) {
+      const h = harness();
+      h.artifact.data.result.items[0].confidence = confidence;
+      if (imported) h.artifact.provenance = 'imported';
+      h.app.open(h.trigger);
+      const evidence = h.nodes.find(n => n.className === 'report-reader-evidence');
+      assert.ok(evidence.textContent.includes(`${imported ? '备份记录的' : ''}规则置信度：${label}`));
+      assert.match(evidence.textContent, /规则维护者对规则准确性的把握/);
+      assert.equal(Boolean(evidence.open), false);
+    }
+  }
+});
+
+test('reader leaves legacy rules unrated and falls back for invalid confidence', () => {
+  const h = harness();
+  for (const item of [...h.artifact.data.result.items, ...h.artifact.data.result.selfCheck]) delete item.confidence;
+  h.app.open(h.trigger);
+  assert.doesNotMatch(h.node('report-reader-content').textContent, /规则置信度/);
+  h.app.close();
+  h.artifact.data.result.items[0].confidence = 'certain';
+  h.app.open(h.trigger);
+  assert.match(h.node('report-reader-summary').textContent, /未提供有效的结构化摘要/);
+  assert.equal(h.node('report-reader-original').open, true);
+  assert.doesNotMatch(h.node('report-reader-content').textContent, /规则置信度/);
+});
+
 test('reader is passive until opened and holds a validated snapshot with visible requirements', () => {
   const h = harness(); assert.equal(h.reads, 0); h.app.open(h.trigger);
   assert.match(h.node('report-reader-content').textContent, /为何关注|需要核对/);
