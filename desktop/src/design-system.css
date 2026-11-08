@@ -66,9 +66,9 @@
   --ds-ink-1: #1f1e1c;  /* primary text, 16.2:1 on canvas */
   --ds-ink-2: #56554f;  /* secondary, 7.3:1 */
   --ds-ink-3: #6f6e68;  /* tertiary/meta, 5.0:1 (AA) */
-  --ds-accent: #b4552f; /* clay, 4.9:1 with white */
-  --ds-accent-hover: #9e4826;
-  --ds-accent-soft: #f7ebe4;
+  --ds-accent: #285769;
+  --ds-accent-hover: #1d4354;
+  --ds-accent-soft: #e6f0f2;
   --ds-accent-ink: #ffffff;
   --ds-success: #237047; --ds-success-soft: #e7f2ea;
   --ds-warning: #835c00; --ds-warning-soft: #f8f0d9;
@@ -96,10 +96,10 @@
   --ds-ink-1: #ecebe8;
   --ds-ink-2: #b4b2ac;
   --ds-ink-3: #9a9892; /* 6.3:1 on canvas; upstream #666 rejected for contrast */
-  --ds-accent: #e08158;
-  --ds-accent-hover: #ea9471;
-  --ds-accent-soft: #3a241a;
-  --ds-accent-ink: #1a110c;
+  --ds-accent: #9bd3dd;
+  --ds-accent-hover: #b6e4eb;
+  --ds-accent-soft: #22373e;
+  --ds-accent-ink: #102630;
   --ds-success: #62bd88; --ds-success-soft: #15271c;
   --ds-warning: #e1b851; --ds-warning-soft: #2a220f;
   --ds-danger: #ec7764;  --ds-danger-soft: #2e1713;
