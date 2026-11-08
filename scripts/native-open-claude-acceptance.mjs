@@ -69,6 +69,16 @@ export async function checkOpenClaudeChat({ run, checked, click, press, inspect,
     for(const theme of ['light','dark']) await checked(`Open Claude adopted chat proportions remain usable in ${theme} at desktop and narrow widths`, async()=>{
       await command('POST','/window/rect',{width:1000,height:900});
       await preferences(); await click(`#desktop-theme-${theme}`); await closePreferences();
+      const reading = await inspect(`const prose = document.querySelector('#desktopMessages .msg--agent .msg__text');
+        const user = document.querySelector('#desktopMessages .msg--user .msg__text');
+        return { prose:getComputedStyle(prose).fontFamily, user:getComputedStyle(user).fontFamily };`);
+      assert.match(reading.prose, /Georgia/);
+      assert.notEqual(reading.user, reading.prose);
+      await click('#desktopComposer .agent-composer__add');
+      await until(() => inspect('return document.querySelector("#desktop-context-dialog").open'), 'attachment preview visible');
+      await screenshot(`conversation-${theme}-attachments`);
+      await click('#desktop-context-dismiss');
+      await until(() => inspect('return document.activeElement.matches(".agent-composer__add")'), 'attachment preview restores focus');
       for(const width of [1000,1440,390,320]) {
         await command('POST','/window/rect',{width,height:900});
         await preferences(); await closePreferences();
