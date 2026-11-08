@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { deriveWorkflow } from '../src/workflow.mjs';
 import { checkSettingsWorkspaceFlows } from './native-settings-acceptance.mjs';
+import { checkTutorialFlows } from './native-tutorial-acceptance.mjs';
 
 // Actual native storage and UI, with labelled temporary project files only.
 // Appearance stress overrides stay in this isolated document and are restored.
@@ -582,4 +583,5 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     const actual = await workflow();
     await writeFile(resolve(run, 'presentation-evidence.json'), JSON.stringify({ projectId, fileNames: Object.keys(files), projectFacts: actual.project.facts, confirmations: actual.confirmations, runCount: final.runs.length, artifactCount: final.artifacts.length, modelRequestCount: requests.length, fixture: 'Real native storage and manual UI actions; temporary labelled files; no invoke mocks, tool execution, OS browser or installed-release validation.' }, null, 2));
   });
+  await checkTutorialFlows({ run, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, requests });
 }
