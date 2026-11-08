@@ -118,7 +118,8 @@
 .project-folder-row > .app-icon { flex: none; }
 .project-folder-row[aria-current="true"] { background: var(--ds-selected); color: var(--ds-ink-1); }
 .project-folder .session-workspace__recent { min-height: 0; margin: 4px 0 12px 25px; padding: 0; border: 0; }
-.project-folder .session-workspace__recent .app-icon { display: none; }
+.project-folder .session-workspace__recent [data-action="recent-session"] .app-icon { display: none; }
+.session-workspace__recent-entry > .session-workspace__button { padding-right: 38px; }
 .project-folder-row:disabled { opacity: .55; cursor: default; }
 .desktop-menu-heading { padding: 6px 12px 4px; color: var(--ds-ink-3); font-size: var(--ds-text-caption); }
 .desktop-menu-heading--separated { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--ds-hairline); }
