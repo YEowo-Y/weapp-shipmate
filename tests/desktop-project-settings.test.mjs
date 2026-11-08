@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
+import { createIcon } from '../desktop/design-previews/components/icons.js';
 import { setImmediate } from 'node:timers/promises';
 
 const require = createRequire(new URL('../desktop/package.json', import.meta.url));
@@ -13,10 +14,12 @@ const source = `${compile('project-backup')}\n${compile('projects')}`;
 const project = (id, revision = 1) => ({ id, name: id, directory: `C:/projects/${id}`, subject: 'personal', revision, directoryAvailable: true });
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 
-function harness({ invoke: handle, canChangeProject = () => true } = {}) {
+function harness({ invoke: handle, canChangeProject = () => true, beforeSelect = async () => true } = {}) {
   const dom = new JSDOM(html), document = dom.window.document, calls = [];
   let projects = [project('a'), project('b')], activeProjectId = 'a', dataRequests = 0;
   const node = id => document.getElementById(id);
+  const recent = document.createElement('div'); recent.className = 'session-workspace__recent';
+  node('sessionHost').append(node('desktop-project-navigation'), recent);
   dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   dom.window.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new dom.window.Event('close')); };
   const invoke = async (command, args) => {
@@ -34,14 +37,54 @@ function harness({ invoke: handle, canChangeProject = () => true } = {}) {
     if (command === 'project_import_preview') return { projectName: '恢复项目', sourceProjectId: 'old', runs: 1, artifacts: 1, memoryEntries: 0, warnings: [] };
     if (command === 'project_import') return { projectId: 'restored', alreadyImported: false };
   };
-  const context = vm.createContext({ document, invoke, open: async () => 'C:/relocated', crypto: { randomUUID: () => 'new-project' }, TextEncoder: globalThis.TextEncoder, setTimeout, clearTimeout, URL, Blob: globalThis.Blob });
+  const context = vm.createContext({ document, createIcon, invoke, open: async () => 'C:/relocated', crypto: { randomUUID: () => 'new-project' }, TextEncoder: globalThis.TextEncoder, setTimeout, clearTimeout, URL, Blob: globalThis.Blob });
   vm.runInContext(`${source}\nglobalThis.mount = mountProjects`, context);
-  const app = context.mount({ beforeSelect: async () => true, onRegistry() {}, onChange() {}, onArtifact() {}, isBusy: () => false, associateSession: async () => true, canChangeProject, onOpenData: () => { dataRequests++; } });
+  const app = context.mount({ beforeSelect, onRegistry() {}, onChange() {}, onArtifact() {}, isBusy: () => false, associateSession: async () => true, canChangeProject, onOpenData: () => { dataRequests++; } });
   document.body.append(app.settings.element, app.backupSettings.element);
   const settle = async () => { await setImmediate(); await setImmediate(); };
   const fire = async (id, event = 'click') => { node(id).dispatchEvent(new dom.window.Event(event, { bubbles: true, cancelable: true })); await settle(); };
   return { app, calls, node, fire, settle, document, get dataRequests() { return dataRequests; }, selectExternally(id) { activeProjectId = id; }, update(value) { projects = projects.map(p => p.id === value.id ? value : p); }, async selectFile() { Object.defineProperty(node('project-import-file'), 'files', { configurable: true, value: [{ size: 2, text: async () => '{}' }] }); await fire('project-import-file', 'change'); } };
 }
+
+test('folder navigation nests the live session list, retains focus on refresh and supports disclosure', async () => {
+  const h = harness(); await h.app.ready;
+  const folder = id => h.document.querySelector(`.project-folder-row[data-project-id="${id}"]`);
+  const recent = h.document.querySelector('.session-workspace__recent');
+  const first = folder('a'); first.focus();
+  assert.equal(first.getAttribute('aria-current'), 'true');
+  assert.equal(first.parentElement.contains(recent), true);
+  first.click(); assert.equal(recent.hidden, true); assert.equal(first.getAttribute('aria-expanded'), 'false');
+  await h.app.refresh();
+  assert.equal(folder('a'), first); assert.equal(h.document.activeElement, first); assert.equal(recent.hidden, true);
+  folder('b').click(); await h.settle();
+  assert.equal(h.app.getActiveId(), 'b'); assert.equal(folder('b').parentElement.contains(recent), true);
+  assert.equal(recent.hidden, false); assert.equal(recent.getAttribute('aria-label'), 'b的会话');
+  folder('').click(); await h.settle();
+  assert.equal(h.app.getActiveId(), null); assert.equal(folder('').parentElement.contains(recent), true);
+  h.app.destroy();
+});
+
+test('folder switching preserves selection and list placement when saving the session fails', async () => {
+  let saved = true;
+  const h = harness({ beforeSelect: async () => saved }); await h.app.ready;
+  const current = h.document.querySelector('.project-folder-row[data-project-id="a"]');
+  saved = false;
+  h.document.querySelector('.project-folder-row[data-project-id="b"]').click(); await h.settle();
+  assert.equal(h.app.getActiveId(), 'a'); assert.equal(current.getAttribute('aria-current'), 'true');
+  assert.equal(current.parentElement.contains(h.document.querySelector('.session-workspace__recent')), true);
+  assert.deepEqual(h.calls.filter(([command]) => command === 'project_select').map(([, args]) => args.projectId), ['b', 'a']);
+  assert.match(h.node('desktop-project-status').textContent, /会话尚未保存/);
+  h.app.destroy();
+});
+
+test('folder switching cannot discard an unsaved project editor', async () => {
+  const h = harness(); await h.app.ready; h.app.openManager();
+  h.node('project-name').value = '未保存的名称';
+  h.document.querySelector('.project-folder-row[data-project-id="b"]').click(); await h.settle();
+  assert.equal(h.app.getActiveId(), 'a'); assert.equal(h.node('project-name').value, '未保存的名称');
+  assert.equal(h.calls.some(([command]) => command === 'project_select'), false);
+  h.app.destroy();
+});
 
 test('embedded project controls use the existing form, picker and controller and return to legacy manager', async () => {
   const h = harness(); await h.app.ready;
