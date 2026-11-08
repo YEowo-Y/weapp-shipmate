@@ -182,7 +182,7 @@ function applyProject(project: Project | null) {
   if (homeSummary) {
     const subjects: Record<string, string> = { personal: "个人", individual_business: "个体工商户", enterprise: "企业" };
     homeSummary.textContent = project
-      ? `${subjects[project.subject] ?? "待确认主体"} · ${project.directoryAvailable === false ? "目录不可用，请在项目设置中重新选择位置。历史报告仍保留。" : "项目已载入，可开始预检或继续整理上线准备。"}`
+      ? `${subjects[project.subject] ?? "待确认主体"} · ${project.directoryAvailable === false ? "目录不可用，请在项目设置中重新选择位置。历史报告仍保留。" : "项目目录可用"}`
       : "选择项目后可预检代码；也可先按主体整理上线清单。";
   }
   $<HTMLSelectElement>("#subject").value = project?.subject || "personal";
@@ -362,8 +362,6 @@ window.addEventListener("DOMContentLoaded", () => {
   $("#read-report")?.addEventListener("click", () => showReport($("#read-report")));
   $("#home-report")?.addEventListener("click", () => showReport($("#home-report")));
   $("#desktop-home-open")?.addEventListener("click", showHome);
-  $("#home-sources")?.addEventListener("click", () => sources?.open($("#home-sources")));
-  $("#home-memory")?.addEventListener("click", () => sessions?.openMemory($("#home-memory")));
   $("#desktop-memory-open")?.addEventListener("click", () => sessions?.openMemory($("#desktop-memory-open")));
   $("#desktop-sources-open")?.addEventListener("click", () => sources?.open($("#desktop-sources-open")));
   $("#home-project-manage")?.addEventListener("click", () => projects?.openManager());
@@ -533,12 +531,10 @@ window.addEventListener("DOMContentLoaded", () => {
   window.addEventListener('pagehide', () => { disposeShortcuts(); workspace.destroy(); }, { once: true });
   $("#desktop-preferences-open")?.addEventListener('click', () => preferences?.open($("#desktop-preferences-open")));
   $("#desktop-maintenance-open")?.addEventListener('click', () => health?.open($("#desktop-maintenance-open")));
-  $("#home-health")?.addEventListener('click', () => health?.open($("#home-health")));
   window.addEventListener('pagehide', () => { health?.destroy(); maintenance?.destroy(); preferences?.destroy(); sources?.destroy(); }, { once: true });
   workflow = mountWorkflow({ openPage: (page, trigger) => workspace.open(page, trigger, { canLeave: () => workflow?.canClose() ?? true }), getProject: () => projects?.getActive() ?? null, isBusy: () => busy, onProjectChanged: async () => { await projects?.refresh(); } });
-  for (const id of ['desktop-workflow-open', 'home-workflow']) {
-    $(`#${id}`)?.addEventListener('click', () => workflow?.open($(`#${id}`)));
-  }
+  const workflowButton = $('#desktop-workflow-open');
+  workflowButton?.addEventListener('click', () => workflow?.open(workflowButton));
   window.addEventListener('pagehide', () => workflow?.destroy(), { once: true });
   $("#save-report").addEventListener("click", () => {
     if (busy || !lastSuccessful || !sessions) return;
