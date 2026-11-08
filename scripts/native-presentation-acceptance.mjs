@@ -58,7 +58,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await activate(`#preferences-nav-${selected}`); await section(selected);
   };
   const openWorkflow = async () => {
-    await home(); await activate('#home-workflow');
+    await home(); await activate('#desktop-workflow-open');
     await until(() => inspect('const n=document.querySelector("#desktop-workflow");return n.open&&n.getAttribute("aria-busy")!=="true"'), 'workflow ready');
   };
   const factsOpen = async () => { if (!await inspect('return document.querySelector(".workflow-facts").open')) await activate('.workflow-facts > summary'); };
@@ -398,11 +398,15 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     }
     await command('POST', '/window/rect', { width: 1200, height: 850 });
   });
-  await checked('Home secondary entries reach real features without executing work or contacting models', async () => {
-    for (const [entry, dialog] of [['#start-explain', '#desktop-explain'], ['#home-health', '#desktop-health'], ['#home-memory', '#desktop-memory'], ['#home-sources', '#desktop-source-freshness']]) {
-      await home(); await activate(entry); await until(() => inspect('return document.querySelector(arguments[0])?.open', [dialog]), `${entry} opens ${dialog}`);
-      await close(dialog); assert.equal(await inspect('return document.activeElement.checkVisibility()'), true, `${entry} returns to visible focus`);
-    }
+  await checked('Compact home exposes preflight before scrolling and restores focus after rejection lookup', async () => {
+    await command('POST', '/window/rect', { width: 320, height: 844 }); await home();
+    const visible = await inspect(`const button=document.querySelector('#start-check'), rect=button.getBoundingClientRect();
+      return button.contains(document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2));`);
+    assert.ok(visible, 'preflight is visible without scrolling at 320px');
+    await screenshot('home-compact-quick-start');
+    await activate('#start-explain'); await until(() => inspect('return document.querySelector("#desktop-explain").open'), 'rejection lookup opens');
+    await close('#desktop-explain'); assert.equal(await inspect('return document.activeElement.id'), 'start-explain');
+    await command('POST', '/window/rect', { width: 1200, height: 850 });
     assert.equal((await snapshot()).runs.length, 0); assert.deepEqual(requests, []);
   });
   await checked('Workflow overview, numbered stages and next action reflect the real catalog', async () => {
