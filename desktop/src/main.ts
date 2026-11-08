@@ -528,7 +528,7 @@ window.addEventListener("DOMContentLoaded", () => {
     settings: () => preferences?.open($('#desktop-preferences-open')),
   });
   $('#sessionHost')?.addEventListener('click', event => {
-    if ((event.target as HTMLElement).closest('[data-action="new"], [data-action="recent-session"], [data-action="history"]') && !workspace.close()) { event.preventDefault(); event.stopImmediatePropagation(); }
+    if ((event.target as HTMLElement).closest('[data-action="new"], [data-action="recent-session"], [data-action="history"], [data-action="session-actions"]') && !workspace.close()) { event.preventDefault(); event.stopImmediatePropagation(); }
   }, true);
   window.addEventListener('pagehide', () => { disposeShortcuts(); workspace.destroy(); }, { once: true });
   $("#desktop-preferences-open")?.addEventListener('click', () => preferences?.open($("#desktop-preferences-open")));
