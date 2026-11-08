@@ -330,6 +330,49 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await close('dialog[data-kind=history]');
     await fill('#desktopInput', '');
   });
+  await checked('Conversation row menus rename inactive chats and archive drafts at wide and compact widths', async () => {
+    for (const width of [1200, 320]) {
+      await command('POST', '/window/rect', { width, height: 850 });
+      const navigation = async () => {
+        if (width <= 640 && !await inspect('return document.querySelector("#desktop-navigation").open')) await activate('#desktop-navigation > summary');
+      };
+      await navigation(); await activate('#sessionHost [data-action=new]');
+      const id = await inspect('return document.querySelector("[data-action=recent-session][aria-current=true]").dataset.sessionId');
+      await fill('#desktopInput', '菜单归档保留草稿 ' + width);
+      await navigation(); await activate('#sessionHost [data-action=new]');
+      await fill('#desktopInput', '当前编辑草稿 ' + width);
+      const row = '[data-action=recent-session][data-session-id="' + id + '"]';
+      const menu = row + ' + .session-workspace__recent-actions wa-dropdown';
+      await navigation();
+      await inspect('document.querySelector(arguments[0]).focus()', [menu + ' [data-action=session-actions]']);
+      await activate(menu + ' [data-action=session-actions]');
+      const bounds = await inspect('const row=document.querySelector(arguments[0]).getBoundingClientRect(), trigger=document.querySelector(arguments[1]).getBoundingClientRect();return {row:{top:row.top,bottom:row.bottom,right:row.right},trigger:{top:trigger.top,bottom:trigger.bottom,right:trigger.right}}', [row, menu + ' [data-action=session-actions]']);
+      assert.ok(bounds.trigger.top >= bounds.row.top - 1 && bounds.trigger.bottom <= bounds.row.bottom + 1 && bounds.trigger.right <= bounds.row.right + 1, 'context trigger stays within its conversation row');
+      await screenshot('conversation-row-menu-' + width);
+      await activate(menu + ' wa-dropdown-item[value=rename]');
+      await until(() => inspect('return document.querySelector("dialog[data-kind=rename]")?.open'), 'row rename dialog opens');
+      assert.equal(await inspect('return document.activeElement.getAttribute("aria-label")'), '会话名称');
+      await fill('[aria-label="会话名称"]', '会话菜单验收 ' + width);
+      await activate('dialog[data-kind=rename] [data-action=confirm]');
+      await until(() => inspect('return !document.querySelector("dialog[data-kind=rename]")'), 'rename closes');
+      assert.equal(await inspect('return document.querySelector("#desktopInput").value'), '当前编辑草稿 ' + width);
+      assert.equal(await inspect('return document.querySelector(arguments[0]).getAttribute("aria-current")', [row]), 'false');
+      await activate(menu + ' [data-action=session-actions]');
+      await activate(menu + ' wa-dropdown-item[value=archive]');
+      await until(() => inspect('return !document.querySelector(arguments[0])', [row]), 'inactive row archived');
+      assert.equal(await inspect('return document.querySelector("#desktopInput").value'), '当前编辑草稿 ' + width);
+      await activate('#desktop-sidebar-heading [data-action=history]');
+      await activate('dialog[data-kind=history] [data-action=filter-archived]');
+      await activate('dialog[data-kind=history] [data-action=restore-session][data-session-id="' + id + '"]');
+      await activate('dialog[data-kind=history] [data-action=filter-active]');
+      await activate('dialog[data-kind=history] [data-action=session][data-session-id="' + id + '"]');
+      await until(() => inspect('return !document.querySelector("dialog[data-kind=history]")'), 'restored conversation opens');
+      assert.equal(await inspect('return document.querySelector("#desktopInput").value'), '菜单归档保留草稿 ' + width);
+      await fill('#desktopInput', '');
+    }
+    await command('POST', '/window/rect', { width: 1200, height: 850 }); await home();
+    await screenshot('main-conversation-home');
+  });
   await checked('Left rail and top quick actions stay reachable and return focus at desktop and compact widths', async () => {
     for (const width of [1200, 390, 320]) {
       await command('POST', '/window/rect', { width, height: 850 });
@@ -608,7 +651,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
       for (const width of [1000, 600]) {
         await command('POST', '/window/rect', { width, height: 480 });
         if (width === 600 && !await inspect('return document.querySelector("#desktop-navigation").open')) await activate('#desktop-navigation > summary');
-        const layout = await inspect(`const last = document.querySelector('.session-workspace__recent > :last-child');
+        const layout = await inspect(`const last = document.querySelector('.session-workspace__recent > :last-child [data-action=recent-session]');
           const scrollers = [];
           for(let n=last.parentElement; n && n.id!=='desktop-navigation'; n=n.parentElement) {
             if (/^(auto|scroll)$/.test(getComputedStyle(n).overflowY) && n.scrollHeight>n.clientHeight+1) scrollers.push(n.id||n.className);
