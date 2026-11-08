@@ -188,6 +188,7 @@
 .preferences-dialog .system-notifications > h4:first-of-type { margin-top:0; }
 .preferences-dialog .settings-section-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 24px; margin:0 0 16px; }
 .preferences-dialog .settings-section-heading h4 { margin:0; }
+.settings-product-name { display:inline-flex; align-items:center; gap:8px; }
 .settings-heading-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
 .preferences-dialog .settings-heading-actions p { margin:0; }
 .preferences-dialog .system-notifications-preferences .system-notifications-toggle { min-height:44px; padding:12px 0 4px; }
