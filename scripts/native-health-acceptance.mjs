@@ -56,7 +56,7 @@ export async function checkHealthFlows({ run, checked, click, fill, press, inspe
     await projectDialog(); await click('#project-retry');
     await until(() => inspect('return document.querySelector("#desktop-project-select").options.length===3 && !document.querySelector("#project-retry").disabled'), 'P7 projects loaded');
     await closeProjects(); await selectProject(a);
-    await click('#home-health'); await ready();
+    await click('#desktop-maintenance-open'); await ready();
     assert.match(await text('#health-project-name'), /P7 维护项目 A/);
     assert.match(await healthText(), /尚未预检/);
     assert.equal(await inspect('return document.querySelector("#health-report").disabled'), true);
@@ -200,7 +200,7 @@ export async function checkHealthFlows({ run, checked, click, fill, press, inspe
 
   await checked('P7 maintenance state stays project-scoped and survives native process restart', async () => {
     const before = await snapshot();
-    await selectProject(b); await click('#home-health'); await ready();
+    await selectProject(b); await click('#desktop-maintenance-open'); await ready();
     assert.match(await text('#health-project-name'), /P7 维护项目 B/); assert.match(await healthText(), /尚未预检/);
     assert.equal(await inspect('return document.querySelector("#health-report").disabled'), true);
     assert.doesNotMatch(await healthText(), /维护项目 A|已改名/); await close();
