@@ -194,6 +194,18 @@ test('rename validates an empty name and persists a valid title without altering
   workspace.destroy();
 });
 
+test('rename from the header menu preserves the draft and returns focus to that menu', async () => {
+  const app = harness({ layout: 'sidebar' }); const workspace = await app.mounting;
+  app.args.input.value = 'keep this draft';
+  const trigger = node(app.doc, 'button'); workspace.renameSession(trigger);
+  const dialog = app.doc.body.children.at(-1), form = flatten(dialog).find(item => item.tag === 'form');
+  flatten(form).find(item => item.tag === 'input').value = 'Header rename'; form.fire('submit'); await tick();
+  assert.equal(app.doc.activeElement, trigger); assert.equal(app.args.input.value, 'keep this draft');
+  await workspace.flush(); assert.equal(app.writes.at(-1).sessions[0].title, 'Header rename');
+  assert.equal(app.writes.at(-1).sessions[0].draft, 'keep this draft');
+  workspace.destroy();
+});
+
 test('history search clears empty results, supports keyboard selection and preserves IME input', async () => {
   const loaded = { version: 1, sessionSequence: 2, currentSessionId: 'session-1', sessions: [
     { id: 'session-1', title: 'First', draft: 'first draft', messages: [] },
