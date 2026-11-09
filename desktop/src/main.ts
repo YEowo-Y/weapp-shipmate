@@ -322,10 +322,7 @@ window.addEventListener("DOMContentLoaded", () => {
     getProject: () => projects?.getActive() ?? null,
     getRulesVersion: () => projects?.getRulesVersion() ?? null,
     onOpenSource: openUrl,
-    onHandoff: () => {
-      const readButton = $("#read-report");
-      handoff?.open(readButton.getClientRects().length ? readButton : $("#desktop-more"), true);
-    },
+    onHandoff: anchor => handoff?.open(anchor, true),
     onRepair: () => { if (lastSuccessful) repair?.openForArtifact(lastSuccessful.artifact, $("#read-report")); },
     returnFocus: () => $("#desktop-more"),
   });
