@@ -86,8 +86,55 @@ test('reader falls back to complete original for malformed structured data witho
   const h = harness(); h.artifact = { ...h.artifact, data: null, markdown: '# 历史原文\n保留所有内容' }; h.app.open(h.trigger);
   assert.match(h.node('report-reader-summary').textContent, /未提供.*结构化/);
   assert.match(h.node('report-reader-original').textContent, /保留所有内容/);
+  assert.ok(!h.nodes.some(n => n.dataset.readerFilter));
   assert.equal(h.node('report-reader-original').open, true);
 });
+test('reader filters findings and outline together, preserving article numbers, evidence and the full original', () => {
+  const h = harness();
+  const result = h.artifact.data.result;
+  result.items = result.items.slice(0, 2);
+  result.items[0].severity = 'warning';
+  result.items[1].severity = 'blocker';
+  result.selfCheck = [{ ...result.selfCheck[0], severity: 'blocker' }];
+  h.app.open(h.trigger);
+  const filters = h.nodes.filter(n => n.dataset.readerFilter);
+  const select = key => filters.find(n => n.dataset.readerFilter === key).listeners.click();
+  assert.deepEqual(filters.map(n => n.textContent), ['全部 3', '阻断 1', '警告 1', '条件自查 1']);
+  const articles = h.node('report-reader-content').children;
+  const entries = h.nodes.filter(n => n.tag === 'a' && n.href?.startsWith('#reader-item-')).map(n => n.parentNode);
+  const evidence = articles[0].children.find(n => n.className === 'report-reader-evidence');
+  evidence.open = true;
+  const original = h.node('report-reader-original').textContent;
+  for (const [key, indexes] of [['blocker', [1]], ['conditional', [2]], ['warning', [0]], ['all', [0, 1, 2]]]) {
+    select(key);
+    assert.deepEqual(filters.filter(n => n.getAttribute('aria-pressed') === 'true').map(n => n.dataset.readerFilter), [key]);
+    assert.deepEqual(articles.filter(n => !n.hidden).map(n => Number(n.dataset.readerItem)), indexes);
+    assert.deepEqual(entries.filter(n => !n.hidden).map(n => n.children[0].href), indexes.map(i => '#reader-item-' + i));
+    for (const i of indexes) assert.ok(articles[i].children[0].textContent.startsWith((i + 1) + '. '));
+    assert.equal(h.node('report-reader-original').textContent, original);
+  }
+  assert.equal(articles[0].children.find(n => n.className === 'report-reader-evidence'), evidence);
+  assert.equal(evidence.open, true);
+});
+
+test('reader resets the filter after recheck and after opening another saved report', () => {
+  const h = harness();
+  h.artifact = { ...h.artifact, kind: 'check', data: { ...h.artifact.data, kind: 'check', result: {
+    command: 'check', notes: [], items: h.artifact.data.result.items.slice(0, 2).map((rule, i) => ({ ...rule, severity: i ? 'warning' : 'info' })),
+    meta: { summary: '预检结果', scan: { filesScanned: 1, scope: { complete: true } } },
+  } } };
+  h.app.open(h.trigger);
+  for (const next of ['recheck', 'reopen']) {
+    const filter = key => h.nodes.findLast(n => n.dataset.readerFilter === key);
+    filter('warning').listeners.click();
+    h.artifact = { ...h.artifact, id: next };
+    if (next === 'recheck') h.app.showRecheck(h.artifact);
+    else { h.app.close(); h.app.open(h.trigger); }
+    assert.equal(filter('all').getAttribute('aria-pressed'), 'true');
+    assert.ok(h.node('report-reader-content').children.every(n => !n.hidden));
+  }
+});
+
 test('reader outline focuses actual item heading without motion', () => {
   const h = harness(); h.app.open(h.trigger);
   const link = h.nodes.find(n => n.tag === 'a' && n.href?.startsWith('#reader-item-'));
@@ -109,6 +156,7 @@ test('reader zero item partial scan remains a warning rather than a pass', () =>
   const h = harness(); h.artifact = { ...h.artifact, kind: 'check', data: { schemaVersion: 1, kind: 'check', result: { command: 'check', items: [], meta: { scan: { filesScanned: 0, scope: { complete: false } } } } } };
   h.app.open(h.trigger); assert.match(h.node('report-reader-warning').textContent, /扫描不完整/);
   assert.match(h.node('report-reader-content').textContent, /不代表.*通过/);
+  assert.ok(!h.nodes.some(n => n.dataset.readerFilter));
 });
 test('reader exposes explicit repair only for local project checks and rejects a changed reading snapshot', () => {
   let repairs = 0;
