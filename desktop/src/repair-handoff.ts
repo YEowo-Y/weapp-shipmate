@@ -106,7 +106,18 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
       trigger = anchor; status.textContent = ''; status.dataset.error = 'false'; refresh();
       if (fromReport) {
         try { display(createHandoff(options.getArtifact()), false); }
-        catch (error) { reportError(error); }
+        catch (error) {
+          pack = null;
+          external = false;
+          content.replaceChildren();
+          basisContent.replaceChildren();
+          basis.hidden = true;
+          basis.open = false;
+          body.scrollTop = 0;
+          refresh();
+          status.dataset.error = 'true';
+          status.textContent = '无法从当前报告生成交接。' + (error instanceof Error ? error.message : '请重新生成报告后再试。');
+        }
       }
       dialog.showModal(); anchor.setAttribute('aria-expanded', 'true'); dismiss.focus();
     },
