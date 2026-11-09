@@ -40,7 +40,7 @@ export function mountReportReader(options: Options) {
   const button = (label: string, id: string) => { const b = createActionButton(document, label, { appearance: 'plain' }); b.id = id; return b; };
   const dismiss = button('', 'report-reader-dismiss'); dismiss.classList.add('ui-action-icon'); dismiss.setAttribute('aria-label', '关闭报告阅读'); dismiss.append(createIcon(document, 'arrow-left')); header.append(title, dismiss);
   const body = node('div'); body.className = 'report-reader-body';
-  const summary = node('p', '', 'report-reader-summary');
+  const summary = node('div', '', 'report-reader-summary');
   const provenance = node('p', '', 'report-reader-provenance');
   const versions = node('details', '', 'report-reader-versions'); versions.append(node('summary', '报告标识与版本'));
   const versionText = node('p'); versions.append(versionText);
@@ -64,6 +64,7 @@ export function mountReportReader(options: Options) {
   const visible = (element: HTMLElement | null | undefined): element is HTMLElement => !!element?.isConnected && element.getClientRects().length > 0;
   function render(artifact = options.getArtifact()) {
     snapshotId = artifact?.id ?? null;
+    summary.replaceChildren(); summary.removeAttribute('role'); summary.removeAttribute('aria-label');
     provenance.textContent = ''; versions.hidden = true; versions.open = false; versionText.textContent = ''; linkStatus.textContent = '';
     warning.removeAttribute('role');
     content.replaceChildren(); nav.replaceChildren(); originalContent.replaceChildren(); context.replaceChildren(); context.hidden = true;
@@ -92,12 +93,15 @@ export function mountReportReader(options: Options) {
     }
     const items = pack.items as ReadingItem[];
     const labels = { blocker: '阻断', warning: '警告', info: '提示' };
-    const counts = (Object.keys(labels) as (keyof typeof labels)[]).map(key => `${labels[key]} ${items.filter(item => item.rule.severity === key && !item.conditional).length}`);
-    summary.textContent = `${items.length} 个核对项 · ${counts.join(' · ')} · 条件自查 ${items.filter(item => item.conditional).length}`;
+    const rows: { category: keyof typeof labels | 'conditional'; article: HTMLElement; entry: HTMLLIElement }[] = [];
     handoff.hidden = !options.onHandoff;
     repair.hidden = !options.onRepair || artifact.kind !== 'check' || artifact.provenance === 'imported' || !artifact.projectId;
-    if (!items.length) content.append(node('p', '本次报告没有结构化核对项。这不代表审核通过或项目不存在问题，请确认扫描范围与业务事实。'));
-    outline.hidden = !items.length;
+    if (!items.length) {
+      summary.textContent = '0 个核对项'; outline.hidden = true;
+      content.append(node('p', '本次报告没有结构化核对项。这不代表审核通过或项目不存在问题，请确认扫描范围与业务事实。'));
+      return;
+    }
+    outline.hidden = false;
     const list = node('ol'); nav.append(list);
     for (const [index, item] of items.entries()) {
       const r = item.rule, article = node('article'); article.dataset.readerItem = String(index); article.className = 'report-reader-item';
@@ -127,6 +131,27 @@ export function mountReportReader(options: Options) {
       article.append(evidence); content.append(article);
       const entry = node('li'), link = node('a', r.title); link.href = `#${heading.id}`;
       link.addEventListener('click', event => { event.preventDefault(); heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'start', behavior: 'instant' }); }); entry.append(link); list.append(entry);
+      rows.push({ category: item.conditional ? 'conditional' : r.severity, article, entry });
+    }
+
+    summary.setAttribute('role', 'group'); summary.setAttribute('aria-label', '筛选报告核对项');
+    const filters: HTMLButtonElement[] = [];
+    for (const [key, label] of Object.entries({ all: '全部', ...labels, conditional: '条件自查' })) {
+      const count = key === 'all' ? rows.length : rows.filter(row => row.category === key).length;
+      if (!count) continue;
+      const filter = node('button', `${label} ${count}`);
+      filter.type = 'button'; filter.dataset.readerFilter = key;
+      filter.setAttribute('aria-pressed', String(key === 'all'));
+      filter.setAttribute('aria-controls', 'report-reader-content report-reader-outline');
+      filter.addEventListener('click', () => {
+        for (const control of filters) control.setAttribute('aria-pressed', String(control === filter));
+        for (const row of rows) {
+          const hidden = key !== 'all' && row.category !== key;
+          row.article.hidden = hidden; row.entry.hidden = hidden;
+        }
+        outline.scrollTop = 0;
+      });
+      filters.push(filter); summary.append(filter);
     }
   }
   function close() { if (dialog.open) dialog.close(); }
