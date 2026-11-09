@@ -112,7 +112,7 @@ test('reader zero item partial scan remains a warning rather than a pass', () =>
 });
 test('reader exposes explicit repair only for local project checks and rejects a changed reading snapshot', () => {
   let repairs = 0;
-  const h = harness({ onRepair: () => { assert.equal(h.node('desktop-report-reader').open, false); repairs++; } });
+  const h = harness({ onRepair: anchor => { assert.equal(h.node('desktop-report-reader').open, true); assert.equal(anchor, h.node('report-reader-repair')); repairs++; } });
   h.artifact = { ...h.artifact, projectId: 'p', projectRevision: 1, kind: 'check', data: { schemaVersion: 1, kind: 'check', result: { command: 'check', items: [], meta: { scan: { filesScanned: 1, scope: { complete: true } } } } } };
   h.app.open(h.trigger);
   assert.equal(h.node('report-reader-repair').hidden, false);
@@ -121,7 +121,7 @@ test('reader exposes explicit repair only for local project checks and rejects a
   assert.equal(repairs, 0); assert.equal(h.node('desktop-report-reader').open, true);
   h.app.close(); h.app.open(h.trigger); h.node('report-reader-repair').listeners.click();
   assert.equal(repairs, 1);
-  h.artifact = { ...h.artifact, provenance: 'imported' }; h.app.open(h.trigger);
+  h.app.close(); h.artifact = { ...h.artifact, provenance: 'imported' }; h.app.open(h.trigger);
   assert.equal(h.node('report-reader-repair').hidden, true);
   h.node('report-reader-repair').listeners.click(); assert.equal(repairs, 1);
 });
