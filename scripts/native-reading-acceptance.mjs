@@ -73,8 +73,17 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
   };
   const verifyContent = async artifact => {
     const pack = createHandoff(artifact), expected = pack.items;
-    const counts = ['blocker', 'warning', 'info'].map(severity => expected.filter(item => !item.conditional && item.rule.severity === severity).length);
-    assert.equal(await text('#report-reader-summary'), `${expected.length} 个核对项 · 阻断 ${counts[0]} · 警告 ${counts[1]} · 提示 ${counts[2]} · 条件自查 ${expected.filter(item => item.conditional).length}`);
+    const labels = { all: '全部', blocker: '阻断', warning: '警告', info: '提示', conditional: '条件自查' };
+    const filters = await inspect(`return [...document.querySelectorAll('#report-reader-summary [data-reader-filter]')].map(button => ({
+      key: button.dataset.readerFilter, label: button.textContent.trim(), pressed: button.getAttribute('aria-pressed')
+    }))`);
+    const expectedFilters = [];
+    for (const [key, label] of Object.entries(labels)) {
+      const count = key === 'all' ? expected.length : expected.filter(item => (item.conditional ? 'conditional' : item.rule.severity) === key).length;
+      if (count) expectedFilters.push({ key, label: `${label} ${count}`, pressed: String(key === 'all') });
+    }
+    assert.deepEqual(filters, expectedFilters);
+    if (!expected.length) assert.equal(await text('#report-reader-summary'), '0 个核对项');
     const rows = await inspect(`return [...document.querySelectorAll('#report-reader-content article[data-reader-item]')].map(article=>({
       heading:article.querySelector('h3').textContent,headingId:article.querySelector('h3').id,text:article.textContent,
       requirements:[...article.querySelectorAll(':scope > ul > li')].map(n=>n.textContent),
@@ -229,6 +238,36 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
       assert.doesNotMatch(handoff, /重新生成上线清单/);
     }
     await click('#handoff-done'); await closeReader(); await closeTools();
+  });
+  await checked('Guide filters keep the outline, original numbering and full handoff in sync', async () => {
+    await fromHistory(artifacts.guide);
+    const items = createHandoff(artifacts.guide).items;
+    const allIds = items.map((_, index) => `reader-item-${index}`);
+    const conditionalIds = allIds.filter((_, index) => items[index].conditional);
+    assert.ok(conditionalIds.length > 0 && conditionalIds.length < items.length, 'real guide has both conditional and confirmed items');
+    const selectFilter = key => activate(`#report-reader-summary [data-reader-filter="${key}"]`);
+    const visibleItems = () => inspect(`return {
+      articles: [...document.querySelectorAll('#report-reader-content article h3')].filter(n => n.checkVisibility()).map(n => n.id),
+      outline: [...document.querySelectorAll('#report-reader-outline li a')].filter(n => n.checkVisibility()).map(n => n.hash.slice(1)),
+      pressed: [...document.querySelectorAll('#report-reader-summary [aria-pressed="true"]')].map(n => n.dataset.readerFilter)
+    }`);
+    await selectFilter('conditional');
+    assert.deepEqual(await visibleItems(), { articles: conditionalIds, outline: conditionalIds, pressed: ['conditional'] });
+    await screenshot('reading-conditional-filter');
+    await activate('#report-reader-original > summary');
+    const original = await inspect('return document.querySelector("#report-reader-original .report-markdown").textContent');
+    for (const item of items) assert.ok(original.includes(item.rule.title), 'original report keeps every rule title');
+    await activate('#report-reader-original > summary');
+    await activate(`#report-reader-outline a[href="#${conditionalIds[0]}"]`);
+    assert.equal(await inspect('return document.activeElement.id'), conditionalIds[0]);
+    await activate('#report-reader-handoff');
+    await until(() => inspect('return document.querySelector("#desktop-handoff").matches(":modal")'), 'full handoff opened from a filtered guide');
+    assert.equal(await inspect('return document.querySelectorAll("#handoff-content h2").length'), items.length);
+    await click('#handoff-done');
+    assert.deepEqual(await visibleItems(), { articles: conditionalIds, outline: conditionalIds, pressed: ['conditional'] });
+    await selectFilter('all');
+    assert.deepEqual(await visibleItems(), { articles: allIds, outline: allIds, pressed: ['all'] });
+    await closeReader(); await closeTools();
   });
   await checked('Closing a handoff resumes the same report, evidence and reading position', async () => {
     await appearance('light');
