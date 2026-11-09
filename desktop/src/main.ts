@@ -113,7 +113,7 @@ function updateCopyControl() {
     ? `已保存的${lastSuccessful.type}报告。${busy ? "正在运行工具，暂不可打开。" : "可查看、复制或加入当前会话。"}`
     : "尚未生成报告。运行工具后，可阅读并加入当前会话。";
   const nextAction = $('#start-check-label');
-  if (nextAction) nextAction.textContent = busy ? '查看执行状态' : !dir ? '配置预检' : projects?.getActive()?.directoryAvailable === false ? '重新定位项目' : lastSuccessful ? '重新预检' : '开始预检';
+  if (nextAction) nextAction.textContent = busy ? '查看执行状态' : !dir ? '配置预检' : projects?.getActive()?.directoryAvailable === false ? '重新定位项目' : lastSuccessful?.artifact.kind === 'check' ? '重新预检' : '开始预检';
 }
 
 function resetCopy() {
@@ -344,7 +344,16 @@ window.addEventListener("DOMContentLoaded", () => {
   } });
   explainPanel = explain;
   $("#start-explain").addEventListener("click", () => explain.open($("#start-explain")));
-  $("#start-check").addEventListener("click", () => tools.open($("#start-check"), $(dir && !busy && projects?.getActive()?.directoryAvailable !== false ? "#check-btn" : "#pick-btn")));
+  $("#start-check").addEventListener("click", () => {
+    const trigger = $("#start-check"), status = $("#status");
+    if (busy) { tools.open(trigger, activeRun ? status : undefined); return; }
+    const project = projects?.getActive();
+    if (!project?.directory || project.directoryAvailable === false) { tools.open(trigger, $("#pick-btn")); return; }
+    if (!tools.open(trigger)) return;
+    const running = run("run_check");
+    status.focus();
+    return running;
+  });
   $("#start-guide").addEventListener("click", () => tools.open($("#start-guide"), $("#subject")));
   const showHome = () => {
     if (!workspace.close()) return;
