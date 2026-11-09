@@ -28,6 +28,26 @@ test('handoff accepts all three source kinds and labels conditional guidance sep
     if (kind === 'explain') assert.equal(pack.items[0].rejectSummary, '拒因说明');
   }
 });
+test('verification follows the original workflow and only explicit console actions require the official console', () => {
+  const cases = [
+    ['check', ['code'], true, /重新运行代码预检/],
+    ['guide', ['materials'], true, /重新生成上线清单/],
+    ['explain', ['console'], false, /原始审核反馈/],
+    ['explain', undefined, true, /原始审核反馈/],
+  ];
+  for (const [kind, categories, manual, expected] of cases) {
+    const source = artifact(kind);
+    const item = source.data.result.items[0];
+    item.manual_required = manual;
+    if (categories) item.action_categories = categories;
+    const saved = exportHandoff(createHandoff(source), 'json');
+    const markdown = exportHandoff(parseHandoff(saved.text), 'markdown').text;
+    const steps = markdown.split('### 验证步骤')[1].split('## 报告来源')[0];
+    assert.match(steps, expected);
+    assert.equal(steps.includes('官方后台'), categories?.includes('console') ?? false);
+    if (kind === 'explain') assert.doesNotMatch(steps, /更新项目事实|重新生成上线清单/);
+  }
+});
 test('handoff rejects missing or mismatched structured source without fabricating content', () => {
   for (const edit of [a => { a.data = null; }, a => { a.data.kind = 'guide'; }, a => { a.data.result.command = 'guide'; }, a => { a.createdAt = -1; }, a => { a.data.result.items = null; }]) {
     const source = artifact(); edit(source); assert.throws(() => createHandoff(source));
