@@ -98,7 +98,7 @@ test('reader filters findings and outline together, preserving article numbers, 
   result.selfCheck = [{ ...result.selfCheck[0], severity: 'blocker' }];
   h.app.open(h.trigger);
   const filters = h.nodes.filter(n => n.dataset.readerFilter);
-  const select = key => filters.find(n => n.dataset.readerFilter === key).listeners.click();
+  const select = key => { const control = filters.find(n => n.dataset.readerFilter === key); control.focus(); control.listeners.click(); return control; };
   assert.deepEqual(filters.map(n => n.textContent), ['全部 3', '阻断 1', '警告 1', '条件自查 1']);
   const articles = h.node('report-reader-content').children;
   const entries = h.nodes.filter(n => n.tag === 'a' && n.href?.startsWith('#reader-item-')).map(n => n.parentNode);
@@ -106,7 +106,12 @@ test('reader filters findings and outline together, preserving article numbers, 
   evidence.open = true;
   const original = h.node('report-reader-original').textContent;
   for (const [key, indexes] of [['blocker', [1]], ['conditional', [2]], ['warning', [0]], ['all', [0, 1, 2]]]) {
-    select(key);
+    const control = select(key);
+    assert.equal(h.document.activeElement, control);
+    const status = h.node('report-reader-filter-status');
+    assert.equal(status.getAttribute('role'), 'status');
+    assert.equal(status.getAttribute('aria-atomic'), 'true');
+    assert.equal(status.textContent, key === 'all' ? '已显示全部 3 项' : `显示${control.textContent.replace(/ 1$/, '')} 1 项，共 3 项`);
     assert.deepEqual(filters.filter(n => n.getAttribute('aria-pressed') === 'true').map(n => n.dataset.readerFilter), [key]);
     assert.deepEqual(articles.filter(n => !n.hidden).map(n => Number(n.dataset.readerItem)), indexes);
     assert.deepEqual(entries.filter(n => !n.hidden).map(n => n.children[0].href), indexes.map(i => '#reader-item-' + i));
@@ -115,6 +120,10 @@ test('reader filters findings and outline together, preserving article numbers, 
   }
   assert.equal(articles[0].children.find(n => n.className === 'report-reader-evidence'), evidence);
   assert.equal(evidence.open, true);
+  assert.ok(evidence.textContent.includes(`规则编号 ${result.items[0].ruleId}`));
+  assert.ok(!articles[0].children.find(n => n.className === 'report-reader-meta').textContent.includes(result.items[0].ruleId));
+  h.app.close(); h.app.open(h.trigger);
+  assert.equal(h.node('report-reader-filter-status').textContent, '');
 });
 
 test('reader resets the filter after recheck and after opening another saved report', () => {
