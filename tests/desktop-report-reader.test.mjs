@@ -35,7 +35,7 @@ function harness(options = {}) {
   let artifact = { id: 'a', runId: 'r', projectId: null, projectRevision: null, contextRevision: null, kind: 'guide', title: '上线清单', createdAt: 1792700000000, toolVersion: 'test', rulesVersion: 'rules', ...runProjectTool('guide', { subject: 'personal' }) };
   let reads = 0, handoffs = 0;
   const fallback = document.createElement('button'), trigger = document.createElement('button');
-  const app = context.mountReportReader({ getArtifact: () => { reads++; return artifact; }, getProject: () => null, getRulesVersion: () => 'rules', returnFocus: () => fallback, onHandoff: () => { assert.equal(node('desktop-report-reader').open, false); handoffs++; }, ...options });
+  const app = context.mountReportReader({ getArtifact: () => { reads++; return artifact; }, getProject: () => null, getRulesVersion: () => 'rules', returnFocus: () => fallback, onHandoff: anchor => { assert.equal(node('desktop-report-reader').open, true); assert.equal(anchor, node('report-reader-handoff')); handoffs++; }, ...options });
   const node = id => nodes.find(n => n.id === id);
   return { app, node, nodes, document, trigger, fallback, get artifact() { return artifact; }, set artifact(value) { artifact = value; }, get reads() { return reads; }, get handoffs() { return handoffs; } };
 }
