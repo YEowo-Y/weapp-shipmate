@@ -41,6 +41,8 @@ export function mountReportReader(options: Options) {
   const dismiss = button('', 'report-reader-dismiss'); dismiss.classList.add('ui-action-icon'); dismiss.setAttribute('aria-label', '关闭报告阅读'); dismiss.append(createIcon(document, 'arrow-left')); header.append(title, dismiss);
   const body = node('div'); body.className = 'report-reader-body';
   const summary = node('div', '', 'report-reader-summary');
+  const filterStatus = node('p', '', 'report-reader-filter-status');
+  filterStatus.setAttribute('role', 'status'); filterStatus.setAttribute('aria-atomic', 'true');
   const provenance = node('p', '', 'report-reader-provenance');
   const versions = node('details', '', 'report-reader-versions'); versions.append(node('summary', '报告标识与版本'));
   const versionText = node('p'); versions.append(versionText);
@@ -55,7 +57,7 @@ export function mountReportReader(options: Options) {
   const content = node('section', '', 'report-reader-content'); content.setAttribute('aria-label', '报告核对项');
   const original = node('details', '', 'report-reader-original'); original.append(node('summary', '完整原报告'));
   const originalContent = node('div'); originalContent.className = 'report-markdown'; original.append(originalContent);
-  column.append(content, original, versions); layout.append(outline, column); body.append(summary, provenance, warning, context, linkStatus, layout);
+  column.append(content, original, versions); layout.append(outline, column); body.append(summary, filterStatus, provenance, warning, context, linkStatus, layout);
   const footer = node('footer'); footer.className = 'report-reader-footer';
   const repair = button('检查可用修复', 'report-reader-repair');
   const handoff = button('准备修复交接', 'report-reader-handoff'); footer.append(repair, handoff);
@@ -64,6 +66,7 @@ export function mountReportReader(options: Options) {
   const visible = (element: HTMLElement | null | undefined): element is HTMLElement => !!element?.isConnected && element.getClientRects().length > 0;
   function render(artifact = options.getArtifact()) {
     snapshotId = artifact?.id ?? null;
+    filterStatus.textContent = '';
     summary.replaceChildren(); summary.removeAttribute('role'); summary.removeAttribute('aria-label');
     provenance.textContent = ''; versions.hidden = true; versions.open = false; versionText.textContent = ''; linkStatus.textContent = '';
     warning.removeAttribute('role');
@@ -106,7 +109,7 @@ export function mountReportReader(options: Options) {
     for (const [index, item] of items.entries()) {
       const r = item.rule, article = node('article'); article.dataset.readerItem = String(index); article.className = 'report-reader-item';
       const heading = node('h3', `${index + 1}. ${r.title}`, `reader-item-${index}`); heading.tabIndex = -1;
-      const severity = node('p', `${item.conditional ? '条件自查 · 适用性尚未确认' : labels[r.severity]} · ${r.ruleId}`); severity.className = 'report-reader-meta';
+      const severity = node('p', item.conditional ? '条件自查 · 适用性尚未确认' : labels[r.severity]); severity.className = 'report-reader-meta';
       if (item.conditional) severity.textContent += ` · ${labels[r.severity]}`;
       article.append(heading, severity, node('h4', '为何关注'), node('p', r.why || '未提供具体发现依据，请人工核对适用性。'));
       if (item.conditional) {
@@ -123,7 +126,7 @@ export function mountReportReader(options: Options) {
       if (r.note && r.note !== r.warn) article.append(node('p', `补充核对：${r.note}`));
       if (r.official_url) { const link = node('a', '查看官方依据（在浏览器中打开）'); link.href = r.official_url; link.target = '_blank'; link.rel = 'noopener noreferrer'; article.append(link); }
       else article.append(node('p', '此项未提供官方链接，请自行核对。'));
-      const evidence = node('details'); evidence.className = 'report-reader-evidence'; evidence.append(node('summary', '规则摘录与资料记录'));
+      const evidence = node('details'); evidence.className = 'report-reader-evidence'; evidence.append(node('summary', '规则摘录与资料记录'), node('p', `规则编号 ${r.ruleId}`));
       const confidence = formatRuleConfidence(r, source.provenance === 'imported');
       if (confidence) evidence.append(node('p', confidence));
       if (r.source_quote) evidence.append(node('blockquote', r.source_quote));
@@ -149,6 +152,7 @@ export function mountReportReader(options: Options) {
           const hidden = key !== 'all' && row.category !== key;
           row.article.hidden = hidden; row.entry.hidden = hidden;
         }
+        filterStatus.textContent = key === 'all' ? `已显示全部 ${rows.length} 项` : `显示${label} ${count} 项，共 ${rows.length} 项`;
         outline.scrollTop = 0;
       });
       filters.push(filter); summary.append(filter);
