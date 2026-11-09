@@ -22,6 +22,22 @@ test("guide 按输入跳过隐私/域名阶段", () => {
   assert.ok(stages.has("filing"), "备案阶段应始终出现");
 });
 
+test("guide 摘要和阶段说明使用可读名称，规则阶段仍保留结构化标识", () => {
+  const { flow } = loadData();
+  const conditionalTitles = flow.filter(stage => ["privacy", "domain"].includes(stage.stage)).map(stage => stage.title).join("、");
+  for (const [subject_type, label] of [[undefined, "未指定"], ["personal", "个人"], ["individual_business", "个体工商户"], ["enterprise", "企业"]]) {
+    const result = runGuide({ subject_type });
+    assert.ok(result.meta.summary.startsWith(`主体：${label}；`));
+    assert.ok(result.notes.some(note => note.includes(conditionalTitles)));
+    assert.doesNotMatch(result.notes.join("\n"), /privacy|domain/);
+    assert.ok(result.items.some(item => item.stage === "privacy"));
+    assert.ok(result.items.some(item => item.stage === "domain"));
+    const skipped = runGuide({ subject_type, collects_sensitive: false, has_server_domain: false });
+    assert.ok(skipped.notes.some(note => note === `按你的输入跳过阶段：${conditionalTitles}`));
+    assert.ok(skipped.items.every(item => item.stage !== "privacy" && item.stage !== "domain"));
+  }
+});
+
 test("guide 收集敏感信息时含隐私阶段", () => {
   const r = runGuide({ subject_type: "personal", collects_sensitive: true });
   const stages = new Set(r.items.map((i) => i.stage));
