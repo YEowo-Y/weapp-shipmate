@@ -8,7 +8,7 @@ import './report-reader.css';
 
 // createHandoff validates these fields before this presentation-only narrowing.
 type ReadingItem = { conditional: boolean; rejectSummary: string | null; relevance?: 'direct' | 'possible'; matchEvidence?: { aliases: string[]; codes: string[]; partialAliases: string[] }; rule: { ruleId: string; title: string; severity: 'blocker' | 'warning' | 'info'; why?: string | null; requires: string[]; official_url?: string | null; source_quote?: string | null; last_verified?: string | null; manual_required: boolean; warn?: string | null; note?: string | null; action_categories?: string[]; confidence?: 'high' | 'medium' | 'low' } };
-type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(anchor: HTMLElement): void; onRepair?(): void; onOpenSource?(url: string): Promise<unknown>; returnFocus?(): HTMLElement | null };
+type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(anchor: HTMLElement): void; onRepair?(anchor: HTMLElement): void; onOpenSource?(url: string): Promise<unknown>; returnFocus?(): HTMLElement | null };
 
 // The export contract intentionally omits run notes and business signals. Validate
 // only these additional reading fields; never derive execution state from prose.
@@ -60,10 +60,9 @@ export function mountReportReader(options: Options) {
   const repair = button('检查可用修复', 'report-reader-repair');
   const handoff = button('准备修复交接', 'report-reader-handoff'); footer.append(repair, handoff);
   dialog.append(header, body, footer); document.body.append(dialog);
-  let trigger: HTMLElement | null = null, disposed = false, pendingRepair = false, snapshotId: string | null = null, epoch = 0;
+  let trigger: HTMLElement | null = null, disposed = false, snapshotId: string | null = null, epoch = 0;
   const visible = (element: HTMLElement | null | undefined): element is HTMLElement => !!element?.isConnected && element.getClientRects().length > 0;
-  function render() {
-    const artifact = options.getArtifact();
+  function render(artifact = options.getArtifact()) {
     snapshotId = artifact?.id ?? null;
     provenance.textContent = ''; versions.hidden = true; versions.open = false; versionText.textContent = ''; linkStatus.textContent = '';
     warning.removeAttribute('role');
@@ -155,7 +154,7 @@ export function mountReportReader(options: Options) {
       warning.textContent = '当前选中的报告已经变化，请重新打开本机预检报告再检查可用修复。';
       warning.hidden = false; warning.setAttribute('role', 'status'); warning.tabIndex = -1; warning.focus(); return;
     }
-    pendingRepair = true; close();
+    options.onRepair?.(repair);
   });
   handoff.addEventListener('click', () => {
     if (!dialog.open || handoff.hidden || disposed) return;
@@ -172,15 +171,20 @@ export function mountReportReader(options: Options) {
     trigger?.setAttribute('aria-expanded', 'false');
     if (disposed) return;
     const target = visible(trigger) ? trigger : options.returnFocus?.(); if (!options.openPage && visible(target)) target.focus();
-    if (pendingRepair) { pendingRepair = false; options.onRepair?.(); }
   });
   return {
     open(anchor: HTMLElement | null) {
       if (disposed || dialog.open) return;
-      epoch++; trigger = anchor; pendingRepair = false; render(); if (options.openPage) { if (!options.openPage(dialog, anchor)) return; } else dialog.showModal();
+      epoch++; trigger = anchor; render(); if (options.openPage) { if (!options.openPage(dialog, anchor)) return; } else dialog.showModal();
       // A hidden dialog has no scroll box: reset after it participates in layout.
       body.scrollTop = 0; outline.scrollTop = 0;
       trigger?.setAttribute('aria-expanded', 'true'); dismiss.focus();
+    },
+    showRecheck(artifact: Artifact) {
+      if (!dialog.open || disposed || options.getArtifact()?.id !== artifact.id) return;
+      epoch++;
+      render(artifact);
+      body.scrollTop = 0; outline.scrollTop = 0;
     },
     close, element: dialog, canClose: () => true,
     destroy() { disposed = true; epoch++; trigger?.setAttribute('aria-expanded', 'false'); dialog.remove(); },
