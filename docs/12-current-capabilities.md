@@ -43,7 +43,7 @@
 | 拒因查询 | 真实 | 匹配规则、筛选处理项、展开来源及导出；未知项不能补成确定结论 | [拒因内核](../src/explain.mjs)、[共享界面](../desktop/design-previews/explain.js)、[桌面对话框](../desktop/src/explain-dialog.ts) |
 | 报告与成果 | 真实 | 预检、清单、拒因单次执行保存 Markdown 和经过校验的结构化成果；历史报告标明事实或规则变化。同项目、同依据及完整同范围预检可比较新增/仍存在/未再检出；旧纯 Markdown 仍可读但不可比较 | [领域成果](../src/project-artifact.mjs)、[项目仓库](../desktop/src-tauri/src/project_store.rs)、[比较](../desktop/src-tauri/src/project_workflow.rs) |
 | 报告阅读 | 真实 | 首页与工具栏进入独立限宽阅读视图；目录、核对项、运行限制与条件线索常显，官方摘录和版本明细可展开。旧或无效结构保留安全原文；打开阅读不运行工具或发送模型，复制仍保留报告原文 | [阅读界面](../desktop/src/report-reader.ts)、[功能呈现规范](../desktop/design-previews/research/functional-reading-design-20261023.md) |
-| 首页工作台 | 真实 | 当前项目、预检主入口、清单/拒因辅助任务、最近报告和后续功能分层呈现；入口打开现有功能，不自动执行工具。按内容宽度重排，真实空状态不伪造完成度 | [正式页面](../desktop/index.html)、[首页样式](../desktop/src/home.css)、[呈现设计](../desktop/design-previews/research/feature-presentation-design-20261023.md) |
+| 首页工作台 | 真实 | 当前项目、预检主入口、清单/拒因辅助任务、最近报告和后续功能分层呈现；已选有效项目时，点击开始或重新预检会打开工具面板并立即运行。目录缺失时进入配置，运行中可查看进度。按内容宽度重排，真实空状态不伪造完成度 | [正式页面](../desktop/index.html)、[首页样式](../desktop/src/home.css)、[呈现设计](../desktop/design-previews/research/feature-presentation-design-20261023.md) |
 | 多项目 | 真实 | 持久目录、名称、主体和业务事实；支付/敏感信息/域名采用三态，未知不等于否。按项目切换会话、草稿和成果，支持目录重新定位 | [项目管理](../desktop/src/projects.ts)、[会话工作区](../desktop/design-previews/session-workspace.js) |
 | 会话、历史、草稿 | 真实 | 会话切换、历史检索、归档与草稿存储已有实现；恢复聊天记录不等于恢复执行中的任务 | [会话工作区](../desktop/design-previews/session-workspace.js)、[存储](../desktop/design-previews/session-store.js) |
 | 会话备份 | 真实 | 会话导出与追加导入独立于项目备份；会话备份不含项目记忆、完整成果和模型凭据。导入内容持续标为外部历史，不能自行声明为本机执行；查找成果时核对项目/运行/成果及版本，缺失或超出本机历史窗口时给恢复说明。未知项目关联归为未归属，不自动创建或启用记忆 | [会话传输](../desktop/design-previews/session-transfer.js)、[成果核验](../desktop/src/sessions.ts)、[项目管理](../desktop/src/projects.ts) |
