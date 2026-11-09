@@ -5,6 +5,11 @@ export { formatRuleActions, formatRuleConfidence };
 
 export const MAX_HANDOFF_BYTES = 512 * 1024;
 const kinds = { check: '代码预检发现', guide: '上线要求核对', explain: '拒因规则匹配' };
+const verificationByKind = {
+  check: '修改后重新运行代码预检，对比同一扫描范围的报告，再实际测试受影响的功能。',
+  guide: '对照实际业务逐项核对所需材料。如果项目事实有变化，更新后重新生成上线清单。',
+  explain: '对照原始审核反馈、匹配依据和官方规则，确认这条规则是否适用。处理后按原反馈逐项复核。',
+};
 const ruleKeys = ['ruleId', 'title', 'stage', 'severity', 'why', 'requires', 'warn', 'official_url', 'source_quote', 'last_verified', 'manual_required', 'note', 'action_categories', 'confidence'];
 const sourceKeys = ['artifactId', 'runId', 'projectId', 'projectRevision', 'contextRevision', 'kind', 'title', 'createdAt', 'toolVersion', 'rulesVersion'];
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
@@ -104,9 +109,9 @@ export function renderHandoffSections(value) {
     else lines.push('官方来源：未提供，请自行核对。', '');
     lines.push(`资料记录日期：${escape(r.last_verified || '未记录')}（未实时核验）`, '', '### 期望结果', '',
       ...(r.requires.length ? r.requires.map(text => `- ${escape(text)}`) : ['- 对照官方要求确认适用性与处理方案。']), '', '### 验证步骤', '',
-      '- 先核对以上要求与当前项目是否一致；条件不适用时记录原因，不擅自删除项目内容。',
-      s.kind === 'check' ? '- 人工实施后重新运行代码预检，对比同一范围的报告，并验证实际功能；“未再检出”不等于修复已被证明。' : '- 逐项核对所需材料与实际业务；更新项目事实后重新生成对应报告。',
-      r.manual_required ? '- 涉及官方后台的要求由本人核验，记录结果与证据。' : '- 记录实际验证步骤、结果与未解决项，交接包本身不记录完成状态。', '');
+      `- ${verificationByKind[s.kind]}`);
+    if (r.action_categories?.includes('console')) lines.push('- 在官方后台核对这项要求对应的实际配置。');
+    lines.push('- 记录核对结果、依据和未解决项。条件不适用时注明原因。', '');
     if (r.warn || r.note) lines.push(`补充：${escape([r.warn, r.note].filter(Boolean).join('；'))}`, '');
   }
   return { basis: basis.join('\n'), content: lines.join('\n') };
