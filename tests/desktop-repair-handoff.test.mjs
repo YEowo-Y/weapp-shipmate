@@ -14,7 +14,7 @@ const requireDesktop = createRequire(new URL('../desktop/package.json', import.m
 let ts;
 try { ts = requireDesktop('typescript'); } catch { /* Optional for CLI-only installation. */ }
 const desktopTest = (name, fn) => test(name, { skip: !ts && 'Install desktop dependencies' }, fn);
-function harness({ copyText = async () => {} } = {}) {
+function harness({ copyText = async () => {}, getProject = () => null, getRulesVersion = () => 'rules' } = {}) {
   const downloads = [];
   const document = createPreviewDocument(), create = document.createElement.bind(document), nodes = [];
   document.createElement = tag => {
@@ -32,7 +32,7 @@ function harness({ copyText = async () => {} } = {}) {
   const context = vm.createContext({ ...contract, Error, document, createIcon, renderMessageText, createActionButton: (doc, label) => { const node = doc.createElement('wa-button'); node.textContent = label; return node; }, createArtifactDownloader: () => ({ download: value => { downloads.push(value); return true; }, dispose() {} }) });
   vm.runInContext(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, context);
   const artifact = { id: 'source-1', runId: 'run-1', projectId: null, projectRevision: null, contextRevision: null, kind: 'guide', title: '上线清单', createdAt: 1792700000000, toolVersion: 'test', rulesVersion: 'rules', ...runProjectTool('guide', { subject: 'personal' }) };
-  const app = context.mountRepairHandoff({ getArtifact: () => artifact, getProject: () => null, getRulesVersion: () => 'rules', isBusy: () => false, copyText });
+  const app = context.mountRepairHandoff({ getArtifact: () => artifact, getProject, getRulesVersion, isBusy: () => false, copyText });
   const node = id => nodes.find(node => node.id === id), trigger = document.createElement('button');
   const select = text => { node('handoff-file').files = [{ size: 100, text }]; node('handoff-file').listeners.change(); };
   return { app, artifact, node, trigger, select, document, downloads };
@@ -44,6 +44,25 @@ desktopTest('handoff replaces the empty state and does not duplicate content on 
   h.node('desktop-handoff').close(); h.app.open(h.trigger, true);
   assert.equal(h.node('handoff-content').textContent, text);
   assert.equal(h.node('handoff-basis').open, false);
+});
+
+desktopTest('shared Markdown reflects the project and rules at sharing time while JSON preserves the report', async () => {
+  const project = { id: 'test-project', revision: 1, contextRevision: 1 };
+  let rulesVersion = 'rules', copied;
+  const h = harness({ getProject: () => project, getRulesVersion: () => rulesVersion, copyText: async text => { copied = text; } });
+  Object.assign(h.artifact, { projectId: project.id, projectRevision: 1, contextRevision: 1 });
+  h.app.open(h.trigger, true);
+  await h.node('handoff-copy').listeners.click();
+  assert.doesNotMatch(copied, /分享时的版本核对/);
+  project.revision++;
+  project.contextRevision++;
+  rulesVersion = 'new-rules';
+  h.node('handoff-markdown').listeners.click();
+  await h.node('handoff-copy').listeners.click();
+  assert.equal(copied, h.downloads[0].text);
+  assert.match(copied, /分享时的版本核对[\s\S]*项目版本已变化[\s\S]*项目事实已变化[\s\S]*规则资料已变化/);
+  h.node('handoff-json').listeners.click();
+  assert.deepEqual(contract.parseHandoff(h.downloads[1].text), contract.createHandoff(h.artifact));
 });
 
 desktopTest('restored project report retains imported provenance in reading and exported handoff', () => {
