@@ -83,6 +83,8 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
       if (count) expectedFilters.push({ key, label: `${label} ${count}`, pressed: String(key === 'all') });
     }
     assert.deepEqual(filters, expectedFilters);
+    const smallTargets = await inspect(`return [...document.querySelectorAll('#report-reader-summary button, #report-reader-outline a')].filter(n=>!n.closest('[hidden]')).filter(n=>{const r=n.getBoundingClientRect();return r.width<24 || r.height<24}).map(n=>n.textContent)`);
+    assert.deepEqual(smallTargets, [], 'filters and outline links meet the minimum target size');
     if (!expected.length) assert.equal(await text('#report-reader-summary'), '0 个核对项');
     const rows = await inspect(`return [...document.querySelectorAll('#report-reader-content article[data-reader-item]')].map(article=>({
       heading:article.querySelector('h3').textContent,headingId:article.querySelector('h3').id,text:article.textContent,
@@ -98,7 +100,7 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
       assert.equal(row.heading, `${index + 1}. ${rule.title}`); assert.equal(row.headingId, `reader-item-${index}`);
       assert.deepEqual(row.requirements, rule.requires.length ? rule.requires : ['对照官方要求确认适用性与处理方案。']);
       assert.equal(row.visibleRequirements, true, 'requirements are not hidden inside collapsed evidence');
-      assert.ok(row.metadata.includes(rule.ruleId)); assert.equal(row.metadata.includes('条件自查'), item.conditional);
+      assert.ok(row.text.includes(`规则编号 ${rule.ruleId}`)); assert.equal(row.metadata.includes(rule.ruleId), false); assert.equal(row.metadata.includes('条件自查'), item.conditional);
       assert.equal(row.evidenceOpen, false);
       if (item.conditional) {
         const signals = artifact.data.result.selfCheck.find(entry => entry.ruleId === rule.ruleId).signal;
@@ -251,7 +253,11 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
       outline: [...document.querySelectorAll('#report-reader-outline li a')].filter(n => n.checkVisibility()).map(n => n.hash.slice(1)),
       pressed: [...document.querySelectorAll('#report-reader-summary [aria-pressed="true"]')].map(n => n.dataset.readerFilter)
     }`);
-    await selectFilter('conditional');
+    await inspect(`document.querySelector('#report-reader-summary [data-reader-filter="conditional"]').focus()`);
+    await press('\uE007');
+    assert.equal(await inspect('return document.activeElement.dataset.readerFilter'), 'conditional');
+    assert.equal(await text('#report-reader-filter-status'), `显示条件自查 ${conditionalIds.length} 项，共 ${items.length} 项`);
+    assert.equal(await inspect('return document.querySelector("#report-reader-filter-status").getAttribute("role")'), 'status');
     assert.deepEqual(await visibleItems(), { articles: conditionalIds, outline: conditionalIds, pressed: ['conditional'] });
     await screenshot('reading-conditional-filter');
     await activate('#report-reader-original > summary');
