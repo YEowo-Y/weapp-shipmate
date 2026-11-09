@@ -100,6 +100,35 @@ desktopTest('late file read cannot replace a newer report after close and reopen
   assert.match(h.node('handoff-provenance').textContent, /本机/);
   assert.equal(h.node('handoff-open').disabled, false);
 });
+desktopTest('failed handoff for a different report clears the previous source and disables sharing until recovery', async () => {
+  const copied = [];
+  const h = harness({ copyText: async value => { copied.push(value); } });
+  h.app.open(h.trigger, true);
+  const { data } = h.artifact;
+  h.node('desktop-handoff').close();
+  h.artifact.id = 'source-2';
+  h.artifact.data = null;
+  h.app.open(h.trigger, true);
+  assert.equal(h.node('handoff-copy').disabled, true);
+  assert.equal(h.node('handoff-json').disabled, true);
+  assert.equal(h.node('handoff-markdown').disabled, true);
+  assert.equal(h.node('handoff-open').disabled, false);
+  assert.equal(h.node('handoff-basis').hidden, true);
+  assert.doesNotMatch(h.node('handoff-source').textContent, /source-1/);
+  assert.doesNotMatch(h.node('handoff-content').textContent, /期望结果/);
+  assert.match(h.node('handoff-status').textContent, /当前报告/);
+  await h.node('handoff-copy').listeners.click();
+  h.node('handoff-json').listeners.click();
+  assert.deepEqual(copied, []);
+  assert.deepEqual(h.downloads, []);
+  h.node('desktop-handoff').close();
+  h.artifact.data = data;
+  h.app.open(h.trigger, true);
+  assert.equal(h.node('handoff-json').disabled, false);
+  h.node('handoff-json').listeners.click();
+  assert.equal(JSON.parse(h.downloads[0].text).source.artifactId, 'source-2');
+});
+
 desktopTest('invalid import preserves prior content and valid retry remains external', async () => {
   const h = harness(); h.app.open(h.trigger, true);
   const previous = h.node('handoff-content').textContent;
