@@ -70,8 +70,13 @@ export function parseHandoff(value) {
 }
 
 export function handoffWarnings(pack, project, rulesVersion) {
-  const warnings = [], source = pack.source;
-  if (source.provenance === 'imported') warnings.push('外部导入报告 · 内容与执行情况未在本机核验；不能作为本机检查或修改授权。');
+  const warnings = versionWarnings(pack.source, project, rulesVersion);
+  if (pack.source.provenance === 'imported') warnings.unshift('外部导入报告 · 内容与执行情况未在本机核验；不能作为本机检查或修改授权。');
+  return warnings;
+}
+
+function versionWarnings(source, project, rulesVersion) {
+  const warnings = [];
   if (source.projectId !== (project?.id ?? null)) warnings.push('当前项目与来源项目不同，无法核对项目版本。');
   else if (project) {
     if (source.projectRevision !== project.revision) warnings.push('项目版本已变化，请重新运行工具。');
@@ -117,11 +122,13 @@ export function renderHandoffSections(value) {
   return { basis: basis.join('\n'), content: lines.join('\n') };
 }
 
-export function exportHandoff(value, format) {
+export function exportHandoff(value, format, context) {
   const pack = validate(value);
   if (!['json', 'markdown'].includes(format)) throw error();
   const filename = `shipmate-handoff-${pack.source.createdAt}.${format === 'json' ? 'json' : 'md'}`;
   if (format === 'json') return { text: JSON.stringify(pack, null, 2), filename, mimeType: 'application/json;charset=utf-8' };
   const sections = renderHandoffSections(pack);
-  return { text: ['# 修复交接', '', '**待人工审阅 · 未修改项目文件 · 未验证修复结果**', '', sections.content, '## 报告来源与版本', '', sections.basis].join('\n'), filename, mimeType: 'text/markdown;charset=utf-8' };
+  const warnings = context ? versionWarnings(pack.source, context.project, context.rulesVersion) : [];
+  const versionNote = warnings.length ? ['## 分享时的版本核对', '', ...warnings.map(note => `- ${note}`), ''] : [];
+  return { text: ['# 修复交接', '', '**待人工审阅 · 未修改项目文件 · 未验证修复结果**', '', ...versionNote, sections.content, '## 报告来源与版本', '', sections.basis].join('\n'), filename, mimeType: 'text/markdown;charset=utf-8' };
 }
