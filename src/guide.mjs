@@ -82,9 +82,9 @@ export function runGuide(inputs = {}, { includeDrafts = false } = {}) {
     // flow.yaml 已按顺序排列；applies_when 决定是否适用
     const missingFact = stage.applies_when && [...stage.applies_when.matchAll(/([A-Za-z_]\w*)\s*(?:==|!=)/g)]
       .some((match) => inputs[match[1]] == null);
-    if (missingFact) unknown.push(stage.stage);
+    if (missingFact) unknown.push(stage.title);
     if (!missingFact && !evalExpr(stage.applies_when, inputs)) {
-      skipped.push(stage.stage);
+      skipped.push(stage.title);
       continue;
     }
     // 导航只取 navigation / both 规则（preflight-only 需源码，归 check）
@@ -136,6 +136,7 @@ export function runGuide(inputs = {}, { includeDrafts = false } = {}) {
   if (selfCheck.length)
     notes.push(`另有 ${selfCheck.length} 条规则是否适用取决于你的具体功能，已列入『可能适用 · 请按业务自查』。`);
   if (includeDrafts) notes.push("已包含 draft 规则（来源未核验，仅供参考）。");
-  const summary = `主体：${subjectType || "未指定"}；适用阶段 ${flow.length - skipped.length}/${flow.length}。`;
+  const subjectLabel = { personal: "个人", individual_business: "个体工商户", enterprise: "企业" }[subjectType] || "未指定";
+  const summary = `主体：${subjectLabel}；适用阶段 ${flow.length - skipped.length}/${flow.length}。`;
   return { command: "guide", meta: { summary }, items, selfCheck, notes };
 }
