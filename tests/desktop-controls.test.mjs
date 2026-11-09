@@ -22,7 +22,7 @@ function harness({ open = async () => null, invoke = async () => 'report', write
       element.click = () => element.listeners.click?.(); return element;
     },
   };
-  for (const id of ['stop-tool', 'pick-btn', 'check-btn', 'guide-btn', 'subject', 'status', 'dir', 'report', 'report-title', 'report-note', 'copy-report', 'copy-status', 'handoff-report', 'read-report', 'repair-report', 'desktop-repair-history', 'save-report', 'start-check', 'start-guide', 'start-explain', 'home-report', 'home-report-summary', 'home-results', 'desktop-results-open', 'desktop-menu-report', 'home-project-name', 'home-project-summary', 'home-project-manage', 'desktop-preferences-open', 'desktop-memory-open', 'desktop-sources-open', 'desktop-maintenance-open', 'desktop-maintenance-count', 'sessionHost']) {
+  for (const id of ['stop-tool', 'pick-btn', 'check-btn', 'guide-btn', 'subject', 'status', 'dir', 'report', 'report-title', 'report-note', 'copy-report', 'copy-status', 'handoff-report', 'read-report', 'repair-report', 'desktop-repair-history', 'save-report', 'start-check', 'start-check-label', 'start-guide', 'start-explain', 'home-report', 'home-report-summary', 'home-results', 'desktop-results-open', 'desktop-menu-report', 'home-project-name', 'home-project-summary', 'home-project-manage', 'desktop-preferences-open', 'desktop-memory-open', 'desktop-sources-open', 'desktop-maintenance-open', 'desktop-maintenance-count', 'sessionHost']) {
     nodes.set(`#${id}`, Object.assign(id === 'report' ? createPreviewDocument().createElement('div') : {}, {
       disabled: id === 'check-btn', value: 'personal', textContent: '', className: '',
       scrollTop: 0, scrollLeft: 0, attributes: {}, listeners: {},
@@ -628,24 +628,50 @@ desktopTest('preferences route uses the single source-status dialog without star
 });
 
 
-desktopTest('home context reflects selected project and points unavailable directories to recovery without execution', async () => {
-  const opened = []; let executions = 0;
-  const app = harness({ tools: { open: (...args) => opened.push(args) }, invoke: async () => { executions++; } });
+desktopTest('home preflight runs once, opens progress during a run and routes an unavailable directory to recovery', async () => {
+  const opened = [], commands = [], first = deferred();
+  const app = harness({
+    tools: { open: (...args) => { opened.push(args); return true; } },
+    invoke: async (cmd, args) => { commands.push({ cmd, ...args }); return commands.length === 1 ? first.promise : 'second report'; },
+  });
   app.selectProject(null);
   assert.match(app.node('home-project-name').textContent, /未选择项目/);
   assert.match(app.node('home-project-summary').textContent, /清单/);
   app.selectProject({ id: 'p1', name: '<Project & test>', directory: 'C:/project', directoryAvailable: true, subject: 'enterprise' });
   assert.equal(app.node('home-project-name').textContent, '<Project & test>');
   assert.match(app.node('home-project-summary').textContent, /企业/);
+  assert.equal(app.node('start-check-label').textContent, '开始预检');
+  const running = app.click('start-check');
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0].cmd, 'project_run');
+  assert.equal(commands[0].projectId, 'p1');
+  assert.equal(commands[0].kind, 'check');
+  assert.equal(app.document.activeElement, app.node('status'));
+  assert.equal(app.node('start-check-label').textContent, '查看执行状态');
   await app.click('start-check');
-  assert.equal(opened.at(-1)[1], app.node('check-btn'));
+  assert.deepEqual(opened.at(-1), [app.node('start-check'), app.node('status')]);
+  assert.equal(commands.length, 1);
+  first.resolve('first report'); await running;
+  assert.equal(app.node('start-check-label').textContent, '重新预检');
+  await app.click('start-check');
+  assert.equal(commands.length, 2);
+  assert.notEqual(commands[0].runId, commands[1].runId);
+  assert.equal(app.node('report').textContent, 'second report');
   app.selectProject({ id: 'p1', name: 'Project', directory: 'C:/missing', directoryAvailable: false, subject: 'enterprise' });
   assert.match(app.node('home-project-summary').textContent, /目录不可用/);
   await app.click('start-check');
   assert.equal(opened.at(-1)[1], app.node('pick-btn'));
   await app.click('home-project-manage');
   assert.equal(app.integration.projectOpens, 1);
-  assert.equal(executions, 0);
+  assert.equal(commands.length, 2);
+});
+
+desktopTest('home preflight respects a blocked panel transition before starting work', async () => {
+  let calls = 0;
+  const app = harness({ tools: { open: () => false }, invoke: async () => { calls++; } });
+  app.selectProject({ id: 'p1', directory: 'C:/project', directoryAvailable: true, subject: 'personal' });
+  await app.click('start-check');
+  assert.equal(calls, 0);
 });
 
 test('desktop exposes one persistent settings entry while retaining business destinations', () => {
