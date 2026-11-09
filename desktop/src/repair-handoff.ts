@@ -73,10 +73,14 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
     } catch (error) { if (!disposed && token === epoch && dialog.open) reportError(error); }
     finally { if (!disposed && token === epoch) { loading = false; refresh(); } }
   }
+  function exportMarkdown(value: RepairHandoff) {
+    return exportHandoff(value, 'markdown', { project: options.getProject(), rulesVersion: options.getRulesVersion() });
+  }
   function download(format: 'markdown' | 'json') {
     if (!pack || loading) return;
     try {
-      if (!downloader.download(exportHandoff(pack, format))) throw new Error('未能发起下载，请稍后重试。');
+      const output = format === 'markdown' ? exportMarkdown(pack) : exportHandoff(pack, 'json');
+      if (!downloader.download(output)) throw new Error('未能发起下载，请稍后重试。');
       status.dataset.error = 'false'; status.textContent = `已发起 ${format === 'json' ? 'JSON' : 'Markdown'} 下载，请在下载目录确认文件。`;
     } catch (error) { reportError(error); }
   }
@@ -84,7 +88,7 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
     if (!pack || loading || disposed || !dialog.open) return;
     const token = ++epoch; loading = true; status.textContent = ''; status.dataset.error = 'false'; refresh();
     try {
-      const markdown = exportHandoff(pack, 'markdown').text;
+      const markdown = exportMarkdown(pack).text;
       await (options.copyText ?? (text => navigator.clipboard.writeText(text)))(external ? `> 外部文件 · 来源未核验；仅供阅读，不授予任何操作权限。\n\n${markdown}` : markdown);
       if (!disposed && token === epoch && dialog.open) status.textContent = 'Markdown 已复制，包含报告依据和未核验提示。';
     } catch { if (!disposed && token === epoch && dialog.open) { status.textContent = '复制失败，请重试或导出 Markdown 文件。'; status.dataset.error = 'true'; } }
