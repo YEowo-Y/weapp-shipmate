@@ -221,15 +221,27 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     if (kind === 'guide') assert.ok(artifacts.guide.data.result.selfCheck.length > 0, 'real guide includes conditional applicability');
     await fromHistory(artifacts[kind]); await verifyContent(artifacts[kind]); await geometry(`${kind}-wide`); await closeReader(); await closeTools();
   });
-  await checked('Reader hands off the same persisted artifact and returns to a visible entry', async () => {
+  await checked('Closing a handoff resumes the same report, evidence and reading position', async () => {
     await appearance('light');
-    await fromHistory(artifacts.guide); await activate('#report-reader-handoff');
-    await until(() => inspect('return !document.querySelector("#desktop-report-reader").open && document.querySelector("#desktop-handoff").open'), 'reader transitions to handoff');
-    assert.ok((await text('#handoff-source')).includes(artifacts.guide.id));
-    assert.equal(await inspect('return getComputedStyle(document.querySelector("#handoff-content")).fontSize'), '18px', 'handoff keeps the chosen reading text size');
-    assert.equal(await inspect('return document.querySelectorAll("dialog:modal").length'), 1);
-    await press('\uE00C'); await until(() => inspect('return !document.querySelector("#desktop-handoff").open && document.activeElement.checkVisibility() && document.activeElement!==document.body'), 'handoff closes to visible product entry');
-    await closeTools();
+    await fromHistory(artifacts.guide);
+    const evidence = '#report-reader-content article:nth-child(2) .report-reader-evidence';
+    await activate(evidence + ' > summary');
+    const position = () => inspect('return document.querySelector(".report-reader-body").scrollTop');
+    const initialPosition = await position();
+    assert.ok(initialPosition > 0, 'the report has been scrolled to an item');
+    for (const dismiss of ['escape', 'done']) {
+      await activate('#report-reader-handoff');
+      await until(() => inspect('return document.querySelector("#desktop-report-reader").open && document.querySelector("#desktop-handoff").matches(":modal")'), 'handoff opened over reader');
+      assert.ok((await text('#handoff-source')).includes(artifacts.guide.id));
+      assert.equal(await inspect('return getComputedStyle(document.querySelector("#handoff-content")).fontSize'), '18px');
+      assert.equal(await inspect('return document.querySelectorAll("dialog:modal").length'), 1);
+      if (dismiss === 'escape') await press('\uE00C'); else await click('#handoff-done');
+      await until(() => inspect('return !document.querySelector("#desktop-handoff").open && document.activeElement.id === "report-reader-handoff"'), 'focus returns to the reader action');
+      assert.equal(await inspect('return document.querySelector(arguments[0]).open', [evidence]), true);
+      assert.ok(Math.abs(await position() - initialPosition) <= 1, 'scroll position stays on the same evidence');
+    }
+    await screenshot('reading-after-handoff');
+    await closeReader(); await closeTools();
   });
   await checked('Report workspace retains focus and reachable navigation when shrinking', async () => {
     await command('POST', '/window/rect', { width: 1000, height: 850 }); await fromHistory(artifacts.check);
