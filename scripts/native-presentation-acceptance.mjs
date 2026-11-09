@@ -292,7 +292,7 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await closeProjects(); await selectProject(projectId); await home();
     assert.equal(await text('#home-project-name'), name); assert.match(await text('#home-project-summary'), /个人/);
     await activate('#home-project-manage'); await until(() => inspect('return document.querySelector("#desktop-projects").open'), 'home project manager'); await closeProjects();
-    await activate('#start-check'); await until(() => inspect('return document.activeElement.id==="check-btn"'), 'saved project focuses explicit run action'); await closeTools();
+    assert.equal(await text('#start-check-label'), '开始预检');
     assert.equal((await snapshot()).runs.length, 0); await geometry('project-home', '#session-empty');
   });
   await checked('Project folders contain scoped sessions and the sidebar menu renames without losing drafts', async () => {
@@ -716,7 +716,20 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     const final = await snapshot(); assert.equal(final.runs.length, 0); assert.equal(final.artifacts.length, 0); assert.deepEqual(requests, []);
     assert.deepEqual((await readdir(directory)).sort(), Object.keys(files).sort());
     for (const [file, content] of Object.entries(files)) assert.equal(await readFile(resolve(directory, file), 'utf8'), content);
+  });
+  await checked('Selected project runs one real preflight directly from Home', async () => {
+    await selectProject(projectId); await home(); await activate('#start-check');
+    await until(() => inspect('return document.querySelector("#desktop-tools").open && !document.querySelector("#read-report").disabled'), 'one click opens the finished report');
+    assert.equal(await inspect('return document.activeElement.id'), 'status');
+    assert.equal(await text('#start-check-label'), '重新预检');
+    const final = await snapshot();
+    assert.equal(final.runs.length, 1); assert.equal(final.artifacts.length, 1);
+    assert.equal(final.artifacts[0].projectId, projectId); assert.equal(final.artifacts[0].kind, 'check');
+    assert.deepEqual(requests, []);
+    await screenshot('home-one-click-preflight');
+    await closeTools();
+    assert.equal(await inspect('return document.activeElement.id'), 'start-check');
     const actual = await workflow();
-    await writeFile(resolve(run, 'presentation-evidence.json'), JSON.stringify({ projectId, fileNames: Object.keys(files), projectFacts: actual.project.facts, confirmations: actual.confirmations, runCount: final.runs.length, artifactCount: final.artifacts.length, modelRequestCount: requests.length, fixture: 'Real native storage and manual UI actions; temporary labelled files; no invoke mocks, tool execution, OS browser or installed-release validation.' }, null, 2));
+    await writeFile(resolve(run, 'presentation-evidence.json'), JSON.stringify({ projectId, fileNames: Object.keys(files), projectFacts: actual.project.facts, confirmations: actual.confirmations, runCount: final.runs.length, artifactCount: final.artifacts.length, modelRequestCount: requests.length, fixture: 'Real native storage and manual UI actions; temporary labelled files; one explicit bundled preflight; no invoke mocks, OS browser or installed-release validation.' }, null, 2));
   });
 }
