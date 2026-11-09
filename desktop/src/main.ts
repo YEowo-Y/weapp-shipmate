@@ -313,6 +313,7 @@ window.addEventListener("DOMContentLoaded", () => {
       if (busy || projects?.getActiveId() !== projectId) throw new Error('当前项目已改变或正在运行，请返回原项目后重新预检。');
       const artifact = await run('run_check');
       if (!artifact || artifact.kind !== 'check' || artifact.projectId !== projectId) throw new Error('源码复检未完成。文件写入状态不受影响，可稍后重新预检。');
+      reader?.showRecheck(artifact);
       return artifact;
     },
   });
@@ -323,7 +324,7 @@ window.addEventListener("DOMContentLoaded", () => {
     getRulesVersion: () => projects?.getRulesVersion() ?? null,
     onOpenSource: openUrl,
     onHandoff: anchor => handoff?.open(anchor, true),
-    onRepair: () => { if (lastSuccessful) repair?.openForArtifact(lastSuccessful.artifact, $("#read-report")); },
+    onRepair: anchor => { if (lastSuccessful) repair?.openForArtifact(lastSuccessful.artifact, anchor); },
     returnFocus: () => $("#desktop-more"),
   });
   $("#handoff-report").addEventListener('click', () => handoff?.open($("#handoff-report"), true));
