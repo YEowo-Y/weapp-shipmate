@@ -7,8 +7,9 @@ declare module '*repair-handoff.js' {
   export function createHandoff(artifact: unknown): RepairHandoff;
   export function parseHandoff(text: string): RepairHandoff;
   export function renderHandoffSections(pack: RepairHandoff): { basis: string; content: string };
-  export function exportHandoff(pack: RepairHandoff, format: 'json' | 'markdown'): { text: string; filename: string; mimeType: string };
-  export function handoffWarnings(pack: RepairHandoff, project: { id: string; revision: number; contextRevision?: number } | null, rulesVersion: string | null): string[];
+  type HandoffProject = { id: string; revision: number; contextRevision?: number };
+  export function exportHandoff(pack: RepairHandoff, format: 'json' | 'markdown', context?: { project: HandoffProject | null; rulesVersion: string | null }): { text: string; filename: string; mimeType: string };
+  export function handoffWarnings(pack: RepairHandoff, project: HandoffProject | null, rulesVersion: string | null): string[];
 }
 declare module '*artifact-download.js' {
   export function createArtifactDownloader(options: { documentRef: Document }): { download(artifact: { text: string; filename: string; mimeType: string }): boolean; dispose(): void };
