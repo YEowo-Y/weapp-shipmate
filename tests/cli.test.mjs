@@ -105,7 +105,8 @@ test("--subject=personal 等号语法被正确解析（不再静默丢弃）", (
   assert.equal(code, 0);
   const o = JSON.parse(out.get());
   assert.equal(o.command, "guide");
-  assert.ok(o.meta.summary.includes("personal") || JSON.stringify(o).includes("personal"), "主体应生效");
+  assert.match(o.meta.summary, /主体：个人/, "主体应以可读名称显示");
+  assert.ok(o.items.some(item => item.ruleId === "filing.individual-id-materials"), "个人主体规则应生效");
 });
 
 test("布尔开关误带 =值 报无法识别", () => {
