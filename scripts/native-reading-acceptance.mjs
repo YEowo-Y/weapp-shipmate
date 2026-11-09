@@ -219,7 +219,16 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     artifacts[kind] = await projectInvoke('project_run', { projectId, kind, runId: `reading-${kind}`, ...(kind === 'guide' ? { subject: 'personal' } : { query: '隐私' }) });
     assert.ok(createHandoff(artifacts[kind]).items.length > 0);
     if (kind === 'guide') assert.ok(artifacts.guide.data.result.selfCheck.length > 0, 'real guide includes conditional applicability');
-    await fromHistory(artifacts[kind]); await verifyContent(artifacts[kind]); await geometry(`${kind}-wide`); await closeReader(); await closeTools();
+    await fromHistory(artifacts[kind]); await verifyContent(artifacts[kind]); await geometry(`${kind}-wide`);
+    await activate('#report-reader-handoff');
+    await until(() => inspect('return document.querySelector("#desktop-handoff").matches(":modal")'), 'handoff opens from the saved report');
+    const handoff = await text('#handoff-content');
+    if (kind === 'guide') assert.match(handoff, /重新生成上线清单/);
+    else {
+      assert.match(handoff, /原始审核反馈/);
+      assert.doesNotMatch(handoff, /重新生成上线清单/);
+    }
+    await click('#handoff-done'); await closeReader(); await closeTools();
   });
   await checked('Closing a handoff resumes the same report, evidence and reading position', async () => {
     await appearance('light');
