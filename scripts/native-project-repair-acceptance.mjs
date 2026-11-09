@@ -20,8 +20,8 @@ export async function checkProjectRepairFlows(options) {
   async function closeRepair() { await click('#repair-done'); await until(() => inspect('return !document.querySelector("#desktop-repair").open'), 'repair closed'); }
   async function closeReport() { if (await inspect('return document.querySelector("#desktop-tools").open')) await click('#desktop-tools-close'); }
   async function openReport() {
-    await projectDialog(); await click('#project-retry');
-    await until(() => inspect('return !document.querySelector("#project-retry").disabled && !!document.querySelector("#project-history .project-run button")'), 'saved report ready');
+    await click('#desktop-results-open'); await click('#project-results-retry');
+    await until(() => inspect('return !document.querySelector("#project-results-retry").disabled && !!document.querySelector("#project-history .project-run button")'), 'saved report ready');
     await click('#project-history .project-run button');
     await until(() => inspect('return document.querySelector("#desktop-tools").open'), 'report open');
   }
@@ -53,7 +53,20 @@ export async function checkProjectRepairFlows(options) {
     await reloadProjects(); await selectProject(projectId);
   });
   await checked('Repair preview shows complete before/after and requires explicit business confirmation', async () => {
-    await prepare();
+    await openReport(); await click('#read-report');
+    const evidence = '#report-reader-content article:last-child .report-reader-evidence';
+    await click(evidence + ' > summary');
+    const position = await inspect('return document.querySelector(".report-reader-body").scrollTop');
+    assert.ok(position > 0);
+    const openPreview = async () => {
+      await click('#report-reader-repair');
+      await until(() => inspect('return document.querySelector("#desktop-repair").matches(":modal") && document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'repair preview over reader');
+    };
+    await openPreview(); await closeRepair();
+    await until(() => inspect('return document.activeElement.id === "report-reader-repair"'), 'return focus to reader');
+    assert.ok(await inspect('return document.querySelector(arguments[0]).open', [evidence]));
+    assert.ok(Math.abs(await inspect('return document.querySelector(".report-reader-body").scrollTop') - position) <= 1);
+    await openPreview();
     assert.equal(await text('#repair-before'), original.toString());
     assert.ok(JSON.parse(await text('#repair-after')).requiredPrivateInfos.includes('getLocation'));
     assert.match(await text('#repair-evidence'), /app.js.*getLocation/);
@@ -74,6 +87,13 @@ export async function checkProjectRepairFlows(options) {
     assert.equal(applied.recheckState, 'completed'); assert.ok(applied.recheckArtifactId);
     assert.deepEqual(await readFile(applied.backupPath), original);
     await screenshot('repair-applied-rechecked');
+    await closeRepair();
+    await until(() => inspect('return document.activeElement.id === "report-reader-repair"'), 'return to rechecked report');
+    assert.ok((await text('#report-reader-versions')).includes(applied.recheckArtifactId));
+    assert.equal(await inspect('return document.querySelector(".report-reader-body").scrollTop'), 0);
+    await screenshot('repair-rechecked-reader');
+    await click('#report-reader-dismiss');
+    await history();
   });
   await checked('Undo requires another preview and restores original bytes including CRLF', async () => {
     await click(`[data-repair-action="undo-preview"][data-operation-id="${operationId}"]`);
