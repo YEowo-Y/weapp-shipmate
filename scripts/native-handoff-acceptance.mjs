@@ -124,6 +124,14 @@ export async function checkHandoffFlows({ run, checked, click, fill, press, insp
     await closeProjects(); await click('#desktop-tools-toggle');
     await until(() => inspect('return !document.querySelector("#handoff-report").disabled'), 'historical source restored after rename');
     await click('#handoff-report'); assert.match(await text('#handoff-warning'), /项目版本已变化/);
+    const staleDownloads = resolve(downloads, 'after-project-change');
+    await mkdir(staleDownloads);
+    await command('POST', '/ms/cdp/execute', { cmd: 'Browser.setDownloadBehavior', params: { behavior: 'allow', downloadPath: staleDownloads } });
+    await click('#handoff-markdown');
+    const stalePath = resolve(staleDownloads, `shipmate-handoff-${source.createdAt}.md`);
+    const markdown = await until(() => readFile(stalePath, 'utf8').catch(() => null), 'historical Markdown downloaded');
+    assert.match(markdown, /分享时的版本核对[\s\S]*项目版本已变化/);
+    assert.ok(markdown.includes(source.id));
     await screenshot('p6-handoff-stale'); await close(); await click('#desktop-tools-close');
     await openMenu(); await upload(jsonPath);
     await until(async () => (await text('#handoff-provenance')).includes('外部文件'), 'portable file after restart');
