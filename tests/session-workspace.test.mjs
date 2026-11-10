@@ -304,6 +304,137 @@ test('history search clears empty results, supports keyboard selection and prese
   workspace.destroy();
 });
 
+test('current conversation find starts empty and excludes titles, drafts, internals and other sessions', async () => {
+  const loaded = { version: 1, sessionSequence: 2, currentSessionId: 'session-1', sessions: [
+    { id: 'session-1', title: 'title-only', draft: 'private-draft', messages: [
+      { id: 'visible', role: 'user', text: 'saved content', tool: { output: 'private-tool' } },
+    ] },
+    { id: 'session-2', title: 'Other', draft: '', messages: [{ id: 'other', role: 'assistant', text: 'other-only' }] },
+  ] };
+  const app = harness({ loaded }), workspace = await app.mounting; workspace.openFind();
+  const dialog = app.doc.body.children.at(-1), search = flatten(dialog).find(item => item.tag === 'input');
+  const empty = flatten(dialog).find(item => item.className === 'session-workspace__empty');
+  const count = flatten(dialog).find(item => item.className === 'session-workspace__status');
+  assert.equal(dialog['aria-label'], '在当前会话中查找');
+  assert.equal(search['aria-label'], '查找当前会话消息');
+  assert.equal(search.placeholder, '查找当前会话消息');
+  assert.equal(find(dialog, 'find-message'), undefined);
+  assert.equal(empty.hidden, false); assert.equal(count.hidden, true);
+  assert.match(empty.children[2].textContent, /输入关键词/);
+  for (const query of ['title-only', 'private-draft', 'private-tool', 'other-only', 'missing', '   ']) {
+    search.value = query; search.fire('input');
+    assert.equal(find(dialog, 'find-message'), undefined, query);
+    assert.equal(empty.hidden, false);
+  }
+  search.value = 'saved'; search.fire('input');
+  assert.equal(find(dialog, 'find-message').dataset.messageId, 'visible');
+  assert.equal(empty.hidden, true);
+  find(dialog, 'clear-search').click();
+  assert.equal(search.value, ''); assert.equal(find(dialog, 'find-message'), undefined);
+  assert.equal(app.doc.activeElement, search);
+  assert.equal(app.args.input.value, 'private-draft');
+  workspace.destroy();
+});
+
+test('current conversation find counts matching messages and exposes literal highlighted snippets', async () => {
+  const loaded = { version: 1, sessionSequence: 1, currentSessionId: 'session-1', sessions: [{
+    id: 'session-1', title: 'Find', draft: '', messages: [
+      { id: 'user', role: 'user', text: 'a+b and a+b' },
+      { id: 'assistant', role: 'assistant', text: 'A+B answer' },
+      { id: 'record', role: 'assistant', text: 'a+b report', record: { kind: 'report', label: '本地报告' } },
+      { id: 'regex-only', role: 'user', text: 'aaab' },
+    ],
+  }] };
+  const app = harness({ loaded }), workspace = await app.mounting; workspace.openFind();
+  const dialog = app.doc.body.children.at(-1), search = flatten(dialog).find(item => item.tag === 'input');
+  search.value = 'a+b'; search.fire('input');
+  const rows = flatten(dialog).filter(item => item.dataset.action === 'find-message');
+  assert.deepEqual(rows.map(row => row.dataset.messageId), ['user', 'assistant', 'record']);
+  assert.deepEqual(rows.map(row => row.children[1].textContent), ['用户', '助手', '记录']);
+  assert.equal(flatten(dialog).find(item => item.className === 'session-workspace__status').textContent, '3 条匹配消息');
+  assert.deepEqual(rows.map(row => flatten(row).find(item => item.tag === 'mark').textContent), ['a+b', 'A+B', 'a+b']);
+  for (const row of rows) {
+    assert.equal(row.tag, 'button');
+    assert.equal(row['aria-describedby'], row.children[2].id);
+  }
+  dialog.fire('keydown', { key: 'ArrowUp' }); assert.equal(app.doc.activeElement, rows[2]);
+  dialog.fire('keydown', { key: 'ArrowDown' }); assert.equal(app.doc.activeElement, rows[0]);
+  dialog.fire('keydown', { key: 'ArrowDown' }); assert.equal(app.doc.activeElement, rows[1]);
+  workspace.destroy();
+});
+
+test('current conversation find locates the first result with Enter without interrupting or losing a draft', async () => {
+  const loaded = { version: 1, sessionSequence: 1, currentSessionId: 'session-1', sessions: [{
+    id: 'session-1', title: 'Find', draft: '继续编辑', messages: [
+      { id: 'first', role: 'assistant', text: '检查隐私声明' }, { id: 'second', role: 'user', text: '确认隐私' },
+    ],
+  }] };
+  const app = harness({ loaded }), workspace = await app.mounting;
+  const original = node(app.doc, 'article'); original.dataset.messageId = 'first';
+  original.getBoundingClientRect = () => ({ top: 180 });
+  app.args.scroll.getBoundingClientRect = () => ({ top: 20 }); app.args.scroll.scrollTop = 40;
+  app.args.list.append(original);
+  workspace.openFind(node(app.doc, 'button'));
+  const dialog = app.doc.body.children.at(-1), search = flatten(dialog).find(item => item.tag === 'input');
+  search.value = '隐私'; search.fire('input'); dialog.fire('keydown', { key: 'Enter' }); await tick();
+  assert.equal(dialog.open, false);
+  assert.equal(app.doc.activeElement, original);
+  assert.equal(workspace.conversation.getViewState().scrollTop, 184);
+  assert.equal(workspace.conversation.getViewState().followLatest, false);
+  assert.equal(app.args.input.value, '继续编辑');
+  assert.equal(app.lifecycle.includes('stop'), false);
+  assert.equal(app.args.status.textContent, '已定位到匹配消息。');
+  const second = node(app.doc, 'article'); second.dataset.messageId = 'second';
+  second.getBoundingClientRect = () => ({ top: 280 }); app.args.list.append(second);
+  workspace.openFind();
+  const nextDialog = app.doc.body.children.at(-1), nextSearch = flatten(nextDialog).find(item => item.tag === 'input');
+  nextSearch.value = '隐私'; nextSearch.fire('input');
+  flatten(nextDialog).find(item => item.dataset.messageId === 'second').click(); await tick();
+  assert.equal(app.doc.activeElement, second);
+  assert.equal(workspace.conversation.getViewState().scrollTop, 284);
+  assert.equal(app.args.input.value, '继续编辑');
+  await workspace.flush();
+  assert.equal(app.writes.at(-1).sessions[0].draft, '继续编辑');
+  workspace.destroy();
+});
+
+test('current conversation find respects composition and clears Escape before restoring its opener', async () => {
+  const app = harness(), workspace = await app.mounting, trigger = node(app.doc, 'button');
+  workspace.conversation.replaceMessages([{ id: 'm', role: 'user', text: '关键词' }]);
+  workspace.openFind(trigger);
+  const dialog = app.doc.body.children.at(-1), search = flatten(dialog).find(item => item.tag === 'input');
+  search.fire('compositionstart'); search.value = '关键词'; search.fire('input', { isComposing: true });
+  dialog.fire('keydown', { key: 'Enter', isComposing: true });
+  assert.equal(find(dialog, 'find-message'), undefined); assert.equal(dialog.open, true);
+  let prevented = false;
+  dialog.fire('cancel', { preventDefault() { prevented = true; } });
+  assert.equal(prevented, true); assert.equal(search.value, '关键词');
+  search.fire('compositionend');
+  assert.equal(find(dialog, 'find-message').dataset.messageId, 'm');
+  dialog.fire('keydown', { key: 'Enter', keyCode: 229 }); assert.equal(dialog.open, true);
+  dialog.fire('cancel', { preventDefault() { prevented = true; } });
+  assert.equal(search.value, ''); assert.equal(find(dialog, 'find-message'), undefined);
+  assert.equal(dialog.open, true); assert.equal(app.doc.activeElement, search);
+  prevented = false; dialog.fire('cancel', { preventDefault() { prevented = true; } });
+  assert.equal(prevented, false, 'Empty-query Escape retains native dialog dismissal');
+  dialog.close(); await tick(); assert.equal(app.doc.activeElement, trigger);
+  workspace.destroy();
+});
+
+test('current conversation find closes on session change and stale results cannot reopen that session', async () => {
+  const app = harness(), workspace = await app.mounting;
+  workspace.conversation.replaceMessages([{ id: 'old', role: 'user', text: 'old message' }]);
+  workspace.openFind();
+  const dialog = app.doc.body.children.at(-1), search = flatten(dialog).find(item => item.tag === 'input');
+  search.value = 'old'; search.fire('input'); const stale = find(dialog, 'find-message');
+  workspace.createSession();
+  assert.equal(dialog.open, false);
+  stale.click(); await tick();
+  assert.equal(workspace.getCurrentSession().id, 'session-2');
+  assert.equal(app.doc.activeElement, app.args.input);
+  workspace.destroy();
+});
+
 test('history close restores opener and Escape without a query retains native dismissal', async () => {
   const app = harness(); const workspace = await app.mounting; workspace.openHistory();
   const dialog = app.doc.body.children.at(-1);
