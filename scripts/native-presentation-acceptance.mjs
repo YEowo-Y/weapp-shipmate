@@ -327,7 +327,19 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     assert.equal(await inspect('return document.querySelector("#desktopInput").value'), draft);
     await activate('#desktop-more'); await click('#desktop-actions wa-dropdown-item[value="history"]');
     await until(() => inspect('return document.querySelector("dialog[data-kind=history]")?.open'), 'header search opens');
-    await close('dialog[data-kind=history]');
+    const historySearch = 'dialog[data-kind=history] [aria-label="搜索会话"]';
+    const resultTitle = '.session-workspace__results .session-workspace__result-title';
+    await fill(historySearch, '导航');
+    assert.equal(await text(resultTitle), '项目导航验收');
+    assert.deepEqual(await inspect('return [...document.querySelectorAll(arguments[0])].map(mark => mark.textContent)', [`${resultTitle} mark`]), ['导航']);
+    await screenshot('history-search-match');
+    await click('dialog[data-kind=history] [data-action=clear-search]');
+    assert.equal(await inspect('return document.querySelector(arguments[0]).value', [historySearch]), '');
+    assert.equal(await inspect('return document.querySelectorAll(".session-workspace__results mark").length'), 0);
+    await fill(historySearch, '导航'); await press('\uE007');
+    await until(() => inspect('return !document.querySelector("dialog[data-kind=history]")'), 'Enter opens the matching session');
+    assert.equal(await text('#session-title'), '项目导航验收');
+    assert.equal(await inspect('return document.querySelector("#desktopInput").value'), draft);
     await fill('#desktopInput', '');
   });
   await checked('Conversation row menus rename inactive chats and archive drafts at wide and compact widths', async () => {
