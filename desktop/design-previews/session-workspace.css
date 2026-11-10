@@ -46,6 +46,7 @@
 .session-workspace__import-preview[hidden]{display:none}
 .session-workspace__results .session-workspace__button{display:grid;grid-template-columns:18px minmax(0,1fr) 16px;column-gap:10px;row-gap:3px;align-items:center;text-align:left;width:100%;padding:10px 12px;overflow-wrap:anywhere}
 .session-workspace__results .app-icon{color:var(--text-3)}
+.session-workspace__results mark{background:transparent;color:var(--text);font-weight:600;text-decoration:underline;text-underline-offset:.15em}
 .session-workspace__result-title{font-size:14px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .session-workspace__results .session-workspace__current{grid-column:3;grid-row:1;color:var(--text)}
 .session-workspace__results [aria-current="true"]{background:var(--surface-3)}
