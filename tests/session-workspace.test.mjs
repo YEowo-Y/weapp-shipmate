@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { createIcon } from '../desktop/design-previews/components/icons.js';
-import { sessionMatch } from '../desktop/design-previews/session-search.js';
+import { literalSessionQuery, sessionMatch } from '../desktop/design-previews/session-search.js';
 import { createSessionPersistence } from '../desktop/design-previews/session-persistence.js';
 import { createActionButton, bindActionMenu } from './helpers/ui-action.mjs';
 
@@ -25,13 +25,14 @@ function node(doc, tag = 'div') {
 }
 function harness({ loaded = null, loadError = false, saveError = false, layout, projectScoped, onOpenDataSettings } = {}) {
   const doc = { createElement(tag) { return node(doc, tag); } };
+  doc.createTextNode = text => Object.assign(node(doc, '#text'), { textContent: text });
   doc.createElementNS = (_namespace, tag) => node(doc, tag);
   Object.assign(doc, node(doc)); doc.body = node(doc);
   const win = node(doc); win.location = { reload() { win.reloaded = true; } }; doc.defaultView = win;
   const host = node(doc), input = node(doc), writes = [], lifecycle = [], hooks = [], dataDialogs = [], dataPanels = [];
   const store = { async load() { if (loadError) throw new Error('offline'); return { revision: 3, snapshot: loaded }; },
     async save(snapshot, revision) { if (typeof saveError === 'function' ? saveError() : saveError) throw Object.assign(new Error('Conflict'), { code: 'conflict' }); writes.push(JSON.parse(JSON.stringify(snapshot))); return { revision: revision + 1 }; }, close() {} };
-  const context = vm.createContext({ createSessionStore: () => store, createSessionPersistence, sessionMatch,
+  const context = vm.createContext({ createSessionStore: () => store, createSessionPersistence, literalSessionQuery, sessionMatch,
     normalizeSessionSnapshot: value => JSON.parse(JSON.stringify(value)), createIcon, createActionButton, bindActionMenu,
     openSessionDataDialog(options) { dataDialogs.push(options); return { node: node(doc, 'dialog') }; },
     createSessionDataPanel(options) {
@@ -181,7 +182,7 @@ test('CAS conflict exposes backup and requires explicit confirmation before relo
   workspace.destroy();
 });
 
-test('sessionMatch searches titles first and returns a message location and bounded excerpt', async () => {
+test('sessionMatch finds a title or returns a message location and bounded excerpt', async () => {
   const app = harness(); const workspace = await app.mounting;
   const session = { title: 'Work', messages: [{ id: 'm', text: 'The saved answer has a needle inside.' }] };
   assert.equal(app.context.sessionMatch(session, 'work').snippet, '');
@@ -323,6 +324,27 @@ test('history opened from a persistent menu restores that trigger instead of the
   workspace.destroy();
 });
 
+test('Enter on a title and message match focuses the original message and keeps the draft', async () => {
+  const loaded = { version: 1, sessionSequence: 1, currentSessionId: 'session-1', sessions: [{
+    id: 'session-1', title: '隐私检查', draft: '待续', messages: [
+      { id: 'first', role: 'assistant', text: '请核对隐私声明。' }, { id: 'last', role: 'user', text: '稍后继续' },
+    ],
+  }] };
+  const app = harness({ loaded }); const workspace = await app.mounting;
+  const original = node(app.doc, 'article'); original.dataset.messageId = 'first';
+  original.getBoundingClientRect = () => ({ top: 80 });
+  app.args.scroll.getBoundingClientRect = () => ({ top: 0 }); app.args.scroll.scrollTop = 0;
+  app.args.list.append(original);
+  workspace.openHistory();
+  const dialog = app.doc.body.children.at(-1), search = flatten(dialog).find(n => n.tag === 'input');
+  search.value = '隐私'; search.fire('input');
+  assert.deepEqual(flatten(find(dialog, 'session')).filter(n => n.tag === 'mark').map(n => n.textContent), ['隐私', '隐私']);
+  dialog.fire('keydown', { key: 'Enter' }); await tick();
+  assert.equal(app.doc.activeElement, original);
+  assert.equal(app.args.input.value, '待续');
+  workspace.destroy();
+});
+
 test('history message match missing from rendered DOM falls back to the composer', async () => {
   const loaded = { version: 1, sessionSequence: 1, currentSessionId: 'session-1', sessions: [
     { id: 'session-1', title: 'Saved', draft: '', messages: [{ id: 'missing-node', role: 'assistant', text: 'needle' }] },
@@ -343,10 +365,14 @@ test('history message matches expose their snippet as an accessible description'
   const search = flatten(dialog).find(item => item.tag === 'input'); search.value = 'needle'; search.fire('input');
   const row = find(dialog, 'session'); const snippet = row.children.find(item => item.tag === 'small');
   assert.ok(snippet.id); assert.equal(row['aria-describedby'], snippet.id);
+  assert.deepEqual(snippet.children.filter(n => n.tag === 'mark').map(n => n.textContent), ['needle']);
   search.value = 'Saved'; search.fire('input');
   const titleMatch = find(dialog, 'session'), preview = titleMatch.children.find(item => item.tag === 'small');
   assert.equal(preview.textContent, 'Find needle in this answer');
   assert.equal(titleMatch['aria-describedby'], preview.id);
+  assert.deepEqual(flatten(titleMatch).filter(n => n.tag === 'mark').map(n => n.textContent), ['Saved']);
+  search.value = ''; search.fire('input');
+  assert.equal(flatten(find(dialog, 'session')).some(n => n.tag === 'mark'), false);
   workspace.destroy();
 });
 
