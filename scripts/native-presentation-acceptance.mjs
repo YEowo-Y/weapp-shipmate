@@ -741,7 +741,73 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     await screenshot('home-one-click-preflight');
     await closeTools();
     assert.equal(await inspect('return document.activeElement.id'), 'start-check');
-    const actual = await workflow();
-    await writeFile(resolve(run, 'presentation-evidence.json'), JSON.stringify({ projectId, fileNames: Object.keys(files), projectFacts: actual.project.facts, confirmations: actual.confirmations, runCount: final.runs.length, artifactCount: final.artifacts.length, modelRequestCount: requests.length, fixture: 'Real native storage and manual UI actions; temporary labelled files; one explicit bundled preflight; no invoke mocks, OS browser or installed-release validation.' }, null, 2));
+  });
+  await checked('Current conversation find locates real reports without losing messages or the draft', async () => {
+    const messageState = () => inspect('return [...document.querySelector("#desktopMessages").children].map(node => ({id:node.dataset.messageId,text:node.textContent}))');
+    const before = await messageState();
+    await activate('#start-guide');
+    await until(() => inspect('return document.querySelector("#desktop-tools").open && !document.querySelector("#save-report").disabled'), 'existing report can be added without rerunning a tool');
+    assert.match(await text('#report'), /上线预检/);
+    for (let index = 0; index < 2; index++) {
+      await activate('#save-report');
+      await until(async () => (await messageState()).length === before.length + index + 1, 'real report appended to the conversation');
+    }
+    await closeTools();
+    const messages = await messageState(), reportIds = messages.slice(-2).map(message => message.id);
+    assert.equal(new Set(reportIds).size, 2);
+    assert.ok(messages.slice(-2).every(message => message.text.includes('上线预检')));
+    const draft = '会话内查找保留尚未发送的草稿';
+    await fill('#desktopInput', draft);
+    const findDialog = 'dialog[data-kind=find]';
+    const findInput = `${findDialog} [aria-label="查找当前会话消息"]`;
+    const findRows = `${findDialog} button[data-action=find-message][data-message-id]`;
+    const openFind = async () => {
+      await activate('#desktop-more'); await click('#desktop-actions wa-dropdown-item[value="find"]');
+      await until(() => inspect('return document.querySelector(arguments[0])?.open', [findDialog]), 'current conversation find opens');
+      assert.equal(await inspect('return document.activeElement.getAttribute("aria-label")'), '查找当前会话消息');
+    };
+    const locate = async messageId => {
+      await until(() => inspect('return !document.querySelector("dialog[data-kind=find]") && document.activeElement.dataset.messageId===arguments[0]', [messageId]), 'matching original message receives focus');
+      assert.equal(await inspect('return document.querySelector("#desktopInput").value'), draft);
+      assert.deepEqual(await messageState(), messages);
+    };
+    await openFind();
+    assert.equal(await inspect('return document.querySelectorAll(arguments[0]).length', [findRows]), 0, 'empty query does not list every message');
+    await fill(findInput, '上线预检');
+    assert.deepEqual(await inspect('return [...document.querySelectorAll(arguments[0])].map(node => node.dataset.messageId)', [findRows]), reportIds);
+    assert.equal(await text(`${findDialog} [role=status]`), '2 条匹配消息');
+    assert.deepEqual(await inspect('return [...document.querySelectorAll(arguments[0])].map(node => node.textContent)', [`${findRows} mark`]), ['上线预检', '上线预检']);
+    await screenshot('find-current-message');
+    await click(`${findRows}[data-message-id="${reportIds[1]}"]`);
+    await locate(reportIds[1]);
+
+    await fill('#desktopInput', draft);
+    await command('POST', '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: [
+      { type: 'keyDown', value: '\uE009' }, { type: 'keyDown', value: 'f' },
+      { type: 'keyUp', value: 'f' }, { type: 'keyUp', value: '\uE009' },
+    ] }] });
+    await until(() => inspect('return document.querySelector(arguments[0])?.open', [findDialog]), 'Ctrl+F opens current conversation find from the composer');
+    await fill(findInput, '上线预检'); await press('\uE007');
+    await locate(reportIds[0]);
+
+    await openFind(); await fill(findInput, '不存在的会话查找验收关键词');
+    assert.equal(await inspect('return document.querySelectorAll(arguments[0]).length', [findRows]), 0);
+    assert.equal(await text(`${findDialog} [role=status]`), '0 条匹配消息');
+    assert.equal(await text(`${findDialog} .session-workspace__empty p`), '没有找到消息');
+    await press('\uE00C');
+    assert.equal(await inspect('return document.querySelector(arguments[0])?.open', [findDialog]), true, 'first Escape clears search');
+    assert.equal(await inspect('return document.querySelector(arguments[0]).value', [findInput]), '');
+    await press('\uE00C');
+    await until(() => inspect('return !document.querySelector(arguments[0])', [findDialog]), 'second Escape closes find');
+    assert.equal(await inspect('return document.activeElement.id'), 'desktop-more');
+    assert.equal(await inspect('return document.querySelector("#desktopInput").value'), draft);
+    assert.deepEqual(await messageState(), messages);
+
+    await refresh();
+    await until(() => inspect('return document.querySelector("#desktopInput")?.value===arguments[0]', [draft]), 'find leaves the saved draft intact after reload');
+    assert.deepEqual(await messageState(), messages);
+    const final = await snapshot(), actual = await workflow();
+    assert.equal(final.runs.length, 1); assert.equal(final.artifacts.length, 1); assert.deepEqual(requests, []);
+    await writeFile(resolve(run, 'presentation-evidence.json'), JSON.stringify({ projectId, fileNames: Object.keys(files), projectFacts: actual.project.facts, confirmations: actual.confirmations, runCount: final.runs.length, artifactCount: final.artifacts.length, modelRequestCount: requests.length, currentConversationFind: { matchedMessageIds: reportIds, draftPreservedAfterReload: true, clickAndEnterLocateOriginalMessages: true }, fixture: 'Real native storage and manual UI actions; temporary labelled files; one explicit bundled preflight reused as two conversation records; no invoke mocks, OS browser or installed-release validation.' }, null, 2));
   });
 }
