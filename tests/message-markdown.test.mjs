@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { updateMessageText } from '../desktop/design-previews/components/message.js';
+import { messageSearchText } from '../desktop/design-previews/components/message-markdown.js';
 import { createPreviewDocument } from './helpers/preview-dom.mjs';
 
 const descendants = node => [node, ...node.children.flatMap(descendants)];
@@ -9,6 +10,26 @@ function host(role = 'assistant') {
   Object.assign(node.dataset, { role, messageId: 'reply-1', partIndex: '2' });
   return node;
 }
+test('search text agrees with rendered inline content, including inert markup and image labels', () => {
+  const node = host();
+  const source = '仅为**待你确认**的导航建议 &amp; <b>literal</b> [safe](https://example.com/target) [relative](/settings) [invalid](javascript:alert(1)) ![**alt**](https://example.com/x.png)';
+  updateMessageText(node, source);
+  assert.equal(messageSearchText(source), node.children[0].textContent);
+  assert.match(messageSearchText(source), /仅为待你确认的导航建议/);
+  assert.doesNotMatch(messageSearchText(source), /example\.com|\/settings/);
+});
+
+test('search text keeps code and line breaks without copy controls or Markdown fences', () => {
+  const node = host(), source = '> before\n> next\n\n```js\n  **literal**\n\n  [code](target)\n```';
+  updateMessageText(node, source);
+  const code = descendants(node).find(item => item.tag === 'pre').textContent;
+  const extracted = messageSearchText(source);
+  assert.ok(extracted.includes(code));
+  assert.match(extracted, /before\nnext/);
+  assert.doesNotMatch(extracted, /复制代码|```|> /);
+  assert.equal(messageSearchText('**user**\r\n\r\n  next\n', 'user'), '**user**\n\n  next');
+});
+
 test('assistant Markdown renders semantic typography, decoded entities, lists and tables', () => {
   const node = host();
   updateMessageText(node, '# Title &amp; text\n\n**strong** *em* ~~gone~~ `code`\n\n> Quote\n\n1. one\n2. two\n\n| A | B |\n| --- | --- |\n| X | Y |');
