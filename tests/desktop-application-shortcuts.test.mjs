@@ -11,7 +11,8 @@ test('application shortcuts respect composition, modifiers, native dialogs, and 
   const context = { document };
   const code = readFileSync(new URL('../desktop/src/application-shortcuts.ts', import.meta.url), 'utf8').replace('export function', 'function');
   vm.runInNewContext(ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, context);
-  const dispose = context.bindApplicationShortcuts({ newSession: () => calls.push('new'), search: () => calls.push('search'), settings: () => calls.push('settings') });
+  let conversationVisible = false;
+  const dispose = context.bindApplicationShortcuts({ newSession: () => calls.push('new'), search: () => calls.push('search'), find: () => { if (!conversationVisible) return false; calls.push('find'); return true; }, settings: () => calls.push('settings') });
   const key = (key, extra = {}) => { const event = new dom.window.KeyboardEvent('keydown', { key, ctrlKey: true, bubbles: true, cancelable: true, ...extra }); document.querySelector('input').dispatchEvent(event); return event; };
   key('n'); key('k', { ctrlKey: false, metaKey: true }); key(',');
   assert.deepEqual(calls, ['new', 'search', 'settings']);
@@ -19,6 +20,13 @@ test('application shortcuts respect composition, modifiers, native dialogs, and 
   const query = document.querySelector.bind(document);
   document.querySelector = selector => selector === 'dialog:modal' ? {} : query(selector);
   assert.equal(key('n').defaultPrevented, false);
-  document.querySelector = query; dispose(); key('n');
-  assert.deepEqual(calls, ['new', 'search', 'settings']);
+  document.querySelector = query;
+  assert.equal(key('f').defaultPrevented, false, 'leave native find available outside the conversation');
+  conversationVisible = true;
+  assert.equal(key('F', { ctrlKey: false, metaKey: true }).defaultPrevented, true);
+  for (const extra of [{ isComposing: true }, { repeat: true }, { altKey: true }, { shiftKey: true }, { ctrlKey: false }]) assert.equal(key('f', extra).defaultPrevented, false);
+  document.querySelector = selector => selector === 'dialog:modal' ? {} : query(selector);
+  assert.equal(key('f').defaultPrevented, false);
+  document.querySelector = query; dispose(); key('n'); key('f');
+  assert.deepEqual(calls, ['new', 'search', 'settings', 'find']);
 });
