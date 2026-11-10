@@ -3,7 +3,7 @@ import { createIcon } from './components/icons.js';
 import { createActionButton, bindActionMenu } from './components/ui-kit.js';
 import { createSessionStore, normalizeSessionSnapshot } from './session-store.js';
 import { createSessionPersistence } from './session-persistence.js';
-import { sessionMatch } from './session-search.js';
+import { literalSessionQuery, sessionMatch } from './session-search.js';
 import { openSessionDataDialog, createSessionDataPanel } from './session-data-dialog.js';
 export { sessionMatch };
 
@@ -280,7 +280,15 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     surface.body.append(searchBox, filters, count, results, empty, feedback);
     surface.actions.replaceChildren(exportButton, dataButton, surface.cancel);
     let resultRows = [];
+    function highlightMatch(node, pattern) {
+      const text = node.textContent;
+      const hit = pattern?.exec(text);
+      if (!hit) return;
+      node.replaceChildren(doc.createTextNode(text.slice(0, hit.index)), element('mark', '', hit[0]),
+        doc.createTextNode(text.slice(hit.index + hit[0].length)));
+    }
     function render() {
+      const pattern = literalSessionQuery(search.value);
       filterButtons.forEach((control, index) => { control.setAttribute('aria-pressed', String(filter === ['active', 'archived', 'all'][index])); control.disabled = mutationBusy; });
       clear.hidden = !search.value;
       reset.hidden = !search.value;
@@ -290,13 +298,15 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
       for (const session of sessions) {
         if (!inScope(session)) continue;
         if ((filter === 'active' && session.archived) || (filter === 'archived' && !session.archived)) continue;
-        const match = sessionMatch(session, search.value); if (!match.matched) continue;
+        const match = sessionMatch(session, search.value, pattern); if (!match.matched) continue;
         matched++;
         const row = button(session.title, 'session', session.archived ? 'folder' : 'message-square'); row.dataset.sessionId = session.id;
-        row.children[1].className = 'session-workspace__result-title';
+        const resultTitle = row.children[1]; resultTitle.className = 'session-workspace__result-title';
+        highlightMatch(resultTitle, pattern);
         row.setAttribute('aria-current', String(session.id === currentSessionId));
         if (match.snippet) {
           const snippet = element('small', '', match.snippet);
+          if (match.messageId) highlightMatch(snippet, pattern);
           snippet.id = `session-workspace-${instanceId}-${encodeURIComponent(session.id)}-snippet`;
           row.setAttribute('aria-describedby', snippet.id); row.append(snippet);
         }
