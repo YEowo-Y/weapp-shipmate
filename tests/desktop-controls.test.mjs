@@ -22,7 +22,7 @@ function harness({ open = async () => null, invoke = async () => 'report', write
       element.click = () => element.listeners.click?.(); return element;
     },
   };
-  for (const id of ['stop-tool', 'pick-btn', 'check-btn', 'guide-btn', 'subject', 'status', 'dir', 'report', 'report-title', 'report-note', 'copy-report', 'copy-status', 'handoff-report', 'read-report', 'repair-report', 'desktop-repair-history', 'save-report', 'start-check', 'start-check-label', 'start-guide', 'start-explain', 'home-report', 'home-report-summary', 'home-results', 'desktop-results-open', 'desktop-menu-report', 'home-project-name', 'home-project-summary', 'home-project-manage', 'desktop-preferences-open', 'desktop-memory-open', 'desktop-sources-open', 'desktop-maintenance-open', 'desktop-maintenance-count', 'sessionHost']) {
+  for (const id of ['stop-tool', 'pick-btn', 'check-btn', 'guide-btn', 'subject', 'status', 'dir', 'report', 'report-title', 'report-note', 'copy-report', 'copy-status', 'handoff-report', 'read-report', 'repair-report', 'desktop-repair-history', 'save-report', 'start-check', 'start-check-label', 'start-guide', 'start-explain', 'home-report', 'home-report-summary', 'home-results', 'desktop-results-open', 'desktop-menu-report', 'home-project-name', 'home-project-summary', 'home-project-manage', 'desktop-preferences-open', 'desktopMessages', 'desktop-memory-open', 'desktop-sources-open', 'desktop-maintenance-open', 'desktop-maintenance-count', 'sessionHost']) {
     nodes.set(`#${id}`, Object.assign(id === 'report' ? createPreviewDocument().createElement('div') : {}, {
       disabled: id === 'check-btn', value: 'personal', textContent: '', className: '',
       scrollTop: 0, scrollLeft: 0, attributes: {}, listeners: {},
@@ -714,6 +714,19 @@ desktopTest('history shortcuts and sidebar navigation release the workpage throu
   app.preferencesOptions().onArchives(null);
   assert.equal(histories, 2);
   assert.equal(closes, 4);
+});
+
+desktopTest('find shortcut opens only the visible conversation and retains its focus anchor', async () => {
+  const anchors = [];
+  const app = harness({ sessions: { openFind(anchor) { anchors.push(anchor); } } });
+  await Promise.resolve();
+  app.node('desktopMessages').getClientRects = () => [];
+  assert.equal(app.integration.shortcuts.find(), false);
+  assert.equal(anchors.length, 0);
+  app.node('desktopMessages').getClientRects = () => [{}];
+  app.node('subject').focus();
+  assert.equal(app.integration.shortcuts.find(), true);
+  assert.equal(anchors[0], app.node('subject'));
 });
 
 desktopTest('global settings and home source actions open their existing surfaces without execution', async () => {
