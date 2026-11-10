@@ -9,7 +9,7 @@ import { createPreviewDocument } from './helpers/preview-dom.mjs';
 import { createSessionPersistence } from '../desktop/design-previews/session-persistence.js';
 import { normalizeSessionSnapshot } from '../desktop/design-previews/session-store.js';
 import { createIcon } from '../desktop/design-previews/components/icons.js';
-import { sessionMatch } from '../desktop/design-previews/session-search.js';
+import { literalSessionQuery, sessionMatch } from '../desktop/design-previews/session-search.js';
 const require = createRequire(new URL('../desktop/package.json', import.meta.url));
 const ts = require('typescript');
 const source = readFileSync(new URL('../desktop/src/projects.ts', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '');
@@ -303,7 +303,7 @@ async function archivedSessionHarness(loaded = null) {
     if (expectedRevision !== revision || failReconcile && hasReconciled) throw Object.assign(Error('other window updated history'), { code: 'conflict' });
     snapshot = JSON.parse(JSON.stringify(value)); return { revision: ++revision };
   }, close() {} };
-  const context = vm.createContext({ createSessionStore: () => store, createSessionPersistence, createIcon, sessionMatch, bindActionMenu,
+  const context = vm.createContext({ createSessionStore: () => store, createSessionPersistence, createIcon, literalSessionQuery, sessionMatch, bindActionMenu,
     normalizeSessionSnapshot: value => normalizeSessionSnapshot(JSON.parse(JSON.stringify(value))),
     createActionButton: (doc, label) => Object.assign(doc.createElement('button'), { textContent: label }),
     mountConversation(options) { let messages = options.initialMessages; return { stop() {}, destroy() {}, getMessages: () => messages, getDraftState: () => ({ draft: input.value }), getViewState: () => null, getModelSelection: () => null,
