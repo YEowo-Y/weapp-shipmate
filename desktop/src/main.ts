@@ -376,6 +376,7 @@ window.addEventListener("DOMContentLoaded", () => {
   if (actionMenu) bindActionMenu(actionMenu, value => {
     if (value === "home") showHome();
     if (value === "rename" && workspace.close()) sessions?.renameSession($("#desktop-more"));
+    if (value === "find" && workspace.close()) sessions?.openFind($("#desktop-more"));
     if (value === "history" && workspace.close()) sessions?.openHistory($("#desktop-more"));
     if (value === "archived" && workspace.close()) sessions?.openHistory($("#desktop-more"), "archived");
     if (value === "report") showReport($("#desktop-more"));
@@ -530,6 +531,11 @@ window.addEventListener("DOMContentLoaded", () => {
   const disposeShortcuts = bindApplicationShortcuts({
     newSession: () => { if (workspace.close()) sessions?.createSession(); },
     search: () => { if (workspace.close()) sessions?.openHistory($('#desktop-more')); },
+    find: () => {
+      if (!sessions || !$('#desktopMessages')?.getClientRects().length) return false;
+      sessions.openFind(document.activeElement as HTMLElement | null ?? $('#desktop-more'));
+      return true;
+    },
     settings: () => preferences?.open($('#desktop-preferences-open')),
   });
   $('#sessionHost')?.addEventListener('click', event => {
