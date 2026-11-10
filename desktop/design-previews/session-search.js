@@ -1,3 +1,16 @@
+import { messageSearchText } from './components/message-markdown.js';
+
+// Retain only each live message object's latest rendering; streamed edits replace
+// their entry, and removed messages do not stay alive because of this cache.
+const searchableMessages = new WeakMap();
+function searchableText(message) {
+  const cached = searchableMessages.get(message);
+  if (cached && cached.source === message.text && cached.role === message.role) return cached.text;
+  const text = messageSearchText(message.text, message.role);
+  searchableMessages.set(message, { source: message.text, role: message.role, text });
+  return text;
+}
+
 export function literalSessionQuery(query) {
   const term = query.trim();
   if (!term) return null;
@@ -8,7 +21,7 @@ export function literalSessionQuery(query) {
 export function sessionMatch(session, query, pattern = literalSessionQuery(query)) {
   if (pattern) {
     for (const message of session.messages) {
-      const text = message.text || '';
+      const text = searchableText(message);
       const hit = pattern.exec(text);
       if (!hit) continue;
 
