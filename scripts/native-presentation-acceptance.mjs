@@ -777,6 +777,21 @@ export async function checkPresentationFlows({ run, checked, click, fill, press,
     assert.deepEqual(await inspect('return [...document.querySelectorAll(arguments[0])].map(node => node.dataset.messageId)', [findRows]), reportIds);
     assert.equal(await text(`${findDialog} [role=status]`), '2 条匹配消息');
     assert.deepEqual(await inspect('return [...document.querySelectorAll(arguments[0])].map(node => node.textContent)', [`${findRows} mark`]), ['上线预检', '上线预检']);
+    const snippets = await inspect('return [...document.querySelectorAll(arguments[0])].map(node => node.textContent)', [`${findRows} small`]);
+    assert.ok(snippets.every(snippet => !snippet.includes('**') && !snippet.includes('>')), 'report excerpts show readable text without markdown delimiters');
+    await fill(findInput, '仅为待你确认的导航建议');
+    assert.equal(await inspect('return document.querySelectorAll(arguments[0]).length', [findRows]), 2, 'find spans plain and emphasized report text');
+    await fill(findInput, '上线预检');
+    for (const width of [320, 1000]) {
+      await command('POST', '/window/rect', { width, height: 850 });
+      const bounds = await inspect(`const root=document.querySelector(arguments[0]), box=root.getBoundingClientRect();
+        return {left:box.left,right:box.right,width:innerWidth,overflow:root.scrollWidth-root.clientWidth,
+          inputVisible:root.querySelector('input').checkVisibility(),
+          marks:[...root.querySelectorAll('mark')].map(mark=>{const r=mark.getBoundingClientRect(),p=mark.parentElement.getBoundingClientRect();return r.top>=p.top-1&&r.bottom<=p.bottom+1;})};`, [findDialog]);
+      assert.ok(bounds.left >= 0 && bounds.right <= bounds.width && bounds.overflow <= 1 && bounds.inputVisible);
+      assert.deepEqual(bounds.marks, [true, true], 'highlight remains visible within the excerpt at each width');
+      await screenshot(`find-current-message-${width}`);
+    }
     await screenshot('find-current-message');
     await click(`${findRows}[data-message-id="${reportIds[1]}"]`);
     await locate(reportIds[1]);
