@@ -62,7 +62,6 @@ test('session switches restore only their own explicitly selected model; new ses
   assert.equal(state.modelSelection, null);
 });
 function pageFunction(name) {
-  if (name === 'sessionMatch') return sessionMatch.toString();
   const match = source.match(new RegExp(`^(?:async )?function ${name}\\([^]*?^}`, 'm'));
   assert.ok(match, `Page function ${name} exists`);
   return match[0];
@@ -126,7 +125,8 @@ test('opening a history text match reveals that message without resetting its dr
     conversationStatus: {}, conversation: { getViewState: () => view, restoreViewState: state => { restored = state; } },
     switchSession: id => { selected = id; }, scheduleHistorySave: () => { saves++; },
   });
-  vm.runInContext(pageFunction('sessionMatch') + '\n' + pageFunction('openHistoryResult'), context);
+  context.sessionMatch = sessionMatch;
+  vm.runInContext(pageFunction('openHistoryResult'), context);
   context.openHistoryResult('target');
   assert.equal(selected, 'target');
   assert.equal(restored.scrollTop, 864);
@@ -209,7 +209,8 @@ function harness({ callbacks = false } = {}) {
       showDialog(dialog, target) { target.focus(); return dialog; },
     } },
   });
-  const names = ['currentSession', 'renderHistory', 'renderReferences', 'removeReference', 'switchSession', 'createSession', 'addMention', 'runSlash', 'planForSession', 'updateSessionMessages', 'sessionMatch', 'setSessionTitle', 'openSessionRename', 'useStarter', 'syncCompletions'];
+  context.sessionMatch = sessionMatch;
+  const names = ['currentSession', 'renderHistory', 'renderReferences', 'removeReference', 'switchSession', 'createSession', 'addMention', 'runSlash', 'planForSession', 'updateSessionMessages', 'setSessionTitle', 'openSessionRename', 'useStarter', 'syncCompletions'];
   vm.runInContext(names.map(pageFunction).join('\n'), context);
   return { page: context, state, doc, sessions, input };
 }
@@ -291,6 +292,19 @@ test('search finds title or literal message text, never an unrelated tool or hid
   assert.equal(page.sessionMatch(session, '<script>').matched, true);
   assert.equal(page.sessionMatch(session, 'secret').matched, false);
   assert.equal(page.sessionMatch(session, '').matched, true);
+});
+
+test('history opens the matching saved message even when its title also matches', () => {
+  const term = '[A+B]  🚢';
+  const session = { title: '检查 ' + term, messages: [
+    { id: 'earlier', role: 'assistant', text: 'before🚢' + '前'.repeat(15) + term + '后'.repeat(15) + '🚢after' },
+    { id: 'latest', role: 'user', text: '最近的请求' },
+  ] };
+  const match = sessionMatch(session, '  [a+b]  🚢 ');
+  assert.equal(match.messageId, 'earlier');
+  assert.equal(match.snippet, '…🚢' + '前'.repeat(15) + term + '后'.repeat(15) + '🚢…');
+  assert.deepEqual(sessionMatch(session, '检查'), { matched: true, snippet: '最近的请求' });
+  assert.deepEqual(sessionMatch(session, '  '), { matched: true, snippet: '最近的请求' });
 });
 
 test('rename dialog validates whitespace, saves exact targeted session and supports cancel', () => {
