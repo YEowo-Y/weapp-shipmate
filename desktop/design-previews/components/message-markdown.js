@@ -105,6 +105,26 @@ function reconcile(host, descriptors) {
   while (host.children.length > descriptors.length) host.children[host.children.length - 1].remove();
 }
 
+// Read the same trusted descriptors as the renderer. Inline nodes concatenate,
+// while block boundaries remain separate and code whitespace stays untouched.
+export function messageSearchText(value, role = 'assistant') {
+  const source = String(value || '').replace(/\r\n?/g, '\n');
+  if (role === 'user') return source.replace(/\n+$/, '');
+  const tree = tokenTree(markdown.parse(source, {}), { partIndex: '0', copyCode: false });
+  let result = '', separator = '';
+  const boundary = () => { if (result && !result.endsWith('\n')) separator = '\n'; };
+  function visit(node) {
+    if (node.tag === 'br') { result += separator + '\n'; separator = ''; return; }
+    const separate = /^(?:p|h[1-6]|blockquote|[uo]l|li|div|pre|table|thead|tbody|tr|th|td|hr)$/.test(node.tag);
+    if (separate) boundary();
+    if (node.text !== undefined) { result += separator + node.text; separator = ''; }
+    else node.children.forEach(visit);
+    if (separate) boundary();
+  }
+  tree.forEach(visit);
+  return result;
+}
+
 export function renderMessageText(host, value, { copyCode = true } = {}) {
   const source = String(value || '').replace(/\r\n?/g, '\n');
   const context = { messageId: host.dataset?.messageId || '', partIndex: host.dataset?.partIndex || '0', copyCode };
