@@ -190,6 +190,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     if (returnFocus) input.focus({ preventScroll: true });
   }
   function restore() {
+    if (activeDialog?.dataset.kind === 'find' && activeDialog.dataset.sessionId !== currentSessionId) activeDialog.close();
     restoring = true;
     const session = current();
     conversation.replaceMessages(session.messages);
@@ -255,6 +256,79 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     } else input.focus();
     schedule();
   }
+  function highlightMatch(node, pattern) {
+    const text = node.textContent;
+    const hit = pattern?.exec(text);
+    if (!hit) return;
+    node.replaceChildren(doc.createTextNode(text.slice(0, hit.index)), element('mark', '', hit[0]),
+      doc.createTextNode(text.slice(hit.index + hit[0].length)));
+  }
+  function openFind(trigger = input) {
+    if (disposed || mutationBusy) return;
+    capture();
+    const sessionId = currentSessionId;
+    const surface = dialog('在当前会话中查找', trigger, 'find');
+    surface.node.dataset.sessionId = sessionId;
+    const search = element('input'); search.type = 'search'; search.placeholder = '查找当前会话消息'; search.setAttribute('aria-label', '查找当前会话消息');
+    const searchBox = element('div', 'session-workspace__search');
+    const clear = actionButton('清除搜索', 'clear-search', { icon: 'x', appearance: 'plain' });
+    searchBox.append(createIcon(doc, 'search'), search, clear);
+    const results = element('div', 'session-workspace__results'), count = element('p', 'session-workspace__status'); count.setAttribute('role', 'status');
+    const empty = element('div', 'session-workspace__empty'), emptyTitle = element('p'), emptyDescription = element('small');
+    empty.append(createIcon(doc, 'search'), emptyTitle, emptyDescription);
+    surface.body.append(searchBox, count, results, empty);
+    let resultRows = [], composing = false;
+    function render() {
+      if (sessionId !== currentSessionId || disposed) { surface.close(); return; }
+      const pattern = literalSessionQuery(search.value);
+      clear.hidden = !search.value;
+      results.replaceChildren(); resultRows = [];
+      if (pattern) for (const message of current().messages) {
+        const match = sessionMatch({ title: '', messages: [message] }, search.value, pattern);
+        if (!match.matched) continue;
+        const label = message.record ? '记录' : message.role === 'user' ? '用户' : '助手';
+        const row = button(label, 'find-message', 'message-square'); row.dataset.messageId = message.id;
+        row.children[1].className = 'session-workspace__result-title';
+        const snippet = element('small', '', match.snippet);
+        snippet.id = `session-workspace-${instanceId}-find-${encodeURIComponent(message.id)}`;
+        highlightMatch(snippet, pattern);
+        row.setAttribute('aria-describedby', snippet.id); row.append(snippet);
+        row.addEventListener('click', () => {
+          if (disposed || mutationBusy || sessionId !== currentSessionId || !surface.node.open) return;
+          surface.close(false); selectSession(sessionId, { messageId: message.id });
+        });
+        results.append(row); resultRows.push(row);
+      }
+      count.hidden = !pattern;
+      count.textContent = `${resultRows.length} 条匹配消息`;
+      empty.hidden = resultRows.length > 0;
+      emptyTitle.textContent = pattern ? '没有找到消息' : '查找当前会话中的内容';
+      emptyDescription.textContent = pattern ? '试试其他关键词，或清除搜索。' : '输入关键词，定位到匹配消息。';
+    }
+    function resetSearch() { search.value = ''; render(); search.focus(); }
+    clear.addEventListener('click', resetSearch);
+    search.addEventListener('compositionstart', () => { composing = true; });
+    search.addEventListener('input', event => { if (!composing && !event.isComposing) render(); });
+    search.addEventListener('compositionend', () => { composing = false; render(); });
+    surface.node.addEventListener('cancel', event => {
+      if (composing || search.value) { event.preventDefault(); if (!composing) resetSearch(); }
+    });
+    surface.node.addEventListener('keydown', event => {
+      if (composing || event.isComposing || event.keyCode === 229) return;
+      const index = resultRows.indexOf(doc.activeElement);
+      if (doc.activeElement !== search && index < 0) return;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        if (!resultRows.length) return;
+        event.preventDefault();
+        const next = index < 0 ? (event.key === 'ArrowDown' ? 0 : resultRows.length - 1)
+          : (index + (event.key === 'ArrowDown' ? 1 : -1) + resultRows.length) % resultRows.length;
+        resultRows[next].focus();
+      } else if (event.key === 'Enter' && doc.activeElement === search && resultRows.length) {
+        event.preventDefault(); resultRows[0].click();
+      }
+    });
+    render(); search.focus();
+  }
   function openHistory(trigger = title, filter = 'active') {
     if (disposed || mutationBusy) return;
     if (!['active', 'archived', 'all'].includes(filter)) filter = 'active';
@@ -280,13 +354,6 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     surface.body.append(searchBox, filters, count, results, empty, feedback);
     surface.actions.replaceChildren(exportButton, dataButton, surface.cancel);
     let resultRows = [];
-    function highlightMatch(node, pattern) {
-      const text = node.textContent;
-      const hit = pattern?.exec(text);
-      if (!hit) return;
-      node.replaceChildren(doc.createTextNode(text.slice(0, hit.index)), element('mark', '', hit[0]),
-        doc.createTextNode(text.slice(hit.index + hit[0].length)));
-    }
     function render() {
       const pattern = literalSessionQuery(search.value);
       filterButtons.forEach((control, index) => { control.setAttribute('aria-pressed', String(filter === ['active', 'archived', 'all'][index])); control.disabled = mutationBusy; });
@@ -584,5 +651,5 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     else win.location.reload();
   });
   bind(win, 'pagehide', event => { if (event.persisted) { conversation.stop(); void flush(); } else destroy(); });
-  return { conversation, flush, openHistory, openData, getDataSettingsPanel, createSession, renameSession, getCurrentSession: current, isTemporary: () => temporaryMode, selectProject, associateCurrentSession, setKnownProjects, destroy };
+  return { conversation, flush, openHistory, openFind, openData, getDataSettingsPanel, createSession, renameSession, getCurrentSession: current, isTemporary: () => temporaryMode, selectProject, associateCurrentSession, setKnownProjects, destroy };
 }
