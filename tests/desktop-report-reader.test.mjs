@@ -171,6 +171,39 @@ test('reader filters findings and outline together, preserving article numbers, 
   assert.equal(h.node('report-reader-filter-status').textContent, '');
 });
 
+test('quote filter updates counts and announces the result when a focused finding leaves the list', () => {
+  let quoteRows, refresh;
+  const h = harness({ mountQuoteChecks(_version, rows, onChange) {
+    quoteRows = rows; refresh = onChange;
+    rows.forEach((row, i) => { row.state = i ? 'matched' : 'unchecked'; });
+    onChange();
+    return () => {};
+  } });
+  const result = h.artifact.data.result;
+  result.items = result.items.slice(0, 2);
+  result.items[0].severity = 'blocker'; result.items[1].severity = 'warning';
+  result.selfCheck = [];
+  h.app.open(h.trigger);
+  const filter = h.node('report-reader-quote-filter');
+  const count = key => filter.children.find(n => n.value === key).textContent;
+  assert.equal(count('unchecked'), '尚未在线核验 1');
+  assert.equal(count('matched'), '最近一次匹配 1');
+  h.nodes.find(n => n.dataset.readerFilter === 'blocker').listeners.click();
+  assert.equal(count('matched'), '最近一次匹配 0');
+  filter.value = 'unchecked'; filter.listeners.change();
+  const row = quoteRows[0]; row.button.focus();
+  row.state = 'missing'; row.status.textContent = '本次核验 · 官方正文未找到此引文';
+  refresh(row);
+  assert.equal(h.document.activeElement, filter);
+  assert.equal(count('missing'), '正文未找到引文 1');
+  assert.equal(h.node('report-reader-outline').hidden, true);
+  assert.match(h.node('report-reader-filter-status').textContent, /官方正文未找到此引文。显示阻断 · 尚未在线核验 0 项/);
+  h.node('report-reader-priority').children.at(-1).listeners.click();
+  assert.equal(filter.value, 'all');
+  assert.equal(h.node('report-reader-content').children.every(n => !n.hidden), true);
+  assert.equal(h.document.activeElement.id, 'reader-item-0');
+});
+
 test('reader resets the filter after recheck and after opening another saved report', () => {
   const h = harness();
   h.artifact = { ...h.artifact, kind: 'check', data: { ...h.artifact.data, kind: 'check', result: {
