@@ -35,6 +35,26 @@ async function run(c = catalog(), fixture = transport(), extra = {}) {
   return checkSource(c, c.sources[0].id, { ...fixture, now: () => 123456, ...extra });
 }
 
+test('online quotes use only this GET body and keep source reachability separate from a match', async () => {
+  for (const [quote, match] of [['正文解释 source', 'exact'], ['正文解释source', 'whitespace-normalized'], ['正文解释。source', 'missing']]) {
+    const fixture = transport();
+    const result = await run(catalog(), fixture, { quote });
+    assert.equal(fixture.calls.length, 1);
+    assert.equal(result.source.state, 'unchanged');
+    assert.equal(result.match, match);
+    assert.equal(result.quoteHash, sha256(quote));
+  }
+  for (const fixture of [transport({ status: 404 }), transport({ body: '<title>Sign in</title>' + html }), transport({ body: '<main>正文解释 source</main>' })]) {
+    const result = await run(catalog(), fixture, { quote: '正文解释 source' });
+    assert.equal(result.match, 'unverified');
+    assert.equal(result.source.contentHash, null);
+  }
+  const manual = transport();
+  assert.equal((await run(catalog({ hash, method: 'manual', fetchedAt: '2026-10-22' }), manual, { quote: '正文' })).match, 'unverified');
+  assert.equal(manual.calls.length, 0);
+  await assert.rejects(run(catalog(), transport(), { quote: ' \u200b ' }), /quote/);
+});
+
 test('shared source extraction preserves legacy function identity and normalized hash', () => {
   assert.equal(legacyHash, sha256); assert.equal(legacyExtract, extractMainText);
   assert.equal(extractMainText('<main><p>A&amp;B\u200b</p><script>x()</script><style>x</style><p>C&#39;D</p></main>'), 'A&B\nC\'D\n');
