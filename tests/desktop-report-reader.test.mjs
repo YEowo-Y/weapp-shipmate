@@ -198,10 +198,13 @@ test('quote filter updates counts and announces the result when a focused findin
   assert.equal(count('missing'), '正文未找到引文 1');
   assert.equal(h.node('report-reader-outline').hidden, true);
   assert.match(h.node('report-reader-filter-status').textContent, /官方正文未找到此引文。显示阻断 · 尚未在线核验 0 项/);
-  h.node('report-reader-priority').children.at(-1).listeners.click();
-  assert.equal(filter.value, 'all');
-  assert.equal(h.node('report-reader-content').children.every(n => !n.hidden), true);
-  assert.equal(h.document.activeElement.id, 'reader-item-0');
+  assert.equal(h.node('report-reader-priority').hidden, true);
+  assert.equal(h.node('report-reader-quote-jump').hidden, true);
+  filter.value = 'missing'; filter.listeners.change();
+  assert.equal(h.node('report-reader-quote-jump').hidden, false);
+  filter.value = 'all'; filter.listeners.change();
+  assert.equal(h.node('report-reader-quote-jump').hidden, true);
+  assert.equal(h.node('report-reader-priority').hidden, false);
 });
 
 test('reader resets the filter after recheck and after opening another saved report', () => {
