@@ -3,13 +3,13 @@ import { createActionButton } from '../design-previews/components/ui-kit.js';
 import { createIcon } from '../design-previews/components/icons.js';
 import { renderMessageText } from '../design-previews/components/message-markdown.js';
 import type { Artifact, Project } from './projects';
-import type { QuoteRow } from './report-quote-checks';
+import type { QuoteRow, QuoteState } from './report-quote-checks';
 import './context.css';
 import './report-reader.css';
 
 // createHandoff validates these fields before this presentation-only narrowing.
 type ReadingItem = { conditional: boolean; rejectSummary: string | null; relevance?: 'direct' | 'possible'; matchEvidence?: { aliases: string[]; codes: string[]; partialAliases: string[] }; rule: { ruleId: string; title: string; severity: 'blocker' | 'warning' | 'info'; why?: string | null; requires: string[]; official_url?: string | null; source_quote?: string | null; last_verified?: string | null; manual_required: boolean; warn?: string | null; note?: string | null; action_categories?: string[]; confidence?: 'high' | 'medium' | 'low' } };
-type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(anchor: HTMLElement): void; onRepair?(anchor: HTMLElement): void; onOpenSource?(url: string): Promise<unknown>; mountQuoteChecks?(rulesVersion: string, rows: QuoteRow[]): () => void; returnFocus?(): HTMLElement | null };
+type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(anchor: HTMLElement): void; onRepair?(anchor: HTMLElement): void; onOpenSource?(url: string): Promise<unknown>; mountQuoteChecks?(rulesVersion: string, rows: QuoteRow[], onChange: (completed?: QuoteRow) => void): () => void; returnFocus?(): HTMLElement | null };
 
 // The export contract intentionally omits run notes and business signals. Validate
 // only these additional reading fields; never derive execution state from prose.
@@ -150,28 +150,63 @@ export function mountReportReader(options: Options) {
       rows.push({ category: item.conditional ? 'conditional' : r.severity, article, entry, heading });
     }
 
-    disposeChecks = options.mountQuoteChecks?.(source.rulesVersion, quoteRows);
-
     summary.setAttribute('role', 'group'); summary.setAttribute('aria-label', '筛选报告核对项');
+    const categories = { all: '全部', ...labels, conditional: '条件自查' };
+    const quoteLabels: Record<QuoteState | 'all', string> = { all: '全部状态', unchecked: '尚未在线核验', missing: '正文未找到引文', unverified: '无法核验', manual: '需人工核对', matched: '最近一次匹配' };
+    let category = 'all', interacted = false;
+    const quoteFilter = node('select', '', 'report-reader-quote-filter');
+    const quoteOptions: HTMLOptionElement[] = [];
     const filters: HTMLButtonElement[] = [];
-    for (const [key, label] of Object.entries({ all: '全部', ...labels, conditional: '条件自查' })) {
+    for (const [key, label] of Object.entries(categories)) {
       const count = key === 'all' ? rows.length : rows.filter(row => row.category === key).length;
       if (!count) continue;
       const filter = node('button', `${label} ${count}`);
       filter.type = 'button'; filter.dataset.readerFilter = key;
       filter.setAttribute('aria-pressed', String(key === 'all'));
       filter.setAttribute('aria-controls', 'report-reader-content report-reader-outline');
-      filter.addEventListener('click', () => selectFilter(key, label, count));
+      filter.addEventListener('click', () => selectCategory(key));
       filters.push(filter); summary.append(filter);
     }
-    function selectFilter(key: string, label: string, count: number) {
-      for (const control of filters) control.setAttribute('aria-pressed', String(control.dataset.readerFilter === key));
-      for (const row of rows) {
-        const hidden = key !== 'all' && row.category !== key;
-        row.article.hidden = hidden; row.entry.hidden = hidden;
-      }
-      filterStatus.textContent = key === 'all' ? `已显示全部 ${rows.length} 项` : `显示${label} ${count} 项，共 ${rows.length} 项`;
+    function selectCategory(key: string) {
+      category = key; interacted = true;
+      for (const control of filters) control.setAttribute('aria-pressed', String(control.dataset.readerFilter === category));
+      updateFilters();
       outline.scrollTop = 0;
+    }
+    function updateFilters(completed?: QuoteRow) {
+      const selected = (quoteFilter.value || 'all') as keyof typeof quoteLabels;
+      const counts = new Map<string, number>();
+      let visibleCount = 0;
+      let completion = '';
+      for (const [i, row] of rows.entries()) {
+        const state = quoteRows[i]?.state;
+        const inCategory = category === 'all' || row.category === category;
+        if (inCategory) {
+          counts.set('all', (counts.get('all') ?? 0) + 1);
+          if (state) counts.set(state, (counts.get(state) ?? 0) + 1);
+        }
+        const hidden = !inCategory || (selected !== 'all' && state !== selected);
+        if (hidden && !row.article.hidden && completed && completed === quoteRows[i]) completion = `${items[i].rule.title}：${completed.status.textContent}。`;
+        if (hidden && (row.article.contains(document.activeElement) || row.entry.contains(document.activeElement))) quoteFilter.focus();
+        row.article.hidden = hidden; row.entry.hidden = hidden;
+        if (!hidden) visibleCount++;
+      }
+      for (const option of quoteOptions) option.textContent = `${quoteLabels[option.value as keyof typeof quoteLabels]} ${counts.get(option.value) ?? 0}`;
+      outline.hidden = !visibleCount;
+      if (!interacted) return;
+      const names = [category !== 'all' && categories[category as keyof typeof categories], selected !== 'all' && quoteLabels[selected]].filter(Boolean).join(' · ');
+      filterStatus.textContent = completion + (names ? `显示${names} ${visibleCount} 项，共 ${rows.length} 项` : `已显示全部 ${rows.length} 项`);
+    }
+    if (options.mountQuoteChecks) {
+      const label = node('label', '引文状态'); label.className = 'report-quote-filter';
+      for (const [key, title] of Object.entries(quoteLabels)) {
+        const option = node('option', title); option.value = key; quoteFilter.append(option); quoteOptions.push(option);
+      }
+      quoteFilter.disabled = true;
+      quoteFilter.setAttribute('aria-controls', 'report-reader-content report-reader-outline');
+      quoteFilter.addEventListener('change', () => { interacted = true; updateFilters(); outline.scrollTop = 0; });
+      label.append(quoteFilter); summary.append(label);
+      disposeChecks = options.mountQuoteChecks(source.rulesVersion, quoteRows, completed => { quoteFilter.disabled = false; updateFilters(completed); });
     }
     const first = ['blocker', 'warning', 'info'].map(severity => items.findIndex(item => !item.conditional && item.rule.severity === severity)).find(index => index >= 0) ?? 0;
     const item = items[first], rule = item.rule;
@@ -181,7 +216,7 @@ export function mountReportReader(options: Options) {
     const jump = node('button', '查看核对要求'); jump.type = 'button'; jump.setAttribute('aria-controls', rows[first].heading.id);
     jump.addEventListener('click', () => {
       if (disposed || !dialog.open) return;
-      selectFilter('all', '全部', rows.length);
+      quoteFilter.value = 'all'; selectCategory('all');
       const heading = rows[first].heading; heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'start', behavior: 'instant' });
     });
     priority.append(jump);
