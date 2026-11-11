@@ -331,10 +331,36 @@ export async function checkSourceFreshnessFlows({ run, checked, click, fill, pre
       await click(`${filter} option[value="${value}"]`);
       await until(() => inspect('return document.querySelector(arguments[0]).value === arguments[1]', [filter, value]), `quote filter ${value}`);
     };
+    const checkStep = async (ids, index, value) => {
+      const step = await inspect(`const summary = document.activeElement;
+        if (!summary.matches(".report-reader-evidence[open] > summary")) return null;
+        const details = summary.parentElement;
+        return {
+          id: details.closest("article").querySelector("h3").id,
+          filter: document.querySelector("#report-reader-quote-filter").value,
+          position: details.querySelector("[data-quote-position]").textContent.match(/[0-9]+/g)?.map(Number),
+          previousDisabled: details.querySelector("[data-quote-prev]").disabled,
+          nextDisabled: details.querySelector("[data-quote-next]").disabled
+        };`);
+      assert.deepEqual(step, { id: ids[index], filter: value, position: [index + 1, ids.length],
+        previousDisabled: index === 0, nextDisabled: index === ids.length - 1 });
+    };
+    const stepControl = (id, direction) => `article:has(> #${id}) .report-reader-evidence [data-quote-${direction}]`;
     const beforeChecks = (await invocations()).length;
     await choose('manual'); await checkVisible(manual);
+    assert.ok(manual.length > 1, 'guide exercises navigation across multiple manual items');
+    await click('#report-reader-quote-jump');
+    await checkStep(manual, 0, 'manual');
+    for (let index = 1; index < manual.length; index++) {
+      await click(stepControl(manual[index - 1], 'next'));
+      await checkStep(manual, index, 'manual');
+    }
+    await click(stepControl(manual.at(-1), 'prev'));
+    await checkStep(manual, manual.length - 2, 'manual');
+    await checkVisible(manual);
+    await screenshot('report-quote-filter-step-navigation');
     await choose('unchecked'); await checkVisible(unchecked);
-    await choose('all'); await checkVisible(expected.map(row => row.id));
+    await click('#report-reader-quote-jump'); await checkStep(unchecked, 0, 'unchecked');
     assert.equal((await invocations()).length, beforeChecks);
     const quote = await inspect('return document.querySelector(arguments[0]).closest("article").querySelector("blockquote").textContent', [selector]);
     const verify = async (mode, expected, html) => {
@@ -346,15 +372,19 @@ export async function checkSourceFreshnessFlows({ run, checked, click, fill, pre
     };
     const escaped = quote.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
     assert.match(await verify('changed', '本次核验 · 引文逐字匹配', sampleHtml.replace('</main>', '<p>' + escaped + '</p></main>')), /核验时间/);
+    await checkStep(unchecked.slice(1), 0, 'unchecked');
+    await checkVisible(unchecked.slice(1));
     await choose('matched'); await checkVisible([unchecked[0]]);
     await click('#report-reader-summary [data-reader-filter="conditional"]');
     await checkVisible([]);
     await click('#report-reader-summary [data-reader-filter="all"]');
     await checkVisible([unchecked[0]]);
-    await choose('all');
+    await click('#report-reader-quote-jump'); await checkStep([unchecked[0]], 0, 'matched');
     assert.match(await verify('changed', '本次核验 · 官方正文未找到此引文'), /上次匹配时间/);
+    await checkVisible([]);
+    assert.equal(await inspect('return document.activeElement.id'), 'report-reader-quote-filter');
     await choose('missing'); await checkVisible([unchecked[0]]);
-    await choose('all');
+    await choose('all'); await checkVisible(expected.map(row => row.id));
     assert.match(await verify('network', '本次核验 · 无法核验'), /网络连接失败.*上次匹配时间/);
     await screenshot('report-quote-network-after-match');
     const count = (await invocations()).length;
@@ -367,7 +397,7 @@ export async function checkSourceFreshnessFlows({ run, checked, click, fill, pre
     await screenshot('report-quote-filter-reopened-failure');
     assert.equal(await inspect('return document.querySelector("#report-reader-priority").hidden'), true);
     await click('#report-reader-quote-jump');
-    assert.equal(await inspect('const e=document.activeElement;return e.matches(".report-reader-evidence[open] > summary") && e.closest("article").querySelector("h3").id === arguments[0]', [unchecked[0]]), true);
+    await checkStep([unchecked[0]], 0, 'unverified');
     await choose('unchecked'); await checkVisible(unchecked.slice(1));
     assert.equal(count, beforeChecks + 3, 'only the three explicit verification actions invoked the checker');
     assert.equal((await invocations()).length, count, 'opening the report never sends a verification request');
