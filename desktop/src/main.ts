@@ -319,7 +319,7 @@ window.addEventListener("DOMContentLoaded", () => {
     },
   });
   reader = mountReportReader({
-    mountQuoteChecks: (version, rows) => mountReportQuoteChecks(invoke, version, rows),
+    mountQuoteChecks: (version, rows, onChange) => mountReportQuoteChecks(invoke, version, rows, onChange),
     openPage: (page, trigger) => workspace.open(page, trigger === $('#read-report') ? tools.getReturnFocus() : trigger),
     getArtifact: () => lastSuccessful?.artifact ?? null,
     getProject: () => projects?.getActive() ?? null,
