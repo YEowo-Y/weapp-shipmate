@@ -38,7 +38,10 @@
 .report-quote-check{display:flex;align-items:baseline;gap:8px 16px;flex-wrap:wrap;margin-top:12px}
 .report-quote-status{display:grid;gap:2px;color:var(--text-2);font-size:.9em}
 .report-quote-status span+span{color:var(--text-3);font-variant-numeric:tabular-nums}
-.report-quote-check button{font:inherit;font-size:.9em;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer}
+.report-quote-check button,.report-quote-pager button{font:inherit;font-size:.9em;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer}
+.report-quote-pager{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px}
+.report-quote-pager span{margin-inline-end:auto;font-size:.875em;color:var(--text-2);font-variant-numeric:tabular-nums}
+.report-quote-pager button:disabled{opacity:.5;cursor:default}
 .report-quote-check button:disabled{opacity:.6;cursor:wait}
 #report-reader-original{margin:16px 0 24px;padding:16px;background:var(--surface);border-radius:10px}#report-reader-original .report-markdown{margin-top:20px;min-width:0;overflow-wrap:anywhere}#report-reader-original pre,#report-reader-original table{max-width:100%;overflow:auto}#report-reader-original table{display:block}#report-reader-original img{max-width:100%;height:auto}
 .report-reader #report-reader-original h1{font-size:1.4em;line-height:1.5}.report-reader #report-reader-original h2{font-size:1.2em;line-height:1.5;margin-top:24px}.report-reader #report-reader-original h3{font-size:1.1em;line-height:1.5}.report-reader #report-reader-original .markdown-table{max-width:100%;overflow:auto}
