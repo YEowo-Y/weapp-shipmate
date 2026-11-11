@@ -747,9 +747,43 @@ async function checkAgentFlows() {
     assert.equal(await toolsCount(),1); assert.equal(await inspect('return document.querySelector("[data-component^=project-tool-]").dataset.toolState'),'success');
     await click('[data-component^="project-tool-"] > summary'); await click('[data-action="open-artifact"]');
     await until(() => inspect('return document.querySelector("#desktop-tools").open'),'local artifact opens');
-    assert.ok((await text('#report')).length>50); await screenshot('p5-local-artifact'); await click('#desktop-tools-close');
+    const originalRendered = await text('#report');
+    assert.ok(originalRendered.length>50); await screenshot('p5-local-artifact'); await click('#desktop-tools-close');
     assert.ok(await inspect('const n=document.querySelector("#desktopConversationStatus");return n.dataset.state==="complete" && n.dataset.announcement==="action" && getComputedStyle(n).clipPath==="none" && n.getBoundingClientRect().height>10'), 'artifact feedback stays visible after a completed run');
     await screenshot('trust-local-action-feedback');
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync(await realpath(projectDatabase));
+    const original = await projectInvoke('project_artifact', { artifactId: state.artifacts[0].id });
+    const originalRun = state.runs.find(item => item.id === original.runId);
+    assert.ok(originalRun);
+    const inserted = [];
+    try {
+      const insertRun = db.prepare("INSERT INTO runs(id,project_id,state,data) VALUES (?,?,'succeeded',?)");
+      const insertArtifact = db.prepare('INSERT INTO artifacts(id,run_id,project_id,data) VALUES (?,?,?,?)');
+      for (let index = 0; index < 200; index++) {
+        const id = 'p5-history-window-fixture-' + index;
+        const createdAt = original.createdAt + index + 1;
+        insertRun.run(id, projectId, JSON.stringify({ ...originalRun, id, startedAt: createdAt, finishedAt: createdAt }));
+        inserted.push(id);
+        insertArtifact.run(id, id, projectId, JSON.stringify({ ...original, id, runId: id, createdAt }));
+      }
+      const recent = await snapshot();
+      assert.equal(recent.runs.some(item => item.id === original.runId), false);
+      assert.equal(recent.artifacts.some(item => item.id === original.id), false);
+      await click('[data-action="open-artifact"]');
+      await until(() => inspect('return document.querySelector("#desktop-tools").open'), 'old conversation opens a report beyond the snapshot window');
+      const verified = await projectInvoke('project_artifact', { artifactId: original.id, localProjectId: projectId });
+      assert.equal(verified.runId, original.runId);
+      assert.equal(await text('#report'), originalRendered);
+      await screenshot('p5-older-conversation-report');
+      await click('#desktop-tools-close');
+    } finally {
+      for (const id of inserted) {
+        db.prepare('DELETE FROM artifacts WHERE id=? AND project_id=?').run(id, projectId);
+        db.prepare('DELETE FROM runs WHERE id=? AND project_id=?').run(id, projectId);
+      }
+      db.close();
+    }
   });
   await checked('Shared guide and explain execute sequentially with two distinct records and bounded model projections', async () => {
     await permissions(true,true);
@@ -1132,7 +1166,7 @@ try {
   } else if (notificationsMode) {
     await checkSystemNotificationFlows({ run, checked, click, press, inspect, text, command, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, quit, launch, requests, ownedRuntimeProcesses });
   } else if (sourcesMode) {
-    await checkSourceFreshnessFlows({ run, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, quit, launch, requests, sourceFixture, ownedRuntimeProcesses });
+    await checkSourceFreshnessFlows({ run, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, quit, launch, requests, sourceFixture, ownedRuntimeProcesses, projectDatabase });
   } else if (maintenanceMode) {
     await checkMaintenanceFlows({ run, projectDatabase, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, quit, launch, requests, isolatedDirectory, ownedRuntimeProcesses });
   } else if (memoryMode) {
