@@ -13,6 +13,7 @@ import { createProjectExplain } from "./project-explain";
 import { mountWorkflow } from "./workflow";
 import { mountRepairHandoff } from "./repair-handoff";
 import { mountReportReader } from "./report-reader";
+import { mountReportQuoteChecks } from "./report-quote-checks";
 import { mountProjectRepair } from "./project-repair";
 import { mountProjectHealth } from "./project-health";
 import { mountProjectMaintenance } from "./maintenance";
@@ -318,6 +319,7 @@ window.addEventListener("DOMContentLoaded", () => {
     },
   });
   reader = mountReportReader({
+    mountQuoteChecks: (version, rows) => mountReportQuoteChecks(invoke, version, rows),
     openPage: (page, trigger) => workspace.open(page, trigger === $('#read-report') ? tools.getReturnFocus() : trigger),
     getArtifact: () => lastSuccessful?.artifact ?? null,
     getProject: () => projects?.getActive() ?? null,
