@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { deriveWorkflow } from '../src/workflow.mjs';
 import { createHandoff } from '../desktop/design-previews/repair-handoff.js';
 
 const execFileAsync = promisify(execFile);
@@ -184,6 +185,22 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     assert.ok(artifacts.check.data.result.items.length >= 3);
     await activate('#read-report'); await readerReady(); await verifyContent(artifacts.check); await geometry('check-wide');
   });
+  await checked('Report priority shows a real finding and navigates directly to its requirements', async () => {
+    const items = createHandoff(artifacts.check).items;
+    assert.ok(items.every(item => !item.conditional && item.rule.severity === 'warning'), 'this real preflight contains warnings, not synthetic blockers');
+    const index = 0;
+    assert.equal(await text('#report-reader-priority h3'), '建议先核对');
+    assert.equal(await text('#report-reader-priority p:first-of-type'), items[index].rule.title);
+    assert.equal(await text('#report-reader-priority p:nth-of-type(2)'), items[index].rule.requires[0]);
+    const before = await snapshot();
+    await activate('#report-reader-priority button');
+    assert.equal(await inspect('return document.activeElement.id'), `reader-item-${index}`);
+    assert.equal(await inspect('return document.activeElement.checkVisibility()'), true);
+    assert.deepEqual((await snapshot()).runs, before.runs);
+    assert.deepEqual((await snapshot()).artifacts, before.artifacts);
+    await inspect('document.querySelector(".report-reader-body").scrollTop=0');
+    await screenshot('reading-priority-overview');
+  });
   await checked('Reading path labels are guidance; native outline links focus the actual headings', async () => {
     assert.equal(await inspect('return document.querySelector(".report-reader-steps")'), null, 'static tutorial is replaced by the report content');
     assert.equal(await inspect('return document.querySelector("#desktop-report-reader").getAttribute("role")'), 'region');
@@ -271,8 +288,10 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     assert.equal(await inspect('return document.querySelectorAll("#handoff-content h2").length'), items.length);
     await click('#handoff-done');
     assert.deepEqual(await visibleItems(), { articles: conditionalIds, outline: conditionalIds, pressed: ['conditional'] });
-    await selectFilter('all');
+    await activate('#report-reader-priority button');
+    assert.ok(!conditionalIds.includes(await inspect('return document.activeElement.id')), 'priority opens an unconditional item hidden by the conditional filter');
     assert.deepEqual(await visibleItems(), { articles: allIds, outline: allIds, pressed: ['all'] });
+    await selectFilter('all');
     await closeReader(); await closeTools();
   });
   await checked('Closing a handoff resumes the same report, evidence and reading position', async () => {
@@ -357,6 +376,38 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
       }
     } finally { await clearStress(); }
     await closeReader(); await closeTools(); await command('POST', '/window/rect', { width: 1200, height: 850 });
+  });
+  await checked('Next step opens the missing fact and keeps unsaved guidance drafts intact', async () => {
+    await activate('#desktop-workflow-open');
+    await until(() => inspect('return document.querySelector("#desktop-workflow").open && !document.querySelector("#workflow-content").hidden && !document.querySelector("#workflow-retry").disabled'), 'workflow loaded');
+    let state = await projectInvoke('project_workflow', { projectId });
+    for (let count = 0; count < state.catalog.stages.length; count++) {
+      const model = deriveWorkflow(state), next = model.stages.find(stage => stage.id === model.nextAction?.stageId);
+      if (!next || next.applicability === null) break;
+      assert.equal(next.applicability, true);
+      await activate('#workflow-next-open');
+      await activate(`#workflow-confirm-${next.id}`);
+      await until(async () => {
+        state = await projectInvoke('project_workflow', { projectId });
+        return deriveWorkflow(state).stages.find(stage => stage.id === next.id).status === 'confirmed'
+          && await inspect('return !document.querySelector("#workflow-retry").disabled');
+      }, 'explicit stage confirmation saved');
+    }
+    const model = deriveWorkflow(state);
+    assert.equal(model.nextAction.stageId, 'privacy');
+    await activate('#workflow-facts-open');
+    const draft = '保留尚未保存的业务核对草稿';
+    await fill('#workflow-businessType', draft);
+    await activate('#workflow-facts > summary');
+    assert.equal(await text('#workflow-next-open'), '补充项目事实');
+    const before = await projectInvoke('project_workflow', { projectId });
+    await activate('#workflow-next-open');
+    assert.equal(await inspect('return document.activeElement.id'), 'workflow-collectsSensitive');
+    assert.equal(await inspect('return document.querySelector("#workflow-facts").open'), true);
+    assert.equal(await inspect('return document.querySelector("#workflow-businessType").value'), draft);
+    assert.deepEqual(await projectInvoke('project_workflow', { projectId }), before, 'navigation never saves facts or confirms a stage');
+    await screenshot('workflow-next-missing-fact');
+    await activate('#workflow-close');
   });
   await checked('Reading leaves files, persisted artifacts and tool counts unchanged with no model requests', async () => {
     assert.deepEqual((await readdir(directory)).sort(), Object.keys(files).sort());
