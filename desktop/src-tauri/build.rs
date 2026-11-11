@@ -37,6 +37,8 @@ fn main() {
             "project_maintenance_stop",
             "source_freshness_snapshot",
             "source_freshness_check",
+            "source_quote_snapshot",
+            "source_quote_check",
             "system_notifications_snapshot",
             "system_notifications_save",
             "system_notifications_test",
