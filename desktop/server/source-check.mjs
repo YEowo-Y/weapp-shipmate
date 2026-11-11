@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { isPublicAddress } from './custom-endpoint.mjs';
 import { officialSourceUrl } from '../../src/source-catalog.mjs';
 import { extractMainText, sha256 } from '../../src/source-text.mjs';
+import { classifyQuote, collapseWhitespace } from '../../src/source-quotes.mjs';
 
 const HASH = /^[a-f0-9]{64}$/;
 const SOURCE_ID = /^source-[a-f0-9]{16}$/;
@@ -46,22 +47,27 @@ export function validateSourceCatalog(catalog) {
   return catalog;
 }
 
-export async function checkSource(catalog, sourceId, { lookup = resolveOfficialAddresses, request = httpsRequest, timeoutMs = 10000, maxBytes = 2 * 1024 * 1024, now = Date.now, signal } = {}) {
+export async function checkSource(catalog, sourceId, { lookup = resolveOfficialAddresses, request = httpsRequest, timeoutMs = 10000, maxBytes = 2 * 1024 * 1024, now = Date.now, signal, quote } = {}) {
   validateSourceCatalog(catalog);
   if (!SOURCE_ID.test(sourceId)) throw new Error('source');
   const source = catalog.sources.find((item) => item.id === sourceId);
   if (!source) throw new Error('source');
-  const result = (state, reason, httpStatus = null, contentHash = null) => ({ schemaVersion: 1, catalogVersion: catalog.catalogVersion, sourceId, checkedAt: now(), state, reason, httpStatus, contentHash });
+  if (quote !== undefined && (typeof quote !== 'string' || quote.length > 8192 || !collapseWhitespace(quote))) throw new Error('quote');
+  const result = (state, reason, httpStatus = null, contentHash = null, body = null) => {
+    const source = { schemaVersion: 1, catalogVersion: catalog.catalogVersion, sourceId, checkedAt: now(), state, reason, httpStatus, contentHash };
+    if (quote === undefined) return source;
+    return { source, quoteHash: sha256(quote), match: body === null ? 'unverified' : classifyQuote(quote, body) };
+  };
   if (source.baseline?.method === 'manual') return result('manual', 'manual');
   const url = officialSourceUrl(source.url);
   return await new Promise((finish) => {
     let settled = false, req, response, timer;
     const dnsController = new AbortController();
-    const complete = (state, reason, status = null, hash = null) => {
+    const complete = (state, reason, status = null, hash = null, body = null) => {
       if (settled) return;
       settled = true; clearTimeout(timer); signal?.removeEventListener('abort', abort);
       dnsController.abort();
-      response?.destroy(); req?.destroy(); finish(result(state, reason, status, hash));
+      response?.destroy(); req?.destroy(); finish(result(state, reason, status, hash, body));
     };
     const abort = () => complete('unknown', 'network');
     timer = setTimeout(() => complete('unknown', 'timeout'), Math.min(Math.max(timeoutMs, 1), 10000));
@@ -101,7 +107,7 @@ export async function checkSource(catalog, sourceId, { lookup = resolveOfficialA
           try { text = extractMainText(html); } catch { complete('unknown', 'body', status); return; }
           if (!text || text.trim().length < 200) { complete('unknown', 'body', status); return; }
           const hash = sha256(text);
-          complete(source.baseline ? (source.baseline.hash === hash ? 'unchanged' : 'changed') : 'reachable', source.baseline ? (source.baseline.hash === hash ? 'same' : 'different') : 'no_baseline', status, hash);
+          complete(source.baseline ? (source.baseline.hash === hash ? 'unchanged' : 'changed') : 'reachable', source.baseline ? (source.baseline.hash === hash ? 'same' : 'different') : 'no_baseline', status, hash, text);
         });
       });
       req.on('error', () => complete('unknown', 'network'));
@@ -112,10 +118,10 @@ export async function checkSource(catalog, sourceId, { lookup = resolveOfficialA
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
-    if (process.argv.length !== 3) throw new Error('arguments');
+    if (process.argv.length !== 3 && !(process.argv.length === 5 && process.argv[3] === '--quote')) throw new Error('arguments');
     const bytes = readFileSync(new URL('../../source-catalog.json', import.meta.url));
     if (bytes.length > 256 * 1024) throw new Error('catalog');
-    const outcome = await checkSource(JSON.parse(bytes.toString('utf8')), process.argv[2]);
+    const outcome = await checkSource(JSON.parse(bytes.toString('utf8')), process.argv[2], { quote: process.argv[4] });
     process.stdout.write(`${JSON.stringify(outcome)}\n`);
   } catch { process.exitCode = 1; }
 }
