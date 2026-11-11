@@ -8,6 +8,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::{collections::HashSet, io::Read, path::Path};
 use tauri::Manager;
 
+#[path = "source_quote.rs"]
+pub mod quote;
+
 const CATALOG_LIMIT: usize = 256 * 1024;
 const RECORD_LIMIT: usize = 4096;
 const CLOCK_TOLERANCE: u64 = 5000;
