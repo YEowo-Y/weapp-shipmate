@@ -158,7 +158,7 @@ test("guide 不接受位置参数（`guide personal` 漏写 --subject 不得看�
 });
 
 test("guide CLI 保留未知，并分别表达明确是与否", () => {
-  for (const [flags, expectedStages, payment] of [[[], "8/8", null], [["--payment", "--sensitive", "--domain"], "8/8", "涉及支付"], [["--no-payment", "--no-sensitive", "--no-domain"], "6/8", "不涉及支付"]]) {
+  for (const [flags, expectedStages, payment] of [[[], "6/8，待确认 2 个阶段", null], [["--payment", "--sensitive", "--domain"], "8/8", "涉及支付"], [["--no-payment", "--no-sensitive", "--no-domain"], "6/8，已跳过 2 个阶段", "不涉及支付"]]) {
     const out = capture(), err = capture();
     assert.equal(main(["node", "cli", "guide", ...flags, "--json"], out, err), 0, err.get());
     const result = JSON.parse(out.get());
