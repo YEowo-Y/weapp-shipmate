@@ -33,6 +33,11 @@
 .report-reader a{color:var(--text);text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}#report-reader-outline a{display:block;color:var(--text-3);font-size:.875em;text-decoration:none;padding:4px 0;min-height:24px;box-sizing:border-box}#report-reader-outline a:hover{color:var(--text);text-decoration:underline}
 .report-reader-item{margin:0 0 36px;padding-bottom:24px;border-bottom:1px solid var(--border)}.report-reader-item h3{font-size:1.2em;line-height:1.5;margin:0 0 8px;scroll-margin-top:16px}.report-reader-item h4{font-size:1em;margin:22px 0 8px}.report-reader-item p{margin:8px 0 16px}.report-reader-item ul{padding-left:1.4em}.report-reader-item li+li{margin-top:8px}
 .report-reader-evidence{margin-top:20px;padding:12px 16px;border-radius:10px;background:var(--surface)}.report-reader-evidence blockquote{margin:16px 0;padding-left:16px;border-left:2px solid var(--border-2)}
+.report-quote-check{display:flex;align-items:baseline;gap:8px 16px;flex-wrap:wrap;margin-top:12px}
+.report-quote-status{display:grid;gap:2px;color:var(--text-2);font-size:.9em}
+.report-quote-status span+span{color:var(--text-3);font-variant-numeric:tabular-nums}
+.report-quote-check button{font:inherit;font-size:.9em;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer}
+.report-quote-check button:disabled{opacity:.6;cursor:wait}
 #report-reader-original{margin:16px 0 24px;padding:16px;background:var(--surface);border-radius:10px}#report-reader-original .report-markdown{margin-top:20px;min-width:0;overflow-wrap:anywhere}#report-reader-original pre,#report-reader-original table{max-width:100%;overflow:auto}#report-reader-original table{display:block}#report-reader-original img{max-width:100%;height:auto}
 .report-reader #report-reader-original h1{font-size:1.4em;line-height:1.5}.report-reader #report-reader-original h2{font-size:1.2em;line-height:1.5;margin-top:24px}.report-reader #report-reader-original h3{font-size:1.1em;line-height:1.5}.report-reader #report-reader-original .markdown-table{max-width:100%;overflow:auto}
 .report-reader-footer{display:flex;justify-content:flex-end;gap:8px;flex:none;padding-top:16px}.report-reader [hidden]{display:none!important}
