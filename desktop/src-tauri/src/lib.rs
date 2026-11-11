@@ -113,6 +113,8 @@ pub fn run() {
             project_maintenance::project_maintenance_stop,
             source_freshness::source_freshness_snapshot,
             source_freshness::source_freshness_check,
+            source_freshness::quote::source_quote_snapshot,
+            source_freshness::quote::source_quote_check,
             system_notifications::system_notifications_snapshot,
             system_notifications::system_notifications_save,
             system_notifications::system_notifications_test,
