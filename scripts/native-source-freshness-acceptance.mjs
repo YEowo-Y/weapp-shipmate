@@ -303,7 +303,7 @@ export async function checkSourceFreshnessFlows({ run, checked, click, fill, pre
     await writeFile(resolve(run, 'source-freshness-observations.json'), JSON.stringify({ observations, catalogVersion: fixture.catalog.catalogVersion, publicNetwork: 'Not exercised: deterministic request and DNS adapters through the real core.', officialLinks: 'Verified exact href, rel, target and keyboard focus; external browsers were not opened.', requestCount: sent.length }, null, 2));
   });
 
-  await checked('Report quote checks preserve the latest failed attempt separately from the last match', async () => {
+  await checked('Report filters use latest quote evidence and keep the outline aligned with severity and quote filters', async () => {
     await quit(); await launch();
     await click('#start-guide'); await click('#guide-btn');
     await until(() => inspect('return !document.querySelector("#read-report").disabled'), 'guide generated');
@@ -312,6 +312,30 @@ export async function checkSourceFreshnessFlows({ run, checked, click, fill, pre
     const first = () => inspect('return document.querySelector(arguments[0])?.closest("article").querySelector(".report-quote-status")?.textContent', [selector]);
     await until(async () => (await first())?.includes('尚未在线核验'), 'reader loaded local quote records');
     assert.equal(await inspect('return document.querySelectorAll("#report-reader-content article").length === document.querySelectorAll("#report-reader-content .report-quote-status").length'), true);
+    const expected = await inspect(`return [...document.querySelectorAll("#report-reader-content article")].map(article => ({
+      id: article.querySelector("h3").id, eligible: !article.querySelector(".report-quote-check button").hidden
+    }))`);
+    const unchecked = expected.filter(row => row.eligible).map(row => row.id);
+    const manual = expected.filter(row => !row.eligible).map(row => row.id);
+    assert.ok(unchecked.length && manual.length, 'guide exercises both online and manual items');
+    const filter = '#report-reader-quote-filter';
+    const checkVisible = async ids => {
+      const rows = await inspect(`return {
+        content: [...document.querySelectorAll("#report-reader-content article:not([hidden]) h3")].map(n => n.id),
+        outline: [...document.querySelectorAll("#report-reader-outline li:not([hidden]) a")].map(n => n.hash.slice(1))
+      }`);
+      assert.deepEqual(rows.content, ids); assert.deepEqual(rows.outline, ids);
+    };
+    const choose = async value => {
+      await inspect('document.querySelector(arguments[0]).scrollIntoView({block:"center",behavior:"instant"})', [filter]);
+      await click(`${filter} option[value="${value}"]`);
+      await until(() => inspect('return document.querySelector(arguments[0]).value === arguments[1]', [filter, value]), `quote filter ${value}`);
+    };
+    const beforeChecks = (await invocations()).length;
+    await choose('manual'); await checkVisible(manual);
+    await choose('unchecked'); await checkVisible(unchecked);
+    await choose('all'); await checkVisible(expected.map(row => row.id));
+    assert.equal((await invocations()).length, beforeChecks);
     const quote = await inspect('return document.querySelector(arguments[0]).closest("article").querySelector("blockquote").textContent', [selector]);
     const verify = async (mode, expected, html) => {
       await fixture.mode(mode, html);
@@ -322,7 +346,15 @@ export async function checkSourceFreshnessFlows({ run, checked, click, fill, pre
     };
     const escaped = quote.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
     assert.match(await verify('changed', '本次核验 · 引文逐字匹配', sampleHtml.replace('</main>', '<p>' + escaped + '</p></main>')), /核验时间/);
+    await choose('matched'); await checkVisible([unchecked[0]]);
+    await click('#report-reader-summary [data-reader-filter="conditional"]');
+    await checkVisible([]);
+    await click('#report-reader-summary [data-reader-filter="all"]');
+    await checkVisible([unchecked[0]]);
+    await choose('all');
     assert.match(await verify('changed', '本次核验 · 官方正文未找到此引文'), /上次匹配时间/);
+    await choose('missing'); await checkVisible([unchecked[0]]);
+    await choose('all');
     assert.match(await verify('network', '本次核验 · 无法核验'), /网络连接失败.*上次匹配时间/);
     await screenshot('report-quote-network-after-match');
     const count = (await invocations()).length;
@@ -331,6 +363,10 @@ export async function checkSourceFreshnessFlows({ run, checked, click, fill, pre
     await click('#desktop-actions wa-dropdown-item[value="report"]');
     await until(async () => (await first())?.includes('上次记录 · 无法核验'), 'reopened report shows last failed check');
     assert.match(await first(), /网络连接失败.*上次匹配时间/);
+    await choose('unverified'); await checkVisible([unchecked[0]]);
+    await screenshot('report-quote-filter-reopened-failure');
+    await choose('unchecked'); await checkVisible(unchecked.slice(1));
+    assert.equal(count, beforeChecks + 3, 'only the three explicit verification actions invoked the checker');
     assert.equal((await invocations()).length, count, 'opening the report never sends a verification request');
   });
 }
