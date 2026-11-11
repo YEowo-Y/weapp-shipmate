@@ -574,6 +574,35 @@ pub(crate) fn artifact(connection: &Connection, artifact_id: &str) -> Result<Art
         .ok_or("成果不存在。")?;
     decode(data)
 }
+fn local_session_artifact(connection: &Connection, project_id: &str, artifact_id: &str) -> Result<Artifact, String> {
+    id(project_id)?;
+    id(artifact_id)?;
+    let mismatch = "未找到与当前项目匹配的本机成功运行和报告。";
+    let (artifact_data, run_data, run_id): (String, String, String) = connection
+        .query_row(
+            "SELECT a.data,r.data,r.id FROM artifacts a
+             JOIN runs r ON r.id=a.run_id AND r.project_id=a.project_id
+             JOIN projects p ON p.id=a.project_id
+             WHERE a.id=?1 AND p.id=?2 AND json_extract(p.data,'$.id')=p.id AND r.state='succeeded'",
+            params![artifact_id, project_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .optional()
+        .map_err(db_error)?
+        .ok_or(mismatch)?;
+    let artifact: Artifact = decode(artifact_data)?;
+    let run: Run = decode(run_data)?;
+    if artifact.provenance.is_some() || run.provenance.is_some()
+        || artifact.id != artifact_id || artifact.run_id != run_id || run.id != run_id
+        || artifact.project_id.as_deref() != Some(project_id) || run.project_id != artifact.project_id
+        || run.state != "succeeded" || run.kind != artifact.kind
+        || run.project_revision != artifact.project_revision || run.context_revision != artifact.context_revision
+        || run.tool_version != artifact.tool_version || run.rules_version != artifact.rules_version
+    {
+        return Err(mismatch.into());
+    }
+    Ok(artifact)
+}
 pub(crate) fn versions(app: &tauri::AppHandle) -> Result<(String, String), String> {
     let root = app
         .path()
@@ -914,9 +943,13 @@ pub fn project_artifact(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     artifact_id: String,
+    local_project_id: Option<String>,
 ) -> Result<Artifact, String> {
     crate::runtime::authorize(&window)?;
-    state.access(&app, |c| artifact(c, &artifact_id))
+    state.access(&app, |c| match local_project_id {
+        Some(project_id) => local_session_artifact(c, &project_id, &artifact_id),
+        None => artifact(c, &artifact_id),
+    })
 }
 #[tauri::command]
 pub fn project_export(
@@ -2124,9 +2157,43 @@ mod tests {
                 .iter()
                 .any(|a| a["id"] == format!("{prefix}-obsolete")));
             assert!(!s.runs.iter().any(|r| r.id == format!("{prefix}-obsolete")));
+            if let Some(project_id) = project_id {
+                let old = local_session_artifact(&c, project_id, &format!("{prefix}-obsolete")).unwrap();
+                assert_eq!(old.run_id, format!("{prefix}-obsolete"));
+            }
         }
         assert_eq!(s.artifacts.len(), 200 + retained.len());
         assert_eq!(s.runs.len(), 200 + retained.len() * 2);
+    }
+    #[test]
+    fn local_chat_report_requires_the_matching_native_project_and_successful_run() {
+        let f = Fixture::new();
+        let mut c = open_database(&f.path).unwrap();
+        save(&mut c, f.input("one", None)).unwrap();
+        save(&mut c, f.input("two", None)).unwrap();
+        let run = start(&mut c, Some("one"), "first-run");
+        finish(&mut c, run, Ok("local report".into())).unwrap();
+        assert!(local_session_artifact(&c, "two", "first-run").is_err());
+        assert!(local_session_artifact(&c, "missing", "first-run").is_err());
+        assert!(local_session_artifact(&c, "one", "missing").is_err());
+        for update in [
+            "UPDATE runs SET state='failed'",
+            "UPDATE runs SET project_id='two'",
+            "UPDATE runs SET data=json_set(data,'$.state','failed')",
+            "UPDATE runs SET data=json_set(data,'$.provenance','imported')",
+            "UPDATE runs SET data=json_set(data,'$.contextRevision',1234)",
+            "UPDATE runs SET data=json_set(data,'$.kind','explain')",
+            "UPDATE artifacts SET data=json_set(data,'$.projectRevision',1234)",
+            "UPDATE artifacts SET data=json_set(data,'$.rulesVersion','other')",
+            "UPDATE artifacts SET data=json_set(data,'$.provenance','imported')",
+            "UPDATE artifacts SET data=json_set(data,'$.runId','other')",
+        ] {
+            let tx = c.transaction().unwrap();
+            tx.execute(update, []).unwrap();
+            assert!(local_session_artifact(&tx, "one", "first-run").is_err(), "{update}");
+            tx.rollback().unwrap();
+        }
+        assert_eq!(local_session_artifact(&c, "one", "first-run").unwrap().markdown, "local report");
     }
     #[test]
     fn export_is_complete_and_project_scoped_while_selection_survives_restart() {
