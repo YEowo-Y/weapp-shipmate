@@ -69,14 +69,14 @@ const request=(url,options,onResponse)=>{
     });
   }; return req;
 };
-const result=await checkSource(catalog,process.argv[2],{lookup,request,timeoutMs:config.mode==='timeout'?100:10000});
+const result=await checkSource(catalog,process.argv[2],{lookup,request,quote:process.argv[4],timeoutMs:config.mode==='timeout'?100:10000});
 process.stdout.write(JSON.stringify(result)+'\\n');
 }
 `;
   await writeFile(cli, wrapper);
   return {
     catalog, runtime, journal,
-    async mode(mode) { await writeFile(control, JSON.stringify({ mode, html: sampleHtml })); },
+    async mode(mode, html = sampleHtml) { await writeFile(control, JSON.stringify({ mode, html })); },
     async events() { return (await readFile(journal, 'utf8')).trim().split('\n').filter(Boolean).map(line => JSON.parse(line)); },
     async assertProtected() {
       assert.deepEqual(await inventory(runtime, protectedRuntime), runtimeBefore, 'checks cannot rewrite bundled rules or source metadata');
@@ -301,5 +301,36 @@ export async function checkSourceFreshnessFlows({ run, checked, click, fill, pre
     assert.deepEqual((await record(automatic)).lastEvidence, evidence);
     await writeFile(resolve(run, 'source-freshness-visuals.json'), JSON.stringify(visuals, null, 2));
     await writeFile(resolve(run, 'source-freshness-observations.json'), JSON.stringify({ observations, catalogVersion: fixture.catalog.catalogVersion, publicNetwork: 'Not exercised: deterministic request and DNS adapters through the real core.', officialLinks: 'Verified exact href, rel, target and keyboard focus; external browsers were not opened.', requestCount: sent.length }, null, 2));
+  });
+
+  await checked('Report quote checks preserve the latest failed attempt separately from the last match', async () => {
+    await quit(); await launch();
+    await click('#start-guide'); await click('#guide-btn');
+    await until(() => inspect('return !document.querySelector("#read-report").disabled'), 'guide generated');
+    await click('#read-report');
+    const selector = '#report-reader-content .report-quote-check button:not([hidden])';
+    const first = () => inspect('return document.querySelector(arguments[0])?.closest("article").querySelector(".report-quote-status")?.textContent', [selector]);
+    await until(async () => (await first())?.includes('尚未在线核验'), 'reader loaded local quote records');
+    assert.equal(await inspect('return document.querySelectorAll("#report-reader-content article").length === document.querySelectorAll("#report-reader-content .report-quote-status").length'), true);
+    const quote = await inspect('return document.querySelector(arguments[0]).closest("article").querySelector("blockquote").textContent', [selector]);
+    const verify = async (mode, expected, html) => {
+      await fixture.mode(mode, html);
+      await inspect('document.querySelector(arguments[0]).scrollIntoView({block:"center",behavior:"instant"})', [selector]);
+      await click(selector);
+      await until(async () => (await first())?.includes(expected), expected);
+      return first();
+    };
+    const escaped = quote.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+    assert.match(await verify('changed', '本次核验 · 引文逐字匹配', sampleHtml.replace('</main>', '<p>' + escaped + '</p></main>')), /核验时间/);
+    assert.match(await verify('changed', '本次核验 · 官方正文未找到此引文'), /上次匹配时间/);
+    assert.match(await verify('network', '本次核验 · 无法核验'), /网络连接失败.*上次匹配时间/);
+    await screenshot('report-quote-network-after-match');
+    const count = (await invocations()).length;
+    await click('#report-reader-dismiss');
+    await click('#desktop-more');
+    await click('#desktop-actions wa-dropdown-item[value="report"]');
+    await until(async () => (await first())?.includes('上次记录 · 无法核验'), 'reopened report shows last failed check');
+    assert.match(await first(), /网络连接失败.*上次匹配时间/);
+    assert.equal((await invocations()).length, count, 'opening the report never sends a verification request');
   });
 }
