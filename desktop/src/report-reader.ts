@@ -100,7 +100,7 @@ export function mountReportReader(options: Options) {
     }
     const items = pack.items as ReadingItem[];
     const labels = { blocker: '阻断', warning: '警告', info: '提示' };
-    const rows: { category: keyof typeof labels | 'conditional'; article: HTMLElement; entry: HTMLLIElement; heading: HTMLHeadingElement }[] = [];
+    const rows: { category: keyof typeof labels | 'conditional'; article: HTMLElement; entry: HTMLLIElement; heading: HTMLHeadingElement; evidence: HTMLDetailsElement }[] = [];
     handoff.hidden = !options.onHandoff;
     repair.hidden = !options.onRepair || artifact.kind !== 'check' || artifact.provenance === 'imported' || !artifact.projectId;
     if (!items.length) {
@@ -147,7 +147,7 @@ export function mountReportReader(options: Options) {
       article.append(evidence); content.append(article);
       const entry = node('li'), link = node('a', r.title); link.href = `#${heading.id}`;
       link.addEventListener('click', event => { event.preventDefault(); heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'start', behavior: 'instant' }); }); entry.append(link); list.append(entry);
-      rows.push({ category: item.conditional ? 'conditional' : r.severity, article, entry, heading });
+      rows.push({ category: item.conditional ? 'conditional' : r.severity, article, entry, heading, evidence });
     }
 
     summary.setAttribute('role', 'group'); summary.setAttribute('aria-label', '筛选报告核对项');
@@ -193,10 +193,21 @@ export function mountReportReader(options: Options) {
       }
       for (const option of quoteOptions) option.textContent = `${quoteLabels[option.value as keyof typeof quoteLabels]} ${counts.get(option.value) ?? 0}`;
       outline.hidden = !visibleCount;
+      priority.hidden = selected !== 'all';
+      jumpToQuote.hidden = selected === 'all' || !visibleCount;
       if (!interacted) return;
       const names = [category !== 'all' && categories[category as keyof typeof categories], selected !== 'all' && quoteLabels[selected]].filter(Boolean).join(' · ');
       filterStatus.textContent = completion + (names ? `显示${names} ${visibleCount} 项，共 ${rows.length} 项` : `已显示全部 ${rows.length} 项`);
     }
+    const jumpToQuote = node('button', '查看首条引文与依据', 'report-reader-quote-jump');
+    jumpToQuote.type = 'button'; jumpToQuote.hidden = true;
+    jumpToQuote.addEventListener('click', () => {
+      const row = rows.find(row => !row.article.hidden);
+      if (!row) return;
+      row.evidence.open = true;
+      row.evidence.querySelector('summary')?.focus({ preventScroll: true });
+      row.evidence.scrollIntoView({ block: 'center', behavior: 'instant' });
+    });
     if (options.mountQuoteChecks) {
       const label = node('label', '引文状态'); label.className = 'report-quote-filter';
       for (const [key, title] of Object.entries(quoteLabels)) {
@@ -205,7 +216,7 @@ export function mountReportReader(options: Options) {
       quoteFilter.disabled = true;
       quoteFilter.setAttribute('aria-controls', 'report-reader-content report-reader-outline');
       quoteFilter.addEventListener('change', () => { interacted = true; updateFilters(); outline.scrollTop = 0; });
-      label.append(quoteFilter); summary.append(label);
+      label.append(quoteFilter); summary.append(label, jumpToQuote);
       disposeChecks = options.mountQuoteChecks(source.rulesVersion, quoteRows, completed => { quoteFilter.disabled = false; updateFilters(completed); });
     }
     const first = ['blocker', 'warning', 'info'].map(severity => items.findIndex(item => !item.conditional && item.rule.severity === severity)).find(index => index >= 0) ?? 0;
