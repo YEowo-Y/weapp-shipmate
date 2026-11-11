@@ -4,7 +4,7 @@ type RecordEntry = {
   latest: { match: 'exact' | 'whitespace-normalized' | 'missing' | 'unverified'; source: { checkedAt: number; reason: string; state: string } };
   lastVerifiedAt: number | null;
 };
-type Snapshot = { catalogVersion: string; rows: { availability: 'ready' | 'manual' | 'unsupported'; record: RecordEntry | null }[] };
+type Snapshot = { catalogVersion: string; rows: { availability: 'ready' | 'manual' | 'unsupported' | 'invalid-record'; record: RecordEntry | null }[] };
 export type QuoteState = 'unchecked' | 'matched' | 'missing' | 'unverified' | 'manual';
 export type QuoteRow = { query: Query; status: HTMLElement; detail: HTMLElement; button: HTMLButtonElement; state?: QuoteState };
 
@@ -70,6 +70,12 @@ export function mountReportQuoteChecks(invoke: Invoke, rulesVersion: string, row
       catalogVersion = snapshot.catalogVersion;
       for (const [i, row] of queries.entries()) {
         const { availability, record } = snapshot.rows[i];
+        if (availability === 'invalid-record') {
+          row.state = 'unverified';
+          row.status.textContent = '无法核验 · 本条核验记录损坏';
+          row.detail.textContent = '请打开官方依据核对原文。';
+          continue;
+        }
         if (availability !== 'ready') {
           row.state = 'manual';
           row.status.textContent = availability === 'manual' ? '需人工核对 · 此来源仅有人工归档' : '无法核验 · 未找到对应的内置官方来源或有效引文';
