@@ -5,7 +5,8 @@ type RecordEntry = {
   lastVerifiedAt: number | null;
 };
 type Snapshot = { catalogVersion: string; rows: { availability: 'ready' | 'manual' | 'unsupported'; record: RecordEntry | null }[] };
-export type QuoteRow = { query: Query; status: HTMLElement; detail: HTMLElement; button: HTMLButtonElement };
+export type QuoteState = 'unchecked' | 'matched' | 'missing' | 'unverified' | 'manual';
+export type QuoteRow = { query: Query; status: HTMLElement; detail: HTMLElement; button: HTMLButtonElement; state?: QuoteState };
 
 const date = (time: number) => new Date(time).toLocaleString('zh-CN', { hour12: false });
 const reasons: Record<string, string> = {
@@ -13,20 +14,25 @@ const reasons: Record<string, string> = {
   access: '无法访问官方正文', body: '未取得可核对的正文', not_found: '官方页面已不可用',
 };
 
-export function mountReportQuoteChecks(invoke: Invoke, rulesVersion: string, rows: QuoteRow[]) {
+export function mountReportQuoteChecks(invoke: Invoke, rulesVersion: string, rows: QuoteRow[], onChange: (completed?: QuoteRow) => void) {
   let disposed = false, runId: string | null = null, catalogVersion = '';
   const ready = new Set<QuoteRow>(), history = new Map<QuoteRow, RecordEntry>();
   const queries = rows.filter(row => {
     const { url, quote } = row.query;
     if (url && quote.trim()) return true;
+    row.state = 'manual';
     row.status.textContent = url ? '无法核验 · 报告未提供引文' : '无法核验 · 报告未提供官方链接';
     return false;
   });
-  function buttons() {
-    for (const row of ready) row.button.disabled = runId !== null;
+  function buttons(running?: QuoteRow) {
+    for (const row of ready) {
+      row.button.disabled = runId !== null && row !== running;
+      row.button.setAttribute('aria-disabled', String(runId !== null));
+    }
   }
   function show(row: QuoteRow, record: RecordEntry, saved: boolean) {
     const { source, match } = record.latest;
+    row.state = match === 'exact' || match === 'whitespace-normalized' ? 'matched' : match;
     const labels = { exact: '引文逐字匹配', 'whitespace-normalized': '忽略空白后匹配', missing: '官方正文未找到此引文', unverified: '无法核验' };
     row.status.textContent = (saved ? '上次记录 · ' : '本次核验 · ') + labels[match];
     const details = [`核验时间 ${date(source.checkedAt)}`];
@@ -40,7 +46,7 @@ export function mountReportQuoteChecks(invoke: Invoke, rulesVersion: string, row
   }
   async function check(row: QuoteRow) {
     if (disposed || runId || !ready.has(row)) return;
-    runId = crypto.randomUUID(); buttons();
+    runId = crypto.randomUUID(); buttons(row);
     row.status.textContent = '正在核对官方正文…'; row.detail.textContent = '';
     const attempt = Date.now();
     try {
@@ -49,13 +55,14 @@ export function mountReportQuoteChecks(invoke: Invoke, rulesVersion: string, row
     } catch {
       if (!disposed) {
         const last = history.get(row)?.lastVerifiedAt;
+        row.state = 'unverified';
         row.status.textContent = '本次未能完成核验';
         row.detail.textContent = `尝试时间 ${date(attempt)} · 请稍后重试或重新打开报告` + (last ? ` · 上次匹配时间 ${date(last)}` : '');
       }
-    } finally { runId = null; if (!disposed) buttons(); }
+    } finally { runId = null; if (!disposed) { buttons(); onChange(row); } }
   }
   async function load() {
-    if (!queries.length) return;
+    if (!queries.length) { onChange(); return; }
     try {
       const snapshot = await invoke<Snapshot>('source_quote_snapshot', { queries: queries.map(r => r.query), rulesVersion });
       if (disposed) return;
@@ -64,17 +71,21 @@ export function mountReportQuoteChecks(invoke: Invoke, rulesVersion: string, row
       for (const [i, row] of queries.entries()) {
         const { availability, record } = snapshot.rows[i];
         if (availability !== 'ready') {
+          row.state = 'manual';
           row.status.textContent = availability === 'manual' ? '需人工核对 · 此来源仅有人工归档' : '无法核验 · 未找到对应的内置官方来源或有效引文';
           continue;
         }
         ready.add(row); row.button.hidden = false;
         row.button.addEventListener('click', () => void check(row));
         if (record) show(row, record, true);
-        else row.status.textContent = '尚未在线核验';
+        else { row.state = 'unchecked'; row.status.textContent = '尚未在线核验'; }
       }
     } catch {
-      if (!disposed) for (const row of queries) row.status.textContent = '无法读取核验记录 · 请重新打开报告';
+      if (!disposed) for (const row of queries) {
+        row.state = 'unverified'; row.status.textContent = '无法读取核验记录 · 请重新打开报告';
+      }
     }
+    if (!disposed) onChange();
   }
   void load();
   return () => {
