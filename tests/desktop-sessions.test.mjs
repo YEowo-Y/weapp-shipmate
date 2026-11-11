@@ -139,12 +139,11 @@ desktopTest('desktop transport uses current context and live consent, never hist
 
 const expectedArtifact = { runId: 'run-a', kind: 'check', projectRevision: 1, contextRevision: 2 };
 const nativeArtifact = () => ({ id: 'artifact-a', projectId: 'project-a', ...expectedArtifact, markdown: '本地报告' });
-const nativeSnapshot = () => ({ projects: [{ id: 'project-a' }], runs: [{ ...expectedArtifact, id: 'run-a', projectId: 'project-a', state: 'succeeded' }] });
 
 desktopTest('artifact lookup verifies project, successful run, artifact, kind and revisions before opening', async () => {
-  let result = nativeArtifact(), registry = nativeSnapshot(), failing = false;
+  let result = nativeArtifact(), failing = false;
   const calls = [], opened = [];
-  const app = harness({ invoke: async (command, args) => { calls.push([command, args?.artifactId]); if (failing) throw Error('offline'); return command === 'project_artifact' ? result : registry; } });
+  const app = harness({ invoke: async (command, args) => { calls.push([command, args.artifactId, args.localProjectId]); if (failing) throw Error('lookup failed'); return result; } });
   await app.mount({ onOpenArtifact: artifact => opened.push(artifact) });
   const options = app.getOptions(), lookup = () => options.conversationOptions.onOpenArtifact('artifact-a', expectedArtifact);
   await lookup();
@@ -152,31 +151,23 @@ desktopTest('artifact lookup verifies project, successful run, artifact, kind an
   assert.match(app.nodes.get('#desktopConversationStatus').textContent, /尚未关联项目/);
   options.onSessionChange(selected());
   await lookup();
-  assert.deepEqual(calls.map(call => call[0]), ['project_artifact', 'project_snapshot']); assert.equal(opened.length, 1);
+  assert.deepEqual(calls, [['project_artifact', 'artifact-a', 'project-a']]); assert.equal(opened.length, 1);
   assert.match(app.nodes.get('#desktopConversationStatus').textContent, /已核验.*本机报告/);
   for (const patch of [{ provenance: 'imported' }, { projectId: 'project-b' }, { id: 'wrong-id' }, { runId: 'other-run' }, { kind: 'guide' }, { projectRevision: 2 }, { contextRevision: 3 }]) {
     result = { ...nativeArtifact(), ...patch }; await lookup(); assert.equal(opened.length, 1, JSON.stringify(patch));
     assert.match(app.nodes.get('#desktopConversationStatus').textContent, /无法核验/);
   }
   result = nativeArtifact();
-  for (const patch of [{ provenance: 'imported' }, { projectId: 'other-project' }, { state: 'failed' }, { kind: 'guide' }, { projectRevision: 2 }, { contextRevision: 3 }]) {
-    registry = nativeSnapshot(); Object.assign(registry.runs[0], patch);
-    await lookup(); assert.equal(opened.length, 1, JSON.stringify(patch));
-  }
-  for (const value of [{ projects: [], runs: nativeSnapshot().runs }, { projects: nativeSnapshot().projects, runs: [] }]) {
-    registry = value; await lookup(); assert.equal(opened.length, 1);
-  }
   failing = true; await lookup(); assert.equal(opened.length, 1);
   assert.match(app.nodes.get('#desktopConversationStatus').textContent, /原设备导出报告.*重新检查/);
 });
 
-desktopTest('late artifact and registry reads cannot open or overwrite status after switching or destruction', async () => {
-  for (const stage of ['artifact', 'snapshot']) for (const action of ['switch', 'destroy']) {
+desktopTest('late exact report lookup cannot open or overwrite status after switching or destruction', async () => {
+  for (const action of ['switch', 'destroy']) {
     let resolve, notifyRead; const opened = [], calls = [];
     const readStarted = new Promise(done => { notifyRead = done; });
     const app = harness({ invoke: command => {
       calls.push(command);
-      if (stage === 'snapshot' && command === 'project_artifact') return Promise.resolve(nativeArtifact());
       return new Promise(done => { resolve = done; notifyRead(); });
     } });
     const workspace = await app.mount({ onOpenArtifact: artifact => opened.push(artifact) });
@@ -185,10 +176,10 @@ desktopTest('late artifact and registry reads cannot open or overwrite status af
     await readStarted;
     if (action === 'switch') options.onSessionChange(selected('project-a', 'session-b')); else workspace.destroy();
     app.nodes.get('#desktopConversationStatus').textContent = '新会话状态';
-    resolve(stage === 'artifact' ? nativeArtifact() : nativeSnapshot()); await pending;
+    resolve(nativeArtifact()); await pending;
     assert.equal(opened.length, 0);
     assert.equal(app.nodes.get('#desktopConversationStatus').textContent, '新会话状态');
-    assert.equal(calls.length, stage === 'artifact' ? 1 : 2);
+    assert.deepEqual(calls, ['project_artifact']);
   }
 });
 
