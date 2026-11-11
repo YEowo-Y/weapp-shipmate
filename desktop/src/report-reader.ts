@@ -3,12 +3,13 @@ import { createActionButton } from '../design-previews/components/ui-kit.js';
 import { createIcon } from '../design-previews/components/icons.js';
 import { renderMessageText } from '../design-previews/components/message-markdown.js';
 import type { Artifact, Project } from './projects';
+import type { QuoteRow } from './report-quote-checks';
 import './context.css';
 import './report-reader.css';
 
 // createHandoff validates these fields before this presentation-only narrowing.
 type ReadingItem = { conditional: boolean; rejectSummary: string | null; relevance?: 'direct' | 'possible'; matchEvidence?: { aliases: string[]; codes: string[]; partialAliases: string[] }; rule: { ruleId: string; title: string; severity: 'blocker' | 'warning' | 'info'; why?: string | null; requires: string[]; official_url?: string | null; source_quote?: string | null; last_verified?: string | null; manual_required: boolean; warn?: string | null; note?: string | null; action_categories?: string[]; confidence?: 'high' | 'medium' | 'low' } };
-type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(anchor: HTMLElement): void; onRepair?(anchor: HTMLElement): void; onOpenSource?(url: string): Promise<unknown>; returnFocus?(): HTMLElement | null };
+type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(anchor: HTMLElement): void; onRepair?(anchor: HTMLElement): void; onOpenSource?(url: string): Promise<unknown>; mountQuoteChecks?(rulesVersion: string, rows: QuoteRow[]): () => void; returnFocus?(): HTMLElement | null };
 
 // The export contract intentionally omits run notes and business signals. Validate
 // only these additional reading fields; never derive execution state from prose.
@@ -64,8 +65,10 @@ export function mountReportReader(options: Options) {
   const handoff = button('准备修复交接', 'report-reader-handoff'); footer.append(repair, handoff);
   dialog.append(header, body, footer); document.body.append(dialog);
   let trigger: HTMLElement | null = null, disposed = false, snapshotId: string | null = null, epoch = 0;
+  let disposeChecks: (() => void) | undefined;
   const visible = (element: HTMLElement | null | undefined): element is HTMLElement => !!element?.isConnected && element.getClientRects().length > 0;
   function render(artifact = options.getArtifact()) {
+    disposeChecks?.(); disposeChecks = undefined;
     snapshotId = artifact?.id ?? null;
     filterStatus.textContent = ''; priority.replaceChildren(); priority.hidden = true;
     summary.replaceChildren(); summary.removeAttribute('role'); summary.removeAttribute('aria-label');
@@ -74,7 +77,7 @@ export function mountReportReader(options: Options) {
     content.replaceChildren(); nav.replaceChildren(); originalContent.replaceChildren(); context.replaceChildren(); context.hidden = true;
     title.textContent = artifact?.title || '报告阅读'; original.hidden = !artifact; original.open = false; outline.hidden = true;
     handoff.hidden = true; repair.hidden = true;
-    warning.textContent = artifact ? artifact.provenance === 'imported' ? '外部导入报告：内容与执行情况未在本机核验，不能作为本机已完成检查的证据。' : '历史快照：打开时读取已保存内容，未重新扫描当前项目；官方依据未实时核验。' : '';
+    warning.textContent = artifact ? artifact.provenance === 'imported' ? '外部导入报告：内容与执行情况未在本机核验，不能作为本机已完成检查的证据。' : '历史快照：打开时读取已保存内容，未重新扫描当前项目。生成报告时官方依据未实时核验，可在每条规则下核对引文。' : '';
     warning.hidden = !artifact;
     if (!artifact) { summary.textContent = '尚未选择已保存报告。'; content.append(node('p', '尚无报告可供阅读。运行项目预检、生成上线清单，或从项目历史打开报告。')); return; }
     renderMessageText(originalContent, artifact.markdown, { copyCode: false });
@@ -107,6 +110,7 @@ export function mountReportReader(options: Options) {
     }
     outline.hidden = false;
     const list = node('ol'); nav.append(list);
+    const quoteRows: QuoteRow[] = [];
     for (const [index, item] of items.entries()) {
       const r = item.rule, article = node('article'); article.dataset.readerItem = String(index); article.className = 'report-reader-item';
       const heading = node('h3', `${index + 1}. ${r.title}`, `reader-item-${index}`); heading.tabIndex = -1;
@@ -131,12 +135,22 @@ export function mountReportReader(options: Options) {
       const confidence = formatRuleConfidence(r, source.provenance === 'imported');
       if (confidence) evidence.append(node('p', confidence));
       if (r.source_quote) evidence.append(node('blockquote', r.source_quote));
-      evidence.append(node('p', `资料记录日期：${r.last_verified || '未记录'} · 未实时核验`));
+      evidence.append(node('p', `资料记录日期：${r.last_verified || '未记录'} · 生成报告时未实时核验`));
+      if (options.mountQuoteChecks) {
+        const status = node('span', '读取核验记录…'), detail = node('span');
+        const feedback = node('div'); feedback.className = 'report-quote-status'; feedback.setAttribute('role', 'status'); feedback.append(status, detail);
+        const button = node('button', '在线核验引文'); button.type = 'button'; button.hidden = true;
+        button.setAttribute('aria-label', `在线核验引文 · ${r.title}`);
+        const panel = node('div'); panel.className = 'report-quote-check'; panel.append(feedback, button); article.append(panel);
+        quoteRows.push({ query: { ruleId: r.ruleId, url: r.official_url ?? '', quote: r.source_quote ?? '' }, status, detail, button });
+      }
       article.append(evidence); content.append(article);
       const entry = node('li'), link = node('a', r.title); link.href = `#${heading.id}`;
       link.addEventListener('click', event => { event.preventDefault(); heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'start', behavior: 'instant' }); }); entry.append(link); list.append(entry);
       rows.push({ category: item.conditional ? 'conditional' : r.severity, article, entry, heading });
     }
+
+    disposeChecks = options.mountQuoteChecks?.(source.rulesVersion, quoteRows);
 
     summary.setAttribute('role', 'group'); summary.setAttribute('aria-label', '筛选报告核对项');
     const filters: HTMLButtonElement[] = [];
@@ -210,6 +224,7 @@ export function mountReportReader(options: Options) {
   });
   dialog.addEventListener('close', () => {
     if (dialog.open) return;
+    disposeChecks?.(); disposeChecks = undefined;
     epoch++;
     trigger?.setAttribute('aria-expanded', 'false');
     if (disposed) return;
@@ -230,6 +245,6 @@ export function mountReportReader(options: Options) {
       body.scrollTop = 0; outline.scrollTop = 0;
     },
     close, element: dialog, canClose: () => true,
-    destroy() { disposed = true; epoch++; trigger?.setAttribute('aria-expanded', 'false'); dialog.remove(); },
+    destroy() { disposed = true; epoch++; disposeChecks?.(); disposeChecks = undefined; trigger?.setAttribute('aria-expanded', 'false'); dialog.remove(); },
   };
 }
