@@ -90,7 +90,7 @@ process.stdout.write(JSON.stringify(result)+'\\n');
   };
 }
 
-export async function checkSourceFreshnessFlows({ run, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, quit, launch, requests, sourceFixture, ownedRuntimeProcesses }) {
+export async function checkSourceFreshnessFlows({ run, checked, click, fill, press, inspect, text, command, until, screenshot, projectInvoke, quit, launch, requests, sourceFixture, ownedRuntimeProcesses, projectDatabase }) {
   const fixture = sourceFixture, snapshot = () => projectInvoke('source_freshness_snapshot');
   const automatic = fixture.catalog.sources.find(source => source.baseline?.method === 'fetch');
   const manual = fixture.catalog.sources.find(source => source.baseline?.method === 'manual');
@@ -401,5 +401,33 @@ export async function checkSourceFreshnessFlows({ run, checked, click, fill, pre
     await choose('unchecked'); await checkVisible(unchecked.slice(1));
     assert.equal(count, beforeChecks + 3, 'only the three explicit verification actions invoked the checker');
     assert.equal((await invocations()).length, count, 'opening the report never sends a verification request');
+  });
+
+  await checked('One damaged citation record leaves the other report findings available for verification', async () => {
+    await click('#report-reader-dismiss');
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync(await realpath(projectDatabase));
+    try {
+      const records = db.prepare("SELECT key,value FROM settings WHERE key GLOB 'source_quote:*'").all();
+      assert.equal(records.length, 1, 'the preceding acceptance flow verified exactly one citation in this isolated database');
+      const [original] = records;
+      const update = db.prepare('UPDATE settings SET value=? WHERE key=? AND value=?');
+      assert.equal(update.run('invalid-quote-fixture', original.key, original.value).changes, 1);
+      try {
+        const before = (await invocations()).length;
+        await click('#desktop-more'); await click('#desktop-actions wa-dropdown-item[value="report"]');
+        const panel = '#report-reader-content .report-quote-check';
+        await until(async () => (await text(panel)).includes('本条核验记录损坏'), 'first quote reports its damaged local record');
+        assert.equal(await inspect('return document.querySelector(arguments[0]).querySelector("button").hidden', [panel]), true);
+        const other = panel + ' button:not([hidden])';
+        assert.equal((await invocations()).length, before, 'opening a damaged record stays offline');
+        await inspect('document.querySelector(arguments[0]).scrollIntoView({block:"center",behavior:"instant"})', [other]);
+        await click(other);
+        await until(() => inspect('return document.querySelector(arguments[0]).parentElement.textContent.includes("本次核验")', [other]), 'another rule completes an explicit check');
+        assert.equal((await invocations()).length, before + 1);
+      } finally {
+        assert.equal(update.run(original.value, original.key, 'invalid-quote-fixture').changes, 1, 'invalid record was not overwritten');
+      }
+    } finally { db.close(); }
   });
 }
