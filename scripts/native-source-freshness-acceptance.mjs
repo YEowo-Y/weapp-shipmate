@@ -365,6 +365,9 @@ export async function checkSourceFreshnessFlows({ run, checked, click, fill, pre
     assert.match(await first(), /网络连接失败.*上次匹配时间/);
     await choose('unverified'); await checkVisible([unchecked[0]]);
     await screenshot('report-quote-filter-reopened-failure');
+    assert.equal(await inspect('return document.querySelector("#report-reader-priority").hidden'), true);
+    await click('#report-reader-quote-jump');
+    assert.equal(await inspect('const e=document.activeElement;return e.matches(".report-reader-evidence[open] > summary") && e.closest("article").querySelector("h3").id === arguments[0]', [unchecked[0]]), true);
     await choose('unchecked'); await checkVisible(unchecked.slice(1));
     assert.equal(count, beforeChecks + 3, 'only the three explicit verification actions invoked the checker');
     assert.equal((await invocations()).length, count, 'opening the report never sends a verification request');
