@@ -83,6 +83,7 @@ export function mountWorkflow(options: Options) {
     el<HTMLDetailsElement>('workflow-facts').open = conflict || (draft.factsOpen ?? (unknownFacts > 0));
     el('workflow-next').textContent = model.nextAction ? `下一步 · ${model.nextAction.title}：${model.nextAction.description}` : '所有阶段已人工标记。请仍以官方平台的实际状态为准。';
     el('workflow-next-open').hidden = !model.nextAction;
+    el('workflow-next-open').textContent = model.stages.find(stage => stage.id === model.nextAction?.stageId)?.applicability === null ? '补充项目事实' : '查看下一步';
     el('workflow-coverage').textContent = '以下是人工准备进度；预检发现请在项目成果中查看。未匹配到规则不表示无需资质或没有风险。';
     const stages = el('workflow-stages');
     const focusedId = stages.contains(document.activeElement) ? (document.activeElement as HTMLElement)?.id : null;
@@ -198,8 +199,16 @@ export function mountWorkflow(options: Options) {
   });
   listen(el('workflow-next-open'), 'click', () => {
     if (!snapshot || blocked()) return;
-    const next = deriveWorkflow(snapshot).nextAction;
+    if (snapshot.project.id !== options.getProject()?.id) return;
+    const model = deriveWorkflow(snapshot), next = model.nextAction;
     if (!next) return;
+    if (model.stages.find(stage => stage.id === next.stageId)?.applicability === null) {
+      el<HTMLDetailsElement>('workflow-facts').open = true; draftFor(snapshot.project.id).factsOpen = true;
+      // These two catalog stages depend on the corresponding saved boolean facts.
+      const field = next.stageId === 'privacy' ? 'collectsSensitive' : next.stageId === 'domain' ? 'hasServerDomain' : 'businessType';
+      const target = el(`workflow-${field}`); target.focus({ preventScroll: true }); target.scrollIntoView({ block: 'nearest' });
+      return;
+    }
     const summary = document.getElementById(`workflow-stage-${next.stageId}`);
     if (!summary) return;
     (summary.parentNode as HTMLDetailsElement).open = true; draftFor(snapshot.project.id).expanded.add(next.stageId);
