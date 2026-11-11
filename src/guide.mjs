@@ -91,6 +91,7 @@ export function runGuide(inputs = {}, { includeDrafts = false } = {}) {
     const stageRules = rulesForStage(rules, stage.stage, subjectType, ["navigation", "both"]);
     const confirmed = stageRules.filter((r) => !isContentDependent(r));
     const conditional = stageRules.filter((r) => isContentDependent(r));
+    const stageItems = [];
 
     for (const r of conditional) {
       const item = ruleToItem(r);
@@ -105,14 +106,14 @@ export function runGuide(inputs = {}, { includeDrafts = false } = {}) {
       const item = ruleToItem(r);
       if (item.warn) item.note = item.warn;
       if (ONBOARDING_STEPS[r.id]) item.requires.push(...ONBOARDING_STEPS[r.id]);
-      items.push(item);
+      stageItems.push(item);
     }
     // 没有「确定适用」的细化规则时，给一个阶段占位，保证导航顺序完整可见。
     if (confirmed.length === 0) {
       const note = conditional.length
-        ? "本阶段是否有额外资质/要求取决于你的具体功能，见下方『可能适用 · 请按业务自查』。"
+        ? "请结合实际功能逐项核对本阶段的条件自查规则。"
         : "按官方指引完成本阶段（暂无细化规则）。";
-      items.push({
+      stageItems.push({
         ruleId: `flow.${stage.stage}`,
         title: stage.title,
         stage: stage.stage,
@@ -123,6 +124,17 @@ export function runGuide(inputs = {}, { includeDrafts = false } = {}) {
         last_verified: stage.last_verified || null,
         manual_required: true,
       });
+    }
+    if (missingFact) {
+      const signal = { privacy: "收集敏感信息", domain: "使用自有服务器域名" }[stage.stage] || stage.title;
+      for (const item of stageItems) {
+        item.conditional = true;
+        item.signal = [signal];
+        item.why = [`请先确认项目是否涉及「${signal}」。`, item.why].filter(Boolean).join(" ");
+        selfCheck.push(item);
+      }
+    } else {
+      items.push(...stageItems);
     }
   }
 
@@ -137,6 +149,8 @@ export function runGuide(inputs = {}, { includeDrafts = false } = {}) {
     notes.push(`另有 ${selfCheck.length} 条规则是否适用取决于你的具体功能，已列入『可能适用 · 请按业务自查』。`);
   if (includeDrafts) notes.push("已包含 draft 规则（来源未核验，仅供参考）。");
   const subjectLabel = { personal: "个人", individual_business: "个体工商户", enterprise: "企业" }[subjectType] || "未指定";
-  const summary = `主体：${subjectLabel}；适用阶段 ${flow.length - skipped.length}/${flow.length}。`;
+  const summary = `主体：${subjectLabel}；已确定适用阶段 ${flow.length - skipped.length - unknown.length}/${flow.length}`
+    + (unknown.length ? `，待确认 ${unknown.length} 个阶段` : "")
+    + (skipped.length ? `，已跳过 ${skipped.length} 个阶段` : "") + "。";
   return { command: "guide", meta: { summary }, items, selfCheck, notes };
 }
