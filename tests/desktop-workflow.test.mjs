@@ -73,6 +73,29 @@ test('workflow shows factual counts and explicit next-step navigation without co
   await app.fire('workflow-facts-open');assert.equal(app.doc.activeElement,app.node('workflow-businessType'));
 });
 
+test('unknown next stages navigate to the relevant fact without saving or confirming', async () => {
+  for (const [stage, expression, field] of [['privacy', 'collects_sensitive == true', 'collectsSensitive'], ['domain', 'has_server_domain == true', 'hasServerDomain']]) {
+    const app = harness();
+    app.snapshot.catalog.stages = [{ stage, title: '待核对阶段', applies_when: expression }];
+    app.controller.open(app.node('trigger')); await app.settle();
+    app.node('workflow-facts').open = false;
+    app.node('workflow-businessType').value = '尚未保存的草稿'; await app.fire('workflow-businessType', 'input');
+    const before = app.calls.length;
+    assert.equal(app.node('workflow-next-open').textContent, '补充项目事实');
+    await app.fire('workflow-next-open');
+    assert.equal(app.node('workflow-facts').open, true);
+    assert.equal(app.doc.activeElement, app.node('workflow-' + field));
+    assert.equal(app.node('workflow-businessType').value, '尚未保存的草稿');
+    assert.equal(app.calls.length, before);
+    app.snapshot.project = { ...project, facts: { ...project.facts, [field]: false } };
+    await app.controller.refresh(); await app.settle();
+    assert.equal(app.node('workflow-next-open').textContent, '查看下一步');
+    await app.fire('workflow-next-open');
+    assert.equal(app.doc.activeElement.id, 'workflow-stage-' + stage);
+    app.controller.destroy();
+  }
+});
+
 test('workflow retains unsaved facts and stage notes across refresh and reopening, isolated by project',async()=>{
   const app=harness({custom:(cmd,args)=>cmd==='project_workflow'?{...app.snapshot,project:{...project,id:args.projectId,name:args.projectId}}:undefined});
   app.controller.open(app.node('trigger'));await app.settle();
