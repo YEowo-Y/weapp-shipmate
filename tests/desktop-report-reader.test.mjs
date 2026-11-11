@@ -39,6 +39,51 @@ function harness(options = {}) {
   const node = id => nodes.find(n => n.id === id);
   return { app, node, nodes, document, trigger, fallback, get artifact() { return artifact; }, set artifact(value) { artifact = value; }, get reads() { return reads; }, get handoffs() { return handoffs; } };
 }
+test('reader prioritizes actual nonconditional findings and reveals their full requirements from a filtered view', () => {
+  const h = harness(), result = h.artifact.data.result;
+  result.items = result.items.slice(0, 2);
+  result.items[0].severity = 'warning'; result.items[1].severity = 'blocker';
+  result.selfCheck = [{ ...result.selfCheck[0], severity: 'blocker' }];
+  h.app.open(h.trigger);
+  const priority = h.node('report-reader-priority');
+  assert.equal(priority.hidden, false);
+  assert.ok(priority.textContent.includes(result.items[1].title));
+  assert.ok(priority.textContent.includes(result.items[1].requires[0]));
+  h.nodes.find(n => n.dataset.readerFilter === 'conditional').listeners.click();
+  const articles = h.node('report-reader-content').children;
+  assert.equal(articles[1].hidden, true);
+  priority.children.at(-1).listeners.click();
+  assert.equal(h.document.activeElement, articles[1].children[0]);
+  assert.equal(h.document.activeElement.scrolled.behavior, 'instant');
+  assert.ok(articles.every(n => !n.hidden));
+  assert.equal(h.nodes.find(n => n.dataset.readerFilter === 'all').getAttribute('aria-pressed'), 'true');
+  assert.equal(h.handoffs, 0);
+});
+
+test('reader priority labels conditional applicability and disappears for empty or invalid reports', () => {
+  const h = harness(), result = h.artifact.data.result;
+  result.items = []; result.selfCheck = result.selfCheck.slice(0, 1);
+  h.app.open(h.trigger);
+  assert.match(h.node('report-reader-priority').textContent, /先判断是否适用/);
+  assert.ok(h.node('report-reader-priority').textContent.includes(result.selfCheck[0].title));
+  h.app.close(); result.selfCheck = []; h.app.open(h.trigger);
+  assert.equal(h.node('report-reader-priority').hidden, true);
+  h.app.close(); h.artifact = { ...h.artifact, data: null }; h.app.open(h.trigger);
+  assert.equal(h.node('report-reader-priority').hidden, true);
+  assert.equal(h.node('report-reader-priority').textContent, '');
+});
+
+test('reader priority refreshes with a new report rather than retaining a previous target', () => {
+  const h = harness(); h.app.open(h.trigger); h.app.close();
+  const result = h.artifact.data.result;
+  result.items = [{ ...result.items[0], title: '新的核对要求', severity: 'info', requires: ['核对新的材料'] }];
+  result.selfCheck = []; h.artifact = { ...h.artifact, id: 'next' };
+  h.app.open(h.trigger);
+  assert.match(h.node('report-reader-priority').textContent, /新的核对要求.*核对新的材料/);
+  h.node('report-reader-priority').children.at(-1).listeners.click();
+  assert.match(h.document.activeElement.textContent, /新的核对要求/);
+});
+
 test('reader shows recorded confidence in evidence and distinguishes imported provenance', () => {
   for (const [confidence, label] of [['high', '高'], ['medium', '中'], ['low', '低']]) {
     for (const imported of [false, true]) {
