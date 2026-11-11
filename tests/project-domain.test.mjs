@@ -112,7 +112,7 @@ test("workflow and guide mark the same source-dependent requirements as conditio
     const conditional = new Set(guide.selfCheck.map(item => item.ruleId));
     for (const stage of workflow.stages) {
       for (const item of stage.items) {
-        assert.equal(item.conditional, conditional.has(item.ruleId), subject + ": " + item.ruleId);
+        assert.equal(item.conditional || stage.applicability === null, conditional.has(item.ruleId), subject + ": " + item.ruleId);
       }
       assert.equal(stage.coverage.conditionalRuleCount, stage.items.filter(item => item.conditional).length);
     }
@@ -178,7 +178,8 @@ test("guide public payment/business inputs explain finite scope and retain unkno
   const result = runGuide({ has_payment: true, business_type: "商城", collects_sensitive: null });
   assert.ok(result.notes.some(note => note.includes("支付") && note.includes("不代表")));
   assert.ok(result.notes.some(note => note.includes("不会自动选定")));
-  assert.ok(result.items.some(item => item.stage === "privacy"));
+  assert.ok(result.items.every(item => item.stage !== "privacy"));
+  assert.ok(result.selfCheck.some(item => item.stage === "privacy"));
   assert.ok(result.notes.some(note => note.includes("未知不等于")));
 });
 
