@@ -30,12 +30,29 @@ test("guide 摘要和阶段说明使用可读名称，规则阶段仍保留结�
     assert.ok(result.meta.summary.startsWith(`主体：${label}；`));
     assert.ok(result.notes.some(note => note.includes(conditionalTitles)));
     assert.doesNotMatch(result.notes.join("\n"), /privacy|domain/);
-    assert.ok(result.items.some(item => item.stage === "privacy"));
-    assert.ok(result.items.some(item => item.stage === "domain"));
+    assert.match(result.meta.summary, /适用阶段 6\/8，待确认 2 个阶段/);
+    assert.ok(result.items.every(item => !["privacy", "domain"].includes(item.stage)));
+    for (const [ruleId, signal] of [["flow.privacy", "收集敏感信息"], ["domain.must-icp-filed", "使用自有服务器域名"]]) {
+      const item = result.selfCheck.find(item => item.ruleId === ruleId);
+      assert.equal(item.conditional, true);
+      assert.deepEqual(item.signal, [signal]);
+    }
     const skipped = runGuide({ subject_type, collects_sensitive: false, has_server_domain: false });
     assert.ok(skipped.notes.some(note => note === `按你的输入跳过阶段：${conditionalTitles}`));
     assert.ok(skipped.items.every(item => item.stage !== "privacy" && item.stage !== "domain"));
+    assert.ok(skipped.selfCheck.every(item => item.stage !== "privacy" && item.stage !== "domain"));
   }
+});
+
+test("不同阶段分别按已知、未知、否定的项目事实归入清单", () => {
+  const mixed = runGuide({ subject_type: "personal", has_server_domain: true });
+  assert.match(mixed.meta.summary, /适用阶段 7\/8，待确认 1 个阶段/);
+  assert.ok(mixed.items.some(item => item.ruleId === "domain.must-icp-filed"));
+  assert.ok(mixed.selfCheck.some(item => item.ruleId === "flow.privacy"));
+  assert.ok(mixed.selfCheck.find(item => item.ruleId === "privacy.getLocation").signal.includes("wx.getLocation"));
+  const skipped = runGuide({ collects_sensitive: false });
+  assert.match(skipped.meta.summary, /适用阶段 6\/8，待确认 1 个阶段，已跳过 1 个阶段/);
+  assert.ok([...skipped.items, ...skipped.selfCheck].every(item => item.stage !== "privacy"));
 });
 
 test("guide 收集敏感信息时含隐私阶段", () => {
