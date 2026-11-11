@@ -207,6 +207,37 @@ test('quote filter updates counts and announces the result when a focused findin
   assert.equal(h.node('report-reader-priority').hidden, false);
 });
 
+test('filtered quote navigation preserves external focus and steps back when the last focused result leaves', () => {
+  let rows, refresh;
+  const h = harness({ mountQuoteChecks(_version, entries, onChange) {
+    rows = entries; refresh = onChange;
+    for (const row of rows) row.state = 'unchecked';
+    onChange();
+    return () => {};
+  } });
+  const report = h.artifact.data.result;
+  report.items = report.items.slice(0, 3); report.selfCheck = [];
+  h.app.open(h.trigger);
+  const filter = h.node('report-reader-quote-filter');
+  filter.value = 'unchecked'; filter.listeners.change();
+  const articles = h.node('report-reader-content').children;
+  const evidence = articles.map(article => article.children.find(n => n.className === 'report-reader-evidence'));
+  evidence[0].children[0].focus();
+  rows[1].state = 'matched'; refresh(rows[1]);
+  assert.equal(h.document.activeElement, evidence[0].children[0], 'a completion elsewhere must not steal focus');
+  const next = h.nodes.filter(n => n.dataset.quoteNext === '');
+  next[0].listeners.click();
+  assert.equal(h.document.activeElement, evidence[2].children[0], 'navigation skips the hidden middle result');
+  assert.equal(next[2].disabled, true);
+  rows[2].button.focus(); rows[2].state = 'matched'; refresh(rows[2]);
+  assert.equal(evidence[0].open, true);
+  assert.equal(h.document.activeElement, evidence[0].children[0]);
+  assert.equal(next[0].disabled, true);
+  const pos = h.node('reader-quote-position-0');
+  assert.equal(pos.textContent, '第 1 / 1 项');
+  assert.equal(evidence[0].children[0].getAttribute('aria-describedby'), pos.id);
+});
+
 test('reader resets the filter after recheck and after opening another saved report', () => {
   const h = harness();
   h.artifact = { ...h.artifact, kind: 'check', data: { ...h.artifact.data, kind: 'check', result: {
