@@ -41,6 +41,7 @@ export function mountReportReader(options: Options) {
   const dismiss = button('', 'report-reader-dismiss'); dismiss.classList.add('ui-action-icon'); dismiss.setAttribute('aria-label', '关闭报告阅读'); dismiss.append(createIcon(document, 'arrow-left')); header.append(title, dismiss);
   const body = node('div'); body.className = 'report-reader-body';
   const summary = node('div', '', 'report-reader-summary');
+  const priority = node('section', '', 'report-reader-priority'); priority.setAttribute('aria-label', '建议先核对');
   const filterStatus = node('p', '', 'report-reader-filter-status');
   filterStatus.setAttribute('role', 'status'); filterStatus.setAttribute('aria-atomic', 'true');
   const provenance = node('p', '', 'report-reader-provenance');
@@ -57,7 +58,7 @@ export function mountReportReader(options: Options) {
   const content = node('section', '', 'report-reader-content'); content.setAttribute('aria-label', '报告核对项');
   const original = node('details', '', 'report-reader-original'); original.append(node('summary', '完整原报告'));
   const originalContent = node('div'); originalContent.className = 'report-markdown'; original.append(originalContent);
-  column.append(content, original, versions); layout.append(outline, column); body.append(summary, filterStatus, provenance, warning, context, linkStatus, layout);
+  column.append(content, original, versions); layout.append(outline, column); body.append(summary, filterStatus, priority, provenance, warning, context, linkStatus, layout);
   const footer = node('footer'); footer.className = 'report-reader-footer';
   const repair = button('检查可用修复', 'report-reader-repair');
   const handoff = button('准备修复交接', 'report-reader-handoff'); footer.append(repair, handoff);
@@ -66,7 +67,7 @@ export function mountReportReader(options: Options) {
   const visible = (element: HTMLElement | null | undefined): element is HTMLElement => !!element?.isConnected && element.getClientRects().length > 0;
   function render(artifact = options.getArtifact()) {
     snapshotId = artifact?.id ?? null;
-    filterStatus.textContent = '';
+    filterStatus.textContent = ''; priority.replaceChildren(); priority.hidden = true;
     summary.replaceChildren(); summary.removeAttribute('role'); summary.removeAttribute('aria-label');
     provenance.textContent = ''; versions.hidden = true; versions.open = false; versionText.textContent = ''; linkStatus.textContent = '';
     warning.removeAttribute('role');
@@ -96,7 +97,7 @@ export function mountReportReader(options: Options) {
     }
     const items = pack.items as ReadingItem[];
     const labels = { blocker: '阻断', warning: '警告', info: '提示' };
-    const rows: { category: keyof typeof labels | 'conditional'; article: HTMLElement; entry: HTMLLIElement }[] = [];
+    const rows: { category: keyof typeof labels | 'conditional'; article: HTMLElement; entry: HTMLLIElement; heading: HTMLHeadingElement }[] = [];
     handoff.hidden = !options.onHandoff;
     repair.hidden = !options.onRepair || artifact.kind !== 'check' || artifact.provenance === 'imported' || !artifact.projectId;
     if (!items.length) {
@@ -134,7 +135,7 @@ export function mountReportReader(options: Options) {
       article.append(evidence); content.append(article);
       const entry = node('li'), link = node('a', r.title); link.href = `#${heading.id}`;
       link.addEventListener('click', event => { event.preventDefault(); heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'start', behavior: 'instant' }); }); entry.append(link); list.append(entry);
-      rows.push({ category: item.conditional ? 'conditional' : r.severity, article, entry });
+      rows.push({ category: item.conditional ? 'conditional' : r.severity, article, entry, heading });
     }
 
     summary.setAttribute('role', 'group'); summary.setAttribute('aria-label', '筛选报告核对项');
@@ -146,17 +147,30 @@ export function mountReportReader(options: Options) {
       filter.type = 'button'; filter.dataset.readerFilter = key;
       filter.setAttribute('aria-pressed', String(key === 'all'));
       filter.setAttribute('aria-controls', 'report-reader-content report-reader-outline');
-      filter.addEventListener('click', () => {
-        for (const control of filters) control.setAttribute('aria-pressed', String(control === filter));
-        for (const row of rows) {
-          const hidden = key !== 'all' && row.category !== key;
-          row.article.hidden = hidden; row.entry.hidden = hidden;
-        }
-        filterStatus.textContent = key === 'all' ? `已显示全部 ${rows.length} 项` : `显示${label} ${count} 项，共 ${rows.length} 项`;
-        outline.scrollTop = 0;
-      });
+      filter.addEventListener('click', () => selectFilter(key, label, count));
       filters.push(filter); summary.append(filter);
     }
+    function selectFilter(key: string, label: string, count: number) {
+      for (const control of filters) control.setAttribute('aria-pressed', String(control.dataset.readerFilter === key));
+      for (const row of rows) {
+        const hidden = key !== 'all' && row.category !== key;
+        row.article.hidden = hidden; row.entry.hidden = hidden;
+      }
+      filterStatus.textContent = key === 'all' ? `已显示全部 ${rows.length} 项` : `显示${label} ${count} 项，共 ${rows.length} 项`;
+      outline.scrollTop = 0;
+    }
+    const first = ['blocker', 'warning', 'info'].map(severity => items.findIndex(item => !item.conditional && item.rule.severity === severity)).find(index => index >= 0) ?? 0;
+    const item = items[first], rule = item.rule;
+    priority.hidden = false;
+    priority.append(node('h3', item.conditional ? '先判断是否适用' : '建议先核对'), node('p', rule.title));
+    priority.append(node('p', item.conditional ? '这是条件自查项，请先核对业务线索，再决定是否处理相关要求。' : rule.requires[0] || '对照官方要求确认适用性与处理方案。'));
+    const jump = node('button', '查看核对要求'); jump.type = 'button'; jump.setAttribute('aria-controls', rows[first].heading.id);
+    jump.addEventListener('click', () => {
+      if (disposed || !dialog.open) return;
+      selectFilter('all', '全部', rows.length);
+      const heading = rows[first].heading; heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'start', behavior: 'instant' });
+    });
+    priority.append(jump);
   }
   function close() { if (dialog.open) dialog.close(); }
   body.addEventListener('click', event => {
