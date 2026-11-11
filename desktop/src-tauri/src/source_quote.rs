@@ -127,6 +127,33 @@ fn records_are_scoped_to_the_report_rule_quote_and_installed_catalog() {
     let v = scope("report-v1").unwrap();
     assert!(resolve_query(&catalog, &q).is_some());
     let (key, hash) = identity(&catalog, &source, &q, &v);
+    let connection = Connection::open_in_memory().unwrap();
+    connection
+        .execute_batch("CREATE TABLE settings(key TEXT PRIMARY KEY,value)")
+        .unwrap();
+    for invalid in ["{", "{}", &"x".repeat(4097)] {
+        connection
+            .execute(
+                "INSERT OR REPLACE INTO settings(key,value) VALUES (?1,?2)",
+                params![key, invalid],
+            )
+            .unwrap();
+        let row = read(&connection, &catalog, &source, &key, &hash).unwrap();
+        assert_eq!(row.availability, "invalid-record");
+        assert!(row.record.is_none());
+        assert_eq!(
+            read(&connection, &catalog, &source, "another-quote", &hash)
+                .unwrap()
+                .availability,
+            "ready"
+        );
+        let original: String = connection
+            .query_row("SELECT value FROM settings WHERE key=?", [&key], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(original, invalid);
+    }
     assert_ne!(
         identity(&catalog, &source, &q, &scope("report-v2").unwrap()).0,
         key
@@ -149,12 +176,35 @@ fn read(
     source: &Source,
     key: &str,
     hash: &str,
-) -> Result<Option<QuoteRecord>, String> {
+) -> Result<QuoteRow, String> {
     let raw: Option<String> = connection.query_row(
-        "SELECT CASE WHEN length(CAST(value AS BLOB)) <= 4096 THEN value ELSE '' END FROM settings WHERE key=?",
+        "SELECT CASE WHEN typeof(value)='text' AND length(CAST(value AS BLOB)) <= 4096 THEN value ELSE '' END FROM settings WHERE key=?",
         [key], |row| row.get(0)).optional().map_err(db_error)?;
-    let Some(raw) = raw else { return Ok(None) };
-    let record: QuoteRecord = serde_json::from_str(&raw).map_err(|_| INVALID_RECORD)?;
+    match raw {
+        None => Ok(QuoteRow {
+            availability: "ready",
+            record: None,
+        }),
+        Some(raw) => Ok(match decode_record(&raw, catalog, source, hash) {
+            Ok(record) => QuoteRow {
+                availability: "ready",
+                record: Some(record),
+            },
+            Err(_) => QuoteRow {
+                availability: "invalid-record",
+                record: None,
+            },
+        }),
+    }
+}
+
+fn decode_record(
+    raw: &str,
+    catalog: &SourceCatalog,
+    source: &Source,
+    hash: &str,
+) -> Result<QuoteRecord, String> {
+    let record: QuoteRecord = serde_json::from_str(raw).map_err(|_| INVALID_RECORD)?;
     record
         .latest
         .validate(catalog, source, hash)
@@ -165,7 +215,7 @@ fn read(
     {
         return Err(INVALID_RECORD.into());
     }
-    Ok(Some(record))
+    Ok(record)
 }
 
 #[tauri::command]
@@ -198,8 +248,7 @@ pub fn source_quote_snapshot(
                     row.availability = "manual";
                 } else {
                     let (key, hash) = identity(&catalog, source, &q, &scope);
-                    row.availability = "ready";
-                    row.record = read(conn, &catalog, source, &key, &hash)?;
+                    row = read(conn, &catalog, source, &key, &hash)?;
                 }
             }
             rows.push(row);
@@ -243,6 +292,11 @@ pub async fn source_quote_check(
     command.arg(&source.id).arg("--quote").arg(&query.quote);
     let store = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
+        store.access(&app, |conn| {
+            let row = read(conn, &catalog, &source, &key, &hash)?;
+            if row.availability == "invalid-record" { return Err(INVALID_RECORD.into()) }
+            Ok(())
+        })?;
         let started_at = now();
         let output = reservation.run_retained(command).map_err(|e| e.to_string())?;
         if output.len() > RECORD_LIMIT { return Err(INVALID_RESULT.into()) }
@@ -254,7 +308,9 @@ pub async fn source_quote_check(
             if load_catalog(&app)?.catalog_version != catalog_version { return Err(INVALID_RESULT.into()) }
             store.access(&app, |conn| {
                 let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(db_error)?;
-                let old = read(&tx, &catalog, &source, &key, &hash)?;
+                let row = read(&tx, &catalog, &source, &key, &hash)?;
+                if row.availability == "invalid-record" { return Err(INVALID_RECORD.into()) }
+                let old = row.record;
                 if old.as_ref().is_some_and(|r| r.latest.source.checked_at > at) { return Err(INVALID_RESULT.into()) }
                 let last_verified_at = if latest.verified() { Some(at) } else { old.and_then(|r| r.last_verified_at) };
                 let record = QuoteRecord { latest, last_verified_at };
