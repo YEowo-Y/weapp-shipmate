@@ -100,7 +100,7 @@ export function mountReportReader(options: Options) {
     }
     const items = pack.items as ReadingItem[];
     const labels = { blocker: '阻断', warning: '警告', info: '提示' };
-    const rows: { category: keyof typeof labels | 'conditional'; article: HTMLElement; entry: HTMLLIElement; heading: HTMLHeadingElement; evidence: HTMLDetailsElement }[] = [];
+    const rows: { category: keyof typeof labels | 'conditional'; article: HTMLElement; entry: HTMLLIElement; heading: HTMLHeadingElement; evidence: HTMLDetailsElement; evidenceTitle: HTMLElement }[] = [];
     handoff.hidden = !options.onHandoff;
     repair.hidden = !options.onRepair || artifact.kind !== 'check' || artifact.provenance === 'imported' || !artifact.projectId;
     if (!items.length) {
@@ -111,6 +111,15 @@ export function mountReportReader(options: Options) {
     outline.hidden = false;
     const list = node('ol'); nav.append(list);
     const quoteRows: QuoteRow[] = [];
+    const pagers: { bar: HTMLElement; position: HTMLElement; previous: HTMLButtonElement; next: HTMLButtonElement }[] = [];
+    let visibleIndices: number[] = [];
+    function openEvidence(index: number | undefined) {
+      if (index === undefined || rows[index].article.hidden) return;
+      const { evidence, evidenceTitle } = rows[index];
+      evidence.open = true;
+      evidenceTitle.focus({ preventScroll: true });
+      evidence.scrollIntoView({ block: 'start', behavior: 'instant' });
+    }
     for (const [index, item] of items.entries()) {
       const r = item.rule, article = node('article'); article.dataset.readerItem = String(index); article.className = 'report-reader-item';
       const heading = node('h3', `${index + 1}. ${r.title}`, `reader-item-${index}`); heading.tabIndex = -1;
@@ -131,7 +140,9 @@ export function mountReportReader(options: Options) {
       if (r.note && r.note !== r.warn) article.append(node('p', `补充核对：${r.note}`));
       if (r.official_url) { const link = node('a', '查看官方依据（在浏览器中打开）'); link.href = r.official_url; link.target = '_blank'; link.rel = 'noopener noreferrer'; article.append(link); }
       else article.append(node('p', '此项未提供官方链接，请自行核对。'));
-      const evidence = node('details'); evidence.className = 'report-reader-evidence'; evidence.append(node('summary', '规则摘录与资料记录'), node('p', `规则编号 ${r.ruleId}`));
+      const evidence = node('details'); evidence.className = 'report-reader-evidence';
+      const evidenceTitle = node('summary', '规则摘录与资料记录'); evidenceTitle.setAttribute('aria-label', `规则摘录与资料记录 · ${r.title}`);
+      evidence.append(evidenceTitle, node('p', `规则编号 ${r.ruleId}`));
       const confidence = formatRuleConfidence(r, source.provenance === 'imported');
       if (confidence) evidence.append(node('p', confidence));
       if (r.source_quote) evidence.append(node('blockquote', r.source_quote));
@@ -143,11 +154,20 @@ export function mountReportReader(options: Options) {
         button.setAttribute('aria-label', `在线核验引文 · ${r.title}`);
         const panel = node('div'); panel.className = 'report-quote-check'; panel.append(feedback, button); article.append(panel);
         quoteRows.push({ query: { ruleId: r.ruleId, url: r.official_url ?? '', quote: r.source_quote ?? '' }, status, detail, button });
+        const bar = node('div'); bar.className = 'report-quote-pager'; bar.hidden = true;
+        bar.setAttribute('role', 'group'); bar.setAttribute('aria-label', '切换筛选结果');
+        const position = node('span', '', `reader-quote-position-${index}`); position.dataset.quotePosition = '';
+        const previous = node('button', '上一条'), next = node('button', '下一条');
+        previous.type = next.type = 'button'; previous.dataset.quotePrev = ''; next.dataset.quoteNext = '';
+        previous.addEventListener('click', () => openEvidence(visibleIndices[visibleIndices.indexOf(index) - 1]));
+        next.addEventListener('click', () => openEvidence(visibleIndices[visibleIndices.indexOf(index) + 1]));
+        bar.append(position, previous, next); evidence.append(bar);
+        pagers.push({ bar, position, previous, next });
       }
       article.append(evidence); content.append(article);
       const entry = node('li'), link = node('a', r.title); link.href = `#${heading.id}`;
       link.addEventListener('click', event => { event.preventDefault(); heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'start', behavior: 'instant' }); }); entry.append(link); list.append(entry);
-      rows.push({ category: item.conditional ? 'conditional' : r.severity, article, entry, heading, evidence });
+      rows.push({ category: item.conditional ? 'conditional' : r.severity, article, entry, heading, evidence, evidenceTitle });
     }
 
     summary.setAttribute('role', 'group'); summary.setAttribute('aria-label', '筛选报告核对项');
@@ -176,7 +196,8 @@ export function mountReportReader(options: Options) {
     function updateFilters(completed?: QuoteRow) {
       const selected = (quoteFilter.value || 'all') as keyof typeof quoteLabels;
       const counts = new Map<string, number>();
-      let visibleCount = 0;
+      visibleIndices = [];
+      let lostFocusAt: number | undefined;
       let completion = '';
       for (const [i, row] of rows.entries()) {
         const state = quoteRows[i]?.state;
@@ -187,9 +208,25 @@ export function mountReportReader(options: Options) {
         }
         const hidden = !inCategory || (selected !== 'all' && state !== selected);
         if (hidden && !row.article.hidden && completed && completed === quoteRows[i]) completion = `${items[i].rule.title}：${completed.status.textContent}。`;
-        if (hidden && (row.article.contains(document.activeElement) || row.entry.contains(document.activeElement))) quoteFilter.focus();
+        if (hidden && (row.article.contains(document.activeElement) || row.entry.contains(document.activeElement))) lostFocusAt = i;
         row.article.hidden = hidden; row.entry.hidden = hidden;
-        if (!hidden) visibleCount++;
+        if (!hidden) visibleIndices.push(i);
+      }
+      const visibleCount = visibleIndices.length;
+      for (const [offset, index] of visibleIndices.entries()) {
+        const pager = pagers[index];
+        if (!pager) continue;
+        pager.bar.hidden = selected === 'all';
+        if (pager.bar.hidden) { rows[index].evidenceTitle.removeAttribute('aria-describedby'); continue; }
+        pager.position.textContent = `第 ${offset + 1} / ${visibleCount} 项`;
+        rows[index].evidenceTitle.setAttribute('aria-describedby', pager.position.id);
+        pager.previous.disabled = offset === 0;
+        pager.next.disabled = offset === visibleCount - 1;
+      }
+      if (lostFocusAt !== undefined) {
+        const removed = lostFocusAt;
+        if (visibleCount && completed && quoteRows[removed] === completed) openEvidence(visibleIndices.find(i => i > removed) ?? visibleIndices[visibleCount - 1]);
+        else quoteFilter.focus();
       }
       for (const option of quoteOptions) option.textContent = `${quoteLabels[option.value as keyof typeof quoteLabels]} ${counts.get(option.value) ?? 0}`;
       outline.hidden = !visibleCount;
@@ -201,13 +238,7 @@ export function mountReportReader(options: Options) {
     }
     const jumpToQuote = node('button', '查看首条引文与依据', 'report-reader-quote-jump');
     jumpToQuote.type = 'button'; jumpToQuote.hidden = true;
-    jumpToQuote.addEventListener('click', () => {
-      const row = rows.find(row => !row.article.hidden);
-      if (!row) return;
-      row.evidence.open = true;
-      row.evidence.querySelector('summary')?.focus({ preventScroll: true });
-      row.evidence.scrollIntoView({ block: 'center', behavior: 'instant' });
-    });
+    jumpToQuote.addEventListener('click', () => openEvidence(visibleIndices[0]));
     if (options.mountQuoteChecks) {
       const label = node('label', '引文状态'); label.className = 'report-quote-filter';
       for (const [key, title] of Object.entries(quoteLabels)) {
