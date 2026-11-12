@@ -124,6 +124,47 @@ export async function checkProjectRepairFlows(options) {
     assert.deepEqual(await readFile(file), edited); await screenshot('repair-stale-plan');
     await closeRepair(); await closeReport(); await writeFile(file, original);
   });
+  await checked('An unverified repair survives restart and can retry without another source write', async () => {
+    // Persist a real approved repair with no follow-up check, as if the app exited after writing.
+    const report = await scan();
+    const pendingPlan = await projectInvoke('project_repair_prepare', { projectId, artifactId: report.id });
+    const pending = await projectInvoke('project_repair_apply', { planId: pendingPlan.planId, requestId: 'native-repair-pending-recheck', businessConfirmed: true });
+    assert.equal(pending.writeState, 'applied'); assert.equal(pending.recheckState, 'required');
+    const appliedBytes = await readFile(file), backupBytes = await readFile(pending.backupPath);
+    errors.push(...await inspect('return window.__repairErrors')); await quit(); await launch(); await monitor();
+    await history();
+    const retry = `[data-repair-action="recheck"][data-operation-id="${pending.operationId}"]`;
+    assert.equal(await inspect('return !!document.querySelector(arguments[0])', [retry]), true);
+    const before = await repairSnapshot(), runs = (await snapshot()).runs.length;
+    const edited = Buffer.from(appliedBytes.toString().replace('修复验收', '复检前人工编辑'));
+    await writeFile(file, edited);
+    await click(retry);
+    await until(async () => /关联未完成/.test(await text('#repair-recheck-status')) && await inspect('return document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'changed configuration cannot claim a completed recheck', 30_000);
+    assert.deepEqual(await readFile(file), edited);
+    assert.equal((await repairSnapshot()).operations.find(item => item.operationId === pending.operationId).recheckState, 'required');
+    await screenshot('repair-recheck-association-failed');
+    await writeFile(file, appliedBytes);
+    await click(retry);
+    await until(async () => /复检已完成并关联报告/.test(await text('#repair-recheck-status')) && await inspect('return document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'history retry links a real current check', 30_000);
+    const after = await repairSnapshot(), verified = after.operations.find(item => item.operationId === pending.operationId);
+    assert.equal(after.operations.length, before.operations.length, 'retry creates no additional file operation');
+    assert.equal(verified.recheckState, 'completed');
+    const linked = await projectInvoke('project_artifact', { artifactId: verified.recheckArtifactId, localProjectId: projectId });
+    assert.equal(linked.kind, 'check'); assert.equal(linked.projectId, projectId);
+    assert.equal((await snapshot()).runs.length, runs + 2, 'each explicit retry runs exactly one check');
+    assert.deepEqual(await readFile(file), appliedBytes);
+    assert.deepEqual(await readFile(pending.backupPath), backupBytes);
+    assert.equal(await inspect('return document.querySelector(arguments[0]) === null', [retry]), true);
+    assert.equal(await inspect('return document.activeElement.id'), 'repair-recheck-status');
+    await screenshot('repair-history-recheck-completed');
+    // Restore this test fixture through the existing, separately confirmed undo path.
+    await click(`[data-repair-action="undo-preview"][data-operation-id="${pending.operationId}"]`);
+    await until(() => inspect('return !document.querySelector("#repair-confirm").disabled'), 'fixture undo preview');
+    await click('#repair-confirm');
+    await until(async () => /复检已完成/.test(await text('#repair-recheck-status')) && await inspect('return document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'fixture undo completed', 30_000);
+    assert.deepEqual(await readFile(file), original);
+    await closeRepair(); await closeReport();
+  });
   await checked('Repair history survives native restart and later edits block undo', async () => {
     await scan(); await prepare(); await apply();
     operationId = (await repairSnapshot()).operations.find(item => item.writeState === 'applied' && item.undoAvailable).operationId;
