@@ -212,6 +212,70 @@ test('reader filters findings and outline together, preserving article numbers, 
   assert.equal(h.node('report-reader-filter-status').textContent, '');
 });
 
+test('action filters include multi-action and legacy items without changing numbering, original content or handoff', () => {
+  const h = harness(), result = h.artifact.data.result;
+  result.items = result.items.slice(0, 3);
+  result.items[0].action_categories = ['code', 'console'];
+  result.items[1].action_categories = ['code'];
+  delete result.items[2].action_categories;
+  result.selfCheck = [{ ...result.selfCheck[0], action_categories: ['manual_check'] }];
+  const saved = JSON.stringify(h.artifact);
+  h.app.open(h.trigger);
+  const filter = h.node('report-reader-action-filter');
+  assert.equal(filter.getAttribute('aria-controls'), 'report-reader-content report-reader-outline');
+  assert.deepEqual(filter.children.map(n => n.textContent), ['全部方式 4', '改代码 2', '后台配置 1', '材料准备 0', '人工核对 2']);
+  const articles = h.node('report-reader-content').children;
+  const entries = h.nodes.filter(n => n.tag === 'a' && n.href?.startsWith('#reader-item-')).map(n => n.parentNode);
+  const original = h.node('report-reader-original').textContent;
+  for (const [action, indexes] of [['code', [0, 1]], ['console', [0]], ['manual_check', [2, 3]], ['materials', []], ['all', [0, 1, 2, 3]]]) {
+    filter.value = action; filter.focus(); filter.listeners.change();
+    assert.equal(h.document.activeElement, filter);
+    assert.deepEqual(articles.filter(n => !n.hidden).map(n => Number(n.dataset.readerItem)), indexes);
+    assert.deepEqual(entries.filter(n => !n.hidden).map(n => n.children[0].href), indexes.map(i => '#reader-item-' + i));
+    for (const i of indexes) assert.ok(articles[i].children[0].textContent.startsWith(`${i + 1}. `));
+    assert.equal(h.node('report-reader-priority').hidden, action !== 'all');
+    if (!indexes.length) assert.match(h.node('report-reader-filter-status').textContent, /显示材料准备 0 项，共 4 项。当前筛选没有核对项/);
+    assert.equal(h.node('report-reader-original').textContent, original);
+    h.node('report-reader-handoff').listeners.click();
+  }
+  assert.equal(h.handoffs, 5);
+  assert.equal(JSON.stringify(h.artifact), saved);
+});
+
+test('action, severity and live quote filters compose with counts, empty recovery and focus', () => {
+  let rows, refresh;
+  const h = harness({ mountQuoteChecks(_version, entries, onChange) {
+    rows = entries; refresh = onChange;
+    rows.forEach((row, i) => { row.state = i === 1 ? 'matched' : 'unchecked'; });
+    onChange(); return () => {};
+  } });
+  const result = h.artifact.data.result;
+  result.items = result.items.slice(0, 3); result.selfCheck = [];
+  result.items.forEach((item, i) => { item.severity = i === 2 ? 'warning' : 'blocker'; item.action_categories = i === 0 ? ['code', 'console'] : i === 1 ? ['console'] : ['manual_check']; });
+  h.app.open(h.trigger);
+  const action = h.node('report-reader-action-filter'), quote = h.node('report-reader-quote-filter');
+  const count = (filter, key) => filter.children.find(n => n.value === key).textContent;
+  action.value = 'code'; action.listeners.change();
+  assert.equal(count(quote, 'matched'), '最近一次匹配 0');
+  quote.value = 'unchecked'; quote.listeners.change();
+  assert.equal(count(action, 'console'), '后台配置 1');
+  assert.equal(count(action, 'manual_check'), '人工核对 1');
+  h.nodes.find(n => n.dataset.readerFilter === 'blocker').listeners.click();
+  assert.equal(count(action, 'manual_check'), '人工核对 0');
+  assert.equal(h.node('reader-quote-position-0').textContent, '第 1 / 1 项');
+  assert.equal(h.node('report-reader-filter-status').textContent, '显示阻断 · 改代码 · 尚未在线核验 1 项，共 3 项');
+  rows[0].button.focus(); rows[0].state = 'matched'; rows[0].status.textContent = '最近一次匹配'; refresh(rows[0]);
+  assert.equal(h.document.activeElement, quote);
+  assert.equal(h.node('report-reader-outline').hidden, true);
+  assert.match(h.node('report-reader-filter-status').textContent, /最近一次匹配。显示阻断 · 改代码 · 尚未在线核验 0 项/);
+  quote.value = 'matched'; quote.listeners.change();
+  assert.equal(count(action, 'console'), '后台配置 2');
+  assert.equal(count(quote, 'matched'), '最近一次匹配 1');
+  assert.equal(h.node('report-reader-outline').hidden, false);
+  h.node('report-reader-quote-jump').listeners.click();
+  assert.equal(h.document.activeElement, h.node('report-reader-content').children[0].children.find(n => n.className === 'report-reader-evidence').children[0]);
+});
+
 test('quote filter updates counts and announces the result when a focused finding leaves the list', () => {
   let quoteRows, refresh;
   const h = harness({ mountQuoteChecks(_version, rows, onChange) {
@@ -289,10 +353,13 @@ test('reader resets the filter after recheck and after opening another saved rep
   for (const next of ['recheck', 'reopen']) {
     const filter = key => h.nodes.findLast(n => n.dataset.readerFilter === key);
     filter('warning').listeners.click();
+    const action = h.nodes.findLast(n => n.id === 'report-reader-action-filter');
+    action.value = 'code'; action.listeners.change();
     h.artifact = { ...h.artifact, id: next };
     if (next === 'recheck') h.app.showRecheck(h.artifact);
     else { h.app.close(); h.app.open(h.trigger); }
     assert.equal(filter('all').getAttribute('aria-pressed'), 'true');
+    assert.equal(h.nodes.findLast(n => n.id === 'report-reader-action-filter').value, 'all');
     assert.ok(h.node('report-reader-content').children.every(n => !n.hidden));
   }
 });
