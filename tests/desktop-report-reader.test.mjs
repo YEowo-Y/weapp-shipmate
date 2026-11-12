@@ -39,6 +39,24 @@ function harness(options = {}) {
   const node = id => nodes.find(n => n.id === id);
   return { app, node, nodes, document, trigger, fallback, get artifact() { return artifact; }, set artifact(value) { artifact = value; }, get reads() { return reads; }, get handoffs() { return handoffs; } };
 }
+test('repair-origin reports expose a scoped return action and ordinary openings clear it', () => {
+  let project = { id: 'p', name: 'Local', revision: 1, contextRevision: 1 };
+  const h = harness({ getProject: () => project }); h.artifact = { ...h.artifact, projectId: 'p' };
+  let calls = 0, accepted = true;
+  const back = anchor => { assert.equal(anchor, h.node('report-reader-back-to-repair')); calls++; return accepted; };
+  h.app.open(h.trigger, back);
+  const action = h.node('report-reader-back-to-repair');
+  assert.equal(action.hidden, false); action.listeners.click(); assert.equal(calls, 1);
+  accepted = false; action.listeners.click(); assert.match(h.node('report-reader-link-status').textContent, /暂时无法返回/);
+  project = { ...project, id: 'other' }; action.listeners.click(); assert.equal(calls, 2);
+  assert.match(h.node('report-reader-link-status').textContent, /报告或项目已变化/);
+  project = { ...project, id: 'p' }; h.artifact = { ...h.artifact, id: 'new' }; action.listeners.click(); assert.equal(calls, 2);
+  h.app.showRecheck(h.artifact); assert.equal(action.hidden, true);
+  h.app.close(); h.app.open(h.trigger, back); assert.equal(action.hidden, false);
+  h.app.close(); action.listeners.click(); assert.equal(calls, 2);
+  h.app.open(h.trigger); assert.equal(action.hidden, true);
+});
+
 test('conditional report facts link only to the same local project and recheck current context on click', () => {
   let project = { id: 'p', name: 'Local', revision: 1, contextRevision: 1, facts: {} };
   const calls = [];
