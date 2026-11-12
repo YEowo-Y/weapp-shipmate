@@ -60,6 +60,91 @@ test('recheck failure never relabels an applied write as unchanged and preserves
   assert.ok(h.document.querySelector('[data-repair-action="undo-preview"]')); assert.equal(h.node('repair-confirm').disabled, true); h.dispose();
 });
 
+test('failed automatic recheck can be retried from its record without repeating the file write', async () => {
+  let attempts = 0, operation = result();
+  const h = harness({
+    recheck: async () => { if (++attempts === 1) throw Error('scanner unavailable'); return { ...artifact, id: 'retry-report' }; },
+    invoke: (cmd, args) => {
+      if (cmd === 'project_repair_snapshot') return { operations: [operation] };
+      if (cmd === 'project_repair_record_recheck') { operation = { ...operation, recheckState: 'completed', recheckArtifactId: args.artifactId }; return operation; }
+    },
+  });
+  h.app.openForArtifact(artifact); await h.settle(); await h.confirmBusiness(); await h.click('repair-confirm');
+  const retry = h.document.querySelector('[data-repair-action="recheck"]');
+  assert.ok(retry); assert.equal(retry.dataset.operationId, 'op1');
+  retry.focus(); retry.click(); await h.settle();
+  assert.equal(attempts, 2);
+  assert.equal(h.calls.filter(([cmd]) => cmd === 'project_repair_apply').length, 1);
+  assert.equal(h.calls.filter(([cmd]) => cmd === 'project_repair_undo').length, 0);
+  assert.equal(operation.recheckArtifactId, 'retry-report');
+  assert.equal(h.document.querySelector('[data-repair-action="recheck"]'), null);
+  assert.match(h.node('repair-recheck-status').textContent, /复检已完成并关联报告/);
+  assert.equal(h.document.activeElement, h.node('repair-recheck-status'));
+  assert.match(h.node('repair-result').textContent, /已写入/);
+  assert.ok(h.document.querySelector('[data-repair-action="undo-preview"]'));
+  h.dispose();
+});
+
+test('history retry retains pending state on association failure and succeeds on a later attempt', async () => {
+  let rejectAssociation = true, operation = result();
+  const h = harness({ invoke: (cmd, args) => {
+    if (cmd === 'project_repair_snapshot') return { operations: [operation] };
+    if (cmd === 'project_repair_record_recheck') {
+      if (rejectAssociation) throw Error('配置已在复检前后改变');
+      operation = { ...operation, recheckState: 'completed', recheckArtifactId: args.artifactId }; return operation;
+    }
+  } });
+  h.app.openHistory(); await h.settle();
+  h.document.querySelector('[data-repair-action="recheck"]').click(); await h.settle();
+  assert.match(h.node('repair-recheck-status').textContent, /关联未完成.*配置已在复检前后改变/);
+  assert.equal(operation.recheckState, 'required');
+  assert.ok(h.document.querySelector('[data-repair-action="recheck"]'));
+  rejectAssociation = false;
+  h.document.querySelector('[data-repair-action="recheck"]').click(); await h.settle();
+  assert.equal(operation.recheckState, 'completed'); assert.equal(h.rechecks.length, 2);
+  assert.ok(h.calls.every(([cmd]) => ['project_repair_snapshot', 'project_repair_record_recheck'].includes(cmd)));
+  h.dispose();
+});
+
+test('only unfinished checks for applied writes or completed restore operations offer retry', async () => {
+  const operations = [
+    { ...result(), operationId: 'apply' },
+    { ...result('undone'), kind: 'undo', operationId: 'undo' },
+    { ...result('undone'), kind: 'recovery', operationId: 'recovery' },
+    { ...result('undone'), operationId: 'compensated-original' },
+    { ...result('recovery_required'), operationId: 'torn' },
+    { ...result('not_applied'), operationId: 'not-written' },
+    { ...result(), recheckState: 'completed', operationId: 'already-checked' },
+    { ...result(), projectId: 'other', operationId: 'foreign' },
+  ];
+  const h = harness({ invoke: cmd => cmd === 'project_repair_snapshot' ? { operations } : undefined });
+  h.app.openHistory(); await h.settle();
+  assert.deepEqual([...h.document.querySelectorAll('[data-repair-action="recheck"]')].map(n => n.dataset.operationId), ['apply', 'undo', 'recovery']);
+  const stale = h.document.querySelector('[data-repair-action="recheck"]');
+  h.setBusy(true); stale.dispatchEvent(new h.document.defaultView.Event('click')); await h.settle();
+  assert.equal(h.rechecks.length, 0);
+  h.setBusy(false); h.setProject('other'); stale.dispatchEvent(new h.document.defaultView.Event('click')); await h.settle();
+  assert.equal(h.rechecks.length, 0);
+  h.dispose();
+});
+
+test('duplicate retries and late results after closing or switching projects cannot associate reports', async () => {
+  for (const leave of ['close', 'switch', 'destroy']) {
+    const pending = deferred(), h = harness({ recheck: () => pending.promise });
+    h.app.openHistory(); await h.settle();
+    const retry = h.document.querySelector('[data-repair-action="recheck"]');
+    retry.click(); await h.settle();
+    retry.dispatchEvent(new h.document.defaultView.Event('click')); await h.settle();
+    assert.equal(h.rechecks.length, 1);
+    if (leave === 'close') { await h.click('repair-dismiss'); h.app.openHistory(); await h.settle(); }
+    else if (leave === 'switch') h.setProject('other');
+    else h.app.destroy();
+    pending.resolve({ ...artifact, id: 'late-report' }); await h.settle();
+    assert.equal(h.calls.filter(([cmd]) => cmd === 'project_repair_record_recheck').length, 0);
+    h.dispose();
+  }
+});
+
 test('expired or switched-project plans never submit writes, including forged click events', async () => {
   const h = harness({ invoke: cmd => cmd === 'project_repair_prepare' ? { ...plan('apply'), expiresAt: Date.now() - 1 } : undefined });
   h.app.openForArtifact(artifact); await h.settle(); await h.confirmBusiness(); await h.click('repair-confirm');
