@@ -204,7 +204,8 @@
                 <label for="workflow-hasServerDomain">是否使用服务器域名<select id="workflow-hasServerDomain"><option value="unknown">尚未确认</option><option value="true">是</option><option value="false">否</option></select></label>
               </div>
               <p id="workflow-facts-note" class="desktop-field-hint">未知不会视为“否”。业务与支付仅提供规则线索，不能自动判断资质。事实变更后，旧确认需重新核对。</p>
-              <wa-button id="workflow-save-facts" type="submit" appearance="outlined" size="s">保存项目事实</wa-button>
+              <div class="project-form-actions"><wa-button id="workflow-save-facts" type="submit" appearance="outlined" size="s">保存项目事实</wa-button><wa-button id="workflow-generate-guide" type="button" appearance="outlined" size="s" aria-describedby="workflow-guide-note" disabled>更新上线清单</wa-button></div>
+              <p id="workflow-guide-note" class="desktop-field-hint">根据已保存事实生成新清单；历史报告保留原有内容。</p>
             </form>
           </details>
           <div id="workflow-coverage" class="desktop-field-hint"></div>
