@@ -427,11 +427,45 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
       await activate('#workflow-close');
     }
   });
-  await checked('Reading leaves files, persisted artifacts and tool counts unchanged with no model requests', async () => {
+  await checked('Saving a missing fact produces a new guide and preserves the old report with a stale-facts warning', async () => {
+    await fromHistory(artifacts.guide);
+    await activate('#report-reader-content [data-reader-fact="collectsSensitive"]');
+    await until(() => inspect('return document.activeElement.id === "workflow-collectsSensitive" && !document.querySelector("#workflow-retry").disabled'), 'privacy fact focused');
+    assert.equal(await inspect('return document.querySelector("#workflow-generate-guide").disabled'), true, 'unsaved draft must be saved before generation');
+    // End selects the last observed native option, false; Tab commits it through the real field handler.
+    assert.equal(await inspect('return document.querySelector("#workflow-collectsSensitive").options[2].value'), 'false');
+    await press('\uE010'); await press('\uE004');
+    assert.equal(await inspect('return document.querySelector("#workflow-collectsSensitive").value'), 'false');
+    await activate('#workflow-save-facts');
+    await until(() => inspect('return !document.querySelector("#workflow-generate-guide").disabled && document.querySelector("#workflow-status").textContent.includes("项目事实已保存")'), 'saved facts ready for generation');
+    const saved = await projectInvoke('project_workflow', { projectId });
+    assert.equal(saved.project.facts.collectsSensitive, false);
+    assert.equal(saved.project.facts.businessType, '保留尚未保存的业务核对草稿');
+    assert.equal((await snapshot()).artifacts.length, 3, 'saving facts alone never regenerates a report');
+    await screenshot('workflow-facts-saved-update-guide');
+    await activate('#workflow-generate-guide'); await readerReady();
+    const state = await snapshot(), fresh = state.artifacts.find(item => !Object.values(artifacts).some(old => old.id === item.id));
+    assert.ok(fresh, 'a separate guide artifact was saved');
+    artifacts.updatedGuide = await projectInvoke('project_artifact', { artifactId: fresh.id });
+    assert.equal(artifacts.updatedGuide.kind, 'guide');
+    assert.equal(artifacts.updatedGuide.contextRevision, saved.project.contextRevision);
+    assert.notEqual(artifacts.updatedGuide.contextRevision, artifacts.guide.contextRevision);
+    await verifyContent(artifacts.updatedGuide);
+    assert.equal(await inspect('return document.querySelector("#report-reader-content [data-reader-fact=collectsSensitive]") === null'), true);
+    assert.doesNotMatch(await text('.report-reader-warning'), /项目事实已变化/);
+    await screenshot('reading-updated-guide');
+    await closeReader();
+    await fromHistory(artifacts.guide);
+    assert.match(await text('.report-reader-warning'), /项目事实已变化/);
+    assert.deepEqual(await projectInvoke('project_artifact', { artifactId: artifacts.guide.id }), artifacts.guide);
+    await screenshot('reading-old-guide-stale-facts');
+    await closeReader(); await closeTools();
+  });
+  await checked('Reading and explicit guide regeneration preserve files and original artifacts without model requests', async () => {
     assert.deepEqual((await readdir(directory)).sort(), Object.keys(files).sort());
     for (const [name, content] of Object.entries(files)) assert.equal(await readFile(resolve(directory, name), 'utf8'), content);
     for (const artifact of Object.values(artifacts)) assert.deepEqual(await projectInvoke('project_artifact', { artifactId: artifact.id }), artifact);
-    const final = await snapshot(); assert.equal(final.runs.length, 3); assert.equal(final.artifacts.length, 3); assert.ok(final.runs.every(item => item.state === 'succeeded'));
+    const final = await snapshot(); assert.equal(final.runs.length, 4); assert.equal(final.artifacts.length, 4); assert.ok(final.runs.every(item => item.state === 'succeeded'));
     assert.equal(requests.length, 0); assert.deepEqual(await inspect('return window.__readingAcceptanceErrors'), []);
     await writeFile(resolve(run, 'reading-evidence.json'), JSON.stringify({
       artifacts: Object.values(artifacts).map(({ id, runId, kind, projectRevision }) => ({ id, runId, kind, projectRevision })),
