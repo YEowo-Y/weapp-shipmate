@@ -179,6 +179,38 @@ export async function checkProjectRepairFlows(options) {
     assert.equal(await inspect('return document.querySelector("#repair-confirm").disabled'), true);
     assert.deepEqual(await readFile(file), edited); await screenshot('repair-undo-after-edit-refused'); await closeRepair(); await closeReport();
   });
+  await checked('Repair records open their exact linked reports even when newer reports exist or a reader is already open', async () => {
+    const latest = await scan(), records = await repairSnapshot(), bytes = await readFile(file);
+    const linked = records.operations.filter(item => item.recheckState === 'completed' && item.recheckArtifactId);
+    assert.ok(linked.length >= 2);
+    const targets = [linked.at(-1), linked.find(item => item.recheckArtifactId !== linked.at(-1).recheckArtifactId)];
+    assert.ok(targets.every(item => item.recheckArtifactId !== latest.id));
+    await history();
+    for (const [index, target] of targets.entries()) {
+      if (index) {
+        await click('#report-reader-repair');
+        await until(() => inspect('return document.querySelector("#desktop-repair").open && document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'repair dialog over an existing reader');
+        await click('#repair-history-refresh');
+        await until(() => inspect('return !document.querySelector("#repair-history-refresh").disabled'), 'linked history loaded');
+      }
+      const selector = `[data-repair-action="read-report"][data-operation-id="${target.operationId}"]`;
+      await inspect('document.querySelector(arguments[0]).scrollIntoView({block:"center",behavior:"instant"})', [selector]);
+      if (!index) await screenshot('repair-linked-report-action');
+      const before = await snapshot();
+      await click(selector);
+      await until(() => inspect('return !document.querySelector("#desktop-repair").open && document.querySelector("#desktop-report-reader").open && document.activeElement.id==="report-reader-dismiss"'), 'linked report is readable and focused');
+      const versions = await text('#report-reader-versions');
+      assert.ok(versions.includes(target.recheckArtifactId));
+      assert.ok(!versions.includes(latest.id), 'reading an old repair cannot substitute the latest report');
+      assert.equal(await inspect('return document.querySelector(".report-reader-body").scrollTop'), 0);
+      const after = await snapshot();
+      assert.deepEqual(after.runs, before.runs); assert.deepEqual(after.artifacts, before.artifacts);
+      assert.deepEqual(await repairSnapshot(), records);
+      assert.deepEqual(await readFile(file), bytes);
+      await screenshot(index ? 'repair-linked-report-replaces-reader' : 'repair-linked-report-reader');
+    }
+    await click('#report-reader-dismiss'); await closeReport();
+  });
   await checked('Imported historical reports cannot grant native file repair authority', async () => {
     const backupJson = await projectInvoke('project_export', { projectId });
     const imported = await projectInvoke('project_import', { backupJson, directory, requestId: 'native-repair-import' });
