@@ -29,6 +29,32 @@ test('workflow exports saved snapshot without drafts or native writes and report
   await h.fire('workflow-export'); assert.equal(h.downloads.length, 3);
 });
 
+test('report fact links preserve drafts and only focus the requested project after loading', async () => {
+  const h = harness();
+  h.controller.open(h.node('trigger')); await h.settle();
+  h.node('workflow-businessType').value = '业务草稿'; await h.fire('workflow-businessType', 'input');
+  h.controller.close();
+  for (const field of ['collectsSensitive', 'hasServerDomain']) {
+    assert.equal(h.controller.openFacts('a', field, h.node('trigger')), true);
+    await h.settle();
+    assert.equal(h.doc.activeElement, h.node('workflow-' + field));
+    assert.equal(h.node('workflow-facts').open, true);
+    assert.equal(h.node('workflow-businessType').value, '业务草稿');
+    h.controller.close();
+  }
+  const reads = h.calls.length;
+  assert.equal(h.controller.openFacts('other', 'collectsSensitive', h.node('trigger')), false);
+  assert.equal(h.calls.length, reads);
+  assert.ok(h.calls.every(([cmd]) => cmd === 'project_workflow'));
+  let resolve;
+  const delayed = harness({ custom: () => new Promise(done => { resolve = done; }) });
+  delayed.controller.openFacts('a', 'hasServerDomain', delayed.node('trigger'));
+  delayed.setCurrent({ ...project, id: 'other' });
+  resolve(delayed.snapshot); await delayed.settle();
+  assert.notEqual(delayed.doc.activeElement, delayed.node('workflow-hasServerDomain'));
+  assert.equal(delayed.node('workflow-content').hidden, true);
+});
+
 test('workflow export guards no project, failed loading, busy state and stale project events', async () => {
   for (const config of [{current:null}, {fail:true}]) {
     const h=harness(config);h.controller.open(h.node('trigger'));await h.settle();await h.fire('workflow-export');
