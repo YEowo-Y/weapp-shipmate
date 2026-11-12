@@ -16,6 +16,10 @@
 #report-reader-filter-status { margin:0; color:var(--text-2); }
 #report-reader-filter-status:not(:empty) { margin:0 0 12px; }
 #report-reader-summary button { min-height:32px; }
+.report-reader-searchbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;flex-basis:100%;min-width:0;margin-bottom:8px}
+.report-reader-search{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0;max-width:100%;font-size:.875em;font-weight:400;color:var(--text-2)}
+.report-reader-search input{width:32ch;max-width:100%;min-width:0;min-height:36px;box-sizing:border-box;font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 8px}
+.report-reader-search input:focus-visible{outline:2px solid var(--text-2);outline-offset:2px}
 .report-quote-filter{display:inline-flex;align-items:center;flex-wrap:wrap;max-width:100%;min-width:0;gap:6px;font-size:.875em;font-weight:400;color:var(--text-2)}
 .report-quote-filter select{min-height:32px;min-width:0;max-width:100%;box-sizing:border-box;font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 6px}
 #report-reader-priority{margin:0 0 20px;padding:0 0 16px;border-bottom:1px solid var(--border);max-width:72ch}
