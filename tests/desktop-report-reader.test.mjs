@@ -276,6 +276,86 @@ test('action, severity and live quote filters compose with counts, empty recover
   assert.equal(h.document.activeElement, h.node('report-reader-content').children[0].children.find(n => n.className === 'report-reader-evidence').children[0]);
 });
 
+
+test('reader search finds literal titles, rule IDs and requirements without changing report contents', () => {
+  const h = harness(), result = h.artifact.data.result;
+  result.items = result.items.slice(0, 2); result.selfCheck = [];
+  result.items[0].title = '定位权限说明'; result.items[0].requires = ['配置 wx.getLocation [scope]'];
+  result.items[1].title = '后台备案'; result.items[1].requires = ['提交材料 <script>'];
+  const saved = JSON.stringify(h.artifact);
+  h.app.open(h.trigger);
+  const search = h.node('report-reader-search'), articles = h.node('report-reader-content').children;
+  const entries = h.nodes.filter(n => n.tag === 'a' && n.href?.startsWith('#reader-item-')).map(n => n.parentNode);
+  const original = h.node('report-reader-original').textContent;
+  assert.equal(search.getAttribute('aria-controls'), 'report-reader-content report-reader-outline');
+  for (const [query, indexes] of [['定位权限', [0]], [result.items[1].ruleId.toUpperCase(), [1]], [' WX.GETLOCATION ', [0]], ['<script>', [1]], ['.*', []], ['   ', [0, 1]]]) {
+    search.value = query; search.focus(); search.listeners.input({ isComposing: false });
+    assert.deepEqual(articles.filter(n => !n.hidden).map(n => Number(n.dataset.readerItem)), indexes);
+    assert.deepEqual(entries.filter(n => !n.hidden).map(n => n.children[0].href), indexes.map(i => '#reader-item-' + i));
+    assert.equal(h.document.activeElement, search);
+    assert.equal(h.node('report-reader-original').textContent, original);
+    assert.equal(h.node('report-reader-priority').hidden, !!query.trim());
+  }
+  assert.equal(h.reads, 1);
+  assert.equal(JSON.stringify(h.artifact), saved);
+});
+
+test('reader search composes with action, severity and live quote filters and clears every filter', () => {
+  let rows, refresh;
+  const h = harness({ mountQuoteChecks(_version, entries, onChange) {
+    rows = entries; refresh = onChange;
+    rows.forEach(row => { row.state = 'unchecked'; }); onChange(); return () => {};
+  } });
+  const result = h.artifact.data.result;
+  result.items = result.items.slice(0, 3); result.selfCheck = [];
+  result.items.forEach((item, i) => {
+    item.title = i === 2 ? '备案' : '隐私要求'; item.requires = ['核对所填内容'];
+    item.severity = i === 1 ? 'warning' : 'blocker'; item.action_categories = ['console'];
+  });
+  h.app.open(h.trigger);
+  const search = h.node('report-reader-search'), reset = h.node('report-reader-reset');
+  const action = h.node('report-reader-action-filter'), quote = h.node('report-reader-quote-filter');
+  const count = (filter, key) => filter.children.find(n => n.value === key).textContent;
+  search.value = '隐私'; search.listeners.input({ isComposing: false });
+  assert.equal(count(action, 'console'), '后台配置 2'); assert.equal(count(quote, 'unchecked'), '尚未在线核验 2');
+  action.value = 'console'; action.listeners.change();
+  h.nodes.find(n => n.dataset.readerFilter === 'blocker').listeners.click();
+  quote.value = 'unchecked'; quote.listeners.change();
+  assert.equal(count(action, 'console'), '后台配置 1');
+  assert.equal(h.node('report-reader-filter-status').textContent, '显示“隐私” · 阻断 · 后台配置 · 尚未在线核验 1 项，共 3 项');
+  rows[0].button.focus(); rows[0].state = 'matched'; rows[0].status.textContent = '最近一次匹配'; refresh(rows[0]);
+  assert.equal(h.document.activeElement, quote);
+  assert.equal(h.node('report-reader-outline').hidden, true);
+  assert.match(h.node('report-reader-filter-status').textContent, /0 项，共 3 项。当前筛选没有核对项/);
+  reset.focus(); reset.listeners.click();
+  assert.equal(h.document.activeElement, search); assert.equal(search.value, ''); assert.equal(reset.hidden, true);
+  assert.equal(action.value, 'all'); assert.equal(quote.value, 'all');
+  assert.equal(h.nodes.find(n => n.dataset.readerFilter === 'all').getAttribute('aria-pressed'), 'true');
+  assert.ok(h.node('report-reader-content').children.every(n => !n.hidden));
+  assert.equal(h.node('report-reader-filter-status').textContent, '已显示全部 3 项');
+});
+
+test('reader search waits for IME completion and Escape clears only the keyword', () => {
+  let refresh;
+  const h = harness({ mountQuoteChecks(_version, rows, onChange) {
+    refresh = onChange; rows.forEach(row => { row.state = 'unchecked'; }); onChange(); return () => {};
+  } });
+  h.app.open(h.trigger);
+  const search = h.node('report-reader-search');
+  search.value = '不存在的核对项'; search.listeners.input({ isComposing: true }); refresh();
+  assert.ok(h.node('report-reader-content').children.every(n => !n.hidden));
+  assert.equal(h.node('report-reader-filter-status').textContent, '');
+  search.listeners.compositionend();
+  assert.ok(h.node('report-reader-content').children.every(n => n.hidden));
+  let prevented = false, stopped = false;
+  const key = { key: 'Escape', isComposing: true, preventDefault() { prevented = true; }, stopPropagation() { stopped = true; } };
+  search.listeners.keydown(key); assert.equal(prevented, false);
+  search.focus(); search.listeners.keydown({ ...key, isComposing: false });
+  assert.equal(prevented, true); assert.equal(stopped, true); assert.equal(search.value, '');
+  assert.equal(h.node('desktop-report-reader').open, true); assert.equal(h.document.activeElement, search);
+  assert.ok(h.node('report-reader-content').children.every(n => !n.hidden));
+});
+
 test('quote filter updates counts and announces the result when a focused finding leaves the list', () => {
   let quoteRows, refresh;
   const h = harness({ mountQuoteChecks(_version, rows, onChange) {
@@ -355,9 +435,12 @@ test('reader resets the filter after recheck and after opening another saved rep
     filter('warning').listeners.click();
     const action = h.nodes.findLast(n => n.id === 'report-reader-action-filter');
     action.value = 'code'; action.listeners.change();
+    const search = h.nodes.findLast(n => n.id === 'report-reader-search');
+    search.value = 'unmatched'; search.listeners.input({ isComposing: false });
     h.artifact = { ...h.artifact, id: next };
     if (next === 'recheck') h.app.showRecheck(h.artifact);
     else { h.app.close(); h.app.open(h.trigger); }
+    assert.equal(h.nodes.findLast(n => n.id === 'report-reader-search').value, '');
     assert.equal(filter('all').getAttribute('aria-pressed'), 'true');
     assert.equal(h.nodes.findLast(n => n.id === 'report-reader-action-filter').value, 'all');
     assert.ok(h.node('report-reader-content').children.every(n => !n.hidden));
