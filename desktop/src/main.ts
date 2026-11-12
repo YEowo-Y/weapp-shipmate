@@ -310,11 +310,11 @@ window.addEventListener("DOMContentLoaded", () => {
   repair = mountProjectRepair({
     getProjectId: () => projects?.getActiveId() ?? null,
     isBusy: () => busy,
-    onReadReport: (artifact, anchor) => {
+    onReadReport: (artifact, anchor, returnToRecord) => {
       if (busy || !reader || artifact.projectId !== projects?.getActiveId() || !workspace.close()) return false;
       repair?.close();
       showArtifact(artifact);
-      reader.open(anchor);
+      reader.open(anchor, returnToRecord);
       return reader.element.open;
     },
     onRecheck: async projectId => {
