@@ -43,6 +43,14 @@ export async function checkProjectRepairFlows(options) {
     await click('#desktop-repair-history');
     await until(() => inspect('return document.querySelector("#desktop-repair").open && document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'repair history ready');
   }
+  async function selectHistoryFilter(value) {
+    const optionIndex = await inspect('return [...document.querySelector("#repair-history-filter").options].findIndex(option => option.value === arguments[0])', [value]);
+    assert.ok(optionIndex >= 0);
+    await click('#repair-history-filter');
+    const keys = ['\uE011', ...Array(optionIndex).fill('\uE015'), '\uE007'];
+    await command('POST', '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: keys.flatMap(key => [{ type: 'keyDown', value: key }, { type: 'keyUp', value: key }]) }] });
+    assert.equal(await inspect('return document.querySelector("#repair-history-filter").value'), value);
+  }
   await monitor(); await command('POST', '/window/rect', { width: 1200, height: 850 });
   await checked('Repair fixture is an actual local single-root project with static privacy API evidence', async () => {
     await mkdir(directory, { recursive: true }); await writeFile(file, original);
@@ -136,12 +144,19 @@ export async function checkProjectRepairFlows(options) {
     const retry = `[data-repair-action="recheck"][data-operation-id="${pending.operationId}"]`;
     assert.equal(await inspect('return !!document.querySelector(arguments[0])', [retry]), true);
     const before = await repairSnapshot(), runs = (await snapshot()).runs.length;
+    await selectHistoryFilter('recheck_required');
+    assert.equal(await inspect('return document.querySelectorAll("#repair-history .project-repair-operation").length'), 1);
+    assert.equal(await inspect('return document.querySelector("#repair-history-filter option[value=recheck_required]").textContent'), '待复检 1');
+    assert.deepEqual(await repairSnapshot(), before);
+    await screenshot('repair-pending-recheck-filter');
     const edited = Buffer.from(appliedBytes.toString().replace('修复验收', '复检前人工编辑'));
     await writeFile(file, edited);
     await click(retry);
     await until(async () => /关联未完成/.test(await text('#repair-recheck-status')) && await inspect('return document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false"'), 'changed configuration cannot claim a completed recheck', 30_000);
     assert.deepEqual(await readFile(file), edited);
     assert.equal((await repairSnapshot()).operations.find(item => item.operationId === pending.operationId).recheckState, 'required');
+    assert.equal(await inspect('return document.querySelector("#repair-history-filter").value'), 'recheck_required');
+    assert.equal(await inspect('return document.querySelectorAll("#repair-history .project-repair-operation").length'), 1);
     await screenshot('repair-recheck-association-failed');
     await writeFile(file, appliedBytes);
     await click(retry);
@@ -156,6 +171,14 @@ export async function checkProjectRepairFlows(options) {
     assert.deepEqual(await readFile(pending.backupPath), backupBytes);
     assert.equal(await inspect('return document.querySelector(arguments[0]) === null', [retry]), true);
     assert.equal(await inspect('return document.activeElement.id'), 'repair-recheck-status');
+    assert.equal(await inspect('return document.querySelector("#repair-history-filter").value'), 'recheck_required');
+    assert.match(await text('#repair-history'), /当前没有待复检记录/);
+    assert.equal(await inspect('return document.querySelector("#repair-history-filter option[value=recheck_required]").textContent'), '待复检 0');
+    await screenshot('repair-pending-recheck-empty');
+    await selectHistoryFilter('recheck_completed');
+    const completed = after.operations.filter(item => item.recheckState === 'completed' && item.recheckArtifactId);
+    assert.equal(await inspect('return document.querySelectorAll("#repair-history .project-repair-operation").length'), completed.length);
+    assert.deepEqual(await repairSnapshot(), after);
     await screenshot('repair-history-recheck-completed');
     // Restore this test fixture through the existing, separately confirmed undo path.
     await click(`[data-repair-action="undo-preview"][data-operation-id="${pending.operationId}"]`);
@@ -193,12 +216,8 @@ export async function checkProjectRepairFlows(options) {
         await click('#repair-history-refresh');
         await until(() => inspect('return !document.querySelector("#repair-history-refresh").disabled'), 'linked history loaded');
       }
-      const optionIndex = await inspect('return [...document.querySelector("#repair-history-filter").options].findIndex(option => option.value === arguments[0])', [target.writeState]);
-      assert.ok(optionIndex > 0);
-      await click('#repair-history-filter');
-      const keys = ['\uE011', ...Array(optionIndex).fill('\uE015'), '\uE007'];
-      await command('POST', '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: keys.flatMap(value => [{ type: 'keyDown', value }, { type: 'keyUp', value }]) }] });
-      assert.equal(await inspect('return document.querySelector("#repair-history-filter").value'), target.writeState);
+      const selectedFilter = index ? 'recheck_completed' : target.writeState;
+      await selectHistoryFilter(selectedFilter);
       const selector = `[data-repair-action="read-report"][data-operation-id="${target.operationId}"]`;
       await inspect('document.querySelector(arguments[0]).scrollIntoView({block:"center",behavior:"instant"})', [selector]);
       if (!index) await screenshot('repair-linked-report-action');
@@ -223,7 +242,7 @@ export async function checkProjectRepairFlows(options) {
       const readingPosition = await inspect('return document.querySelector(".report-reader-body").scrollTop');
       await click('#report-reader-back-to-repair');
       await until(() => inspect('return document.querySelector("#desktop-repair").open && document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false" && document.activeElement.dataset.operationId===arguments[0]', [target.operationId]), 'return focuses the exact repair record');
-      assert.equal(await inspect('return document.querySelector("#repair-history-filter").value'), target.writeState);
+      assert.equal(await inspect('return document.querySelector("#repair-history-filter").value'), selectedFilter);
       assert.deepEqual(await repairSnapshot(), records);
       assert.deepEqual((await snapshot()).runs, before.runs);
       await screenshot(index ? 'repair-return-to-applied-record' : 'repair-return-to-restored-record');
