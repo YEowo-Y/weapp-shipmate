@@ -548,7 +548,17 @@ window.addEventListener("DOMContentLoaded", () => {
   $("#desktop-preferences-open")?.addEventListener('click', () => preferences?.open($("#desktop-preferences-open")));
   $("#desktop-maintenance-open")?.addEventListener('click', () => health?.open($("#desktop-maintenance-open")));
   window.addEventListener('pagehide', () => { health?.destroy(); maintenance?.destroy(); preferences?.destroy(); sources?.destroy(); }, { once: true });
-  workflow = mountWorkflow({ openPage: (page, trigger) => workspace.open(page, trigger, { canLeave: () => workflow?.canClose() ?? true }), getProject: () => projects?.getActive() ?? null, isBusy: () => busy, onProjectChanged: async () => { await projects?.refresh(); } });
+  workflow = mountWorkflow({
+    openPage: (page, trigger) => workspace.open(page, trigger, { canLeave: () => workflow?.canClose() ?? true }),
+    getProject: () => projects?.getActive() ?? null, isBusy: () => busy,
+    onProjectChanged: async () => { await projects?.refresh(); },
+    onGenerateGuide: async projectId => {
+      if (busy || projects?.getActiveId() !== projectId) throw new Error('当前项目已改变或正在运行，请返回原项目后重试。');
+      const artifact = await run('run_guide');
+      if (!artifact || artifact.kind !== 'guide' || artifact.projectId !== projectId) throw new Error('上线清单未生成成功，已保存事实仍保留，请重试。');
+    },
+    onReadGuide: trigger => reader?.open(trigger),
+  });
   const workflowButton = $('#desktop-workflow-open');
   workflowButton?.addEventListener('click', () => workflow?.open(workflowButton));
   window.addEventListener('pagehide', () => workflow?.destroy(), { once: true });
