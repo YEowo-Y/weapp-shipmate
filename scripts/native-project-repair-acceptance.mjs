@@ -193,6 +193,12 @@ export async function checkProjectRepairFlows(options) {
         await click('#repair-history-refresh');
         await until(() => inspect('return !document.querySelector("#repair-history-refresh").disabled'), 'linked history loaded');
       }
+      const optionIndex = await inspect('return [...document.querySelector("#repair-history-filter").options].findIndex(option => option.value === arguments[0])', [target.writeState]);
+      assert.ok(optionIndex > 0);
+      await click('#repair-history-filter');
+      const keys = ['\uE011', ...Array(optionIndex).fill('\uE015'), '\uE007'];
+      await command('POST', '/actions', { actions: [{ type: 'key', id: 'keyboard', actions: keys.flatMap(value => [{ type: 'keyDown', value }, { type: 'keyUp', value }]) }] });
+      assert.equal(await inspect('return document.querySelector("#repair-history-filter").value'), target.writeState);
       const selector = `[data-repair-action="read-report"][data-operation-id="${target.operationId}"]`;
       await inspect('document.querySelector(arguments[0]).scrollIntoView({block:"center",behavior:"instant"})', [selector]);
       if (!index) await screenshot('repair-linked-report-action');
@@ -208,6 +214,22 @@ export async function checkProjectRepairFlows(options) {
       assert.deepEqual(await repairSnapshot(), records);
       assert.deepEqual(await readFile(file), bytes);
       await screenshot(index ? 'repair-linked-report-replaces-reader' : 'repair-linked-report-reader');
+      if (!index) {
+        await command('POST', '/window/rect', { width: 390, height: 844 });
+        assert.equal(await inspect('const d=document.querySelector("#desktop-report-reader");return document.documentElement.scrollWidth<=innerWidth+1 && d.scrollWidth<=d.clientWidth+1 && document.querySelector("#report-reader-back-to-repair").checkVisibility()'), true);
+        await screenshot('repair-report-return-narrow');
+        await command('POST', '/window/rect', { width: 1200, height: 850 });
+      }
+      const readingPosition = await inspect('return document.querySelector(".report-reader-body").scrollTop');
+      await click('#report-reader-back-to-repair');
+      await until(() => inspect('return document.querySelector("#desktop-repair").open && document.querySelector("#desktop-repair").getAttribute("aria-busy")==="false" && document.activeElement.dataset.operationId===arguments[0]', [target.operationId]), 'return focuses the exact repair record');
+      assert.equal(await inspect('return document.querySelector("#repair-history-filter").value'), target.writeState);
+      assert.deepEqual(await repairSnapshot(), records);
+      assert.deepEqual((await snapshot()).runs, before.runs);
+      await screenshot(index ? 'repair-return-to-applied-record' : 'repair-return-to-restored-record');
+      await closeRepair();
+      await until(() => inspect('return document.activeElement.id==="report-reader-back-to-repair"'), 'closing records returns focus to the report');
+      assert.equal(await inspect('return document.querySelector(".report-reader-body").scrollTop'), readingPosition);
     }
     await click('#report-reader-dismiss'); await closeReport();
   });
