@@ -310,6 +310,13 @@ window.addEventListener("DOMContentLoaded", () => {
   repair = mountProjectRepair({
     getProjectId: () => projects?.getActiveId() ?? null,
     isBusy: () => busy,
+    onReadReport: (artifact, anchor) => {
+      if (busy || !reader || artifact.projectId !== projects?.getActiveId() || !workspace.close()) return false;
+      repair?.close();
+      showArtifact(artifact);
+      reader.open(anchor);
+      return reader.element.open;
+    },
     onRecheck: async projectId => {
       if (busy || projects?.getActiveId() !== projectId) throw new Error('当前项目已改变或正在运行，请返回原项目后重新预检。');
       const artifact = await run('run_check');
