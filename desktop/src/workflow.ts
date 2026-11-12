@@ -8,6 +8,7 @@ import { createArtifactDownloader } from '../design-previews/artifact-download.j
 import './workflow.css';
 
 type Snapshot = { project: Project; catalog: unknown; rulesVersion: string; confirmations: unknown[] };
+export type MissingFact = 'collectsSensitive' | 'hasServerDomain';
 type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getProject(): Project | null; isBusy(): boolean; onProjectChanged(): Promise<void> };
 const labels: Record<string, string> = { confirmed: '人工已确认', not_applicable: '人工不适用', pending: '待确认', unknown: '事实待补充', stale: '待重检' };
 
@@ -233,8 +234,28 @@ export function mountWorkflow(options: Options) {
   listen(el('workflow-retry'), 'click', () => { void refresh(); });
   listen(el('workflow-close'), 'click', () => { if (!pending) dialog.close(); });
   listen(dialog, 'close', () => { if (!dialog.open && !options.openPage && !destroyed && (document.activeElement === document.body || dialog.contains(document.activeElement))) opener?.focus({preventScroll:true}); });
+  function open(trigger: HTMLElement, field?: MissingFact) {
+    if (destroyed || dialog.open) return false;
+    opener = trigger;
+    if (options.openPage) { if (!options.openPage(dialog, trigger)) return false; } else dialog.showModal();
+    const dismiss = el('workflow-close'); dismiss.focus(); invalidate();
+    const projectId = options.getProject()?.id;
+    const loading = refresh(), token = epoch;
+    void loading.then(() => {
+      if (!field || destroyed || !dialog.open || epoch !== token || blocked() || !snapshot || snapshot.project.id !== projectId || options.getProject()?.id !== projectId) return;
+      el<HTMLDetailsElement>('workflow-facts').open = true; draftFor(snapshot.project.id).factsOpen = true;
+      if (document.activeElement === dismiss) {
+        const target = el(`workflow-${field}`); target.focus({ preventScroll: true }); target.scrollIntoView({ block: 'nearest' });
+      }
+    });
+    return true;
+  }
   return {
-    open(trigger: HTMLElement) { if (destroyed || dialog.open) return; opener = trigger; if (options.openPage) { if (!options.openPage(dialog, trigger)) return; } else dialog.showModal(); el('workflow-close').focus(); invalidate(); void refresh(); },
+    open,
+    openFacts(projectId: string, field: MissingFact, trigger: HTMLElement) {
+      if (blocked() || options.getProject()?.id !== projectId) return false;
+      return open(trigger, field);
+    },
     refresh, element: dialog, canClose: () => !pending,
     close() { if (!pending && dialog.open) dialog.close(); },
     setBusy(value: boolean) { busy = value; if (snapshot && snapshot.project.id !== options.getProject()?.id) { invalidate(); reloadAfterPending = true; } controls(); drainReload(); },
