@@ -42,6 +42,9 @@
 .report-quote-pager{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px}
 .report-quote-pager span{margin-inline-end:auto;font-size:.875em;color:var(--text-2);font-variant-numeric:tabular-nums}
 .report-quote-pager button:disabled{opacity:.5;cursor:default}
+.report-reader-fact{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 12px;min-height:36px;cursor:pointer}
+.report-reader-fact:hover{background:var(--ds-hover)}
+.report-reader-fact:focus-visible{outline:2px solid var(--text-2);outline-offset:2px}
 .report-quote-check button:disabled{opacity:.6;cursor:wait}
 #report-reader-original{margin:16px 0 24px;padding:16px;background:var(--surface);border-radius:10px}#report-reader-original .report-markdown{margin-top:20px;min-width:0;overflow-wrap:anywhere}#report-reader-original pre,#report-reader-original table{max-width:100%;overflow:auto}#report-reader-original table{display:block}#report-reader-original img{max-width:100%;height:auto}
 .report-reader #report-reader-original h1{font-size:1.4em;line-height:1.5}.report-reader #report-reader-original h2{font-size:1.2em;line-height:1.5;margin-top:24px}.report-reader #report-reader-original h3{font-size:1.1em;line-height:1.5}.report-reader #report-reader-original .markdown-table{max-width:100%;overflow:auto}
