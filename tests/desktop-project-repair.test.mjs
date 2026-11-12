@@ -330,6 +330,70 @@ test('history restart path previews undo and recovery before separate explicit c
   }
 });
 
+test('recheck filters count actionable pending checks separately from linked reports and recovery', async () => {
+  const operations = [
+    { ...result(), operationId: 'pending-apply' },
+    { ...result('undone'), kind: 'undo', operationId: 'pending-undo' },
+    { ...result('undone'), operationId: 'compensated-original' },
+    { ...result('recovery_required'), operationId: 'needs-recovery', recheckState: 'not_required' },
+    { ...result(), operationId: 'linked', recheckState: 'completed', recheckArtifactId: 'report-linked' },
+    { ...result(), operationId: 'missing-link', recheckState: 'completed' },
+    { ...result('not_applied'), operationId: 'not-written', recheckState: 'not_required' },
+  ];
+  const h = harness({ invoke: cmd => cmd === 'project_repair_snapshot' ? { operations } : undefined, onReadReport: () => true });
+  h.app.openHistory(); await h.settle();
+  const before = h.calls.length, select = h.node('repair-history-filter');
+  const change = value => { select.value = value; select.dispatchEvent(new h.document.defaultView.Event('change')); };
+  const label = value => [...select.options].find(option => option.value === value).textContent;
+  assert.equal(label('all'), '全部记录 7');
+  assert.equal(label('recheck_required'), '待复检 2');
+  assert.equal(label('recheck_completed'), '已关联复检 1');
+  assert.equal(label('recovery_required'), '需要恢复文件 1');
+  change('recheck_required');
+  assert.deepEqual([...h.document.querySelectorAll('.project-repair-operation')].map(row => row.dataset.operationId), ['pending-apply', 'pending-undo']);
+  assert.equal(h.node('repair-history-count').textContent, '2 / 7 条记录');
+  change('recheck_completed');
+  assert.deepEqual([...h.document.querySelectorAll('.project-repair-operation')].map(row => row.dataset.operationId), ['linked']);
+  assert.equal(h.document.querySelector('[data-repair-action="read-report"]').dataset.operationId, 'linked');
+  change('recovery_required'); assert.ok(h.document.querySelector('[data-repair-action="recovery-preview"]'));
+  assert.equal(h.calls.length, before); assert.equal(h.rechecks.length, 0);
+  h.dispose();
+});
+
+test('successful retry leaves the pending filter and linked-report return preserves the completed filter', async () => {
+  let operation = result(), fail = true, back;
+  const h = harness({
+    invoke: (cmd, args) => {
+      if (cmd === 'project_repair_snapshot') return { operations: [operation] };
+      if (cmd === 'project_repair_record_recheck') {
+        if (fail) throw Error('association unavailable');
+        operation = { ...operation, recheckState: 'completed', recheckArtifactId: args.artifactId }; return operation;
+      }
+      if (cmd === 'project_artifact') return { ...artifact, id: operation.recheckArtifactId, markdown: '报告' };
+    },
+    onReadReport: (_artifact, _anchor, returnToRecord) => { back = returnToRecord; h.app.close(); return true; },
+  });
+  h.app.openHistory(); await h.settle();
+  const select = h.node('repair-history-filter');
+  select.value = 'recheck_required'; select.dispatchEvent(new h.document.defaultView.Event('change'));
+  h.document.querySelector('[data-repair-action="recheck"]').click(); await h.settle();
+  assert.equal(h.document.querySelectorAll('.project-repair-operation').length, 1);
+  assert.match(h.node('repair-recheck-status').textContent, /关联未完成/);
+  fail = false; h.document.querySelector('[data-repair-action="recheck"]').click(); await h.settle();
+  assert.equal(select.value, 'recheck_required');
+  assert.equal(h.document.querySelectorAll('.project-repair-operation').length, 0);
+  assert.match(h.node('repair-history').textContent, /当前没有待复检记录.*需要恢复文件/);
+  assert.equal(h.node('repair-history-count').textContent, '0 / 1 条记录');
+  assert.equal([...select.options].find(option => option.value === 'recheck_completed').textContent, '已关联复检 1');
+  select.value = 'recheck_completed'; select.dispatchEvent(new h.document.defaultView.Event('change'));
+  h.document.querySelector('[data-repair-action="read-report"]').click(); await h.settle();
+  back(h.node('opener')); await h.settle();
+  assert.equal(select.value, 'recheck_completed');
+  assert.equal(h.document.activeElement.dataset.operationId, operation.operationId);
+  assert.ok(h.calls.every(([cmd]) => ['project_repair_snapshot', 'project_repair_record_recheck', 'project_artifact'].includes(cmd)));
+  h.dispose();
+});
+
 test('history state filtering is local, preserves recovery actions and recovers from an empty selection', async () => {
   const operations = ['applied', 'recovery_required', 'undone'].map((state, index) => ({ ...result(state), operationId: `op-${index}` }));
   const h = harness({ invoke: cmd => cmd === 'project_repair_snapshot' ? { operations } : undefined });
