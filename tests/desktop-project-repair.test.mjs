@@ -16,6 +16,7 @@ const plan = kind => ({ planId: `plan-${kind}`, projectId: 'p1', file: 'app.json
 const result = (writeState = 'applied') => ({ operationId: 'op1', projectId: 'p1', kind: 'apply', createdAt: Date.now(), writeState, recheckState: 'required', undoAvailable: writeState === 'applied', recoveryAvailable: writeState === 'recovery_required', backupPath: 'C:/backup/app.json', message: '原生处理结果' });
 function harness({ invoke: custom, recheck = async () => ({ ...artifact, id: 'recheck-1' }), onReadReport } = {}) {
   const dom = new JSDOM('<body><button id="opener">打开修复</button></body>'), document = dom.window.document, calls = [], rechecks = [];
+  dom.window.HTMLElement.prototype.scrollIntoView = function () { this.scrolled = true; };
   dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   dom.window.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new dom.window.Event('close')); };
   let projectId = 'p1', externalBusy = false, sequence = 0;
@@ -76,6 +77,64 @@ test('completed repair records open their exact local report without rerunning o
   assert.equal(h.node('desktop-repair').open, false);
   assert.equal(h.rechecks.length, 0);
   assert.ok(h.calls.every(([cmd]) => ['project_repair_snapshot', 'project_artifact'].includes(cmd)));
+  h.dispose();
+});
+
+test('returning from a linked report reloads the original filter and focuses the matching record', async () => {
+  let back, operation = { ...result(), recheckState: 'completed', recheckArtifactId: 'linked' };
+  const h = harness({
+    invoke: cmd => cmd === 'project_repair_snapshot' ? { operations: [operation] } : cmd === 'project_artifact' ? { ...artifact, id: 'linked', markdown: '报告' } : undefined,
+    onReadReport: (_report, _anchor, returnToRecord) => { back = returnToRecord; h.app.close(); return true; },
+  });
+  h.app.openHistory(); await h.settle();
+  const filter = h.node('repair-history-filter'); filter.value = 'applied'; filter.dispatchEvent(new h.document.defaultView.Event('change'));
+  h.document.querySelector('[data-repair-action="read-report"]').click(); await h.settle();
+  const reads = h.calls.length;
+  assert.equal(back(h.node('opener')), true); await h.settle();
+  assert.equal(filter.value, 'applied');
+  assert.equal(h.document.activeElement.dataset.operationId, operation.operationId);
+  assert.equal(h.document.activeElement.scrolled, true);
+  assert.equal(h.calls.length, reads + 1);
+  assert.equal(h.calls.at(-1)[0], 'project_repair_snapshot');
+  h.app.close(); operation = { ...operation, writeState: 'undone' };
+  assert.equal(back(h.node('opener')), true); await h.settle();
+  assert.equal(filter.value, 'all', 'changed state reveals the requested record outside the old filter');
+  assert.equal(h.document.activeElement.dataset.operationId, operation.operationId);
+  h.app.close(); h.setProject('other');
+  assert.equal(back(h.node('opener')), false);
+  assert.equal(h.node('desktop-repair').open, false);
+  h.dispose();
+});
+
+test('returning handles missing records and read failures without inventing state or stealing focus', async () => {
+  let back, mode = 'initial', resolve;
+  const operation = { ...result(), recheckState: 'completed', recheckArtifactId: 'linked' };
+  const h = harness({
+    invoke: cmd => {
+      if (cmd === 'project_artifact') return { ...artifact, id: 'linked', markdown: '报告' };
+      if (cmd === 'project_repair_snapshot') {
+        if (mode === 'missing') return { operations: [] };
+        if (mode === 'failed') throw Error('storage unavailable');
+        if (mode === 'pending') return new Promise(done => { resolve = done; });
+        return { operations: [operation] };
+      }
+    },
+    onReadReport: (_report, _anchor, returnToRecord) => { back = returnToRecord; h.app.close(); return true; },
+  });
+  h.app.openHistory(); await h.settle();
+  h.document.querySelector('[data-repair-action="read-report"]').click(); await h.settle();
+  mode = 'missing'; back(h.node('opener')); await h.settle();
+  assert.match(h.node('repair-status').textContent, /记录已不可用/);
+  h.app.close(); mode = 'failed'; back(h.node('opener')); await h.settle();
+  assert.match(h.node('repair-status').textContent, /读取失败.*storage unavailable/);
+  h.app.close(); mode = 'pending'; back(h.node('opener'));
+  h.node('repair-done').focus();
+  resolve({ operations: [operation] }); await h.settle();
+  assert.equal(h.document.activeElement, h.node('repair-done'));
+  h.app.close(); mode = 'pending'; back(h.node('opener')); h.setProject('other');
+  resolve({ operations: [operation] }); await h.settle();
+  assert.equal(h.document.querySelector('[data-repair-action="read-report"]'), null);
+  assert.equal(h.rechecks.length, 0);
   h.dispose();
 });
 
