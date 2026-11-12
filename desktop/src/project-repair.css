@@ -22,6 +22,7 @@
 .project-repair-operation:first-child { border-top:0; }
 .project-repair-operation h4 { font-variant-numeric:tabular-nums; }
 .project-repair-operation p { margin-block:8px; }
+.project-repair-operation [data-repair-action] { margin-block-start:4px; margin-inline-end:8px; }
  .project-repair-filters { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-block:12px 16px; }
 .project-repair-filters select { min-height:36px; max-width:100%; border:1px solid var(--border); border-radius:8px; padding:6px 12px; color:var(--text); background:var(--surface); font:inherit; }
 .project-repair-filters select:focus-visible { outline:2px solid var(--text-2); outline-offset:2px; }
