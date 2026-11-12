@@ -84,7 +84,7 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
       if (count) expectedFilters.push({ key, label: `${label} ${count}`, pressed: String(key === 'all') });
     }
     assert.deepEqual(filters, expectedFilters);
-    const smallTargets = await inspect(`return [...document.querySelectorAll('#report-reader-summary button, #report-reader-outline a')].filter(n=>!n.closest('[hidden]')).filter(n=>{const r=n.getBoundingClientRect();return r.width<24 || r.height<24}).map(n=>n.textContent)`);
+    const smallTargets = await inspect(`return [...document.querySelectorAll('#report-reader-summary button, #report-reader-summary select, #report-reader-outline a')].filter(n=>!n.closest('[hidden]')).filter(n=>{const r=n.getBoundingClientRect();return r.width<24 || r.height<24}).map(n=>n.textContent)`);
     assert.deepEqual(smallTargets, [], 'filters and outline links meet the minimum target size');
     if (!expected.length) assert.equal(await text('#report-reader-summary'), '0 个核对项');
     const rows = await inspect(`return [...document.querySelectorAll('#report-reader-content article[data-reader-item]')].map(article=>({
@@ -135,7 +135,7 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
       const dialog=document.querySelector('#desktop-report-reader'),body=dialog.querySelector('.report-reader-body');
       const rect=node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
       const visible=node=>node.checkVisibility();
-      const blocks=[...dialog.querySelectorAll('h2,h3,h4,p,li,summary,a,wa-button')].filter(visible);
+      const blocks=[...dialog.querySelectorAll('h2,h3,h4,p,li,summary,a,wa-button,select')].filter(visible);
       const clipped=blocks.filter(node=>{const c=getComputedStyle(node);return (/^(hidden|clip)$/.test(c.overflowX)&&node.scrollWidth>node.clientWidth+1)||(/^(hidden|clip)$/.test(c.overflowY)&&node.scrollHeight>node.clientHeight+1);}).map(node=>({tag:node.tagName,id:node.id,text:node.textContent.slice(0,80)}));
       return {viewport:{width:innerWidth,height:innerHeight},theme:document.body.dataset.theme,messageSize:getComputedStyle(body).fontSize,dialog:rect(dialog),body:rect(body),
         pageOverflow:document.documentElement.scrollWidth-innerWidth,dialogOverflow:dialog.scrollWidth-dialog.clientWidth,bodyOverflow:body.scrollWidth-body.clientWidth,
@@ -292,6 +292,47 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     assert.ok(!conditionalIds.includes(await inspect('return document.activeElement.id')), 'priority opens an unconditional item hidden by the conditional filter');
     assert.deepEqual(await visibleItems(), { articles: allIds, outline: allIds, pressed: ['all'] });
     await selectFilter('all');
+    await closeReader(); await closeTools();
+  });
+  await checked('Action filters compose with severity and quote state while preserving the complete saved guide', async () => {
+    await fromHistory(artifacts.guide);
+    const items = createHandoff(artifacts.guide).items;
+    const actions = item => item.rule.action_categories ?? ['manual_check'];
+    const select = async (selector, value) => {
+      const index = await inspect('return [...document.querySelector(arguments[0]).options].findIndex(n => n.value === arguments[1])', [selector, value]);
+      assert.ok(index >= 0);
+      await activate(selector); await press('\uE011');
+      for (let i = 0; i < index; i++) await press('\uE015');
+      await press('\uE007');
+      assert.equal(await inspect('return document.querySelector(arguments[0]).value', [selector]), value);
+    };
+    const verify = async expected => {
+      const ids = items.flatMap((item, index) => expected(item) ? [`reader-item-${index}`] : []);
+      const visible = await inspect(`return {
+        articles:[...document.querySelectorAll('#report-reader-content article h3')].filter(n=>n.checkVisibility()).map(n=>n.id),
+        outline:[...document.querySelectorAll('#report-reader-outline li a')].filter(n=>n.checkVisibility()).map(n=>n.hash.slice(1))
+      }`);
+      assert.deepEqual(visible, { articles: ids, outline: ids });
+    };
+    for (const action of ['code', 'console', 'materials', 'manual_check']) {
+      await select('#report-reader-action-filter', action);
+      await verify(item => actions(item).includes(action));
+    }
+    await select('#report-reader-action-filter', 'console');
+    await activate('#report-reader-summary [data-reader-filter="conditional"]');
+    await until(() => inspect('return !document.querySelector("#report-reader-quote-filter").disabled'), 'quote snapshot loaded');
+    await select('#report-reader-quote-filter', 'unchecked');
+    await verify(item => item.conditional && actions(item).includes('console'));
+    await screenshot('reading-action-filter');
+    await activate('#report-reader-handoff');
+    await until(() => inspect('return document.querySelector("#desktop-handoff").matches(":modal")'), 'full handoff from action filter');
+    assert.equal(await inspect('return document.querySelectorAll("#handoff-content h2").length'), items.length);
+    await click('#handoff-done');
+    assert.equal(await inspect('return document.querySelector("#report-reader-action-filter").value'), 'console');
+    await verify(item => item.conditional && actions(item).includes('console'));
+    await closeReader(); await closeTools();
+    await fromHistory(artifacts.guide); await verifyContent(artifacts.guide);
+    assert.equal(await inspect('return document.querySelector("#report-reader-action-filter").value'), 'all');
     await closeReader(); await closeTools();
   });
   await checked('Closing a handoff resumes the same report, evidence and reading position', async () => {
