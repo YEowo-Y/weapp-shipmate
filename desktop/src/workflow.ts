@@ -9,7 +9,7 @@ import './workflow.css';
 
 type Snapshot = { project: Project; catalog: unknown; rulesVersion: string; confirmations: unknown[] };
 export type MissingFact = 'collectsSensitive' | 'hasServerDomain';
-type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getProject(): Project | null; isBusy(): boolean; onProjectChanged(): Promise<void> };
+type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getProject(): Project | null; isBusy(): boolean; onProjectChanged(): Promise<void>; onGenerateGuide?(projectId: string): Promise<void>; onReadGuide?(trigger: HTMLElement): void };
 const labels: Record<string, string> = { confirmed: '人工已确认', not_applicable: '人工不适用', pending: '待确认', unknown: '事实待补充', stale: '待重检' };
 
 /** Native storage owns facts and confirmations; the shared domain projection owns stage state. */
@@ -40,6 +40,10 @@ export function mountWorkflow(options: Options) {
     dialog.setAttribute('aria-busy', String(pending));
     for (const field of content.querySelectorAll<HTMLInputElement>('input,textarea,select,button,wa-button')) field.disabled = blocked() || !snapshot || snapshot.project.id !== options.getProject()?.id || field.dataset.workflowBlocked === 'true';
     el<HTMLButtonElement>('workflow-export').disabled = blocked() || !snapshot || snapshot.project.id !== options.getProject()?.id;
+    const hasDraft = !!snapshot && Object.keys(draftFor(snapshot.project.id).facts).length > 0;
+    el<HTMLButtonElement>('workflow-generate-guide').hidden = !options.onGenerateGuide;
+    el<HTMLButtonElement>('workflow-generate-guide').disabled = blocked() || !snapshot || snapshot.project.id !== options.getProject()?.id || hasDraft;
+    el('workflow-guide-note').textContent = hasDraft ? '请先保存项目事实，再更新上线清单。' : '根据已保存事实生成新清单；历史报告保留原有内容。';
     el<HTMLButtonElement>('workflow-retry').disabled = blocked();
     el<HTMLButtonElement>('workflow-save-facts').disabled = blocked() || !snapshot || snapshot.project.id !== options.getProject()?.id || factsConflict(snapshot);
   }
@@ -190,6 +194,7 @@ export function mountWorkflow(options: Options) {
       if (key === 'businessType') draft.facts.businessType = field.value;
       else draft.facts[key] = field.value === 'unknown' ? null : field.value === 'true';
       el('workflow-facts-summary').textContent = factsConflict(snapshot) ? '已保存事实已变化 · 草稿待核对' : '有未保存更改 · 仅在本次应用运行期间保留';
+      controls();
     });
   }
   listen(el('workflow-facts'), 'toggle', () => { if (snapshot && snapshot.project.id === options.getProject()?.id) draftFor(snapshot.project.id).factsOpen = el<HTMLDetailsElement>('workflow-facts').open; });
@@ -220,7 +225,25 @@ export function mountWorkflow(options: Options) {
     if (factsConflict(basis)) { message('已保存事实已变化，草稿已保留。请先处理冲突，不能覆盖新事实。', true); return; }
     const facts: ProjectFacts = { businessType: el<HTMLTextAreaElement>('workflow-businessType').value.trim(), hasPayment: null, collectsSensitive: null, hasServerDomain: null };
     for (const key of ['hasPayment', 'collectsSensitive', 'hasServerDomain'] as const) { const value = el<HTMLSelectElement>(`workflow-${key}`).value; facts[key] = value === 'unknown' ? null : value === 'true'; }
-    void operation(async () => { await invoke('project_facts_save', { projectId: basis.project.id, expectedRevision: basis.project.revision, facts }); const draft = draftFor(basis.project.id); draft.facts = {}; delete draft.factsBasis; await saved(); });
+    void operation(async () => { await invoke('project_facts_save', { projectId: basis.project.id, expectedRevision: basis.project.revision, facts }); const draft = draftFor(basis.project.id); draft.facts = {}; delete draft.factsBasis; await saved(); if (snapshot?.project.id === basis.project.id) message('项目事实已保存。请更新上线清单，旧报告仍保留保存时的内容。'); });
+  });
+  listen(el('workflow-generate-guide'), 'click', () => {
+    if (blocked() || !dialog.open || !options.onGenerateGuide) return;
+    const basis = currentBasis();
+    if (!basis) return;
+    if (Object.keys(draftFor(basis.project.id).facts).length) { message('请先保存项目事实，再更新上线清单。', true); return; }
+    void (async () => {
+      let generated = false;
+      await operation(async () => {
+        message('正在根据已保存事实生成上线清单…');
+        await options.onGenerateGuide!(basis.project.id);
+        generated = true;
+      });
+      if (generated && !destroyed && dialog.open && options.getProject()?.id === basis.project.id) {
+        message('新上线清单已保存，历史报告仍可在项目成果中查看。');
+        options.onReadGuide?.(el('workflow-generate-guide'));
+      }
+    })();
   });
   listen(el('workflow-export'), 'click', () => {
     if (blocked() || !dialog.open || !snapshot) return;
