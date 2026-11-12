@@ -84,7 +84,7 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
       if (count) expectedFilters.push({ key, label: `${label} ${count}`, pressed: String(key === 'all') });
     }
     assert.deepEqual(filters, expectedFilters);
-    const smallTargets = await inspect(`return [...document.querySelectorAll('#report-reader-summary button, #report-reader-summary select, #report-reader-outline a')].filter(n=>!n.closest('[hidden]')).filter(n=>{const r=n.getBoundingClientRect();return r.width<24 || r.height<24}).map(n=>n.textContent)`);
+    const smallTargets = await inspect(`return [...document.querySelectorAll('#report-reader-summary button, #report-reader-summary select, #report-reader-summary input, #report-reader-outline a')].filter(n=>!n.closest('[hidden]')).filter(n=>{const r=n.getBoundingClientRect();return r.width<24 || r.height<24}).map(n=>n.textContent)`);
     assert.deepEqual(smallTargets, [], 'filters and outline links meet the minimum target size');
     if (!expected.length) assert.equal(await text('#report-reader-summary'), '0 个核对项');
     const rows = await inspect(`return [...document.querySelectorAll('#report-reader-content article[data-reader-item]')].map(article=>({
@@ -135,7 +135,7 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
       const dialog=document.querySelector('#desktop-report-reader'),body=dialog.querySelector('.report-reader-body');
       const rect=node=>{const r=node.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height};};
       const visible=node=>node.checkVisibility();
-      const blocks=[...dialog.querySelectorAll('h2,h3,h4,p,li,summary,a,wa-button,select')].filter(visible);
+      const blocks=[...dialog.querySelectorAll('h2,h3,h4,p,li,summary,a,wa-button,select,input')].filter(visible);
       const clipped=blocks.filter(node=>{const c=getComputedStyle(node);return (/^(hidden|clip)$/.test(c.overflowX)&&node.scrollWidth>node.clientWidth+1)||(/^(hidden|clip)$/.test(c.overflowY)&&node.scrollHeight>node.clientHeight+1);}).map(node=>({tag:node.tagName,id:node.id,text:node.textContent.slice(0,80)}));
       return {viewport:{width:innerWidth,height:innerHeight},theme:document.body.dataset.theme,messageSize:getComputedStyle(body).fontSize,dialog:rect(dialog),body:rect(body),
         pageOverflow:document.documentElement.scrollWidth-innerWidth,dialogOverflow:dialog.scrollWidth-dialog.clientWidth,bodyOverflow:body.scrollWidth-body.clientWidth,
@@ -334,6 +334,46 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     await fromHistory(artifacts.guide); await verifyContent(artifacts.guide);
     assert.equal(await inspect('return document.querySelector("#report-reader-action-filter").value'), 'all');
     await closeReader(); await closeTools();
+  });
+
+  await checked('Report search finds saved titles, rule IDs and requirements with keyboard clearing and filter recovery', async () => {
+    await fromHistory(artifacts.guide);
+    const items = createHandoff(artifacts.guide).items, target = items[0].rule;
+    const visible = () => inspect(`return {
+      articles:[...document.querySelectorAll('#report-reader-content article h3')].filter(n=>n.checkVisibility()).map(n=>n.id),
+      outline:[...document.querySelectorAll('#report-reader-outline li a')].filter(n=>n.checkVisibility()).map(n=>n.hash.slice(1))
+    }`);
+    for (const query of [target.title, target.ruleId.toUpperCase(), target.requires[0].slice(0, 20)]) {
+      await activate('#report-reader-search'); await fill('#report-reader-search', query);
+      const ids = items.flatMap(({rule}, i) => [rule.title, rule.ruleId, ...rule.requires].join('\n').toLowerCase().includes(query.toLowerCase()) ? [`reader-item-${i}`] : []);
+      assert.ok(ids.length > 0 && ids.length < items.length);
+      assert.deepEqual(await visible(), { articles: ids, outline: ids });
+      assert.equal(await inspect('return document.activeElement.id'), 'report-reader-search');
+    }
+    await screenshot('reading-search-requirements');
+    await activate('#report-reader-handoff');
+    await until(() => inspect('return document.querySelector("#desktop-handoff").matches(":modal")'), 'full handoff from search');
+    assert.equal(await inspect('return document.querySelectorAll("#handoff-content h2").length'), items.length);
+    await click('#handoff-done');
+    await activate('#report-reader-search'); await press('\uE00C');
+    assert.equal(await inspect('return document.querySelector("#desktop-report-reader").open'), true);
+    assert.equal(await inspect('return document.querySelector("#report-reader-search").value'), '');
+    const allIds = items.map((_, i) => `reader-item-${i}`);
+    assert.deepEqual(await visible(), { articles: allIds, outline: allIds });
+    await activate('#report-reader-summary [data-reader-filter="conditional"]');
+    await activate('#report-reader-search'); await fill('#report-reader-search', '不存在的规则987654');
+    assert.deepEqual(await visible(), { articles: [], outline: [] });
+    assert.match(await text('#report-reader-filter-status'), /当前筛选没有核对项.*清除筛选/);
+    await screenshot('reading-search-empty');
+    await activate('#report-reader-reset');
+    assert.equal(await inspect('return document.activeElement.id'), 'report-reader-search');
+    assert.equal(await inspect('return document.querySelector("#report-reader-search").value'), '');
+    assert.deepEqual(await visible(), { articles: allIds, outline: allIds });
+    await fill('#report-reader-search', '隐私');
+    await activate('#report-reader-dismiss'); await closeTools();
+    await fromHistory(artifacts.guide);
+    assert.equal(await inspect('return document.querySelector("#report-reader-search").value'), '');
+    await verifyContent(artifacts.guide); await closeReader(); await closeTools();
   });
   await checked('Closing a handoff resumes the same report, evidence and reading position', async () => {
     await appearance('light');
