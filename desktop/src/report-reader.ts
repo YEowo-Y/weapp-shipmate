@@ -4,12 +4,13 @@ import { createIcon } from '../design-previews/components/icons.js';
 import { renderMessageText } from '../design-previews/components/message-markdown.js';
 import type { Artifact, Project } from './projects';
 import type { QuoteRow, QuoteState } from './report-quote-checks';
+import type { MissingFact } from './workflow';
 import './context.css';
 import './report-reader.css';
 
 // createHandoff validates these fields before this presentation-only narrowing.
-type ReadingItem = { conditional: boolean; rejectSummary: string | null; relevance?: 'direct' | 'possible'; matchEvidence?: { aliases: string[]; codes: string[]; partialAliases: string[] }; rule: { ruleId: string; title: string; severity: 'blocker' | 'warning' | 'info'; why?: string | null; requires: string[]; official_url?: string | null; source_quote?: string | null; last_verified?: string | null; manual_required: boolean; warn?: string | null; note?: string | null; action_categories?: string[]; confidence?: 'high' | 'medium' | 'low' } };
-type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(anchor: HTMLElement): void; onRepair?(anchor: HTMLElement): void; onOpenSource?(url: string): Promise<unknown>; mountQuoteChecks?(rulesVersion: string, rows: QuoteRow[], onChange: (completed?: QuoteRow) => void): () => void; returnFocus?(): HTMLElement | null };
+type ReadingItem = { conditional: boolean; rejectSummary: string | null; relevance?: 'direct' | 'possible'; matchEvidence?: { aliases: string[]; codes: string[]; partialAliases: string[] }; rule: { ruleId: string; title: string; stage?: string; severity: 'blocker' | 'warning' | 'info'; why?: string | null; requires: string[]; official_url?: string | null; source_quote?: string | null; last_verified?: string | null; manual_required: boolean; warn?: string | null; note?: string | null; action_categories?: string[]; confidence?: 'high' | 'medium' | 'low' } };
+type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(anchor: HTMLElement): void; onRepair?(anchor: HTMLElement): void; onEditFact?(projectId: string, field: MissingFact, anchor: HTMLElement): boolean; onOpenSource?(url: string): Promise<unknown>; mountQuoteChecks?(rulesVersion: string, rows: QuoteRow[], onChange: (completed?: QuoteRow) => void): () => void; returnFocus?(): HTMLElement | null };
 
 // The export contract intentionally omits run notes and business signals. Validate
 // only these additional reading fields; never derive execution state from prose.
@@ -129,6 +130,20 @@ export function mountReportReader(options: Options) {
       if (item.conditional) {
         const signal = reading?.signals.get(r.ruleId);
         article.append(node('p', signal?.length ? `业务自查线索：${signal.join('、')}。这些线索不代表已在项目中发现相关功能。` : '业务自查线索未提供或未能验证，请结合完整原报告人工判断适用性。'));
+        const field = r.stage === 'privacy' ? 'collectsSensitive' : r.stage === 'domain' ? 'hasServerDomain' : null;
+        if (field && options.onEditFact && source.provenance !== 'imported' && project && source.projectId === project.id && project.facts?.[field] == null) {
+          const edit = node('button', field === 'collectsSensitive' ? '补充隐私事实' : '补充域名事实');
+          edit.type = 'button'; edit.dataset.readerFact = field; edit.className = 'report-reader-fact';
+          edit.addEventListener('click', () => {
+            if (disposed || !dialog.open) return;
+            const current = options.getProject();
+            if (options.getArtifact()?.id !== snapshotId || current?.id !== source.projectId || current?.facts?.[field] != null) {
+              linkStatus.textContent = '报告或项目事实已变化，请重新生成清单后核对。'; return;
+            }
+            if (!options.onEditFact!(current.id, field, edit)) linkStatus.textContent = '当前操作尚未结束，请稍后重试。';
+          });
+          article.append(edit);
+        }
       }
       if (item.rejectSummary) article.append(node('p', `匹配拒因：${item.rejectSummary}`));
       if (item.relevance && item.matchEvidence) article.append(node('p', `${item.relevance === 'direct' ? '直接相关' : '可能相关'} · 匹配依据：${[...item.matchEvidence.aliases, ...item.matchEvidence.codes, ...item.matchEvidence.partialAliases].join('、')}。相关性不表示已确认违规。`));
