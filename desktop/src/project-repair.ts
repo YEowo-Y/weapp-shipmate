@@ -10,6 +10,7 @@ type RepairResult = { operationId: string; projectId: string; createdAt: number;
 type Options = { getProjectId(): string | null; isBusy(): boolean; onRecheck(projectId: string): Promise<Artifact>; onReadReport?(artifact: Artifact, anchor: HTMLElement | null, returnToRecord: (anchor: HTMLElement) => boolean): boolean };
 type Source = { kind: 'apply'; artifactId: string } | { kind: 'undo' | 'recovery'; operationId: string };
 const writeLabels = { applied: '已写入 app.json', not_applied: '未写入文件', recovery_required: '需要恢复文件', undone: '已恢复原文件' };
+const historyLabels = { all: '全部记录', recheck_required: '待复检', recheck_completed: '已关联复检', ...writeLabels };
 const date = (value: number) => new Date(value).toLocaleString('zh-CN', { hour12: false });
 
 /** Writes only invoke native, hash-bound plans after an explicit local approval. */
@@ -53,7 +54,7 @@ export function mountProjectRepair(options: Options) {
   const filters = node('div'); filters.className = 'project-repair-filters';
   const filterLabel = node('label', '记录状态'); filterLabel.htmlFor = 'repair-history-filter';
   const filter = node('select', '', 'repair-history-filter');
-  for (const [value, label] of [['all', '全部记录'], ...Object.entries(writeLabels)]) { const option = node('option', label); option.value = value; filter.append(option); }
+  for (const [value, label] of Object.entries(historyLabels)) { const option = node('option', label); option.value = value; filter.append(option); }
   const historyCount = node('span', '', 'repair-history-count'); historyCount.setAttribute('role', 'status');
   const resetFilter = button('显示全部', 'repair-history-reset', 'plain'); resetFilter.hidden = true;
   filters.append(filterLabel, filter, historyCount, resetFilter);
@@ -107,13 +108,18 @@ export function mountProjectRepair(options: Options) {
   }
   const canRecheck = (operation: RepairResult) => operation.projectId === projectId && operation.recheckState === 'required'
     && (operation.kind === 'apply' ? operation.writeState === 'applied' : operation.writeState === 'undone');
+  const matchesFilter = (operation: RepairResult, value = filter.value) => value === 'all'
+    || (value === 'recheck_required' ? canRecheck(operation) : value === 'recheck_completed'
+      ? operation.projectId === projectId && operation.recheckState === 'completed' && !!operation.recheckArtifactId
+      : operation.writeState === value);
   function renderHistory() {
     history.replaceChildren();
-    const visible = operations.filter(operation => filter.value === 'all' || operation.writeState === filter.value);
+    for (const option of Array.from(filter.options)) option.textContent = `${historyLabels[option.value as keyof typeof historyLabels]} ${operations.filter(operation => matchesFilter(operation, option.value)).length}`;
+    const visible = operations.filter(operation => matchesFilter(operation));
     historyCount.textContent = `${visible.length} / ${operations.length} 条记录`;
     resetFilter.hidden = filter.value === 'all';
     if (!operations.length) { history.append(node('p', '尚无本机修复记录。预览不会修改文件或建立成功记录。')); return; }
-    if (!visible.length) { history.append(node('p', '此状态下没有修复记录。')); return; }
+    if (!visible.length) { history.append(node('p', filter.value === 'recheck_required' ? '当前没有待复检记录。需恢复的文件请查看“需要恢复文件”。' : filter.value === 'recheck_completed' ? '当前没有已关联复检报告的记录。' : '此状态下没有修复记录。')); return; }
     for (const operation of visible) {
       const row = node('article'); row.className = 'project-repair-operation'; row.dataset.writeState = operation.writeState; row.dataset.operationId = operation.operationId;
       row.append(node('h4', `${writeLabels[operation.writeState]} · ${date(operation.createdAt)}`), node('p', operation.message));
@@ -165,7 +171,7 @@ export function mountProjectRepair(options: Options) {
         if (!current(token)) return;
         const record = operations.find(item => item.operationId === operation.operationId && item.projectId === operation.projectId);
         if (!record) { message('这条修复记录已不可用。当前项目的其余记录仍可查看。', true); return; }
-        if (filter.value !== 'all' && filter.value !== record.writeState) { filter.value = 'all'; renderHistory(); }
+        if (!matchesFilter(record)) { filter.value = 'all'; renderHistory(); }
         const row = Array.from(history.querySelectorAll<HTMLElement>('.project-repair-operation')).find(item => item.dataset.operationId === operation.operationId);
         if (row) { row.tabIndex = -1; target = row.querySelector<HTMLElement>('[data-repair-action="read-report"]') ?? row; }
         message('已返回对应修复记录，状态已重新读取。');
