@@ -7,7 +7,7 @@ import './project-repair.css';
 
 type RepairPlan = { planId: string; expiresAt: number; projectId: string; file: 'app.json'; before: string; after: string; missingApis: string[]; evidence: { file: string; apis: string[] }[]; warnings: string[]; kind: 'apply' | 'undo' | 'recovery' };
 type RepairResult = { operationId: string; projectId: string; createdAt: number; kind: RepairPlan['kind']; writeState: 'applied' | 'not_applied' | 'recovery_required' | 'undone'; recheckState: 'required' | 'not_required' | 'completed'; recheckArtifactId?: string; undoAvailable: boolean; recoveryAvailable: boolean; backupPath: string; message: string };
-type Options = { getProjectId(): string | null; isBusy(): boolean; onRecheck(projectId: string): Promise<Artifact>; onReadReport?(artifact: Artifact, anchor: HTMLElement | null): boolean };
+type Options = { getProjectId(): string | null; isBusy(): boolean; onRecheck(projectId: string): Promise<Artifact>; onReadReport?(artifact: Artifact, anchor: HTMLElement | null, returnToRecord: (anchor: HTMLElement) => boolean): boolean };
 type Source = { kind: 'apply'; artifactId: string } | { kind: 'undo' | 'recovery'; operationId: string };
 const writeLabels = { applied: '已写入 app.json', not_applied: '未写入文件', recovery_required: '需要恢复文件', undone: '已恢复原文件' };
 const date = (value: number) => new Date(value).toLocaleString('zh-CN', { hour12: false });
@@ -115,7 +115,7 @@ export function mountProjectRepair(options: Options) {
     if (!operations.length) { history.append(node('p', '尚无本机修复记录。预览不会修改文件或建立成功记录。')); return; }
     if (!visible.length) { history.append(node('p', '此状态下没有修复记录。')); return; }
     for (const operation of visible) {
-      const row = node('article'); row.className = 'project-repair-operation'; row.dataset.writeState = operation.writeState;
+      const row = node('article'); row.className = 'project-repair-operation'; row.dataset.writeState = operation.writeState; row.dataset.operationId = operation.operationId;
       row.append(node('h4', `${writeLabels[operation.writeState]} · ${date(operation.createdAt)}`), node('p', operation.message));
       if (operation.backupPath) row.append(node('p', `备份：${operation.backupPath}`));
       if (operation.recheckState === 'completed') row.append(node('p', '写入后的本机源码复检已完成并关联报告；这不代表官方审核通过。'));
@@ -154,6 +154,30 @@ export function mountProjectRepair(options: Options) {
     catch (error) { if (current(token)) message(`修复记录读取失败：${String(error instanceof Error ? error.message : error)}。可重试，原文件状态未由此次读取改变。`, true); }
     finally { if (token === epoch) { busy = false; sync(); } }
   }
+  function returnToRecord(operation: RepairResult, savedFilter: string, anchor: HTMLElement) {
+    if (options.getProjectId() !== operation.projectId || !open(anchor)) return false;
+    filter.value = savedFilter;
+    const token = ++epoch; busy = true; sync(); message('正在读取对应修复记录…');
+    void (async () => {
+      let target: HTMLElement | undefined;
+      try {
+        await loadHistory(token);
+        if (!current(token)) return;
+        const record = operations.find(item => item.operationId === operation.operationId && item.projectId === operation.projectId);
+        if (!record) { message('这条修复记录已不可用。当前项目的其余记录仍可查看。', true); return; }
+        if (filter.value !== 'all' && filter.value !== record.writeState) { filter.value = 'all'; renderHistory(); }
+        const row = Array.from(history.querySelectorAll<HTMLElement>('.project-repair-operation')).find(item => item.dataset.operationId === operation.operationId);
+        if (row) { row.tabIndex = -1; target = row.querySelector<HTMLElement>('[data-repair-action="read-report"]') ?? row; }
+        message('已返回对应修复记录，状态已重新读取。');
+      } catch (error) {
+        if (current(token)) message(`修复记录读取失败：${String(error instanceof Error ? error.message : error)}。请刷新修复记录重试。`, true);
+      } finally {
+        if (token === epoch) { busy = false; sync(); }
+        if (current(token) && target && document.activeElement === dismiss) { target.focus({ preventScroll: true }); target.scrollIntoView({ block: 'nearest' }); }
+      }
+    })();
+    return true;
+  }
   async function readReport(operation: RepairResult) {
     if (blocked() || !operations.includes(operation) || operation.projectId !== projectId || operation.recheckState !== 'completed' || !operation.recheckArtifactId || !options.onReadReport) return;
     const token = ++epoch;
@@ -162,7 +186,8 @@ export function mountProjectRepair(options: Options) {
       const artifact = await invoke<Artifact>('project_artifact', { artifactId: operation.recheckArtifactId, localProjectId: operation.projectId });
       if (!current(token)) return;
       if (artifact.id !== operation.recheckArtifactId || artifact.projectId !== operation.projectId || artifact.kind !== 'check' || artifact.provenance === 'imported' || typeof artifact.markdown !== 'string' || !artifact.markdown.trim()) throw Error('报告与本次修复记录不匹配或内容不可用。');
-      if (options.isBusy() || !options.onReadReport(artifact, opener)) message('当前操作尚未结束，暂时无法打开报告，请稍后重试。', true);
+      const savedFilter = filter.value;
+      if (options.isBusy() || !options.onReadReport(artifact, opener, anchor => returnToRecord(operation, savedFilter, anchor))) message('当前操作尚未结束，暂时无法打开报告，请稍后重试。', true);
     } catch (error) {
       if (current(token)) message(`无法读取本次复检报告：${String(error instanceof Error ? error.message : error)}。可重试或到项目成果中核对；原修复记录保留。`, true);
     } finally { if (token === epoch) { busy = false; sync(); } }
