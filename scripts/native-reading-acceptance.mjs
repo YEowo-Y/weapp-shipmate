@@ -409,6 +409,24 @@ export async function checkReadingFlows({ run, checked, click, fill, press, insp
     await screenshot('workflow-next-missing-fact');
     await activate('#workflow-close');
   });
+  await checked('Conditional report entries open the matching project fact without saving or replacing drafts', async () => {
+    const before = await projectInvoke('project_workflow', { projectId });
+    const draft = '保留尚未保存的业务核对草稿';
+    for (const field of ['collectsSensitive', 'hasServerDomain']) {
+      assert.equal(before.project.facts[field], null);
+      await fromHistory(artifacts.guide);
+      const entry = `#report-reader-content [data-reader-fact="${field}"]`;
+      await activate(entry);
+      await until(() => inspect('return document.querySelector("#desktop-workflow").open && !document.querySelector("#workflow-content").hidden && !document.querySelector("#workflow-retry").disabled && document.activeElement.id === arguments[0]', [`workflow-${field}`]), `report opens the ${field} fact field`);
+      assert.equal(await inspect('return document.querySelector("#workflow-facts").open'), true);
+      assert.equal(await inspect('return document.querySelector("#workflow-businessType").value'), draft);
+      assert.equal(await inspect('return document.querySelector(arguments[0]).value', [`#workflow-${field}`]), 'unknown');
+      assert.deepEqual(await projectInvoke('project_workflow', { projectId }), before, 'report navigation never saves facts or changes confirmations');
+      assert.deepEqual(await projectInvoke('project_artifact', { artifactId: artifacts.guide.id }), artifacts.guide, 'original guide remains a saved snapshot');
+      await screenshot(`reading-missing-fact-${field}`);
+      await activate('#workflow-close');
+    }
+  });
   await checked('Reading leaves files, persisted artifacts and tool counts unchanged with no model requests', async () => {
     assert.deepEqual((await readdir(directory)).sort(), Object.keys(files).sort());
     for (const [name, content] of Object.entries(files)) assert.equal(await readFile(resolve(directory, name), 'utf8'), content);
