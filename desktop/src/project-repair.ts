@@ -45,7 +45,7 @@ export function mountProjectRepair(options: Options) {
   business.append(businessCheck, node('span', '我已核对上述接口属于当前业务确实需要的能力，并确认这份 app.json 改动。'));
   preview.append(previewTitle, basis, apis, evidence, warning, comparison, business);
   const result = node('p', '', 'repair-result'); result.setAttribute('role', 'status'); result.setAttribute('aria-atomic', 'true');
-  const recheckStatus = node('p', '', 'repair-recheck-status'); recheckStatus.setAttribute('role', 'status');
+  const recheckStatus = node('p', '', 'repair-recheck-status'); recheckStatus.setAttribute('role', 'status'); recheckStatus.tabIndex = -1;
   const resultNote = node('p', '写入不是原子替换：应用先保存备份，再独占写入文件。普通撤销不会覆盖后续编辑。若写入被中断，请从修复记录重新预览并确认恢复；恢复将使用备份中的完整内容。', 'repair-method-note');
   const historySection = node('section'); historySection.className = 'project-repair-history'; historySection.setAttribute('aria-labelledby', 'repair-history-title');
   const historyHeader = node('div'); historyHeader.className = 'project-repair-history-header';
@@ -105,6 +105,8 @@ export function mountProjectRepair(options: Options) {
     if (!current(token)) return;
     operations = snapshot.operations; renderHistory();
   }
+  const canRecheck = (operation: RepairResult) => operation.projectId === projectId && operation.recheckState === 'required'
+    && (operation.kind === 'apply' ? operation.writeState === 'applied' : operation.writeState === 'undone');
   function renderHistory() {
     history.replaceChildren();
     const visible = operations.filter(operation => filter.value === 'all' || operation.writeState === filter.value);
@@ -117,7 +119,11 @@ export function mountProjectRepair(options: Options) {
       row.append(node('h4', `${writeLabels[operation.writeState]} · ${date(operation.createdAt)}`), node('p', operation.message));
       if (operation.backupPath) row.append(node('p', `备份：${operation.backupPath}`));
       if (operation.recheckState === 'completed') row.append(node('p', '写入后的本机源码复检已完成并关联报告；这不代表官方审核通过。'));
-      if (operation.recheckState === 'required') row.append(node('p', '写入记录不证明源码复检通过，请查看此项目最新预检报告。'));
+      if (operation.recheckState === 'required') row.append(node('p', canRecheck(operation) ? '本次文件操作尚未关联复检报告。可重新复检当前源码，原修复记录与备份保留。' : '本次操作未关联复检报告，请查看后续恢复记录或项目最新预检报告。'));
+      if (canRecheck(operation)) {
+        const retry = button('重新复检', ''); retry.dataset.repairAction = 'recheck'; retry.dataset.operationId = operation.operationId;
+        retry.addEventListener('click', () => { void retryRecheck(operation, retry); }); row.append(retry);
+      }
       if (operation.projectId === projectId && (operation.undoAvailable || operation.recoveryAvailable)) {
         const kind = operation.recoveryAvailable ? 'recovery' : 'undo';
         const action = button(kind === 'recovery' ? '预览中断恢复' : '预览撤销', ''); action.dataset.repairAction = `${kind}-preview`; action.dataset.operationId = operation.operationId;
@@ -144,6 +150,37 @@ export function mountProjectRepair(options: Options) {
     catch (error) { if (current(token)) message(`修复记录读取失败：${String(error instanceof Error ? error.message : error)}。可重试，原文件状态未由此次读取改变。`, true); }
     finally { if (token === epoch) { busy = false; sync(); } }
   }
+  async function checkAndRecord(operation: RepairResult, token: number) {
+    recheckStatus.textContent = '文件操作已完成，正在运行本机源码复检…';
+    let checked = false;
+    try {
+      const artifact = await options.onRecheck(operation.projectId); checked = true;
+      if (!current(token)) return;
+      await invoke('project_repair_record_recheck', { operationId: operation.operationId, artifactId: artifact.id });
+      if (current(token)) recheckStatus.textContent = '本机源码复检已完成并关联报告，请阅读新报告；这不代表官方审核通过。';
+    } catch (error) {
+      if (current(token)) recheckStatus.textContent = `文件操作已完成，但${checked ? '复检报告关联未完成' : '复检未完成'}：${String(error instanceof Error ? error.message : error)}。可在本条修复记录中重新复检；撤销或恢复仍需另外预览并确认。`;
+    }
+  }
+  async function retryRecheck(operation: RepairResult, trigger: HTMLElement) {
+    if (blocked() || !operations.includes(operation) || !canRecheck(operation)) return;
+    const token = ++epoch;
+    busy = true; plan = null; source = null; businessCheck.checked = false; preview.hidden = true;
+    result.textContent = `${writeLabels[operation.writeState]}。${operation.message}`;
+    sync(); message('正在复检当前源码，本次操作不会再次写入项目文件。');
+    try {
+      await checkAndRecord(operation, token);
+      if (current(token)) {
+        await loadHistory(token);
+        if (current(token)) message('请核对本次复检状态与报告。');
+      }
+    } catch {
+      if (current(token)) message('复检状态已返回，但修复记录刷新失败。请刷新修复记录核对。', true);
+    } finally {
+      if (token === epoch) { busy = false; sync(); }
+      if (current(token) && (document.activeElement === trigger || document.activeElement === document.body)) recheckStatus.focus();
+    }
+  }
   async function commit() {
     if (blocked() || !plan) return;
     if (plan.expiresAt <= Date.now()) { plan = null; message('方案已过期，请重新预览后再确认。', true); sync(); return; }
@@ -157,14 +194,7 @@ export function mountProjectRepair(options: Options) {
       result.textContent = `${writeLabels[outcome.writeState]}。${outcome.message}${outcome.backupPath ? ` 备份：${outcome.backupPath}` : ''}`;
       if (outcome.projectId !== projectId) throw Error('操作结果项目不一致，请刷新对应项目的修复记录核对。');
       if (outcome.recheckState === 'required' && ['applied', 'undone'].includes(outcome.writeState)) {
-        recheckStatus.textContent = '文件操作已完成，正在运行本机源码复检…';
-        let checked = false;
-        try {
-          const artifact = await options.onRecheck(outcome.projectId); checked = true;
-          await invoke('project_repair_record_recheck', { operationId: outcome.operationId, artifactId: artifact.id });
-          if (current(token)) recheckStatus.textContent = '本机源码复检已完成并关联报告，请阅读新报告；这不代表官方审核通过。';
-        }
-        catch (error) { if (current(token)) recheckStatus.textContent = `文件操作已完成，但${checked ? '复检报告关联未完成' : '复检未完成'}：${String(error instanceof Error ? error.message : error)}。请重新运行预检；仍可从修复记录预览撤销或恢复。`; }
+        await checkAndRecord(outcome, token);
       } else if (outcome.writeState === 'recovery_required') recheckStatus.textContent = '文件需要恢复。请先查看修复记录中的中断恢复预览，暂不要继续编辑此文件。';
       if (current(token)) {
         message('请核对文件操作结果与后续检查状态。');
