@@ -7,7 +7,7 @@ import './project-repair.css';
 
 type RepairPlan = { planId: string; expiresAt: number; projectId: string; file: 'app.json'; before: string; after: string; missingApis: string[]; evidence: { file: string; apis: string[] }[]; warnings: string[]; kind: 'apply' | 'undo' | 'recovery' };
 type RepairResult = { operationId: string; projectId: string; createdAt: number; kind: RepairPlan['kind']; writeState: 'applied' | 'not_applied' | 'recovery_required' | 'undone'; recheckState: 'required' | 'not_required' | 'completed'; recheckArtifactId?: string; undoAvailable: boolean; recoveryAvailable: boolean; backupPath: string; message: string };
-type Options = { getProjectId(): string | null; isBusy(): boolean; onRecheck(projectId: string): Promise<Artifact> };
+type Options = { getProjectId(): string | null; isBusy(): boolean; onRecheck(projectId: string): Promise<Artifact>; onReadReport?(artifact: Artifact, anchor: HTMLElement | null): boolean };
 type Source = { kind: 'apply'; artifactId: string } | { kind: 'undo' | 'recovery'; operationId: string };
 const writeLabels = { applied: '已写入 app.json', not_applied: '未写入文件', recovery_required: '需要恢复文件', undone: '已恢复原文件' };
 const date = (value: number) => new Date(value).toLocaleString('zh-CN', { hour12: false });
@@ -120,6 +120,10 @@ export function mountProjectRepair(options: Options) {
       if (operation.backupPath) row.append(node('p', `备份：${operation.backupPath}`));
       if (operation.recheckState === 'completed') row.append(node('p', '写入后的本机源码复检已完成并关联报告；这不代表官方审核通过。'));
       if (operation.recheckState === 'required') row.append(node('p', canRecheck(operation) ? '本次文件操作尚未关联复检报告。可重新复检当前源码，原修复记录与备份保留。' : '本次操作未关联复检报告，请查看后续恢复记录或项目最新预检报告。'));
+      if (operation.projectId === projectId && operation.recheckState === 'completed' && operation.recheckArtifactId && options.onReadReport) {
+        const read = button('查看复检报告', ''); read.dataset.repairAction = 'read-report'; read.dataset.operationId = operation.operationId;
+        read.addEventListener('click', () => { void readReport(operation); }); row.append(read);
+      }
       if (canRecheck(operation)) {
         const retry = button('重新复检', ''); retry.dataset.repairAction = 'recheck'; retry.dataset.operationId = operation.operationId;
         retry.addEventListener('click', () => { void retryRecheck(operation, retry); }); row.append(retry);
@@ -149,6 +153,19 @@ export function mountProjectRepair(options: Options) {
     try { await loadHistory(token); if (current(token)) message('记录已更新。撤销或恢复都需要重新预览并确认，不会自动执行。'); }
     catch (error) { if (current(token)) message(`修复记录读取失败：${String(error instanceof Error ? error.message : error)}。可重试，原文件状态未由此次读取改变。`, true); }
     finally { if (token === epoch) { busy = false; sync(); } }
+  }
+  async function readReport(operation: RepairResult) {
+    if (blocked() || !operations.includes(operation) || operation.projectId !== projectId || operation.recheckState !== 'completed' || !operation.recheckArtifactId || !options.onReadReport) return;
+    const token = ++epoch;
+    busy = true; sync(); message('正在读取本次修复关联的复检报告…');
+    try {
+      const artifact = await invoke<Artifact>('project_artifact', { artifactId: operation.recheckArtifactId, localProjectId: operation.projectId });
+      if (!current(token)) return;
+      if (artifact.id !== operation.recheckArtifactId || artifact.projectId !== operation.projectId || artifact.kind !== 'check' || artifact.provenance === 'imported' || typeof artifact.markdown !== 'string' || !artifact.markdown.trim()) throw Error('报告与本次修复记录不匹配或内容不可用。');
+      if (options.isBusy() || !options.onReadReport(artifact, opener)) message('当前操作尚未结束，暂时无法打开报告，请稍后重试。', true);
+    } catch (error) {
+      if (current(token)) message(`无法读取本次复检报告：${String(error instanceof Error ? error.message : error)}。可重试或到项目成果中核对；原修复记录保留。`, true);
+    } finally { if (token === epoch) { busy = false; sync(); } }
   }
   async function checkAndRecord(operation: RepairResult, token: number) {
     recheckStatus.textContent = '文件操作已完成，正在运行本机源码复检…';
@@ -222,7 +239,7 @@ export function mountProjectRepair(options: Options) {
   refreshPlan.addEventListener('click', () => { if (source) void prepare(source); });
   confirm.addEventListener('click', () => { void commit(); }); businessCheck.addEventListener('change', sync);
   dialog.addEventListener('cancel', event => { if (writing) event.preventDefault(); });
-  dialog.addEventListener('close', () => { epoch++; if (!writing) busy = false; plan = null; source = null; businessCheck.checked = false; opener?.setAttribute('aria-expanded', 'false'); if (!disposed && opener?.isConnected) opener.focus(); });
+  dialog.addEventListener('close', () => { epoch++; if (!writing) busy = false; plan = null; source = null; businessCheck.checked = false; opener?.setAttribute('aria-expanded', 'false'); if (!disposed && opener?.isConnected && (document.activeElement === document.body || dialog.contains(document.activeElement))) opener.focus(); });
   dialog.addEventListener('keydown', event => {
     if (event.key !== 'Tab' || event.defaultPrevented || event.ctrlKey || event.altKey || event.metaKey) return;
     const target = event.shiftKey && document.activeElement === dismiss ? done : !event.shiftKey && document.activeElement === done ? dismiss : null;
@@ -236,7 +253,7 @@ export function mountProjectRepair(options: Options) {
       void prepare({ kind: 'apply', artifactId: artifact.id });
     },
     openHistory(anchor?: HTMLElement | null) { if (open(anchor) && projectId) void readHistory(); },
-    sync,
+    sync, close,
     destroy() { disposed = true; epoch++; plan = null; source = null; opener?.setAttribute('aria-expanded', 'false'); dialog.remove(); },
   };
 }
