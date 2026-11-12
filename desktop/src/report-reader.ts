@@ -190,6 +190,25 @@ export function mountReportReader(options: Options) {
     }
 
     summary.setAttribute('role', 'group'); summary.setAttribute('aria-label', '筛选报告核对项');
+    const search = node('input', '', 'report-reader-search'); search.type = 'search'; search.value = '';
+    search.placeholder = '标题、规则编号或处理要求'; search.maxLength = 256;
+    search.setAttribute('aria-controls', 'report-reader-content report-reader-outline');
+    const searchLabel = node('label', '查找核对项'); searchLabel.className = 'report-reader-search'; searchLabel.append(search);
+    const reset = node('button', '清除筛选', 'report-reader-reset'); reset.type = 'button'; reset.hidden = true;
+    const searchBar = node('div'); searchBar.className = 'report-reader-searchbar'; searchBar.append(searchLabel, reset); summary.append(searchBar);
+    const searchText = items.map(({ rule }) => [rule.title, rule.ruleId, ...rule.requires].join('\n').toLowerCase());
+    let query = '';
+    function searchItems() { query = search.value.trim(); interacted = true; updateFilters(); outline.scrollTop = 0; }
+    search.addEventListener('input', event => { if (!(event as InputEvent).isComposing) searchItems(); });
+    search.addEventListener('compositionend', searchItems);
+    search.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || event.isComposing || !search.value) return;
+      event.preventDefault(); event.stopPropagation(); search.value = ''; searchItems();
+    });
+    reset.addEventListener('click', () => {
+      search.value = ''; query = ''; actionFilter.value = 'all'; quoteFilter.value = 'all';
+      selectCategory('all'); search.focus({ preventScroll: true });
+    });
     const categories = { all: '全部', ...labels, conditional: '条件自查' };
     const actionLabels: Record<string, string> = { all: '全部方式' };
     for (const action of ['code', 'console', 'materials', 'manual_check']) actionLabels[action] = formatRuleActions({ action_categories: [action] });
@@ -234,7 +253,7 @@ export function mountReportReader(options: Options) {
       let completion = '';
       for (const [i, row] of rows.entries()) {
         const state = quoteRows[i]?.state;
-        const inCategory = category === 'all' || row.category === category;
+        const inCategory = (category === 'all' || row.category === category) && searchText[i].includes(query.toLowerCase());
         const inAction = action === 'all' || actions[i].includes(action);
         const inQuote = selected === 'all' || state === selected;
         if (inCategory && inQuote) {
@@ -269,12 +288,13 @@ export function mountReportReader(options: Options) {
       for (const option of quoteOptions) option.textContent = `${quoteLabels[option.value as keyof typeof quoteLabels]} ${counts.get(option.value) ?? 0}`;
       for (const option of actionOptions) option.textContent = `${actionLabels[option.value]} ${actionCounts.get(option.value) ?? 0}`;
       outline.hidden = !visibleCount;
-      priority.hidden = selected !== 'all' || action !== 'all';
+      priority.hidden = selected !== 'all' || action !== 'all' || !!query;
+      reset.hidden = category === 'all' && selected === 'all' && action === 'all' && !query;
       jumpToQuote.hidden = selected === 'all' || !visibleCount;
       if (!interacted) return;
-      const names = [category !== 'all' && categories[category as keyof typeof categories], action !== 'all' && actionLabels[action], selected !== 'all' && quoteLabels[selected]].filter(Boolean).join(' · ');
+      const names = [query && `“${query}”`, category !== 'all' && categories[category as keyof typeof categories], action !== 'all' && actionLabels[action], selected !== 'all' && quoteLabels[selected]].filter(Boolean).join(' · ');
       filterStatus.textContent = completion + (names ? `显示${names} ${visibleCount} 项，共 ${rows.length} 项` : `已显示全部 ${rows.length} 项`);
-      if (!visibleCount) filterStatus.textContent += '。当前筛选没有核对项，请切换处理方式、级别或引文状态。';
+      if (!visibleCount) filterStatus.textContent += '。当前筛选没有核对项，请更换关键词或清除筛选。';
     }
     const jumpToQuote = node('button', '查看首条引文与依据', 'report-reader-quote-jump');
     jumpToQuote.type = 'button'; jumpToQuote.hidden = true;
@@ -298,7 +318,7 @@ export function mountReportReader(options: Options) {
     const jump = node('button', '查看核对要求'); jump.type = 'button'; jump.setAttribute('aria-controls', rows[first].heading.id);
     jump.addEventListener('click', () => {
       if (disposed || !dialog.open) return;
-      actionFilter.value = 'all'; quoteFilter.value = 'all'; selectCategory('all');
+      search.value = ''; query = ''; actionFilter.value = 'all'; quoteFilter.value = 'all'; selectCategory('all');
       const heading = rows[first].heading; heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'start', behavior: 'instant' });
     });
     priority.append(jump);
