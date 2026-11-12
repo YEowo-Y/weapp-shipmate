@@ -63,14 +63,18 @@ export function mountReportReader(options: Options) {
   column.append(content, original, versions); layout.append(outline, column); body.append(summary, filterStatus, priority, provenance, warning, context, linkStatus, layout);
   const footer = node('footer'); footer.className = 'report-reader-footer';
   const repair = button('检查可用修复', 'report-reader-repair');
-  const handoff = button('准备修复交接', 'report-reader-handoff'); footer.append(repair, handoff);
+  const backToRepair = button('返回修复记录', 'report-reader-back-to-repair'); backToRepair.hidden = true;
+  const handoff = button('准备修复交接', 'report-reader-handoff'); footer.append(backToRepair, repair, handoff);
   dialog.append(header, body, footer); document.body.append(dialog);
   let trigger: HTMLElement | null = null, disposed = false, snapshotId: string | null = null, epoch = 0;
   let disposeChecks: (() => void) | undefined;
+  let repairOrigin: { artifactId: string; projectId: string | null; open(anchor: HTMLElement): boolean } | null = null;
   const visible = (element: HTMLElement | null | undefined): element is HTMLElement => !!element?.isConnected && element.getClientRects().length > 0;
   function render(artifact = options.getArtifact()) {
     disposeChecks?.(); disposeChecks = undefined;
     snapshotId = artifact?.id ?? null;
+    if (repairOrigin?.artifactId !== snapshotId) repairOrigin = null;
+    backToRepair.hidden = !repairOrigin;
     filterStatus.textContent = ''; priority.replaceChildren(); priority.hidden = true;
     summary.replaceChildren(); summary.removeAttribute('role'); summary.removeAttribute('aria-label');
     provenance.textContent = ''; versions.hidden = true; versions.open = false; versionText.textContent = ''; linkStatus.textContent = '';
@@ -296,6 +300,13 @@ export function mountReportReader(options: Options) {
       if (!disposed && dialog.open && epoch === token) linkStatus.textContent = '无法打开外部页面，请检查系统默认浏览器后再次点击该链接重试。';
     });
   });
+  backToRepair.addEventListener('click', () => {
+    if (disposed || !dialog.open || !repairOrigin) return;
+    if (options.getArtifact()?.id !== repairOrigin.artifactId || options.getProject()?.id !== repairOrigin.projectId) {
+      linkStatus.textContent = '当前报告或项目已变化，请从对应项目重新打开修复记录。'; return;
+    }
+    if (!repairOrigin.open(backToRepair)) linkStatus.textContent = '当前操作尚未结束，暂时无法返回修复记录，请稍后重试。';
+  });
   dismiss.addEventListener('click', close);
   repair.addEventListener('click', () => {
     if (!dialog.open || repair.hidden || disposed) return;
@@ -323,9 +334,11 @@ export function mountReportReader(options: Options) {
     const target = visible(trigger) ? trigger : options.returnFocus?.(); if (!options.openPage && visible(target)) target.focus();
   });
   return {
-    open(anchor: HTMLElement | null) {
+    open(anchor: HTMLElement | null, returnToRepair?: (anchor: HTMLElement) => boolean) {
       if (disposed || dialog.open) return;
-      epoch++; trigger = anchor; render(); if (options.openPage) { if (!options.openPage(dialog, anchor)) return; } else dialog.showModal();
+      const artifact = options.getArtifact();
+      repairOrigin = returnToRepair && artifact ? { artifactId: artifact.id, projectId: artifact.projectId, open: returnToRepair } : null;
+      epoch++; trigger = anchor; render(artifact); if (options.openPage) { if (!options.openPage(dialog, anchor)) return; } else dialog.showModal();
       // A hidden dialog has no scroll box: reset after it participates in layout.
       body.scrollTop = 0; outline.scrollTop = 0;
       trigger?.setAttribute('aria-expanded', 'true'); dismiss.focus();
