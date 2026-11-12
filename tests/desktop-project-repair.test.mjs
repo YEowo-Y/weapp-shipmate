@@ -14,7 +14,7 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
 const artifact = { id: 'a1', projectId: 'p1', kind: 'check' };
 const plan = kind => ({ planId: `plan-${kind}`, projectId: 'p1', file: 'app.json', expiresAt: Date.now() + 300000, before: '{"pages":[]}', after: '{"pages":[],"requiredPrivateInfos":["getLocation"]}', missingApis: ['getLocation'], evidence: [{ file: 'pages/index.js', apis: ['getLocation'] }], warnings: ['非原子写入；保留恢复备份'], kind });
 const result = (writeState = 'applied') => ({ operationId: 'op1', projectId: 'p1', kind: 'apply', createdAt: Date.now(), writeState, recheckState: 'required', undoAvailable: writeState === 'applied', recoveryAvailable: writeState === 'recovery_required', backupPath: 'C:/backup/app.json', message: '原生处理结果' });
-function harness({ invoke: custom, recheck = async () => ({ ...artifact, id: 'recheck-1' }) } = {}) {
+function harness({ invoke: custom, recheck = async () => ({ ...artifact, id: 'recheck-1' }), onReadReport } = {}) {
   const dom = new JSDOM('<body><button id="opener">打开修复</button></body>'), document = dom.window.document, calls = [], rechecks = [];
   dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
   dom.window.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new dom.window.Event('close')); };
@@ -30,7 +30,7 @@ function harness({ invoke: custom, recheck = async () => ({ ...artifact, id: 're
   };
   const context = vm.createContext({ document, invoke, createIcon, crypto: { randomUUID: () => `request-${++sequence}` }, createActionButton: (doc, label) => Object.assign(doc.createElement('button'), { textContent: label }) });
   vm.runInContext(`${script}\nglobalThis.mount = mountProjectRepair;`, context);
-  const app = context.mount({ getProjectId: () => projectId, isBusy: () => externalBusy, onRecheck: async id => { rechecks.push(id); return await recheck(id); } });
+  const app = context.mount({ getProjectId: () => projectId, isBusy: () => externalBusy, onRecheck: async id => { rechecks.push(id); return await recheck(id); }, onReadReport });
   const node = id => document.getElementById(id), settle = async () => { await setImmediate(); await setImmediate(); };
   const click = async id => { node(id).click(); await settle(); };
   const confirmBusiness = async () => { node('repair-business-confirm').checked = true; node('repair-business-confirm').dispatchEvent(new dom.window.Event('change')); await settle(); };
@@ -51,6 +51,107 @@ test('imported and foreign-project reports cannot request a writable plan', asyn
   for (const bad of [{ ...artifact, provenance: 'imported' }, { ...artifact, projectId: 'other' }, { ...artifact, kind: 'guide' }]) {
     const h = harness(); h.app.openForArtifact(bad); await h.settle();
     assert.equal(h.calls.some(([cmd]) => cmd === 'project_repair_prepare'), false); assert.match(h.node('repair-status').textContent, /本机.*预检/); h.dispose();
+  }
+});
+
+test('completed repair records open their exact local report without rerunning or writing', async () => {
+  const linked = { ...artifact, id: 'linked-old-report', markdown: '原复检报告' };
+  const operations = [
+    { ...result(), recheckState: 'completed', recheckArtifactId: linked.id },
+    { ...result(), operationId: 'pending' },
+    { ...result(), operationId: 'missing-link', recheckState: 'completed' },
+    { ...result(), operationId: 'foreign', projectId: 'other', recheckState: 'completed', recheckArtifactId: 'foreign-report' },
+  ];
+  const opened = [];
+  const h = harness({
+    invoke: cmd => cmd === 'project_repair_snapshot' ? { operations } : cmd === 'project_artifact' ? linked : undefined,
+    onReadReport: (report, anchor) => { opened.push([report, anchor]); h.app.close(); return true; },
+  });
+  h.app.openHistory(h.node('opener')); await h.settle();
+  assert.equal(h.document.querySelectorAll('[data-repair-action="read-report"]').length, 1);
+  h.document.querySelector('[data-repair-action="read-report"]').click(); await h.settle();
+  assert.deepEqual(opened, [[linked, h.node('opener')]]);
+  const reads = h.calls.filter(([cmd]) => cmd === 'project_artifact');
+  assert.equal(reads.length, 1); assert.equal(reads[0][1].artifactId, linked.id); assert.equal(reads[0][1].localProjectId, 'p1');
+  assert.equal(h.node('desktop-repair').open, false);
+  assert.equal(h.rechecks.length, 0);
+  assert.ok(h.calls.every(([cmd]) => ['project_repair_snapshot', 'project_artifact'].includes(cmd)));
+  h.dispose();
+});
+
+test('a delayed repair close event preserves focus already handed to a report', async () => {
+  const h = harness(); h.app.openHistory(h.node('opener')); await h.settle();
+  const dialog = h.node('desktop-repair');
+  dialog.close = () => { dialog.open = false; };
+  h.app.close();
+  const reportControl = h.document.createElement('button'); h.document.body.append(reportControl); reportControl.focus();
+  dialog.dispatchEvent(new h.document.defaultView.Event('close'));
+  assert.equal(h.document.activeElement, reportControl);
+  h.app.openHistory(h.node('opener')); await h.settle();
+  dialog.close = () => { dialog.open = false; dialog.dispatchEvent(new h.document.defaultView.Event('close')); };
+  await h.click('repair-dismiss');
+  assert.equal(h.document.activeElement, h.node('opener'));
+  h.dispose();
+});
+
+test('missing linked report can be retried without substituting another report', async () => {
+  let missing = true, opened = 0;
+  const linked = { ...artifact, id: 'linked', markdown: '报告' };
+  const h = harness({
+    invoke: cmd => {
+      if (cmd === 'project_repair_snapshot') return { operations: [{ ...result(), recheckState: 'completed', recheckArtifactId: 'linked' }] };
+      if (cmd === 'project_artifact') { if (missing) throw Error('报告不存在'); return linked; }
+    },
+    onReadReport: () => { opened++; return true; },
+  });
+  h.app.openHistory(); await h.settle();
+  const read = h.document.querySelector('[data-repair-action="read-report"]');
+  read.click(); await h.settle();
+  assert.equal(opened, 0); assert.equal(read.disabled, false); assert.equal(h.node('desktop-repair').open, true);
+  assert.match(h.node('repair-status').textContent, /无法读取本次复检报告.*报告不存在.*原修复记录保留/);
+  missing = false; read.click(); await h.settle();
+  assert.equal(opened, 1); assert.equal(h.rechecks.length, 0);
+  h.dispose();
+});
+
+test('report links reject mismatched, imported and empty results and preserve the repair dialog', async () => {
+  for (const override of [{ id: 'different' }, { projectId: 'other' }, { kind: 'guide' }, { provenance: 'imported' }, { markdown: '' }]) {
+    let opened = 0;
+    const h = harness({
+      invoke: cmd => cmd === 'project_repair_snapshot' ? { operations: [{ ...result(), recheckState: 'completed', recheckArtifactId: 'linked' }] }
+        : cmd === 'project_artifact' ? { ...artifact, id: 'linked', markdown: '报告', ...override } : undefined,
+      onReadReport: () => { opened++; return true; },
+    });
+    h.app.openHistory(); await h.settle();
+    h.document.querySelector('[data-repair-action="read-report"]').click(); await h.settle();
+    assert.equal(opened, 0); assert.equal(h.node('desktop-repair').open, true);
+    assert.match(h.node('repair-status').textContent, /不匹配或内容不可用/);
+    h.dispose();
+  }
+});
+
+test('late and duplicate linked-report reads cannot navigate after leaving or while another tool is busy', async () => {
+  for (const leave of ['close', 'switch', 'busy', 'destroy', 'navigation-denied']) {
+    const pending = deferred(); let opened = 0;
+    const h = harness({
+      invoke: cmd => cmd === 'project_repair_snapshot' ? { operations: [{ ...result(), recheckState: 'completed', recheckArtifactId: 'linked' }] } : cmd === 'project_artifact' ? pending.promise : undefined,
+      onReadReport: () => { opened++; return false; },
+    });
+    h.app.openHistory(); await h.settle();
+    const read = h.document.querySelector('[data-repair-action="read-report"]');
+    read.click(); read.dispatchEvent(new h.document.defaultView.Event('click')); await h.settle();
+    assert.equal(h.calls.filter(([cmd]) => cmd === 'project_artifact').length, 1);
+    if (leave === 'close') { h.app.close(); h.app.openHistory(); await h.settle(); }
+    if (leave === 'switch') h.setProject('other');
+    if (leave === 'busy') h.setBusy(true);
+    if (leave === 'destroy') h.app.destroy();
+    pending.resolve({ ...artifact, id: 'linked', markdown: '报告' }); await h.settle();
+    assert.equal(opened, leave === 'navigation-denied' ? 1 : 0);
+    if (['busy', 'navigation-denied'].includes(leave)) {
+      assert.equal(h.node('desktop-repair').open, true);
+      assert.match(h.node('repair-status').textContent, /当前操作尚未结束/);
+    }
+    assert.equal(h.rechecks.length, 0); h.dispose();
   }
 });
 
