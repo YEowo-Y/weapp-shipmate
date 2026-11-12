@@ -191,6 +191,18 @@ export function mountReportReader(options: Options) {
 
     summary.setAttribute('role', 'group'); summary.setAttribute('aria-label', '筛选报告核对项');
     const categories = { all: '全部', ...labels, conditional: '条件自查' };
+    const actionLabels: Record<string, string> = { all: '全部方式' };
+    for (const action of ['code', 'console', 'materials', 'manual_check']) actionLabels[action] = formatRuleActions({ action_categories: [action] });
+    const actions = items.map(item => item.rule.action_categories ?? ['manual_check']);
+    const actionFilter = node('select', '', 'report-reader-action-filter');
+    const actionLabel = node('label', '处理方式'); actionLabel.className = 'report-quote-filter';
+    const actionOptions = Object.entries(actionLabels).map(([key, title]) => {
+      const option = node('option', title); option.value = key; actionFilter.append(option); return option;
+    });
+    actionFilter.value = 'all';
+    actionFilter.setAttribute('aria-controls', 'report-reader-content report-reader-outline');
+    actionFilter.addEventListener('change', () => { interacted = true; updateFilters(); outline.scrollTop = 0; });
+    actionLabel.append(actionFilter);
     const quoteLabels: Record<QuoteState | 'all', string> = { all: '全部状态', unchecked: '尚未在线核验', missing: '正文未找到引文', unverified: '无法核验', manual: '需人工核对', matched: '最近一次匹配' };
     let category = 'all', interacted = false;
     const quoteFilter = node('select', '', 'report-reader-quote-filter');
@@ -206,6 +218,7 @@ export function mountReportReader(options: Options) {
       filter.addEventListener('click', () => selectCategory(key));
       filters.push(filter); summary.append(filter);
     }
+    summary.append(actionLabel);
     function selectCategory(key: string) {
       category = key; interacted = true;
       for (const control of filters) control.setAttribute('aria-pressed', String(control.dataset.readerFilter === category));
@@ -214,18 +227,24 @@ export function mountReportReader(options: Options) {
     }
     function updateFilters(completed?: QuoteRow) {
       const selected = (quoteFilter.value || 'all') as keyof typeof quoteLabels;
-      const counts = new Map<string, number>();
+      const action = actionFilter.value || 'all';
+      const counts = new Map<string, number>(), actionCounts = new Map<string, number>();
       visibleIndices = [];
       let lostFocusAt: number | undefined;
       let completion = '';
       for (const [i, row] of rows.entries()) {
         const state = quoteRows[i]?.state;
         const inCategory = category === 'all' || row.category === category;
-        if (inCategory) {
+        const inAction = action === 'all' || actions[i].includes(action);
+        const inQuote = selected === 'all' || state === selected;
+        if (inCategory && inQuote) {
+          for (const key of ['all', ...new Set(actions[i])]) actionCounts.set(key, (actionCounts.get(key) ?? 0) + 1);
+        }
+        if (inCategory && inAction) {
           counts.set('all', (counts.get('all') ?? 0) + 1);
           if (state) counts.set(state, (counts.get(state) ?? 0) + 1);
         }
-        const hidden = !inCategory || (selected !== 'all' && state !== selected);
+        const hidden = !inCategory || !inAction || !inQuote;
         if (hidden && !row.article.hidden && completed && completed === quoteRows[i]) completion = `${items[i].rule.title}：${completed.status.textContent}。`;
         if (hidden && (row.article.contains(document.activeElement) || row.entry.contains(document.activeElement))) lostFocusAt = i;
         row.article.hidden = hidden; row.entry.hidden = hidden;
@@ -245,15 +264,17 @@ export function mountReportReader(options: Options) {
       if (lostFocusAt !== undefined) {
         const removed = lostFocusAt;
         if (visibleCount && completed && quoteRows[removed] === completed) openEvidence(visibleIndices.find(i => i > removed) ?? visibleIndices[visibleCount - 1]);
-        else quoteFilter.focus();
+        else (options.mountQuoteChecks ? quoteFilter : actionFilter).focus();
       }
       for (const option of quoteOptions) option.textContent = `${quoteLabels[option.value as keyof typeof quoteLabels]} ${counts.get(option.value) ?? 0}`;
+      for (const option of actionOptions) option.textContent = `${actionLabels[option.value]} ${actionCounts.get(option.value) ?? 0}`;
       outline.hidden = !visibleCount;
-      priority.hidden = selected !== 'all';
+      priority.hidden = selected !== 'all' || action !== 'all';
       jumpToQuote.hidden = selected === 'all' || !visibleCount;
       if (!interacted) return;
-      const names = [category !== 'all' && categories[category as keyof typeof categories], selected !== 'all' && quoteLabels[selected]].filter(Boolean).join(' · ');
+      const names = [category !== 'all' && categories[category as keyof typeof categories], action !== 'all' && actionLabels[action], selected !== 'all' && quoteLabels[selected]].filter(Boolean).join(' · ');
       filterStatus.textContent = completion + (names ? `显示${names} ${visibleCount} 项，共 ${rows.length} 项` : `已显示全部 ${rows.length} 项`);
+      if (!visibleCount) filterStatus.textContent += '。当前筛选没有核对项，请切换处理方式、级别或引文状态。';
     }
     const jumpToQuote = node('button', '查看首条引文与依据', 'report-reader-quote-jump');
     jumpToQuote.type = 'button'; jumpToQuote.hidden = true;
@@ -277,10 +298,11 @@ export function mountReportReader(options: Options) {
     const jump = node('button', '查看核对要求'); jump.type = 'button'; jump.setAttribute('aria-controls', rows[first].heading.id);
     jump.addEventListener('click', () => {
       if (disposed || !dialog.open) return;
-      quoteFilter.value = 'all'; selectCategory('all');
+      actionFilter.value = 'all'; quoteFilter.value = 'all'; selectCategory('all');
       const heading = rows[first].heading; heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'start', behavior: 'instant' });
     });
     priority.append(jump);
+    updateFilters();
   }
   function close() { if (dialog.open) dialog.close(); }
   body.addEventListener('click', event => {
