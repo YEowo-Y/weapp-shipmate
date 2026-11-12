@@ -39,6 +39,29 @@ function harness(options = {}) {
   const node = id => nodes.find(n => n.id === id);
   return { app, node, nodes, document, trigger, fallback, get artifact() { return artifact; }, set artifact(value) { artifact = value; }, get reads() { return reads; }, get handoffs() { return handoffs; } };
 }
+test('conditional report facts link only to the same local project and recheck current context on click', () => {
+  let project = { id: 'p', name: 'Local', revision: 1, contextRevision: 1, facts: {} };
+  const calls = [];
+  const h = harness({ getProject: () => project, onEditFact: (...args) => { calls.push(args); return true; } });
+  h.artifact = { ...h.artifact, projectId: 'p', projectRevision: 1, contextRevision: 1 };
+  h.app.open(h.trigger);
+  const fact = field => h.nodes.findLast(n => n.dataset.readerFact === field);
+  const privacy = fact('collectsSensitive'), domain = fact('hasServerDomain');
+  assert.ok(privacy && domain);
+  privacy.listeners.click(); assert.equal(calls[0][0], 'p'); assert.equal(calls[0][1], 'collectsSensitive');
+  project = { ...project, facts: { hasServerDomain: false } };
+  domain.listeners.click(); assert.equal(calls.length, 1);
+  assert.match(h.node('report-reader-link-status').textContent, /事实已变化/);
+  project = { ...project, id: 'other' };
+  privacy.listeners.click(); assert.equal(calls.length, 1);
+  for (const imported of [false, true]) {
+    const other = harness({ getProject: () => ({ ...project, id: imported ? 'p' : 'other' }), onEditFact: () => true });
+    other.artifact = { ...other.artifact, projectId: 'p', projectRevision: 1, contextRevision: 1, ...(imported ? { provenance: 'imported' } : {}) };
+    other.app.open(other.trigger);
+    assert.equal(other.nodes.some(n => n.dataset.readerFact), false);
+  }
+});
+
 test('reader prioritizes actual nonconditional findings and reveals their full requirements from a filtered view', () => {
   const h = harness(), result = h.artifact.data.result;
   result.items = result.items.slice(0, 2);
