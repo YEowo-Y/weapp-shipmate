@@ -67,7 +67,7 @@ test('workflow export guards no project, failed loading, busy state and stale pr
   assert.equal(h.node('workflow-content').hidden,true);
 });
 
-function harness({ current = project, fail = false, custom } = {}) {
+function harness({ current = project, fail = false, custom, onGenerateGuide, onReadGuide } = {}) {
   const doc = createPreviewDocument(), nodes = new Map(), calls = [], downloads = [];
   let downloadOK = true, disposed = false;
   const descendants = root => root.children.flatMap(child => [child, ...descendants(child)]);
@@ -79,11 +79,65 @@ function harness({ current = project, fail = false, custom } = {}) {
   const context={document:doc,URL,deriveWorkflow,createWorkflowArtifact,createArtifactDownloader:()=>({download:artifact=>{downloads.push(artifact);return downloadOK;},dispose:()=>{disposed=true;}}),createIcon:()=>doc.createElement('svg'),openUrl:async()=>{},invoke:async(cmd,args)=>{calls.push([cmd,args]);if(custom){const result=await custom(cmd,args);if(result!==undefined)return result;}if(fail)throw Error('storage unavailable');return snapshot;}};
   vm.createContext(context);vm.runInContext(`${script}\nglobalThis.mount=mountWorkflow`,context);
   let changes=0, externalBusy=false;
-  const controller=context.mount({getProject:()=>current,isBusy:()=>externalBusy,onProjectChanged:async()=>{changes++;}});
+  const controller=context.mount({getProject:()=>current,isBusy:()=>externalBusy,onProjectChanged:async()=>{changes++;},onGenerateGuide,onReadGuide});
   const settle=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
   const fire=async(id,event='click')=>{node(id).events[event]?.forEach(fn=>fn({preventDefault(){}}));await settle();};
   return {controller,node,calls,doc,snapshot,settle,fire,downloads,setDownloadOK:value=>{downloadOK=value;},disposed:()=>disposed,changes:()=>changes,setExternalBusy:v=>{externalBusy=v;},setFail:v=>{fail=v;},setCurrent:v=>{current=v;}};
 }
+test('workflow generates from saved facts only and opens the report after releasing its navigation lock', async () => {
+  const generated = [], opened = [];
+  const h = harness({
+    custom: (cmd, args) => { if (cmd === 'project_facts_save') h.snapshot.project = { ...project, facts: args.facts }; },
+    onGenerateGuide: async id => { generated.push({ id, facts: h.snapshot.project.facts }); },
+    onReadGuide: trigger => { assert.equal(h.controller.canClose(), true); opened.push(trigger); },
+  });
+  h.controller.open(h.node('trigger')); await h.settle();
+  assert.equal(h.node('workflow-generate-guide').disabled, false);
+  h.node('workflow-collectsSensitive').value = 'false'; await h.fire('workflow-collectsSensitive', 'change');
+  assert.equal(h.node('workflow-generate-guide').disabled, true);
+  await h.fire('workflow-generate-guide'); assert.equal(generated.length, 0);
+  assert.match(h.node('workflow-guide-note').textContent, /请先保存/);
+  await h.fire('workflow-facts-form', 'submit');
+  assert.match(h.node('workflow-status').textContent, /项目事实已保存.*更新上线清单/);
+  assert.equal(h.node('workflow-generate-guide').disabled, false);
+  await h.fire('workflow-generate-guide');
+  assert.equal(generated.length, 1); assert.equal(generated[0].id, 'a');
+  assert.equal(generated[0].facts.collectsSensitive, false);
+  assert.deepEqual(opened, [h.node('workflow-generate-guide')]);
+  assert.equal(h.calls.filter(([cmd]) => cmd === 'project_facts_save').length, 1);
+});
+
+test('workflow generation rejects duplicate, busy and stale actions and allows retry after failure', async () => {
+  let reject, resolve, attempts = 0, opened = 0;
+  const h = harness({
+    onGenerateGuide: () => { attempts++; return new Promise((yes, no) => { resolve = yes; reject = no; }); },
+    onReadGuide: () => { opened++; },
+  });
+  h.controller.open(h.node('trigger')); await h.settle();
+  h.setExternalBusy(true); await h.fire('workflow-generate-guide'); assert.equal(attempts, 0);
+  h.setExternalBusy(false); await h.fire('workflow-generate-guide');
+  assert.equal(h.controller.canClose(), false);
+  await h.fire('workflow-generate-guide'); assert.equal(attempts, 1);
+  reject(new Error('清单生成失败，请重试')); await h.settle();
+  assert.equal(opened, 0); assert.equal(h.controller.canClose(), true);
+  assert.equal(h.node('workflow-generate-guide').disabled, false);
+  assert.match(h.node('workflow-status').textContent, /清单生成失败/);
+  await h.fire('workflow-generate-guide'); resolve(); await h.settle();
+  assert.equal(attempts, 2); assert.equal(opened, 1);
+  await h.fire('workflow-generate-guide'); h.setCurrent({ ...project, id: 'b' });
+  resolve(); await h.settle(); assert.equal(opened, 1);
+  await h.fire('workflow-generate-guide'); assert.equal(attempts, 3);
+});
+
+test('closed or destroyed workflows never start generation or open a late result', async () => {
+  let finish, generated = 0, opened = 0;
+  const h = harness({ onGenerateGuide: () => { generated++; return new Promise(resolve => { finish = resolve; }); }, onReadGuide: () => { opened++; } });
+  await h.fire('workflow-generate-guide'); assert.equal(generated, 0);
+  h.controller.open(h.node('trigger')); await h.settle();
+  await h.fire('workflow-generate-guide'); h.controller.destroy(); finish(); await h.settle();
+  assert.equal(generated, 1); assert.equal(opened, 0);
+});
+
 test('workflow has a project-empty state and never invents a native project',async()=>{
   const app=harness({current:null});app.controller.open(app.node('trigger'));await app.settle();assert.match(app.node('workflow-status').textContent,/选择或创建项目/);assert.equal(app.calls.length,0);assert.equal(app.node('workflow-content').hidden,true);
 });
