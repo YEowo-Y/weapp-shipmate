@@ -24,9 +24,18 @@ const IGNORE_DIRS = new Set([
 const ROOT_ONLY_IGNORE = new Set([
   "scripts", "test", "tests", "__tests__", "__mocks__", "e2e", "output", "tmp", "windows",
 ]);
-// 文件忽略（与 SECURITY.md 一致）
+// 两端都先把文件名转为小写，再按清单匹配。本地预检只使用「不读」一档。
+const { noRead } = JSON.parse(readFileSync(new URL("./private-files.json", import.meta.url), "utf8"));
+function privateFile(name) {
+  const lower = name.toLowerCase();
+  return noRead.exact?.includes(lower)
+    || noRead.prefix?.some((prefix) => lower.startsWith(prefix))
+    || noRead.suffix?.some((suffix) => lower.endsWith(suffix))
+    || noRead.contains?.some((part) => lower.includes(part))
+    || noRead.prefixSuffix?.some(({ prefix, suffix }) =>
+      lower.length >= prefix.length + suffix.length && lower.startsWith(prefix) && lower.endsWith(suffix));
+}
 const IGNORE_FILE = [
-  /^\.env/, /\.pem$/, /\.p12$/, /^private\..*\.key$/, /^project\.private\.config\.json$/, /^secret/,
   /-lock\.json$/, /^pnpm-lock\.yaml$/, /^yarn\.lock$/, // lock 文件：纯依赖元数据，含大量募捐/registry 域名
   /\.d\.ts$/,                                          // 类型声明：只有类型、无运行时调用
 ];
@@ -36,7 +45,7 @@ const SCAN_EXT = new Set([
   ".js", ".ts", ".jsx", ".tsx", ".mjs", ".wxml", ".wxs", ".json", ".vue", ".uvue", ".nvue", ".mpx", ".wpy",
 ]);
 
-const ignored = (name) => IGNORE_FILE.some((re) => re.test(name));
+const ignored = (name) => privateFile(name) || IGNORE_FILE.some((re) => re.test(name));
 
 // Shared watcher eligibility only; walk keeps its existing traversal and accounting.
 export function isScanPathEligible(parts, kind = "file") {

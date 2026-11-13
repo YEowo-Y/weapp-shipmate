@@ -78,7 +78,7 @@ export async function prepareRuntime({ root = ROOT, output = join(root, 'desktop
   try {
     await writeFile(join(temporary, 'node.exe'), binary);
     await writeFile(join(temporary, 'LICENSE.node'), license);
-    for (const name of ['package.json', 'LICENSE', 'flow.yaml', 'rejections.yaml']) {
+    for (const name of ['package.json', 'LICENSE', 'flow.yaml', 'rejections.yaml', 'src/private-files.json']) {
       await copyAllowed(join(root, name), join(temporary, name), () => true);
     }
     for (const name of ['bin', 'src', 'desktop/server']) {
