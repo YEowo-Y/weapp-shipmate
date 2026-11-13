@@ -146,6 +146,9 @@ export async function runStdio(input = process.stdin, output = process.stdout) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  // Only protocol frames may reach the native host on stdout.
+  globalThis.AI_SDK_LOG_WARNINGS = false;
+  console.log = console.info = console.debug = console.error;
   runStdio().catch(() => { process.exitCode = 1; });
 }
 

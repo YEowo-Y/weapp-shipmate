@@ -1,5 +1,6 @@
 import { TextEncoder } from 'node:util';
 import { ReadableStream } from 'node:stream/web';
+import { text } from 'node:stream/consumers';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 const { Response } = globalThis;
@@ -106,6 +107,20 @@ test('owned stdio child returns framed events and exits when its owner closes st
   assert.ok(events.every(event => event.id === 'native-1'));
   child.stdin.end();
   assert.equal((await exited)[0], 0); assert.equal(errors, '');
+});
+
+test('stdio broker keeps console diagnostics off its protocol stream', async t => {
+  const preload = `process.once('beforeExit', () => {
+    console.info('probe-info'); console.log('probe-log'); console.debug('probe-debug'); console.warn('probe-warn');
+  });`;
+  const child = spawn(process.execPath, ['--import', `data:text/javascript,${encodeURIComponent(preload)}`, 'desktop/server/desktop-bridge.mjs'], { windowsHide: true });
+  t.after(() => { if (child.exitCode === null) child.kill(); });
+  const result = Promise.all([once(child, 'close'), text(child.stdout), text(child.stderr)]);
+  child.stdin.end();
+  const [[code], stdout, stderr] = await result;
+  assert.equal(code, 0);
+  for (const line of stdout.trimEnd().split('\n').filter(Boolean)) JSON.parse(line);
+  for (const marker of ['probe-info', 'probe-log', 'probe-debug', 'probe-warn']) assert.ok(stderr.includes(marker), marker);
 });
 
 test('desktop reuses broker session, CSRF, model discovery and real stream conversion', async t => {
