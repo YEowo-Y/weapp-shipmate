@@ -56,6 +56,7 @@ test('online quotes use only this GET body and keep source reachability separate
 });
 
 test('shared source extraction preserves legacy function identity and normalized hash', () => {
+  assert.equal(extractMainText('<main>\n  <p>正文</p></main>'), '正文\n');
   assert.equal(legacyHash, sha256); assert.equal(legacyExtract, extractMainText);
   assert.equal(extractMainText('<main><p>A&amp;B\u200b</p><script>x()</script><style>x</style><p>C&#39;D</p></main>'), 'A&B\nC\'D\n');
 });
