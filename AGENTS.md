@@ -26,7 +26,7 @@
 - **ESLint 不看 `desktop/**`**（`eslint.config.mjs`）。桌面代码的静态检查只有 `npm --prefix desktop run build` 里的 `tsc`。
 - **桌面 `tsc` 构建和 Rust 只在 PR 的 `glib-backport` 里跑**，`cargo test` 只在它的 Windows job 里。`tests/desktop-*.test.mjs` 随 `npm test` 在 `validate-rules` 里跑。本机跑 Rust 要 1.94.1：`cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked`。
 - **新增运行时依赖要登记**：`desktop/scripts/prepare-runtime.mjs` 用显式白名单复制依赖，未登记的会抛 `Unreviewed runtime dependency`；`tests/desktop-runtime-package.test.mjs` 钉着目录列表和版本。新增生产依赖本身要维护者批准。
-- **运行时只复制 `.mjs`**：`prepare-runtime.mjs` 从 `bin`、`src`、`desktop/server` 只复制 `.mjs`，从 `rules` 只复制 YAML。往这些目录加别的类型的文件，要同步改复制规则。
+- **运行时复制白名单**：`prepare-runtime.mjs` 从 `bin`、`src`、`desktop/server` 复制 `.mjs`，另显式复制 `src/private-files.json`，从 `rules` 只复制 YAML。往这些目录加别的类型的文件，要同步改复制规则。
 - **启动包有预算**：750 kB、gzip 250 kB，现在是 735 kB 和 241 kB，由 `tests/desktop-bundle-budget.test.mjs` 把关。新界面按路由拆分，不要进启动入口。
 - **broker 的 stdout 只能有 JSON 行**：`desktop/server/` 里不要用 `console.log`，Rust 端读到非 JSON 行会断开连接。
 - **改规则会牵动金快照和夹具钉板**：按 `CONTRIBUTING.md`「改规则的验收协议」裁决。

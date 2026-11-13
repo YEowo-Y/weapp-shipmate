@@ -43,6 +43,7 @@ test('relocated Windows runtime executes local entrypoints with empty PATH', asy
   assert.deepEqual(second, first, 'same source produces identical manifest without stale files');
   await assert.rejects(access(join(output, 'stale.txt')));
   assert.deepEqual(await readdir(join(output, 'node_modules')), ['@ai-sdk', '@opentelemetry', '@standard-schema', '@vercel', 'ai', 'argparse', 'eventsource-parser', 'js-yaml', 'json-schema', 'undici', 'zod']);
+  assert.deepEqual(await readFile(join(output, 'src/private-files.json')), await readFile(join(root, 'src/private-files.json')));
   assert.equal(first.dependencies.ai, '6.0.313');
   assert.equal(first.dependencies['@ai-sdk/anthropic'], '3.0.135');
   assert.equal(first.dependencies['@ai-sdk/google'], '3.0.138');
