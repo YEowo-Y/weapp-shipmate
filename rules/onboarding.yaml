@@ -15,7 +15,7 @@ rules:
     why: "填写本机项目资料不等于已经完成公众平台注册。"
     official_url: "https://developers.weixin.qq.com/miniprogram/introduction/"
     source_quote: "请选择主体类型选择，完善主体信息和管理员信息。"
-    last_verified: "2026-10-22"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: certification.enterprise-verification
@@ -32,7 +32,7 @@ rules:
     why: "企业认证成功并非普遍的提审前提，不能把未申请微信认证误判为无法上线；具体能力须人工核对。"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/renzheng.html"
     source_quote: "认证成功不作为提交发布审核的前提，但支付功能等腾讯有特别规定的除外。"
-    last_verified: "2026-10-22"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: release.manual-publish
@@ -49,5 +49,5 @@ rules:
     why: "审核与正式发布是两个独立步骤，本工具不执行发布操作。"
     official_url: "https://developers.weixin.qq.com/miniprogram/introduction/"
     source_quote: "代码审核通过，需要开发者手动点击发布，小程序才会发布到线上提供服务。"
-    last_verified: "2026-10-22"
+    last_verified: "2026-11-13"
     manual_required: true
