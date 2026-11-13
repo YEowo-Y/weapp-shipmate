@@ -22,6 +22,8 @@ jobs:
           # 兼容性由 ci.yml 的 20/22/24 矩阵负责，此处只决定"发布产物由谁构建"。
           node-version: "22"
       - run: npm ci
+      # Broker 测试从 desktop 的依赖目录加载 AI SDK。
+      - run: npm ci --prefix desktop
       # 门禁与 CI 同口径：任何一道红都不允许出资产。
       - run: npm run lint
       - run: npm run release:check
