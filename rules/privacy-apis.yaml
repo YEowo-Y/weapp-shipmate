@@ -1,5 +1,5 @@
 # rules/privacy-apis.yaml —— 隐私 API → 必填《用户隐私保护指引》项
-# 已核验官方总则来源（2026-06-13）：处理用户个人信息均需补充隐私保护指引，否则提审受阻。
+# 已核验官方总则来源（2026-06-13）：处理用户个人信息均需补充隐私保护指引，提审时会核对隐私接口调用与协议内容。
 # confidence=medium：总则已核验，单条 API 与具体声明项的精确映射为合理推断（官方页未逐项列出）。
 schema_version: 1
 rules:
@@ -17,10 +17,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：用户信息（昵称、头像）"
-    why: "处理用户个人信息需在隐私指引声明；声明与接口调用不符或为空会在提审被拦截"
+    why: "处理用户个人信息需在隐私指引声明；声明与接口调用不符或为空时，提审会被提醒更新隐私指引"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/"
     source_quote: "小程序、插件中涉及处理用户个人信息的开发者，均需补充相应用户隐私保护指引。"
-    last_verified: "2026-06-13"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.upp-required
@@ -38,7 +38,7 @@ rules:
     why: "隐私接口调用情况与隐私协议内容有出入、或协议内容为空，会在提审时被提醒更新甚至拦截"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/"
     source_quote: "小程序、插件中涉及处理用户个人信息的开发者，均需补充相应用户隐私保护指引。"
-    last_verified: "2026-06-23"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.auth-mechanism-enabled
@@ -53,10 +53,10 @@ rules:
     warn: "自 2023 年 10 月 17 日起，无论 app.json 是否配置 __usePrivacyCheck__，隐私相关功能都会启用——涉及隐私接口须先配好《用户隐私保护指引》并处理用户授权弹窗，否则接口调用受限。"
     requires:
       - "配置《用户隐私保护指引》并适配隐私授权流程；隐私机制已默认启用，不可依赖关闭 __usePrivacyCheck__ 规避"
-    why: "隐私机制已默认强制启用，未配置隐私指引 / 未处理授权会导致隐私接口调用失败、提审受阻"
+    why: "隐私机制已默认强制启用，未在隐私指引中声明的信息所对应的接口或组件将被禁用；调用已声明的接口或组件前还须同步用户同意状态"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/PrivacyAuthorize.html"
     source_quote: "在 2023年10月17日之后，不论 app.json 中是否有配置 __usePrivacyCheck__ ，隐私相关功能都会启用。"
-    last_verified: "2026-06-23"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.getLocation
@@ -74,11 +74,11 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：地理位置信息"
-      - "在 app.json 的 requiredPrivateInfos 声明相应位置接口（请对照官方位置接口文档确认）"
-    why: "处理位置信息需在隐私指引声明；声明缺失会在提审被拦截，部分位置接口未在 requiredPrivateInfos 声明会调用失败"
+      - "对 2022-07-14 后发布的小程序，在 app.json 的 requiredPrivateInfos 声明相应位置接口，并在后台开通接口权限；按官方文档核对旧版本适用范围"
+    why: "处理位置信息需在隐私指引声明；声明缺失时，提审会被提醒更新隐私指引，部分位置接口未在 requiredPrivateInfos 声明会调用失败"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/"
     source_quote: "小程序、插件中涉及处理用户个人信息的开发者，均需补充相应用户隐私保护指引。"
-    last_verified: "2026-06-13"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.getPhoneNumber
@@ -95,10 +95,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：手机号"
-    why: "通过 button open-type=getPhoneNumber 或 wx.getRealtimePhoneNumber 获取手机号属处理用户个人信息，未声明会在提审被拦截"
+    why: "通过 button open-type=getPhoneNumber 或 wx.getRealtimePhoneNumber 获取手机号属处理用户个人信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/"
     source_quote: "小程序、插件中涉及处理用户个人信息的开发者，均需补充相应用户隐私保护指引。"
-    last_verified: "2026-06-13"
+    last_verified: "2026-11-13"
     manual_required: true
 
   # 以下 4 条 confidence=high：官方《用户隐私保护指引内容介绍》(miniprogram-intro.html)
@@ -116,10 +116,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：剪切板"
-    why: "读写剪贴板属处理用户个人信息，未声明会在提审被拦截"
+    why: "读写剪贴板属处理用户个人信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "读取你的剪切板 wx.setClipboardData、wx.getClipboardData"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.record
@@ -136,10 +136,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：麦克风"
-    why: "访问麦克风/录音属处理用户个人信息，未声明会在提审被拦截"
+    why: "访问麦克风/录音属处理用户个人信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "访问你的麦克风 wx.authorize({scope: 'scope.record'})、wx.startRecord、RecorderManager.start"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.camera
@@ -156,10 +156,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：摄像头"
-    why: "访问摄像头属处理用户个人信息，未声明会在提审被拦截"
+    why: "访问摄像头属处理用户个人信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "访问你的摄像头 wx.authorize({scope: 'scope.camera'})、wx.createVKSession、<camera>"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.writePhotosAlbum
@@ -175,10 +175,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：相册（仅写入）"
-    why: "向相册写入图片/视频属调用受限权限，未声明会在提审被拦截"
+    why: "向相册写入图片/视频属调用受限权限，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "使用你的相册（仅写入）权限 wx.authorize({scope: 'scope.writePhotosAlbum'})、wx.saveImageToPhotosAlbum、wx.saveVideoToPhotosAlbum"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.choosePhotoVideo
@@ -194,10 +194,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：照片或视频"
-    why: "收集用户选中的照片/视频属处理用户个人信息，未声明会在提审被拦截"
+    why: "收集用户选中的照片/视频属处理用户个人信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "收集你选中的照片或视频信息"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.chooseLocation
@@ -213,10 +213,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：选择的位置信息"
-    why: "收集用户选择的位置信息属处理用户个人信息，未声明会在提审被拦截"
+    why: "收集用户选择的位置信息属处理用户个人信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "收集你选择的位置信息"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.chooseAddress
@@ -232,10 +232,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：地址"
-    why: "收集用户地址属处理用户个人信息，未声明会在提审被拦截"
+    why: "收集用户地址属处理用户个人信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "收集你的地址"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.chooseInvoice
@@ -251,10 +251,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：发票信息"
-    why: "收集用户发票信息属处理用户个人信息，未声明会在提审被拦截"
+    why: "收集用户发票信息属处理用户个人信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "收集你的发票信息"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.bluetooth
@@ -270,10 +270,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：蓝牙"
-    why: "访问蓝牙属处理用户个人信息/设备权限，未声明会在提审被拦截"
+    why: "访问蓝牙属处理用户个人信息/设备权限，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "访问你的蓝牙"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.addPhoneContact
@@ -289,10 +289,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：通讯录（仅写入）"
-    why: "向通讯录写入联系人属调用受限权限，未声明会在提审被拦截"
+    why: "向通讯录写入联系人属调用受限权限，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "使用你的通讯录（仅写入）权限"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.addPhoneCalendar
@@ -308,10 +308,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：日历（仅写入）"
-    why: "向日历写入事件属调用受限权限，未声明会在提审被拦截"
+    why: "向日历写入事件属调用受限权限，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "使用你的日历（仅写入）权限"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.chooseFile
@@ -327,10 +327,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：文件"
-    why: "收集用户选中的文件属处理用户个人信息，未声明会在提审被拦截"
+    why: "收集用户选中的文件属处理用户个人信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "收集你选中的文件"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.chooseLicensePlate
@@ -346,10 +346,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：车牌号"
-    why: "收集用户车牌号属处理用户个人信息，未声明会在提审被拦截"
+    why: "收集用户车牌号属处理用户个人信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "收集你的车牌号"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.werun
@@ -365,10 +365,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：微信运动步数"
-    why: "收集用户微信运动步数属处理用户个人信息，未声明会在提审被拦截"
+    why: "收集用户微信运动步数属处理用户个人信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "收集你的微信运动步数"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.accelerometer
@@ -384,10 +384,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：加速度计"
-    why: "调用加速传感器属处理用户设备信息，未声明会在提审被拦截"
+    why: "调用加速传感器属处理用户设备信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "调用你的加速传感器"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.compass
@@ -403,10 +403,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：磁场传感器"
-    why: "调用磁场传感器属处理用户设备信息，未声明会在提审被拦截"
+    why: "调用磁场传感器属处理用户设备信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "调用你的磁场传感器"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.deviceMotion
@@ -422,10 +422,10 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：方向传感器"
-    why: "调用方向传感器属处理用户设备信息，未声明会在提审被拦截"
+    why: "调用方向传感器属处理用户设备信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "调用你的方向传感器"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: privacy.gyroscope
@@ -441,8 +441,8 @@ rules:
       scanner: static_api_call
     requires:
       - "在《小程序用户隐私保护指引》中声明：陀螺仪"
-    why: "调用陀螺仪传感器属处理用户设备信息，未声明会在提审被拦截"
+    why: "调用陀螺仪传感器属处理用户设备信息，应按实际处理的信息补充隐私指引，提审时平台会核对接口调用与指引内容"
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html"
     source_quote: "调用你的陀螺仪传感器"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
