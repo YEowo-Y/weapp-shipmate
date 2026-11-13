@@ -1,11 +1,11 @@
 ===== URL: https://developers.weixin.qq.com/miniprogram/product/record/record_guidelines.html
-===== FETCHED: 2026-10-22
+===== FETCHED: 2026-11-13
 ===== METHOD: fetch + <main> extract
 
 小程序备案操作指引
 
 复制给 LLM
-查看 llm.txt
+查看 Markdown
 
 最后一次编辑于 2026-08-18
 
