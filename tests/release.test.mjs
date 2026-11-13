@@ -84,11 +84,16 @@ test("release workflow 在任何打包步骤前运行 lint 与版本契约", () 
   const workflow = readFileSync(join(ROOT, ".github", "workflows", "release.yml"), "utf-8");
   const steps = yaml.load(workflow).jobs.release.steps;
   const indexOfRun = (command) => steps.findIndex((step) => step.run === command);
+  const install = indexOfRun("npm ci");
+  const desktopInstall = indexOfRun("npm ci --prefix desktop");
+  const test = indexOfRun("npm test");
   const lint = indexOfRun("npm run lint");
   const versionCheck = indexOfRun("npm run release:check");
   const npmPack = indexOfRun("npm pack");
   const mcpbPack = indexOfRun("npm run build:mcpb");
 
+  assert.ok(install >= 0 && install < desktopInstall && desktopInstall < test,
+    "release workflow 必须在 npm ci 之后、npm test 之前安装桌面依赖");
   assert.ok(lint >= 0, "release workflow 缺少 lint 门禁");
   assert.ok(versionCheck >= 0, "release workflow 缺少版本一致性门禁");
   assert.ok(npmPack >= 0 && mcpbPack >= 0, "release workflow 的两个打包步骤应存在");
