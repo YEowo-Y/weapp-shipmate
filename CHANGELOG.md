@@ -26,6 +26,8 @@
 
 ### Changed
 
+- 明确源码默认留在本机，以及由用户开启的 agent 文件分享、经开发者工具预览或上传体验版的边界。新增[安全设计与验收条件](docs/security/agent-mode-and-trial-upload-design.md)；仅修订文档，未启用这些功能。
+
 - 依赖维护升级（2026-07-26，三个存量 Dependabot PR，均非安全告警）：`eslint` 10.6.0→10.8.0（仅开发链）。其 PR 绿勾早于上轮 lockfile 安全升级、base 已移动，「PR 绿 + main 绿」不等于「合并结果绿」——故合并前在隔离 worktree 实跑「最新 main + 该 PR」合并结果的五道门禁（lint / test 236 全过 / verify:quotes / coverage / mcpb 冒烟）全绿后才落锁。`actions/checkout` 与 `actions/setup-node` 均 4→7（ci / release / rule-rot 三个 workflow）：两者在 workflow 中系相邻行，三方合并互相冲突，后者经 Dependabot rebase 后合并，rebase 后的六腿 CI 已实测两个 @v7 的**组合**。留档：`release.yml` 与 `rule-rot.yml` 里的 @v7 要到下次打 tag / 定时触发才首次真实执行，validate 六腿验过的是同版本 action 而非该两处调用点。
 
 ### Security
