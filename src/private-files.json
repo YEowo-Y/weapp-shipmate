@@ -1,0 +1,17 @@
+{
+  "noRead": {
+    "exact": ["project.private.config.json"],
+    "prefix": [".env", "secret"],
+    "suffix": [".pem", ".p12"],
+    "prefixSuffix": [{ "prefix": "private.", "suffix": ".key" }]
+  },
+  "noSend": {
+    "exact": [
+      ".git", ".ssh", ".aws", ".azure", ".npmrc", ".netrc", ".pypirc",
+      "keys", "keys.json", "auth.json", "config.private.json", "node_modules",
+      "id_rsa", "id_ed25519"
+    ],
+    "suffix": [".key", ".pfx", ".sqlite", ".sqlite3", ".db"],
+    "contains": ["secret", "token", "credential"]
+  }
+}

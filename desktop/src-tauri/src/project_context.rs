@@ -19,35 +19,52 @@ pub struct ContextSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_revision: Option<u64>,
 }
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PrivateFilePolicy {
+    no_read: NamePatterns,
+    no_send: NamePatterns,
+}
+
+#[derive(Default, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+struct NamePatterns {
+    exact: Vec<String>,
+    prefix: Vec<String>,
+    suffix: Vec<String>,
+    contains: Vec<String>,
+    prefix_suffix: Vec<PrefixSuffix>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PrefixSuffix {
+    prefix: String,
+    suffix: String,
+}
+
+impl NamePatterns {
+    fn matches(&self, name: &str) -> bool {
+        self.exact.iter().any(|s| name == s)
+            || self.prefix.iter().any(|s| name.starts_with(s))
+            || self.suffix.iter().any(|s| name.ends_with(s))
+            || self.contains.iter().any(|s| name.contains(s))
+            || self.prefix_suffix.iter().any(|pair| {
+                name.strip_prefix(&pair.prefix)
+                    .is_some_and(|rest| rest.ends_with(&pair.suffix))
+            })
+    }
+}
+
+static PRIVATE_FILES: std::sync::LazyLock<PrivateFilePolicy> = std::sync::LazyLock::new(|| {
+    serde_json::from_str(include_str!("../../../src/private-files.json"))
+        .expect("invalid embedded private file policy")
+});
+
 fn sensitive(value: &str) -> bool {
-    let value = value.to_ascii_lowercase();
-    value.starts_with(".env")
-        || [
-            ".git",
-            ".ssh",
-            ".aws",
-            ".azure",
-            ".npmrc",
-            ".netrc",
-            ".pypirc",
-            "keys",
-            "keys.json",
-            "auth.json",
-            "config.private.json",
-            "node_modules",
-            "credentials",
-            "secrets",
-            "tokens",
-        ]
-        .contains(&value.as_str())
-        || [".pem", ".key", ".p12", ".pfx", ".sqlite", ".sqlite3", ".db"]
-            .iter()
-            .any(|suffix| value.ends_with(suffix))
-        || value.contains("secret")
-        || value.contains("token")
-        || value.contains("credential")
-        || value == "id_rsa"
-        || value == "id_ed25519"
+    // Match the same lowercase filename semantics as the local scanner.
+    let name = value.to_lowercase();
+    PRIVATE_FILES.no_read.matches(&name) || PRIVATE_FILES.no_send.matches(&name)
 }
 pub(crate) fn validate_text(text: String, limit: usize) -> Result<String, String> {
     if text.len() > limit || text.trim().is_empty() {
@@ -242,6 +259,31 @@ pub fn project_context_report(
 mod tests {
     use super::*;
     #[test]
+    fn private_file_cases() {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Case {
+            path: String,
+            no_read: bool,
+            no_send: bool,
+        }
+        let cases: Vec<Case> = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/private-file-cases.json"
+        ))
+        .unwrap();
+        for case in cases {
+            let name = case.path.rsplit('/').next().unwrap().to_lowercase();
+            assert_eq!(
+                PRIVATE_FILES.no_read.matches(&name),
+                case.no_read,
+                "{}",
+                case.path
+            );
+            let blocked = case.path.split('/').any(sensitive);
+            assert_eq!(blocked, case.no_send, "{}", case.path);
+        }
+    }
+    #[test]
     fn context_rejects_sensitive_and_binary_text() {
         for text in [
             "sk-secret123",
@@ -283,12 +325,14 @@ mod tests {
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("readme.txt"), "safe content").unwrap();
         std::fs::write(root.join(".env"), "safe content").unwrap();
+        std::fs::write(root.join("project.private.config.json"), "{}").unwrap();
         std::fs::write(root.join("large.txt"), vec![b'a'; 16385]).unwrap();
         std::fs::write(root.join("invalid.txt"), [0xff, 0xfe]).unwrap();
         assert_eq!(read_file(&root, "readme.txt").unwrap().text, "safe content");
         for path in [
             "../readme.txt",
             ".env",
+            "project.private.config.json",
             "large.txt",
             "invalid.txt",
             "readme.txt:stream",
