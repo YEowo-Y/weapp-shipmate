@@ -12,11 +12,25 @@ export function readRepositoryVersionIdentity(root = ROOT) {
   const pkg = readJSON(join(root, "package.json"));
   const manifest = readJSON(join(root, "manifest.json"));
   const lock = readJSON(join(root, "package-lock.json"));
+  const desktop = join(root, "desktop");
+  const native = join(desktop, "src-tauri");
+  const desktopLock = readJSON(join(desktop, "package-lock.json"));
+  const manifestSection = readFileSync(join(native, "Cargo.toml"), "utf8")
+    .split(/^\[/m).find(section => section.startsWith("package]"));
+  const lockedPackage = readFileSync(join(native, "Cargo.lock"), "utf8")
+    .split(/^\[\[package\]\]/m).find(section => /^name = "desktop"\r?$/m.test(section));
+  const versionOf = section => section?.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
   return {
     packageVersion: pkg.version,
     manifestVersion: manifest.version,
     lockVersion: lock.version,
     lockPackageVersion: lock.packages?.[""]?.version,
+    desktopPackageVersion: readJSON(join(desktop, "package.json")).version,
+    desktopLockVersion: desktopLock.version,
+    desktopLockPackageVersion: desktopLock.packages?.[""]?.version,
+    tauriVersion: readJSON(join(native, "tauri.conf.json")).version,
+    cargoVersion: versionOf(manifestSection),
+    cargoLockVersion: versionOf(lockedPackage),
   };
 }
 
@@ -33,6 +47,12 @@ export function assertVersionIdentity(identity, { requireTag = false } = {}) {
     ["manifest.json", manifestVersion],
     ["package-lock.json.version", lockVersion],
     ['package-lock.json.packages[""].version', lockPackageVersion],
+    ["desktop/package.json", identity.desktopPackageVersion],
+    ["desktop/package-lock.json.version", identity.desktopLockVersion],
+    ['desktop/package-lock.json.packages[""].version', identity.desktopLockPackageVersion],
+    ["desktop/src-tauri/tauri.conf.json", identity.tauriVersion],
+    ["desktop/src-tauri/Cargo.toml", identity.cargoVersion],
+    ["desktop/src-tauri/Cargo.lock (desktop)", identity.cargoLockVersion],
   ];
   const missing = versions.filter(([, version]) => typeof version !== "string" || version.length === 0);
   if (missing.length > 0) {
