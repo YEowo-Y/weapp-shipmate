@@ -17,7 +17,7 @@ rules:
     why: "简介中提炼的功能点未实现或不可用是高频拒审原因之一"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "小程序所实际提供的功能点，需与小程序的简介一致。示例：功能包括但不限于简介中提炼的功能点"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: review.category-reachable-on-home
@@ -29,11 +29,11 @@ rules:
     severity: warning
     confidence: high
     requires:
-      - "确保提交的每个服务类目对应功能，能从首页直达或经 2 次点击到达，勿隐藏在深层或付费墙后"
+      - "确保提交的每个服务类目对应功能能从首页直达或经 2 次点击到达；若存在付费等受限功能，提供可完整体验的测试号"
     why: "类目功能在首页不可达会被判定与提交类目不符而拒审"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "小程序所提供的所有服务类目功能，必须在小程序首页得到体现，即在小程序首页必须能直达或者经过2次点击到达所有本文档2（服务类目审核）中提交的服务类目页面"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: review.no-inducement
@@ -49,7 +49,7 @@ rules:
     why: "诱导类行为是平台明令拒审项"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "小程序的页面内容中，存在诱导类行为，包括但不限于诱导分享、诱导添加、诱导关注公众号、诱导下载等"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: review.not-mainly-ads
@@ -65,7 +65,7 @@ rules:
     why: "页面主要为营销或广告用途将被拒审"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "小程序的页面内容中，主要为营销或广告用途（如内含空白广告位、招商广告等），将会被拒绝"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: review.must-be-finished
@@ -81,7 +81,7 @@ rules:
     why: "测试版或不可运行的半成品会被直接拒审"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "提交的小程序须是一个完成品，要求可以打开，可以运行，且不可以是一个测试版"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: review.test-account
@@ -93,11 +93,11 @@ rules:
     severity: warning
     confidence: high
     requires:
-      - "若小程序含登录/账号体系，提审时在版本说明里提供可体验全部功能的测试号（账号+密码）"
+      - "若小程序含登录/账号体系，提审时按官方后台入口提供可体验全部功能的测试号（账号+密码）"
     why: "缺测试号会导致审核无法体验完整功能而被拒"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "若小程序中存在账号体系，需提供测试号，包含账号和密码（可以体验所有功能）"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: review.category-matches-service
@@ -113,5 +113,5 @@ rules:
     why: "类目与实际服务不符是高频拒审原因；个人主体尤其需避免选了未实际提供的类目"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "小程序的类目要和自身所提供的服务一致。"
-    last_verified: "2026-06-23"
+    last_verified: "2026-11-13"
     manual_required: true
