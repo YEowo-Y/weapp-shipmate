@@ -33,6 +33,6 @@ export function extractMainText(html) {
     .split("\n")
     .map((l) => l.replace(/[ \t]+/g, (s) => (s.includes("\t") ? "\t" : " ")).trim())
     .filter((l, i, a) => l !== "" || a[i - 1] !== "")
-    .join("\n");
+    .join("\n").trimStart();
 }
 
