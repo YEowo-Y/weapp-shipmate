@@ -50,7 +50,7 @@ rules:
     why: "请求或诱导输入微信账号密码属明令拒审项"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "不得在小程序任何页面请求或诱导用户输入微信用户的用户名或密码"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: login.no-unauthorized-userdata
@@ -66,7 +66,7 @@ rules:
     why: "未经授权显示用户头像昵称等数据属明令拒审项"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "不得在未经用户授权同意的情况下，显示用户相关数据，比如：头像，昵称等信息"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: login.clear-data-on-refuse
@@ -82,5 +82,5 @@ rules:
     why: "拒绝授权后仍留存/使用用户头像昵称等数据违反运营规范"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "用户拒绝授权后，开发者有义务清除并不再继续使用该用户的微信头像、昵称等数据。"
-    last_verified: "2026-07-16"
+    last_verified: "2026-11-13"
     manual_required: true
