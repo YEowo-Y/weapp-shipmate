@@ -21,6 +21,7 @@ jobs:
           node-version: "20"
       # E2：去掉 `|| npm install` 兜底——lockfile 漂移应当响亮失败，静默改装浮动版本会毁掉可复现性。
       - run: npm ci
+        id: install
       # 含链接体检（联网）；超期规则、失效/已搬家/登录墙不可达的链接会让此 job 失败以示告警。
       # 反爬 403/405 归类为"待人工"不触发失败，避免误报。
       - run: npm run rot -- --links
@@ -29,3 +30,4 @@ jobs:
       # 若无人重抓，快照可以无限期地与官方原文分家，而 CI 全绿：陈旧引文会被认证为"逐字"。
       # 与上一步分列两步，是为了让"链接死了"和"内容变了"在日志里各自可辨。
       - run: npm run snapshot:sources -- --check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
