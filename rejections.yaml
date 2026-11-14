@@ -51,6 +51,7 @@ rejections:
     last_verified: "2026-11-13"
 
   - id: reject.forced-login
+    draft: true
     summary: "强制登录 / 未体验功能即要求授权登录 / 登录无法取消"
     aliases: ["强制登录", "强制授权", "未体验", "一进入就登录", "登录才能", "无法取消登录", "必须登录", "授权登录"]
     codes: []
