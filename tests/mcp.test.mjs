@@ -117,6 +117,23 @@ test("tools/call guide 非法 subject → -32602 且列出合法值", async () =
   assert.match(res.error.message, /personal \| individual_business \| enterprise/);
 });
 
+test("tools/call guide 保留省略的项目事实，并区分显式 false 与 true", async () => {
+  for (const [facts, summary, domainGroup] of [
+    [{}, "6/8，待确认 2 个阶段", "selfCheck"],
+    [{ sensitive: false, domain: false, payment: false }, "6/8，已跳过 2 个阶段", null],
+    [{ sensitive: true, domain: true, payment: true }, "8/8", "items"],
+  ]) {
+    const response = await dispatch({ jsonrpc: "2.0", id: 1, method: "tools/call",
+      params: { name: "weapp_shipmate_guide", arguments: { subject: "personal", ...facts } } });
+    const result = response.result.structuredContent;
+    assert.ok(result.meta.summary.includes(summary));
+    const hasDomain = item => item.ruleId === "domain.must-icp-filed";
+    assert.equal(result.items.some(hasDomain), domainGroup === "items");
+    assert.equal(result.selfCheck.some(hasDomain), domainGroup === "selfCheck");
+    assert.equal(result.notes.some(note => note.includes("涉及支付")), facts.payment !== undefined);
+  }
+});
+
 test("未知方法返回 -32601", async () => {
   const res = await dispatch({ jsonrpc: "2.0", id: 5, method: "no/such" });
   assert.equal(res.error.code, -32601);

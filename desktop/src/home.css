@@ -1,0 +1,31 @@
+/* Compact workbench; shared desktop tokens retain the existing visual language. */
+.workbench-header-actions { display:flex; align-items:center; gap:4px; }
+.desktop-home { width:100%; max-width:760px; margin:0 auto; padding:24px 4px; box-sizing:border-box; container-type:inline-size; color:var(--text); font-size:14px; line-height:1.5; }
+.desktop-home[hidden] { display:none; }
+.home-heading { display:flex;align-items:center;gap:var(--ds-space-3);margin:12px 0 24px; }
+.home-heading img { flex:none; }
+.home-heading h2 { margin:0; font-family:var(--ds-font-reading); font-size:var(--ds-text-display); font-weight:500; line-height:1.4; letter-spacing:-.02em; }
+.desktop-home h3,.desktop-home h4 { margin:0; font-size:14px; font-weight:600; line-height:20px; }
+.desktop-home p { overflow-wrap:anywhere; }
+.home-project,.home-report { display:flex; align-items:center; gap:16px; min-width:0; }
+.home-project { margin-bottom:24px; padding:0 0 20px; border-bottom:1px solid var(--border); }
+.home-project > div,.home-report > div { flex:1; min-width:0; }
+.home-project > [data-icon],.home-report > [data-icon] { flex:none; color:var(--text-3); }
+.home-project p,.home-report p { margin:4px 0 0; font-size:13px; color:var(--text-2); }
+.home-project wa-button,.home-report wa-button { flex:none; max-width:100%; }
+.home-section-heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 16px; margin-bottom:12px; }
+.home-section-heading h3,.home-section-heading > span { font-size:12px; color:var(--text-3); font-weight:400; }
+.home-start-actions { display:flex; flex-wrap:wrap; align-items:center; gap:var(--ds-space-2); }
+.home-start-actions wa-button { max-width:100%; }
+.home-start-actions wa-button::part(base) { min-height:var(--ds-control-md); }
+.home-continue { margin-top:24px; }
+.home-report { padding:12px 0 16px; border-bottom:1px solid var(--border); }
+.desktop-home wa-button::part(label) { white-space:normal; overflow-wrap:anywhere; }
+@container (max-width:480px) {
+  .home-project,.home-report { flex-wrap:wrap; gap:12px; }
+  .home-project > div,.home-report > div { flex-basis:calc(100% - 40px); }
+  .home-heading { margin:4px 0 16px; }
+  .home-project { margin-bottom:16px; padding-bottom:12px; }
+}
+@media(max-width:640px) { .desktop-home { padding:8px 0 20px; } .desktop-home wa-button::part(base) { min-height:44px; } }
+@media(forced-colors:active) { .home-report { outline:1px solid CanvasText; } }

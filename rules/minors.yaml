@@ -3,6 +3,7 @@
 schema_version: 1
 rules:
   - id: minor.protect
+    action_categories: ["code", "manual_check"]
     title: "未成年人保护：不宜内容须提醒/处理"
     kind: navigation
     stage: review
@@ -13,8 +14,8 @@ rules:
     warn: "若小程序可能涉及不宜未成年人接触的内容或服务，须按法规与平台要求做提醒/处理（如适龄提示、防沉迷），保护未成年人权益。"
     requires:
       - "对可能不宜未成年人接触的内容或服务做提醒或处理，遵守未成年人保护相关法规"
-    why: "未对不宜未成年人内容做处理会被拒审并涉法律风险"
+    why: "平台要求对不宜未成年人接触的内容或服务予以提醒或处理"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "对可能涉及不宜未成年人接触的内容或服务予以提醒或处理，保护未成年人的身心健康和合法权益。"
-    last_verified: "2026-07-16"
+    last_verified: "2026-11-13"
     manual_required: true

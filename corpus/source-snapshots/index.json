@@ -13,81 +13,121 @@
     {
       "url": "https://developers.weixin.qq.com/miniprogram/dev/component/web-view.html",
       "file": "n-qq-com-miniprogram-dev-component-web-view-html-e32652cd.txt",
-      "sha256": "4089b54cf5873a1c3e134cfbd26a9e79afee89fbef147bc77cf1e83e5d38da76",
-      "chars": 3787,
-      "fetched_at": "2026-07-17",
+      "sha256": "f481e74d77689cd69dcc2fd0fafca9a0348a5ab6fac494317c0418a038c71bd3",
+      "chars": 3708,
+      "fetched_at": "2026-11-13",
       "method": "fetch"
     },
     {
       "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html",
       "file": "m-miniprogram-dev-framework-ability-network-html-fc7d0a47.txt",
-      "sha256": "53afc3a087543849b2895bed27a90e5399c541180a095bd7c74633859e59b8b9",
+      "sha256": "3aa73eeb4c7ee6006e40bdc54e050a25e81f576336833099be2609d9e169e5c9",
       "chars": 3324,
-      "fetched_at": "2026-07-17",
+      "fetched_at": "2026-11-13",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/server-ability/backend-api.html",
+      "file": "am-dev-framework-server-ability-backend-api-html-e143b387.txt",
+      "sha256": "81ef3f47158fed403d18fe3e87db51f8b7b76915d813a0cbf968dd67fed6d7fd",
+      "chars": 759,
+      "fetched_at": "2026-11-14",
       "method": "fetch"
     },
     {
       "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/",
       "file": "in-qq-com-miniprogram-dev-framework-user-privacy-778ac67d.txt",
-      "sha256": "a2214d29bcc77fb0e71e2c1aacbba4b8e78c2ea8285962fecae7b0f8c1be5015",
-      "chars": 1386,
-      "fetched_at": "2026-07-17",
+      "sha256": "c9ba65c7ad8ab47f3b86463ad10fa17af585f8f5ad681826c3843892ba72b8d0",
+      "chars": 1359,
+      "fetched_at": "2026-11-13",
       "method": "fetch"
     },
     {
       "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html",
       "file": "ev-framework-user-privacy-miniprogram-intro-html-a7dc8233.txt",
-      "sha256": "0c3b3b8470febf0624ea93ec8199d4e11d005bfe5e17fb30853a85340628d7da",
-      "chars": 3548,
-      "fetched_at": "2026-07-17",
+      "sha256": "0d7cfd2af377ae4d963605b223c305354448f59ad724e0d4979e6757a63767f2",
+      "chars": 3463,
+      "fetched_at": "2026-11-13",
       "method": "fetch"
     },
     {
       "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/PrivacyAuthorize.html",
       "file": "dev-framework-user-privacy-PrivacyAuthorize-html-2887b496.txt",
-      "sha256": "1906bc354db903b5c0fdd55c361f7f23f381475c972a5b67d25f75cf8da0efa8",
-      "chars": 7334,
-      "fetched_at": "2026-07-17",
+      "sha256": "411ede6354b8733e16cf4b53fcd06d4dccb775f307e4cf54a42c712c146e01fe",
+      "chars": 7321,
+      "fetched_at": "2026-11-13",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/reference/configuration/app.html#requiredPrivateInfos",
+      "file": "ence-configuration-app-html-requiredPrivateInfos-30798767.txt",
+      "sha256": "948b9d5de396bc679c9902388f51650a1ca762da7b506b8d3bda1c853b3b397b",
+      "chars": 12968,
+      "fetched_at": "2026-11-14",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/server/API/mp-access-token/api_getaccesstoken.html",
+      "file": "rver-API-mp-access-token-api-getaccesstoken-html-46f06650.txt",
+      "sha256": "946144c4f5cc7dbe0b35c62116be5e1a102aff3bff057858bf9251b3fd57567f",
+      "chars": 2332,
+      "fetched_at": "2026-11-14",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/introduction/",
+      "file": "evelopers-weixin-qq-com-miniprogram-introduction-01b23206.txt",
+      "sha256": "0b8f79b5472199ba6714180d4846550d76543725acd65a444e015da8a8a4eaef",
+      "chars": 4248,
+      "fetched_at": "2026-11-13",
       "method": "fetch"
     },
     {
       "url": "https://developers.weixin.qq.com/miniprogram/product/",
       "file": "developers-weixin-qq-com-miniprogram-product-f3a87176.txt",
-      "sha256": "39aa69ecf6ac81d7e16d2dba906a1d415c17104705643503ffca4b04a7c814c5",
-      "chars": 33056,
-      "fetched_at": "2026-07-17",
+      "sha256": "9cba528296be2cfd939988fd9fdeaf4154f5b3c94a38a3ada2927087c82b3f55",
+      "chars": 32566,
+      "fetched_at": "2026-11-13",
       "method": "fetch"
     },
     {
       "url": "https://developers.weixin.qq.com/miniprogram/product/material/",
       "file": "opers-weixin-qq-com-miniprogram-product-material-5080a757.txt",
-      "sha256": "3e90e101744d34441cfc7c91c95b117b9b9293f489c1b96f796aa11f6da5169d",
-      "chars": 68200,
-      "fetched_at": "2026-07-17",
+      "sha256": "6654e4358d0fa3144fbaf860afc0c09ad65439e0f606d1fbc1eafd19e2b8653e",
+      "chars": 75160,
+      "fetched_at": "2026-11-13",
       "method": "fetch"
     },
     {
-      "url": "https://developers.weixin.qq.com/miniprogram/product/record_guidelines.html",
-      "file": "q-com-miniprogram-product-record-guidelines-html-76e8156b.txt",
-      "sha256": "9652620a9884dcfa71efdf6667b82d8df777d657b24d62dae08d82e50c88186d",
-      "chars": 5560,
-      "fetched_at": "2026-07-17",
+      "url": "https://developers.weixin.qq.com/miniprogram/product/record/record_guidelines.html",
+      "file": "iniprogram-product-record-record-guidelines-html-87c6b29f.txt",
+      "sha256": "14dd46cb0b0a34d3144cb797b2c77802e598570bb11623859f78c2bc1bdc7fd2",
+      "chars": 5502,
+      "fetched_at": "2026-11-13",
       "method": "fetch"
     },
     {
       "url": "https://developers.weixin.qq.com/miniprogram/product/reject.html",
       "file": "rs-weixin-qq-com-miniprogram-product-reject-html-1ea6d349.txt",
-      "sha256": "72a2ef63a2b050176ac78050eb79f5d6fb67a430ce55ebbb6c42a47953fc2e5b",
-      "chars": 4821,
-      "fetched_at": "2026-07-17",
+      "sha256": "e414babb1a144945e94443c726292c3e99ff782f3efe2cb0555423ad12f0fe81",
+      "chars": 4539,
+      "fetched_at": "2026-11-13",
       "method": "fetch"
     },
     {
-      "url": "https://pay.weixin.qq.com/docs/merchant/products/mini-program-payment/introduction.html",
-      "file": "-products-mini-program-payment-introduction-html-04afc704.txt",
-      "sha256": "3b379915e4657bd7379120db184827b35a78e37f3eb72d7381c7a4e4bb57b98e",
-      "chars": 903,
-      "fetched_at": "2026-07-17",
+      "url": "https://developers.weixin.qq.com/miniprogram/product/renzheng.html",
+      "file": "-weixin-qq-com-miniprogram-product-renzheng-html-5c75726d.txt",
+      "sha256": "72b21d3a1aa38165dc910fe49a0896108e7220bafd3d9383e32120c3613a55b2",
+      "chars": 4834,
+      "fetched_at": "2026-11-13",
+      "method": "fetch"
+    },
+    {
+      "url": "https://pay.weixin.qq.com/doc/v3/merchant/4012791894",
+      "file": "pay-weixin-qq-com-doc-v3-merchant-4012791894-f67de327.txt",
+      "sha256": "2cf9b0c7e4ed655e144d7bba2481aa5bcb949d3c8909c38c0a7876c2dfcd1ce1",
+      "chars": 914,
+      "fetched_at": "2026-11-13",
       "method": "fetch"
     }
   ]

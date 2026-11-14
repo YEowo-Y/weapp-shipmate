@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-project-maintenance-save"
+description = "Enables the project_maintenance_save command without any pre-configured scope."
+commands.allow = ["project_maintenance_save"]
+
+[[permission]]
+identifier = "deny-project-maintenance-save"
+description = "Denies the project_maintenance_save command without any pre-configured scope."
+commands.deny = ["project_maintenance_save"]

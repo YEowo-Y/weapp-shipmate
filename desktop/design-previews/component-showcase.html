@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent 组件验收 · 上线船友</title>
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="conversation.css">
+  <link rel="stylesheet" href="components/message.css">
+  <link rel="stylesheet" href="components/composer.css">
+  <link rel="stylesheet" href="components/review.css">
+  <link rel="stylesheet" href="components/showcase.css">
+</head>
+<body data-theme="light" class="agent-workspace">
+  <header class="showcase-nav">
+    <a href="index.html" class="showcase-brand">上线船友 <span>/ 组件</span></a>
+    <nav aria-label="设计预览"><a href="main-four-region.html">主工作台</a><a href="chat-full.html">完整对话</a><button id="themeBtn" type="button">深色</button></nav>
+  </header>
+  <main class="showcase">
+    <div class="showcase-intro"><p class="showcase-eyebrow">AGENT INTERFACE / 01</p><h1>同一套组件，每一种状态。</h1><p>消息、输入、工具与审批使用工作台的共享源码。所有执行均为本地演示，不连接模型、不读取项目、不写入文件。</p></div>
+    <div class="showcase-grid">
+      <section class="showcase-panel showcase-chat" aria-labelledby="chatTitle">
+        <div class="showcase-panel-head"><div><span class="showcase-number">01</span><h2 id="chatTitle">对话与输入</h2></div><label class="showcase-select">执行场景<select id="runScenario"><option value="normal">成功</option><option value="tool-failure">工具失败</option><option value="timeout">超时</option></select></label></div>
+        <div class="conversation-shell">
+          <div class="conversation-scroll scroll" id="showcaseScroll"><div class="conv__inner"><div id="showcaseMessages"></div></div></div>
+          <p id="showcaseStatus" class="showcase-run-status" role="status" aria-live="polite"></p>
+          <button id="showcaseLatest" class="showcase-latest" type="button" hidden>回到最新消息 ↓</button>
+          <div id="showcaseComposer" data-composer-host></div>
+        </div>
+        <p class="showcase-footnote">发送后可停止；失败后可重试。输入内容只保留在本页。</p>
+      </section>
+      <div class="showcase-stack">
+        <section class="showcase-panel" aria-labelledby="toolTitle">
+          <div class="showcase-panel-head"><div><span class="showcase-number">02</span><h2 id="toolTitle">工具执行</h2></div><span class="showcase-tag">参数、结果与错误</span></div>
+          <div class="showcase-panel-body"><div id="toolStates" class="showcase-segments" role="group" aria-label="工具示例状态"><button type="button" data-state="running" aria-pressed="true">执行中</button><button type="button" data-state="success" aria-pressed="false">成功</button><button type="button" data-state="fail" aria-pressed="false">失败</button><button type="button" data-state="canceled" aria-pressed="false">已停止</button></div><div id="toolExample"></div></div>
+        </section>
+        <section class="showcase-panel" aria-labelledby="reviewTitle">
+          <div class="showcase-panel-head"><div><span class="showcase-number">03</span><h2 id="reviewTitle">审批与差异</h2></div><label class="showcase-select">状态<select id="reviewState"><option value="pending">待审批</option><option value="accepted">已批准</option><option value="rejected">已拒绝</option><option value="stale">已失效</option></select></label></div>
+          <div class="showcase-panel-body" id="reviewExample"></div>
+        </section>
+        <section class="showcase-panel" aria-labelledby="resultTitle"><div class="showcase-panel-head"><div><span class="showcase-number">04</span><h2 id="resultTitle">结构化结果</h2></div><span class="showcase-tag">固定数据 · 已校验</span></div><div class="showcase-panel-body" id="resultExample"></div></section>
+      </div>
+    </div>
+  </main>
+  <script src="preview.js"></script>
+  <script type="module" src="components/showcase.js"></script>
+</body>
+</html>

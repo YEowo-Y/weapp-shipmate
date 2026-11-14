@@ -20,6 +20,12 @@ const CONSISTENT = Object.freeze({
   manifestVersion: VERSION,
   lockVersion: VERSION,
   lockPackageVersion: VERSION,
+  desktopPackageVersion: VERSION,
+  desktopLockVersion: VERSION,
+  desktopLockPackageVersion: VERSION,
+  tauriVersion: VERSION,
+  cargoVersion: VERSION,
+  cargoLockVersion: VERSION,
 });
 
 test("发布版本契约接受 tag 与全部版本载体完全一致", () => {
@@ -35,6 +41,12 @@ for (const [name, change, carrier] of [
   ["manifest.json 漂移", { manifestVersion: DRIFT_VERSION }, "manifest.json"],
   ["package-lock.json 顶层漂移", { lockVersion: DRIFT_VERSION }, "package-lock.json.version"],
   ["package-lock.json 根包漂移", { lockPackageVersion: DRIFT_VERSION }, 'package-lock.json.packages[""].version'],
+  ["桌面 package.json 漂移", { desktopPackageVersion: DRIFT_VERSION }, "desktop/package.json"],
+  ["桌面 lock 顶层漂移", { desktopLockVersion: DRIFT_VERSION }, "desktop/package-lock.json.version"],
+  ["桌面 lock 根包漂移", { desktopLockPackageVersion: DRIFT_VERSION }, 'desktop/package-lock.json.packages[""].version'],
+  ["Tauri 配置漂移", { tauriVersion: DRIFT_VERSION }, "tauri.conf.json"],
+  ["Rust 包版本漂移", { cargoVersion: DRIFT_VERSION }, "Cargo.toml"],
+  ["Rust 锁定版本漂移", { cargoLockVersion: DRIFT_VERSION }, "Cargo.lock"],
 ]) {
   test(`发布版本契约拒绝 ${name}`, () => {
     assert.throws(
@@ -53,13 +65,8 @@ test("发布版本契约拒绝缺失 tag，但打包复用时可只校验文件�
   assert.equal(assertVersionIdentity(withoutTag).version, VERSION);
 });
 
-test("仓库读取器覆盖 package、manifest 与 lock 的两个根版本字段", () => {
-  assert.deepEqual(readRepositoryVersionIdentity(ROOT), {
-    packageVersion: VERSION,
-    manifestVersion: VERSION,
-    lockVersion: VERSION,
-    lockPackageVersion: VERSION,
-  });
+test("仓库读取器覆盖根目录及桌面端的全部版本载体", () => {
+  assert.deepEqual({ tag: `v${VERSION}`, ...readRepositoryVersionIdentity(ROOT) }, CONSISTENT);
 });
 
 test("发布版本 CLI 使用 GITHUB_REF_NAME，并以退出码拒绝错误 tag", () => {
@@ -80,15 +87,34 @@ test("发布版本 CLI 使用 GITHUB_REF_NAME，并以退出码拒绝错误 tag"
   assert.match(bad.stderr, /tag/);
 });
 
+test("rule-rot 链接失败后仍检查漂移，安装失败或取消时不运行", () => {
+  const workflow = yaml.load(readFileSync(join(ROOT, ".github", "workflows", "rule-rot.yml"), "utf-8"));
+  const steps = workflow.jobs.rot.steps;
+  const install = steps.find(step => step.run === "npm ci");
+  const rot = steps.find(step => step.run === "npm run rot -- --links");
+  const snapshot = steps.find(step => step.run === "npm run snapshot:sources -- --check");
+  assert.equal(install.id, "install");
+  assert.equal(snapshot.if, "${{ !cancelled() && steps.install.outcome == 'success' }}");
+  assert.ok(steps.indexOf(install) < steps.indexOf(rot));
+  assert.ok(steps.indexOf(rot) < steps.indexOf(snapshot));
+  assert.notEqual(rot["continue-on-error"], true);
+  assert.notEqual(snapshot["continue-on-error"], true);
+});
+
 test("release workflow 在任何打包步骤前运行 lint 与版本契约", () => {
   const workflow = readFileSync(join(ROOT, ".github", "workflows", "release.yml"), "utf-8");
   const steps = yaml.load(workflow).jobs.release.steps;
   const indexOfRun = (command) => steps.findIndex((step) => step.run === command);
+  const install = indexOfRun("npm ci");
+  const desktopInstall = indexOfRun("npm ci --prefix desktop");
+  const test = indexOfRun("npm test");
   const lint = indexOfRun("npm run lint");
   const versionCheck = indexOfRun("npm run release:check");
   const npmPack = indexOfRun("npm pack");
   const mcpbPack = indexOfRun("npm run build:mcpb");
 
+  assert.ok(install >= 0 && install < desktopInstall && desktopInstall < test,
+    "release workflow 必须在 npm ci 之后、npm test 之前安装桌面依赖");
   assert.ok(lint >= 0, "release workflow 缺少 lint 门禁");
   assert.ok(versionCheck >= 0, "release workflow 缺少版本一致性门禁");
   assert.ok(npmPack >= 0 && mcpbPack >= 0, "release workflow 的两个打包步骤应存在");

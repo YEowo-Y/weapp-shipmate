@@ -3,15 +3,43 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>上线船友 · 健康检查仪表盘 · 合规漂移(docs/08 §11.5)</title>
+<title>上线船友 · 上线后检查示例</title>
 <link rel="stylesheet" href="app.css" />
+<link rel="stylesheet" href="responsive.css" />
+<style>
+  .dash__head { flex-wrap: wrap; gap: 10px; }
+  .dash__head .dash__rescan { margin-left: auto; }
+  .dash__meta { margin: 8px 0 16px; }
+  .dash__inner .attn { background: transparent; }
+  .dash__inner .attn__what { font-size: 16px; line-height: 1.6; }
+  .dash__inner .attn__why { font-size: 14px; line-height: 1.7; }
+  .dash__inner .hgrid { display: block; border-top: 1px solid var(--border); }
+  .dash__inner .hcard { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 4px 24px; padding: 18px 0; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; }
+  .dash__inner .hcard__top { grid-column: 1; grid-row: 1 / 4; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; align-content: start; margin: 0; }
+  .dash__inner .hcard__ico { width: 22px; height: 22px; color: var(--text-2); background: transparent; }
+  .dash__inner .hcard__t { font-size: 14px; }
+  .dash__inner .hstatus { grid-column: 2; justify-self: start; margin: 0; padding: 0; background: transparent; font-size: 12px; }
+  .dash__inner .hcard__d { grid-column: 2; margin: 0; font-size: 15px; line-height: 1.65; color: var(--text); }
+  .dash__inner .hcard__what { grid-column: 2; margin: 0; font-size: 13px; line-height: 1.65; }
+  .dash__inner .hcard__foot { grid-column: 2; justify-content: flex-start; flex-wrap: wrap; gap: 6px 20px; margin-top: 6px; padding: 0; border: 0; font-size: 12px; line-height: 1.6; font-family: var(--font-ui); }
+  .dash__inner .feed__t { font-size: 14px; }
+  .dash__inner .feed__d { font-size: 13px; line-height: 1.7; }
+  .dash__inner .feed__when { font-size: 12px; }
+  @media (max-width: 700px) {
+    .dash__head .dash__rescan { margin-left: 0; }
+    .dash__inner .hcard { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+    .dash__inner .hcard__top { grid-column: 1; grid-row: auto; grid-template-columns: 22px minmax(0, 1fr) auto; margin-bottom: 4px; }
+    .dash__inner .hstatus { grid-column: 3; }
+    .dash__inner :is(.hcard__d, .hcard__what, .hcard__foot) { grid-column: 1; }
+  }
+</style>
 </head>
 <body data-theme="light">
-  <h2 class="sr-only">上线船友健康检查仪表盘：先列需关注项与处理动作，再列五项合规监控（各含监控内容与下次检查），附最近动态与数据来源。</h2>
+  <h2 class="sr-only">上线后检查示例：关注项、处理路径与五项检查内容。当前未连接项目或执行自动扫描。</h2>
 
   <div class="chrome">
     <b>上线船友 · 健康检查仪表盘</b>
-    <span class="sub">合规漂移引擎 · docs/08 §11.5（上线后 · 复用 rot · 官方背书"动态更新请定期复查"）</span>
+    <span class="sub">上线后的复查事项与处理路径</span>
     <button class="ctl active" id="annotBtn">标注四区</button>
     <button class="ctl" id="themeBtn">深色</button>
   </div>
@@ -21,51 +49,50 @@
       <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="tt">上线船友 — my-miniprogram</span></div>
       <div class="topbar">
         <span class="pill">个人主体</span>
-        <span class="pill" style="color:var(--ok);background:var(--ok-soft);border-color:transparent">● 已上线 · 健康检查模式</span>
-        <span class="cmdk"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索 / 命令 <kbd>⌘K</kbd></span>
+        <span class="pill">已上线项目示例</span>
+        <button class="cmdk" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#search"></use></svg>搜索 / 命令 <kbd>⌘K</kbd></button>
       </div>
 
       <div class="main main--2">
         <aside class="region rail scroll">
           <span class="rtag">① 左栏 · 脊柱（全程已完成）</span>
-          <a class="proj" href="main-four-region.html" style="text-decoration:none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>返回主界面</a>
-          <div><p class="rail__h">上线脊柱 · 已全部完成</p><ul class="spine" id="spine"></ul></div>
-          <div class="rail__foot"><span class="keydot"></span><span class="who">Claude · key 已存钥匙串</span></div>
+          <a class="proj" data-journey-return href="main-four-region.html" style="text-decoration:none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#arrow-left"></use></svg>返回主界面</a>
+          <div><p class="rail__h">上线阶段 · 示例已完成</p><ul class="spine" id="spine"></ul></div>
+          <div class="rail__foot"><span class="keydot"></span><span class="who">本地示例 · 未连接模型</span></div>
         </aside>
 
         <section class="region dash scroll">
           <span class="rtag">② 健康检查仪表盘</span>
           <div class="dash__inner">
-            <div class="dash__head"><h1>健康检查</h1><span class="statepill" style="color:var(--warn);background:var(--warn-soft)">1 项需关注 · 4 项正常</span></div>
+            <div class="dash__head"><h1>健康检查</h1><span class="statepill" style="color:var(--warn);background:var(--warn-soft)">1 项需关注</span><button class="dash__rescan" id="healthReplay" type="button">回放检查示例</button></div>
             <div class="dash__meta">
-              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>上次扫描 2026-06-22 09:14</span>
-              <span>下次自动扫描 每周一 09:00</span>
-              <span>已上线 38 天</span>
-              <button class="dash__rescan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg>立即重新扫描</button>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#clock"></use></svg>示例快照 2026-06-22</span>
+              <span>固定检查示例 · 自动扫描未接入</span>
             </div>
 
+<p id="healthStatus" role="status" aria-live="polite">本地示例，尚未扫描或验证真实项目。</p><progress id="healthProgress" max="5" value="0" aria-label="示例展示进度" hidden></progress>
             <!-- 需关注：先把唯一要做的事放最显眼，带处理动作 -->
             <div class="attn">
               <div class="attn__bar"></div>
               <div class="attn__b">
-                <div class="attn__top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>需要你关注<span class="ct">检测于 2 小时前</span></div>
-                <p class="attn__what">官方《微信小程序平台运营规范》检测到更新</p>
-                <p class="attn__why">运营规范会动态调整，官方明确"请定期复查"。本次变更可能涉及内容/运营条款，建议你对照自查；船友可用 explain 把变更点映射到已核验规则，但<b style="font-weight:500">是否影响你的业务需你确认</b>。</p>
-                <div class="attn__acts"><span class="chip chip--accent">查看变更点 →</span><span class="chip">explain 反查影响</span><span class="chip">标记为已复查</span></div>
+                <div class="attn__top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#triangle-alert"></use></svg>需要你关注<span class="ct">示例提醒</span></div>
+                <p class="attn__what">示例：运营规范更新后，需要复查哪些事项？</p>
+                <p class="attn__why">这条提醒演示收到规范变更通知后的处理路径。请打开官方说明，对照实际业务复查；本页没有检测到真实变更，标记已阅读也不会解除风险。</p>
+                <div class="attn__acts"><a class="chip chip--accent" href="https://developers.weixin.qq.com/miniprogram/product/operation.html" target="_blank" rel="noopener">打开官方规范</a><a class="chip" href="explain.html?from=health-dashboard.html">查看拒因反查</a><button class="chip" id="healthReviewed" type="button" aria-pressed="false">标记为已阅读</button></div>
               </div>
             </div>
 
             <!-- 五项合规监控 -->
             <div class="sec">
-              <p class="sec__h">合规监控 · 5 项</p>
+              <p class="sec__h">检查项目示例 · 5 项</p>
               <div class="hgrid hgrid--5" id="monitors"></div>
             </div>
 
             <!-- 最近动态 -->
             <div class="sec">
-              <p class="sec__h">最近动态</p>
+              <p class="sec__h">历史动态示例 · 非实时记录</p>
               <ul class="feed">
-                <li><span class="feed__dot feed__dot--warn"></span><div><div class="feed__t">运营规范页检测到更新</div><div class="feed__d">官方《平台运营规范》有内容变化，建议复查与你业务相关的条款。</div><span class="feed__act">查看变更 / explain 反查 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div><span class="feed__when">2 小时前</span></li>
+                <li><span class="feed__dot feed__dot--warn"></span><div><div class="feed__t">运营规范页检测到更新</div><div class="feed__d">官方《平台运营规范》有内容变化，建议复查与你业务相关的条款。</div><a class="feed__act" href="explain.html?from=health-dashboard.html">查看拒因反查 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#arrow-right"></use></svg></a></div><span class="feed__when">2 小时前</span></li>
                 <li><span class="feed__dot feed__dot--nf"></span><div><div class="feed__t">规则库刷新</div><div class="feed__d">新增 2 条提审材料规则（官方核验），下次预检自动生效。</div></div><span class="feed__when">2 天前</span></li>
                 <li><span class="feed__dot feed__dot--ok"></span><div><div class="feed__t">隐私指引复审通过</div><div class="feed__d">提审前自动比对"隐私接口调用 vs 协议声明"，一致。</div></div><span class="feed__when">2 天前</span></li>
                 <li><span class="feed__dot feed__dot--ok"></span><div><div class="feed__t">服务器域名体检通过</div><div class="feed__d">HTTPS 证书有效、白名单域名可达。</div></div><span class="feed__when">2 天前</span></li>
@@ -75,36 +102,29 @@
 
             <!-- 数据来源 / 新鲜度 -->
             <div class="sec">
-              <p class="sec__h">数据来源 · 新鲜度</p>
-              <div class="set-row" style="border:0;padding:6px 0"><div class="set-row__l"><div class="set-row__t">规则库</div><div class="set-row__d">官方 46 条 · 最近核验 2026-06-20 · 每月 rot 体检</div></div><span class="conn conn--ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>新鲜</span></div>
-              <div class="set-row" style="padding:6px 0"><div class="set-row__l"><div class="set-row__t">可机检项（自动）</div><div class="set-row__d">域名 HTTPS / 可达性 / 备案 ping · 隐私接口 vs 协议比对</div></div><span class="conn conn--ok">每日</span></div>
+              <p class="sec__h">数据来源与能力状态</p>
+              <div class="set-row" style="border:0;padding:6px 0"><div class="set-row__l"><div class="set-row__t">规则库</div><div class="set-row__d">固定示例快照 · 以真实预检报告与官方来源为准</div></div><span class="conn conn--ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>示例</span></div>
+              <div class="set-row" style="padding:6px 0"><div class="set-row__l"><div class="set-row__t">自动检查</div><div class="set-row__d">本页仅回放固定结果，没有后台任务、联网检测或定期扫描。</div></div><span class="conn conn--off">未接入</span></div>
               <div class="set-row" style="padding:6px 0"><div class="set-row__l"><div class="set-row__t">需人工确认项</div><div class="set-row__d">类目政策、运营规范是否影响你的业务——船友提示，你判定</div></div><span class="conn conn--off">提示复查</span></div>
             </div>
 
-            <div class="foot-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg><span>官方逐字背书："运营规范动态更新、请定期复查"；类目"随政策变化、仅供参考"；备案信息不及时更新可能被警告 / 封禁 / 强制注销。漂移监控只提示需复查，<b style="font-weight:500">不替你判定"已合规"</b>，最终以官方为准。</span></div>
+            <div class="foot-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#shield"></use></svg><span>官方逐字背书："运营规范动态更新、请定期复查"；类目"随政策变化、仅供参考"；备案信息不及时更新可能被警告 / 封禁 / 强制注销。漂移监控只提示需复查，<b style="font-weight:500">不替你判定"已合规"</b>，最终以官方为准。</span></div>
           </div>
         </section>
       </div>
     </div>
   </div>
 
-<script>
-  const S = (p, s=13, sw=1.75) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
-  const CHECK = '<path d="M20 6 9 17l-5-5"/>';
-  const STAGES = ['注册小程序账号','主体认证 / 实名核验','ICP 备案','选择服务类目','用户隐私保护指引','服务器域名白名单','提交审核','发布上线'];
-  document.getElementById('spine').innerHTML = STAGES.map(t =>
-    `<li class="stg stg--done"><button class="stg__row" onclick="location.href='main-four-region.html'"><span class="stg__dot">${S(CHECK, 8, 2.6)}</span><span class="stg__t">${t}</span></button></li>`
+<script type="module">
+  import { STAGES, stageHref } from './stages.js';
+  import { iconMarkup } from './components/icons.js';
+  document.getElementById('spine').innerHTML = STAGES.map(stage =>
+    `<li class="stg stg--done"><a class="stg__row" href="${stageHref(stage.id)}"><span class="stg__dot">${iconMarkup('check')}</span><span class="stg__t">${stage.title}</span></a></li>`
   ).join('');
 
   const ICO = {
-    norm: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
-    cat: '<path d="m12 2 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5"/>',
-    priv: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
-    domain: '<path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20ZM2 12h20"/><circle cx="12" cy="12" r="10"/>',
-    filing: '<path d="M9 12l2 2 4-4M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>'
+    norm: 'file-text', cat: 'list-checks', priv: 'shield-check', domain: 'globe', filing: 'file-text'
   };
-  const WARN_ICO = '<path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>';
-  const OK_ICO = '<path d="M20 6 9 17l-5-5"/>';
   const MON = [
     { ico:'norm', st:'warn', name:'运营规范', what:'监控官方《平台运营规范》页是否更新', d:'检测到更新，建议复查相关条款。', last:'检测 2026-06-22', next:'每周' },
     { ico:'cat', st:'ok', name:'服务类目', what:'监控你的类目政策 / 资质要求是否变化', d:'类目政策无变化，无需调整。', last:'比对 2026-06-20', next:'每月' },
@@ -112,26 +132,23 @@
     { ico:'domain', st:'ok', name:'服务器域名', what:'HTTPS 证书 + 域名可达性 + 备案 ping', d:'证书有效、白名单域名可达。', last:'体检 2026-06-22', next:'每日' },
     { ico:'filing', st:'ok', name:'ICP 备案', what:'备案有效性 + 主体 / 域名变更提醒', d:'备案有效，主体信息无变更。', last:'核验 2026-06-22', next:'年检 2026-12' }
   ];
-  const STT = { warn:['需关注', WARN_ICO, 'warn'], ok:['正常', OK_ICO, 'ok'] };
+  const STT = { warn:['示例提醒', 'circle-alert', 'warn'], ok:['示例正常', 'check', 'ok'] };
   document.getElementById('monitors').innerHTML = MON.map(m => {
     const [label, sico, scls] = STT[m.st];
     return `<div class="hcard">
-      <div class="hcard__top"><span class="hcard__ico hcard__ico--${scls}">${S(ICO[m.ico], 16)}</span><span class="hcard__t">${m.name}</span><span class="hstatus hstatus--${scls}">${S(sico, 11, scls==='ok'?2.4:1.75)}${label}</span></div>
-      <p class="hcard__what">${m.what}</p>
+      <div class="hcard__top"><span class="hcard__ico hcard__ico--${scls}">${iconMarkup(ICO[m.ico])}</span><span class="hcard__t">${m.name}</span><span class="hstatus hstatus--${scls}">${iconMarkup(sico)}${label}</span></div>
       <p class="hcard__d">${m.d}</p>
-      <div class="hcard__foot"><span>${m.last}</span><span>下次 · ${m.next}</span></div>
+      <p class="hcard__what">${m.what}</p>
+      <div class="hcard__foot"><span>${m.last}</span><span>建议周期 · ${m.next}</span></div>
     </div>`;
   }).join('');
 
   const annotBtn = document.getElementById('annotBtn');
-  document.body.classList.add('annot');
   annotBtn.addEventListener('click', () => annotBtn.classList.toggle('active', document.body.classList.toggle('annot')));
-  const themeBtn = document.getElementById('themeBtn');
-  themeBtn.addEventListener('click', () => {
-    const dark = document.body.getAttribute('data-theme') === 'dark';
-    document.body.setAttribute('data-theme', dark ? 'light' : 'dark');
-    themeBtn.textContent = dark ? '深色' : '浅色';
-  });
+
 </script>
+<script src="preview.js"></script>
+<script src="responsive.js"></script>
+<script type="module" src="health.js"></script>
 </body>
 </html>

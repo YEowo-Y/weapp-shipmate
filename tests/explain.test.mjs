@@ -42,6 +42,14 @@ test("空查询不命中任何拒因", () => {
   assert.equal(scoreRejection({ aliases: ["营销"] }, ""), 0);
 });
 
+test("强制登录拒因仅在显式开启草稿时返回", () => {
+  assert.ok(!loadRejections().some(entry => entry.id === "reject.forced-login"));
+  assert.equal(runExplain("强制登录").items.length, 0);
+  const result = runExplain("强制登录", { includeDrafts: true });
+  assert.deepEqual(result.items.map(item => item.ruleId).sort(), ["login.after-experience", "login.cancellable"]);
+  assert.ok(result.notes.some(note => note.includes("draft")));
+});
+
 test("引用完整性：每条拒因映射的 rule id 必须在规则库真实存在", () => {
   const entries = loadRejections({ includeDrafts: true });
   const { rules } = loadData({ includeDrafts: true });

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-project-repair-snapshot"
+description = "Enables the project_repair_snapshot command without any pre-configured scope."
+commands.allow = ["project_repair_snapshot"]
+
+[[permission]]
+identifier = "deny-project-repair-snapshot"
+description = "Denies the project_repair_snapshot command without any pre-configured scope."
+commands.deny = ["project_repair_snapshot"]

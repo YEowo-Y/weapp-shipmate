@@ -3,11 +3,24 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>上线船友 · 阶段工作区 · ICP 备案详情(docs/08 §8.5)</title>
+<title>上线船友 · 阶段工作区</title>
 <link rel="stylesheet" href="app.css" />
+<link rel="stylesheet" href="responsive.css" />
+<style>
+  #stageContent .tl { list-style: none; }
+  #stageContent .tl__t { font-size: 16px; }
+  #stageContent .tl__d, #stageContent .split__card li, #stageContent .faq__a { font-size: 14px; line-height: 1.7; }
+  #stageContent .tl > li { padding-bottom: 24px; }
+  #stageContent .tag { font-size: 12px; background: var(--surface-2); color: var(--text-2); }
+  #stageContent .split__card { background: none; border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 16px 0; }
+  #stageContent .split__card h4, #stageContent .faq__q { font-size: 14px; color: var(--text); }
+  #stageContent .srccard__t { font-size: 14px; }
+  #stageContent .srccard__v { font-size: 12px; }
+  @media (max-width: 460px) { #stageContent .srccard { flex-wrap: wrap; } #stageContent .srccard__v { margin-left: 0; } }
+</style>
 </head>
 <body data-theme="light">
-  <h2 class="sr-only">上线船友阶段工作区设计稿：ICP 备案的小白友好详情——五个环节时间线、谁做什么、官方来源、常见问题。</h2>
+  <h2 class="sr-only" id="stageDescription">上线船友阶段工作区设计稿：ICP 备案的小白友好详情——五个环节时间线、谁做什么、官方来源、常见问题。</h2>
 
   <div class="chrome">
     <b>上线船友 · 阶段工作区</b>
@@ -22,15 +35,15 @@
       <div class="topbar">
         <span class="pill">个人主体</span>
         <span class="path">~/projects/my-miniprogram</span>
-        <span class="cmdk"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索 / 命令 <kbd>⌘K</kbd></span>
+        <button class="cmdk" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#search"></use></svg>搜索 / 命令 <kbd>⌘K</kbd></button>
       </div>
 
       <div class="main main--2">
         <!-- 区① 左栏：脊柱（ICP 高亮） -->
         <aside class="region rail scroll">
-          <span class="rtag">① 左栏 · 脊柱（当前：ICP 备案）</span>
+          <span class="rtag">① 左栏 · 上线阶段导航</span>
           <a class="proj" href="main-four-region.html" style="text-decoration:none">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#arrow-left"></use></svg>
             返回主界面
           </a>
           <div>
@@ -42,58 +55,58 @@
         <!-- 区② 中：阶段工作区 -->
         <section class="region work scroll">
           <span class="rtag">② 阶段工作区 · 小白详情</span>
-          <div class="work__inner">
-            <p class="crumb"><a href="main-four-region.html">上线脊柱</a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>ICP 备案</p>
-            <div class="work__head"><h1>ICP 备案</h1><span class="statepill statepill--cur">进行中 · 第 3/8 阶段</span></div>
+          <div class="work__inner" id="stageContent">
+            <p class="crumb"><a href="main-four-region.html">上线脊柱</a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#chevron-right"></use></svg>ICP 备案</p>
+            <div class="work__head"><h1>ICP 备案</h1><span class="statepill statepill--cur">示例阶段 3 / 8</span></div>
             <div style="display:inline-flex;gap:6px;margin:14px 0 18px">
               <span class="chip chip--accent">概览</span>
-              <a class="chip" href="guided-step.html" style="text-decoration:none">手把手指导 →</a>
+              <a class="chip" href="https://mp.weixin.qq.com/" target="_blank" rel="noopener">前往官方后台</a>
             </div>
             <div class="work__meta">
-              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>最长 20 工作日</span>
-              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>需你本人提交</span>
-              <span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>前置「主体认证」已完成</span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#clock"></use></svg>最长 20 工作日</span>
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#user"></use></svg>需你本人提交</span>
+              <span class="ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>示例前置状态：主体认证已完成</span>
             </div>
 
-            <p class="lede">备案 = 向<b>工信部</b>登记你的小程序。没有备案，小程序<b>无法正式上线</b>、会被限制访问。好消息：你的主体认证已通过，现在可以直接开始。</p>
+            <p class="lede">备案 = 向<b>工信部</b>登记你的小程序。没有备案，小程序<b>无法正式上线</b>、会被限制访问。当前展示示例办理路径；请先在官方后台确认你的主体认证状态。</p>
 
             <div class="sec">
               <p class="sec__h">五个环节</p>
-              <ul class="tl">
+              <ol class="tl">
                 <li class="cur"><span class="tl__num">1</span>
                   <p class="tl__t">备案信息填写</p>
                   <p class="tl__d">填写主体信息、小程序信息、负责人信息，并上传证件照。字段较多，容易漏填。</p>
-                  <div class="tl__tags"><span class="tag tag--you"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>你本人</span><span class="tag tag--ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 13h.01M15 13h.01"/></svg>船友帮你核对字段</span></div>
+                  <div class="tl__tags"><span class="tag tag--you"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#user"></use></svg>你本人</span><span class="tag tag--ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#bot"></use></svg>字段核对说明</span></div>
                 </li>
                 <li><span class="tl__num">2</span>
                   <p class="tl__t">平台初审</p>
                   <p class="tl__d">微信先审核基础信息是否合规，无需你操作，等结果即可。</p>
-                  <div class="tl__tags"><span class="tag tag--time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>1–2 工作日</span><span class="tag tag--auto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>平台自动</span></div>
+                  <div class="tl__tags"><span class="tag tag--time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#clock"></use></svg>1–2 工作日</span><span class="tag tag--auto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>平台自动</span></div>
                 </li>
                 <li><span class="tl__num">3</span>
                   <p class="tl__t">工信部短信核验</p>
                   <p class="tl__d">工信部会给负责人手机发短信，<b>必须在收到后 24 小时内</b>按提示回复，逾期需重来。</p>
-                  <div class="tl__tags"><span class="tag tag--you"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>你本人 · 限时 24h</span></div>
+                  <div class="tl__tags"><span class="tag tag--you"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#user"></use></svg>你本人 · 限时 24h</span></div>
                 </li>
                 <li><span class="tl__num">4</span>
                   <p class="tl__t">通管局审核</p>
                   <p class="tl__d">所在省通信管理局终审。这是整条路径上最长的等待，没有个人查询 API。</p>
-                  <div class="tl__tags"><span class="tag tag--time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>1–20 工作日</span></div>
+                  <div class="tl__tags"><span class="tag tag--time"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#clock"></use></svg>1–20 工作日</span></div>
                 </li>
                 <li><span class="tl__num">5</span>
                   <p class="tl__t">备案成功</p>
                   <p class="tl__d">备案号下发，本阶段完成，可继续推进「提交审核」。</p>
                 </li>
-              </ul>
+              </ol>
             </div>
 
             <div class="sec">
               <p class="sec__h">谁做什么</p>
               <div class="split">
-                <div class="split__card split--ai"><h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 13h.01M15 13h.01"/></svg>船友能帮</h4>
-                  <ul><li>核对备案信息字段是否齐全</li><li>提醒短信核验的 24h 时限</li><li>备案变更 / 年检的健康检查提醒</li></ul>
+                <div class="split__card split--ai"><h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#bot"></use></svg>本页提供</h4>
+                  <ul><li>备案字段与办理环节说明</li><li>短信核验时限的提示</li><li>官方来源与常见问题</li></ul>
                 </div>
-                <div class="split__card split--you"><h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>需你本人</h4>
+                <div class="split__card split--you"><h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#user"></use></svg>需你本人</h4>
                   <ul><li>在微信 / 工信部后台提交备案</li><li>收到短信后 24h 内回复核验</li><li>上传身份证等证件照</li></ul>
                 </div>
               </div>
@@ -102,23 +115,23 @@
             <div class="sec">
               <p class="sec__h">官方来源</p>
               <a class="srccard" href="https://developers.weixin.qq.com/miniprogram/product/record_guidelines.html" target="_blank" rel="noopener">
-                <span class="srccard__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+                <span class="srccard__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg></span>
                 <span><span class="srccard__t">小程序备案指引</span><br><span class="srccard__u">developers.weixin.qq.com/.../record_guidelines</span></span>
-                <span class="srccard__v"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>已核验 2026-06-13</span>
+                <span class="srccard__v"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>已核验 2026-06-13</span>
               </a>
             </div>
 
             <div class="sec">
               <p class="sec__h">常见问题</p>
               <div class="faq" id="faq">
-                <div class="faq__item" aria-expanded="true"><button class="faq__q"><span class="qi">个人主体能备案吗？</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="faq__a">能。个人小程序同样需要备案，准备好本人身份证即可，不需要企业资质。</div></div>
-                <div class="faq__item" aria-expanded="false"><button class="faq__q"><span class="qi">备案要花钱吗？</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="faq__a">备案本身免费，微信和通管局都不收费。警惕第三方"代办备案"收费——官方流程你自己就能完成。</div></div>
-                <div class="faq__item" aria-expanded="false"><button class="faq__q"><span class="qi">大概多久能下来？</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><div class="faq__a">平台初审 1–2 工作日，通管局审核 1–20 工作日，整体以通管局为准。建议尽早发起——这是上线路径上最长的人肉等待。</div></div>
+                <details class="faq__item" open><summary class="faq__q"><span class="qi">个人主体能备案吗？</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#chevron-down"></use></svg></summary><div class="faq__a">能。个人小程序同样需要备案，准备好本人身份证即可，不需要企业资质。</div></details>
+                <details class="faq__item"><summary class="faq__q"><span class="qi">备案要花钱吗？</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#chevron-down"></use></svg></summary><div class="faq__a">备案本身免费，微信和通管局都不收费。警惕第三方"代办备案"收费——官方流程你自己就能完成。</div></details>
+                <details class="faq__item"><summary class="faq__q"><span class="qi">大概多久能下来？</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#chevron-down"></use></svg></summary><div class="faq__a">平台初审 1–2 工作日，通管局审核 1–20 工作日，整体以通管局为准。建议尽早发起——这是上线路径上最长的人肉等待。</div></details>
               </div>
             </div>
 
             <div class="foot-note">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#shield"></use></svg>
               <span>以上为待你确认的导航整理，依据官方来源；不构成合规担保，不代表"已合规 / 保证过审"。所有官方后台的提交、核验、发布均需你本人完成。</span>
             </div>
           </div>
@@ -127,36 +140,8 @@
     </div>
   </div>
 
-<script>
-  const S = (p, s=13, sw=1.75) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
-  const CHECK = '<path d="M20 6 9 17l-5-5"/>';
-  const STAGES = [
-    ['注册小程序账号','done'],['主体认证 / 实名核验','done'],['ICP 备案','cur'],['选择服务类目','todo'],
-    ['用户隐私保护指引','todo','按需'],['服务器域名白名单','todo','按需'],['提交审核','todo'],['发布上线','todo']
-  ];
-  document.getElementById('spine').innerHTML = STAGES.map(([t, s, cond]) => {
-    const cls = s === 'done' ? 'stg--done' : s === 'cur' ? 'stg--cur' : '';
-    const dot = s === 'done' ? S(CHECK, 8, 2.6) : '';
-    const c = cond ? `<span class="stg__cond">${cond}</span>` : '';
-    const href = s === 'cur' ? '' : `onclick="location.href='main-four-region.html'"`;
-    return `<li class="stg ${cls}"><button class="stg__row" ${href}><span class="stg__dot">${dot}</span><span class="stg__t">${t}</span>${c}</button></li>`;
-  }).join('');
-
-  document.getElementById('faq').addEventListener('click', (e) => {
-    const q = e.target.closest('.faq__q'); if (!q) return;
-    const item = q.parentElement;
-    item.setAttribute('aria-expanded', item.getAttribute('aria-expanded') === 'true' ? 'false' : 'true');
-  });
-
-  const annotBtn = document.getElementById('annotBtn');
-  document.body.classList.add('annot');
-  annotBtn.addEventListener('click', () => annotBtn.classList.toggle('active', document.body.classList.toggle('annot')));
-  const themeBtn = document.getElementById('themeBtn');
-  themeBtn.addEventListener('click', () => {
-    const dark = document.body.getAttribute('data-theme') === 'dark';
-    document.body.setAttribute('data-theme', dark ? 'light' : 'dark');
-    themeBtn.textContent = dark ? '深色' : '浅色';
-  });
-</script>
+<script type="module" src="stage-workspace.js"></script>
+<script src="preview.js"></script>
+<script src="responsive.js"></script>
 </body>
 </html>

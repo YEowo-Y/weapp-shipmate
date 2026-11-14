@@ -17,6 +17,8 @@
 
 ### Fixed
 
+- 桌面安装器与随包 CLI 统一显示 `0.2.0-rc.3`。Windows 候选包使用 NSIS；发布校验覆盖根目录、桌面 npm、Tauri 与 Cargo 的版本字段。
+
 - **`review.function-matches-intro` 曾让用户删掉合规功能**（误报，high）：`reject.html` 3.1.1 整行为「小程序所实际提供的功能点，需与小程序的简介一致。示例：功能包括但不限于简介中提炼的功能点；」，旧引文恰在句号处截断，丢掉了后半句。原文确立的是**单向下界**（简介提炼的功能点须都实现），规则却据此写出「简介里没写的功能别上」这一原文明确容许其反面的**上界禁令**。现补全引文并把 `requires` 收回下界。
 - **`login.after-experience` 对「体验范围特定」小程序误报 blocker**（误报，high）：官方页把小程序二分为「体验范围开放」与「体验范围特定」并给出方向相反的整改建议，规则引用的只是「开放」分支原文，却无条件适用。对学校/员工/社保卡信息系统等「特定」小程序，官方**明文允许**首页即要求授权（另需使用范围说明与取消登录按钮）。现把适用分支写进 `title`/`requires`，并如实说明「特定」分支的另一套要求。
 - **`privacy.upp-required` 把插件的审核门槛套给了小程序**（越界，high）：「隐私说明须审核通过才可提交版本」出自该页「二、插件用户隐私保护说明填写」节；小程序节说的是平台默认拉取现网协议、有出入或为空「则在提审时会提醒开发者进行更新」，并无此前置。`why` 中「会导致接口不可用」的因果由 `PrivacyAuthorize.html` 建立、本页从未建立，一并移除。
@@ -25,6 +27,8 @@
 - **rot 对失效来源必然漏报**：旧实现 `redirect: "follow"` + 任意 2xx 判 `ok`。实测两例（现由负向控制钉住）：`login.*` 引用的社区页 302 → `/community/error/emergency?forceLogin=true` 强制登录错误页 → 200 → 判 `ok`，即**用户点开 `official_url` 读不到被引用的原文**；`payment.requires-merchant` 引用的支付文档 301 → 新规范地址 → 200 → 判 `ok`。加固后实跑 `--links` 另发现审计范围外的第三例：`flow:registration` / `flow:certification` 引用的社区文章同样落在 forceLogin 错误页。
 
 ### Changed
+
+- 明确手动聊天附件与工具权限分别授权，源码默认留在本机。规划中的例外包括 agent 文件分享、经开发者工具预览或上传体验版的边界。新增[安全设计与验收条件](docs/security/agent-mode-and-trial-upload-design.md)；仅修订文档，未启用这些功能。
 
 - 依赖维护升级（2026-07-26，三个存量 Dependabot PR，均非安全告警）：`eslint` 10.6.0→10.8.0（仅开发链）。其 PR 绿勾早于上轮 lockfile 安全升级、base 已移动，「PR 绿 + main 绿」不等于「合并结果绿」——故合并前在隔离 worktree 实跑「最新 main + 该 PR」合并结果的五道门禁（lint / test 236 全过 / verify:quotes / coverage / mcpb 冒烟）全绿后才落锁。`actions/checkout` 与 `actions/setup-node` 均 4→7（ci / release / rule-rot 三个 workflow）：两者在 workflow 中系相邻行，三方合并互相冲突，后者经 Dependabot rebase 后合并，rebase 后的六腿 CI 已实测两个 @v7 的**组合**。留档：`release.yml` 与 `rule-rot.yml` 里的 @v7 要到下次打 tag / 定时触发才首次真实执行，validate 六腿验过的是同版本 action 而非该两处调用点。
 

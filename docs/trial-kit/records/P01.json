@@ -1,0 +1,59 @@
+{
+  "participant_id": "P01",
+  "consent_recorded": false,
+  "trial_type": "desktop",
+  "date_utc": null,
+  "persona": null,
+  "artifact": {
+    "version": null,
+    "sha256": null,
+    "source_commit": null,
+    "working_tree_dirty": null,
+    "channel_type": null,
+    "channel_reference": null,
+    "signature_status": "not-verified"
+  },
+  "environment": {
+    "os_version": null,
+    "architecture": null,
+    "webview2_version": null,
+    "network": null,
+    "developer_tools_present": null,
+    "prior_install": null
+  },
+  "stages": {
+    "acquire": "not-run",
+    "install": "not-run",
+    "first_open": "not-run",
+    "first_useful_result": "not-run",
+    "reopen": "not-run",
+    "uninstall": "not-run",
+    "select_practice_directory": "not-run",
+    "read_action_categories": "not-run",
+    "guide_unknown_preserved": "not-run",
+    "empty_rejection_page": "not-run",
+    "export_project_backup": "not-run",
+    "restore_project_backup": "not-run",
+    "imported_history_understanding": "not-run"
+  },
+  "timings_seconds": {
+    "acquire": null,
+    "install": null,
+    "first_open": null,
+    "first_useful_result": null
+  },
+  "independent_completion": null,
+  "first_assistance_at_seconds": null,
+  "assistance_summary": null,
+  "next_action_verbatim": null,
+  "understanding_verdict": "not-run",
+  "official_vs_manual_understanding": null,
+  "recheck_and_comparison_understanding": null,
+  "warnings_and_blockers": [],
+  "sanitized_evidence_refs": [],
+  "followup_issue": null,
+  "practice_fixture": "practice-miniapp",
+  "action_category_verbatim": null,
+  "empty_rejection_verbatim": null,
+  "imported_history_verbatim": null
+}

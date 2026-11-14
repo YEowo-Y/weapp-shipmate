@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-project-archive-prepare"
+description = "Enables the project_archive_prepare command without any pre-configured scope."
+commands.allow = ["project_archive_prepare"]
+
+[[permission]]
+identifier = "deny-project-archive-prepare"
+description = "Denies the project_archive_prepare command without any pre-configured scope."
+commands.deny = ["project_archive_prepare"]

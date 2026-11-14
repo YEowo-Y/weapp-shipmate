@@ -75,6 +75,7 @@ export function ruleToItem(r) {
     title: r.title,
     stage: r.stage,
     severity: r.severity,
+    ...(r.confidence !== undefined ? { confidence: r.confidence } : {}),
     why: r.why || null,
     requires: r.requires ? [...r.requires] : [],
     warn: r.warn || null,
@@ -82,5 +83,6 @@ export function ruleToItem(r) {
     source_quote: r.source_quote,
     last_verified: r.last_verified,
     manual_required: r.manual_required,
+    ...(r.action_categories ? { action_categories: [...r.action_categories] } : {}),
   };
 }

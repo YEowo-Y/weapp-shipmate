@@ -1,5 +1,11 @@
 # 08 · 产品愿景:从上线工具到全生命周期上线 copilot
 
+> **当前实现与历史方案的边界（2026-10-22 P0）**：本文保留 2026-06 的产品探索记录；下文的「✅ 已定」、阶段编号和架构图不代表已经交付，也不是当前依赖安装清单。当前事实以[功能台账](12-current-capabilities.md)为准，实施顺序见[总体计划](../.omx/plans/project-completion-plan-20261022.md)。
+>
+> 当前桌面为 **Vanilla TypeScript / Vite / Tauri 2 / Web Awesome**，复用 Node 模型 broker 和 IndexedDB 会话存储。React、Zustand、SQLite、系统凭据库、PTY、自动修复和持久任务执行器尚未作为本文所述架构落地。后续项目模型拟支持一个项目关联多个会话、运行和成果，替代「一项目=一会话」；迁移前保留未归属的旧会话。
+>
+> 安全口径更正：合法规则 ID 只能说明引用存在，不能给整段 AI 解释授予「已核验」状态；提示词与 XML 分隔符不是权限边界。工具字段须经过契约校验，模型解释仍标注为 AI 建议。本次文档整理不代表浏览器、真实账号或安装版验收通过。
+
 > 本文涉及的规则数/统计以 `npm run validate` 实测为准,历史快照不再逐处回填。
 >
 > 状态:**愿景施工图(2026-06-22,四轮调研已沉淀)**,驱动 P2.1+ 实施。本文是决策 #8(自建桌面 agent 终态)在**产品层**的展开;技术底座见 [`docs/07`](07-desktop-agent-tech-research.md)。
@@ -19,7 +25,7 @@
 
 - **领域聚焦,不做通用 agent 工作台。** 对话 / 终端 / MCP / 记忆等是**手脚**,服务于唯一目标:从代码到上线。理由:护城河是 63 条已核验规则(以 `npm run validate` 实测为准)+ 8 阶段流 + 拒因库 + 交叉核验扫描器,这些不转移到通用 agent;通用工作台是打不赢的红海;"公益 / 不做担保"只有收窄才可信;决策 #8 的"换壳几乎零返工"本就是领域产品架构。
 - **市场空白已被竞品扫描证实**(R1):GitHub `wechat-mini-program` topic 1000+ 仓 + 6 组中英关键词,**零直接竞品**。邻接工具各管一段——`miniprogram-ci`(上传管道)、`wechat-devtools-mcp`/`weapp-dev-mcp`(操控开发者工具)、`wxmini-security-audit`(安全扫描)——**没人碰"代码完成→上架"这段合规导航**。我们填的正是这个空白。
-- **不变的灶台**(继承自项目根):不做合规担保、不代提交官方后台、不上传源码/密钥、查无官方明文者宁缺毋造、所有官方动作 `manual_required`。
+- **不变的灶台**(继承自项目根):不做合规担保、不代提交官方后台、不收集项目密钥、源码默认留在本机（手动聊天附件与规划中的两项工具权限见[治理承诺](../GOVERNANCE.md)）、查无官方明文者宁缺毋造、所有官方动作 `manual_required`。
 - **覆盖边界 ✅(用户定)**:确定性规则/知识库系统化覆盖「上线/合规/运营」官方文档**全集**(终态目标;前期优先个人开发者);纯开发文档(组件/框架/SDK/API)**不进逐字规则库**,交给 agent + LLM(BYO-key)或开关承载——把"错一条砸信任"的合规知识与"多/变/低风险"的开发知识分到两种载体,也让 §4 准确性 与 §5 LLM 巡航 各有战场、不抢同一责任。覆盖进度与 backlog 见 §15。
 - **红线提醒**:工程化能力(DOD / 质量门禁 / 测试 / git / 安全)本质是通用软件工程——**只在锚定"上线就绪"、且开关化/零知识时**才纳入,否则滑向通用商品海。口径见 §3.2。
 
@@ -45,7 +51,7 @@
 ### 3.1 必备(table-stakes,做到位即止)
 - 8 阶段引导清单作为产品脊柱(`flow.yaml` 驱动,done-state 归规则引擎、永不归 LLM,锁定靠 `requires_stage`)。
 - 5 问平白访谈 → 填 docs/02 导航输入(LLM 解析模糊自由文本为 enum,写回确定性状态,给"接受/编辑"门)。
-- 流式 markdown 对话 + 左栏会话=项目列表(一项目=一会话=一文件夹),本地 SQLite 持久化。
+- 流式 markdown 对话与会话历史已存在。原「一项目=一会话=一文件夹 + SQLite」为历史提议，已由多会话项目规划替代；当前会话实际存于 IndexedDB，持久项目与报告存储待实施。
 - `check` 接真实项目文件夹(扫请求域名 + 隐私 API + 交叉核验;变量 baseURL 出 `manual_only`,绝不 LLM 猜)。
 - 每阶段交接闸门(材料清单 + 时间炸弹 + 官方深链 + "我已完成"勾选,工具永不提交)。
 - BYO-key 设置(provider → 粘 key → 可改 Base URL → "测试连接"绿/红 → 启用;一个 OpenAI 兼容自定义槽给国内网关;key 只进 OS 钥匙串)。
@@ -106,12 +112,13 @@
 
 当前可复现实测（2026-07-17）：`npm run accuracy` 覆盖 89 条人工标注，**TP=55 / FP=0 / FN=0，precision=recall=1.000**；这只证明已标注语料上的表现，不外推为所有真实项目零误报/零漏报。
 
+2026-11-07 已交付 confidence 显性化：JSON 保留可选原始值，Markdown、桌面依据和交接导出显示同一含义；不将缺值补为高置信，不改变严重度或匹配。兼容性与验证记录见 [报告置信度契约](24-rule-confidence.md)。
+
 仍属后续演进而非当前能力：
 
 | 待演进项 | 触发与边界 |
 |---|---|
 | 逐规则 YAML 内嵌正/反例 | 当集中 labels/fixture pins 已难以定位规则级回归时，再评估 schema 与迁移成本 |
-| confidence 显性化 | JSON/Markdown 要形成一致契约并补回归测试后再暴露，不提前声称用户可见 |
 | 抑制留痕 | 需要明确注释语法、审计记录与“不静默消失”报告语义后实施 |
 
 后续规则扩充继续受现有数字地基约束：每批同时报告新增覆盖、逐字核验和 precision，不能用扩覆盖掩盖准确性下降。
@@ -163,7 +170,9 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 
 > 📐 本节是组件级骨架;**记忆/提示词/持久化的工程级规范(注入分层 + 生命周期 + 存储引擎 + 完整 SQL DDL)见 [`docs/09`](09-memory-context-architecture.md)**,它把 §5/§7.1/§11.3 的草图回填成可单测工件与确定性 schema。
 
-### 7.1 组件图(Rust 核拥逻辑,webview 拥 UI)
+### 7.1 历史候选组件图（未按此图实施）
+
+下图保留方案演变背景，不作为当前实现或依赖清单；本轮继续复用现有 Vanilla TypeScript 前端与 Node broker，不另建 Rust 模型运行时。
 ```
 [Webview: React+Vite+Zustand+shadcn] 对话 / 项目+阶段侧栏 / 设置 / xterm.js 终端 / diff 面板
    <-> Tauri IPC (ipc::Channel<ChatDelta>) <->
@@ -180,16 +189,13 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 ### 7.2 大脑当内置 MCP ✅(关键决定)
 把 `bin/weapp-shipmate-mcp.mjs`(已是合规·极简依赖 stdio JSON-RPC server,仅 js-yaml)当 Node sidecar,`mcp_servers` 表种一行 `builtin=true` 不可删,McpClient 启动自动拉起。check/guide/explain 成为 AgentRuntime 看到的同一工具注册表里的 3 个工具,经与任何用户 MCP server **完全相同**的调用路径派发。大脑字节级不变(决策 #8 零返工),同文件同时服务独立 `.mcpb`。**这保证规则永远是事实源**:LLM 拿到的是结构化工具结果,必须引用、不能编。
 
-### 7.3 BYO-key ✅(broker 模式 = 行业最强姿态)
-设置 → 模型与密钥:provider(OpenAI/Anthropic/Gemini/Ollama/**OpenAI 兼容自定义**)→ key → 可改 Base URL → 选模型 → 测试连接 → 启用。
+### 7.3 模型连接与凭据（现状及后续边界）
 
-**broker 模式(R2,我们比对标都强)**:几乎所有纯桌面 AI 客户端(Cherry Studio/Chatbox/Jan/Open WebUI/Continue)都**明文存 key**;只有蹭 VS Code SecretStorage 的 IDE 扩展用 keychain。我们:
-```
-[WebView] invoke("chat",{messages})        ← 载荷里没有 key
-[Rust 核] 1.keyring 取 key 2.拼 Authorization 头 3.reqwest 调 LLM 4.只回 {content}
-[WebView] 只拿到 {content}                   ← key 永不过 IPC、永不进 webview/日志/后端
-```
-即使 webview 被 XSS,也没有任何 command 会返回 key。`keyring-rs`(macOS Keychain / Windows Credential Manager / Linux Secret Service;Linux 用 `sync-secret-service`+`crypto-rust` features 避 OpenSSL 依赖)。**不用 Stronghold**(官方将弃用 + 口令 UX 差)。**确定性流无 key 也能跑**,key 只解锁 AI 辅助(无后端,零运行成本结构性成立)。
+当前支持 OpenAI、Anthropic、Google、OpenRouter、Ollama 的文本聊天适配；OAuth 只接入 OpenRouter PKCE。自定义 Base URL、系统凭据保存及通用订阅账号登录尚未完成。连接目录成功不等于推理调用成功，真实外部账号须单独验收。
+
+当前凭据由本机 Node broker 在活动会话内持有；不能把计划中的 OS 钥匙串描述为已经实现。API key 在用户输入及提交连接时会经过界面和相应传输边界，因此撤回「key 永不进 WebView/IPC/后端」的绝对表述。后续系统凭据方案需分别验证录入、保存、使用、注销和错误恢复，普通状态响应不应回传密钥。
+
+原文关于竞品普遍明文保存密钥的概括没有逐产品、逐版本证据，予以撤回。2026-10-22 调研未找到 [Tauri 官方 Stronghold 文档](https://v2.tauri.app/plugin/stronghold/)的弃用声明，不再以「官方将弃用」作为选型理由。系统凭据库是待验证的集成方向，不代表已证明所有替代方案不安全。确定性规则工具无密钥可用，AI 辅助另行连接模型服务。
 
 ---
 
@@ -199,6 +205,7 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 **"engineered calm" + 专业版 Claude 桌面的暖,Linear 的结构清晰——清晰第一。** 颜色只承载意义不做装饰:整屏中性灰白,只有三种带意义的色。船友"航程"品牌张力收敛为"清楚的阶段脊柱",不花哨。
 
 ### 8.2 栈与 token(提议)
+> 以下为历史视觉与技术候选，React 迁移建议已被「优先复用现有组件」取代；当前依赖见[功能台账](12-current-capabilities.md)。
 - 栈:React + Vite + Zustand + Tailwind + Radix + shadcn/ui(源码内置、离线本地、无 CDN),CSS 变量主题化;xterm.js 终端;react-markdown + 代码高亮;字体本地打包。**P2.1 脚手架可起于 `dannysmith/tauri-template`**(R1:Tauri v2 + React 19 + shadcn/ui v4 + Tailwind v4,MIT,且内置 Claude Code 集成)。
 - 配色(暖色友好,跟 host/Claude 同系、自动适配明暗):中性灰白为底 + 一抹赭橙(`#c15f3c`)只给"当前/主操作";语义 绿=已核验/通过、黄=警告、红=阻断。深度靠表面阶梯不靠阴影。
 - 字体:Inter(UI)+ JetBrains/Geist Mono(终端/规则 id/路径/已核验输出——mono 是"可信工程工具"最便宜的信号,也把"已核验规则"和"AI 散文"在视觉上分开)。
@@ -220,7 +227,7 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 | 阶段 | 范围 | 为什么这么排 |
 |---|---|---|
 | **P2.0 ✅** | 薄外壳 + 大脑 sidecar(Tauri 2,vanilla TS) | 已发布;证明 sidecar 边界、外壳可丢 |
-| **P2.0.5(可穿插，部分已交付)** | `corpus/labels.json` + `scripts/accuracy.mjs` + CI 红线已落地；逐规则 YAML 内嵌反例、confidence 显性化与 suppression 留痕仍按 §4.2 后续触发 | **纯大脑层、零 UI 风险、直接兑现 make-or-break**；现有准确率数字已成为后续规则扩充的门禁，与 P2.1 可并行 |
+| **P2.0.5(可穿插，部分已交付)** | `corpus/labels.json` + `scripts/accuracy.mjs` + CI 红线已落地；confidence 显性化已交付；逐规则 YAML 内嵌反例与 suppression 留痕仍按 §4.2 后续触发 | 准确性契约与报告可解释性；显示变更须通过桌面验收，现有准确率数字继续约束后续规则扩充，与 P2.1 可并行 |
 | **P2.1** | 前端换骨:React+shadcn,四区 IA + ⌘K(mock 数据、无 LLM);本地字体;收紧 CSP | 可独立回退但并非零风险：新依赖、CSP/Tauri 权限和信息架构都须重新审批与验证。触发点以 outreach 信息架构反馈和 `EVOLUTION_ROADMAP.md` M1 为准；视觉规范源 = `desktop/design-previews/` 14 屏 + 用户 Claude design 稿 |
 | **P2.2** | 大脑接成内置 MCP + 确定性流 UI(8 阶段 + 交接闸门 + check 接真实文件夹 + SQLite + 无 key 首启分流),**仍无 LLM** | 这一阶段单独就是个可发布的诚实产品;零 LLM 风险、零担保暴露;最可砍 |
 | **P2.3** | BYO-key 对话 + 接地 agent loop(provider 适配 + keychain broker + 5 问访谈 + 护栏 + 绿/灰双标) | 辅助层叠在已正确的确定性核心上 |
@@ -393,7 +400,7 @@ LLM 锚在规则大脑上,在"上线"上能做的(低→高):翻译官 → 问�
 | login-after-experience | 不得未体验即强制授权登录 / 注册墙 | 部分 | ✅ | ✅ login.after-experience |
 | logout-option-discoverable | 含账户系统须提供易发现的"退出"选项 | 否 | ⚠️ | ⚠️ 阻塞:需渲染复核(Playwright 桥不可用) |
 | cat-ai-content-labeling | AI 生成内容须显著标注"AI 生成"(2026 高频,通用义务) | 否 | ✅ | 🔜 下一批 |
-| info-match-recall-gaps | 隐私 match 召回补齐(getRealtimePhoneNumber/getFuzzyLocation 等)+ 三条 confidence medium→high | **是** | ✅ | ✅ fixtures/recall-apis + match 扩(confidence 显性化仍待做) |
+| info-match-recall-gaps | 隐私 match 召回补齐(getRealtimePhoneNumber/getFuzzyLocation 等)+ 三条 confidence medium→high | **是** | ✅ | ✅ fixtures/recall-apis + match 扩；confidence 显性化见 [docs/24](24-rule-confidence.md) |
 
 > **T0 剩余 4 项裁决(2026-07-02)**:不卡 v0.1.0 预览发布——3 项 🔜 走 curl 逐字流水线入 0.1.1,logout 待 Playwright 恢复;预览版价值在既有 63 条。
 

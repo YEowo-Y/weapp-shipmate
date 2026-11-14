@@ -4,6 +4,7 @@
 schema_version: 1
 rules:
   - id: qualification.provide-materials
+    action_categories: ["materials", "manual_check"]
     title: "按要求提供审批/备案等资质材料"
     kind: navigation
     stage: review
@@ -15,5 +16,5 @@ rules:
     why: "未按要求提供真实有效资质材料会影响审核结果甚至被拒"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "你应当按照我们的要求提供相应的审批、备案等资质文件材料"
-    last_verified: "2026-07-16"
+    last_verified: "2026-11-13"
     manual_required: true

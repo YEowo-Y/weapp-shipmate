@@ -5,6 +5,7 @@
 schema_version: 1
 rules:
   - id: data.collection-consent
+    action_categories: ["code", "manual_check"]
     title: "收集用户数据须告知用途并取得同意"
     kind: navigation
     stage: review
@@ -18,10 +19,11 @@ rules:
     why: "未告知用途或未取得明确同意即收集用户数据会被拒审，并涉个人信息保护合规风险"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "明确告知用户该数据的用途，确保经过用户明确同意和授权"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: data.delete-on-request
+    action_categories: ["code", "manual_check"]
     title: "须提供用户数据删除方式"
     kind: navigation
     stage: review
@@ -35,10 +37,11 @@ rules:
     why: "未向用户提供数据删除方式不符合运营规范，涉个人信息保护合规风险并可能被处理"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "微信小程序应当向用户提供修改、删除用户数据的方式，确保用户要求删除其用户数据时可通过该方式自行操作完成，并确保相关数据不可恢复、不可撤销地被完全删除。"
-    last_verified: "2026-07-16"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: data.security-measures
+    action_categories: ["code", "manual_check"]
     title: "收集用户数据须采取安全保护措施"
     kind: navigation
     stage: review
@@ -52,5 +55,5 @@ rules:
     why: "未采取数据安全保护措施违反运营规范，涉个人信息保护合规风险"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "微信小程序收集用户的数据后，应当采取必要、合理、有效的安全保护措施，防止任何形式的用户数据被盗、泄漏、披露等事件。"
-    last_verified: "2026-07-16"
+    last_verified: "2026-11-13"
     manual_required: true

@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, rmSync, mkdirSync, cpSync, existsSync } fr
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
-import { assertVersionIdentity } from "./check-release-version.mjs";
+import { assertVersionIdentity, readRepositoryVersionIdentity } from "./check-release-version.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const STAGE = join(ROOT, "build", "mcpb-stage");
@@ -22,14 +22,7 @@ function readJSON(p) {
 
 // 1) 版本一致性：所有仓库版本载体必须相等，杜绝静默漂移。
 const pkg = readJSON(join(ROOT, "package.json"));
-const manifest = readJSON(join(ROOT, "manifest.json"));
-const lock = readJSON(join(ROOT, "package-lock.json"));
-assertVersionIdentity({
-  packageVersion: pkg.version,
-  manifestVersion: manifest.version,
-  lockVersion: lock.version,
-  lockPackageVersion: lock.packages?.[""]?.version,
-});
+assertVersionIdentity(readRepositoryVersionIdentity(ROOT));
 log(`✓ 版本一致：${pkg.version}`);
 
 // 2) 暂存纯生产副本。

@@ -18,16 +18,26 @@ export function loadRejections({ includeDrafts = false, root = ROOT } = {}) {
  * 给一条拒因条目按查询打分：错误码精确命中权重最高，其次别名子串双向命中。
  * 中文按子串匹配，无需分词；alias 命中 query 或 query 命中 alias 皆算（兼顾"贴整段反馈"与"敲单个词"）。
  */
-export function scoreRejection(entry, query) {
+function matchRejection(entry, query) {
   const q = String(query || "").trim().toLowerCase();
-  if (!q) return 0;
-  let score = 0;
-  for (const code of entry.codes || []) if (q.includes(String(code).toLowerCase())) score += 100;
+  const evidence = { aliases: [], codes: [], partialAliases: [] };
+  if (!q) return { score: 0, evidence, relevance: "possible" };
+  for (const code of entry.codes || [])
+    if (q.includes(String(code).toLowerCase())) evidence.codes.push(code);
   for (const alias of entry.aliases || []) {
-    const a = String(alias).toLowerCase();
-    if (q.includes(a) || a.includes(q)) score += 1;
+    const a = alias.toLowerCase();
+    if (q.includes(a)) evidence.aliases.push(alias);
+    else if (a.includes(q)) evidence.partialAliases.push(alias);
   }
-  return score;
+  // 一对多索引或短词扩展只能给候选；直接相关也仅指文本相关，不证明项目违规。
+  const relevance = entry.rules?.length === 1 && (evidence.codes.length || evidence.aliases.length)
+    ? "direct" : "possible";
+  const score = evidence.codes.length * 100 + evidence.aliases.length + evidence.partialAliases.length;
+  return { score, evidence, relevance };
+}
+
+export function scoreRejection(entry, query) {
+  return matchRejection(entry, query).score;
 }
 
 /**
@@ -42,19 +52,21 @@ export function runExplain(query, { includeDrafts = false } = {}) {
   const ruleById = new Map(rules.map((r) => [r.id, r]));
 
   const matched = entries
-    .map((e) => ({ entry: e, score: scoreRejection(e, query) }))
+    .map((e) => ({ entry: e, ...matchRejection(e, query) }))
     .filter((m) => m.score > 0)
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => Number(b.relevance === "direct") - Number(a.relevance === "direct") || b.score - a.score);
 
   const items = [];
   const missingLinks = [];
-  for (const { entry } of matched) {
+  for (const { entry, relevance, evidence } of matched) {
     for (const rid of entry.rules) {
       const rule = ruleById.get(rid);
       if (!rule) { missingLinks.push(`${entry.id}→${rid}`); continue; }
       const item = ruleToItem(rule);
       item.rejectId = entry.id; // 供 explain 渲染器按拒因分组
       item.rejectSummary = entry.summary;
+      item.relevance = relevance;
+      item.matchEvidence = evidence;
       items.push(item);
     }
   }

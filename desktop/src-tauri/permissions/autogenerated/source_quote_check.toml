@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-source-quote-check"
+description = "Enables the source_quote_check command without any pre-configured scope."
+commands.allow = ["source_quote_check"]
+
+[[permission]]
+identifier = "deny-source-quote-check"
+description = "Denies the source_quote_check command without any pre-configured scope."
+commands.deny = ["source_quote_check"]

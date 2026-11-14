@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-source-freshness-snapshot"
+description = "Enables the source_freshness_snapshot command without any pre-configured scope."
+commands.allow = ["source_freshness_snapshot"]
+
+[[permission]]
+identifier = "deny-source-freshness-snapshot"
+description = "Denies the source_freshness_snapshot command without any pre-configured scope."
+commands.deny = ["source_freshness_snapshot"]

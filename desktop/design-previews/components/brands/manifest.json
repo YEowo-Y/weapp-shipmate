@@ -1,0 +1,79 @@
+{
+  "repository": "https://github.com/lobehub/lobe-icons",
+  "commit": "8a1b2821bb768c484fe8da20c5e1838b6bf551a9",
+  "license": "MIT",
+  "files": [
+    {
+      "file": "openai.svg",
+      "upstreamPath": "packages/static-svg/icons/openai.svg",
+      "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/packages/static-svg/icons/openai.svg",
+      "sha256": "a595df6b423920c67a7f8f73c063e4bfb72d415948097b6cac063a2366bb5186",
+      "bytes": 1687,
+      "rendering": "monochrome"
+    },
+    {
+      "file": "anthropic.svg",
+      "upstreamPath": "packages/static-svg/icons/anthropic.svg",
+      "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/packages/static-svg/icons/anthropic.svg",
+      "sha256": "e833fdfa7e7187a86a05b870925067556a506dcd4239089aed73e1e58c9366a3",
+      "bytes": 368,
+      "rendering": "monochrome"
+    },
+    {
+      "file": "google-color.svg",
+      "upstreamPath": "packages/static-svg/icons/google-color.svg",
+      "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/packages/static-svg/icons/google-color.svg",
+      "sha256": "4e6aa8892ef15a6b431f40f2c9045979bf7e2357524e7bbb89b353cf4f32a5ac",
+      "bytes": 920,
+      "rendering": "original-color"
+    },
+    {
+      "file": "ollama.svg",
+      "upstreamPath": "packages/static-svg/icons/ollama.svg",
+      "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/packages/static-svg/icons/ollama.svg",
+      "sha256": "3a268218fb2e6e81fa31df70f70b51331625047794db81db21d35359428fae7a",
+      "bytes": 3290,
+      "rendering": "monochrome"
+    },
+    {
+      "file": "openrouter.svg",
+      "upstreamPath": "packages/static-svg/icons/openrouter.svg",
+      "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/packages/static-svg/icons/openrouter.svg",
+      "sha256": "ae671cc83de9bd45db97a47ed5e38a4e1bd9f93a12be495ba4b4f8b284026bca",
+      "bytes": 382,
+      "rendering": "monochrome"
+    },
+    {
+      "file": "deepseek.svg",
+      "upstreamPath": "packages/static-svg/icons/deepseek.svg",
+      "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/packages/static-svg/icons/deepseek.svg",
+      "sha256": "8f9443e351b6dacce71871790201b799d92e8bf96a45ef79aeb5e9bf4db423e2",
+      "bytes": 2189,
+      "rendering": "monochrome"
+    },
+    {
+      "file": "zhipu.svg",
+      "upstreamPath": "packages/static-svg/icons/zhipu.svg",
+      "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/packages/static-svg/icons/zhipu.svg",
+      "sha256": "d4c3fe5ff92820b2ae5e3ddaaa30e6fc622cb746b75baad97f4bb2428fa25c5d",
+      "bytes": 3602,
+      "rendering": "monochrome"
+    },
+    {
+      "file": "kimi.svg",
+      "upstreamPath": "packages/static-svg/icons/kimi.svg",
+      "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/packages/static-svg/icons/kimi.svg",
+      "sha256": "ed08131b46acf70e6e2144eceb775e74098b58ea65fa21eaee04be7b05cfe63b",
+      "bytes": 786,
+      "rendering": "monochrome"
+    },
+    {
+      "file": "LICENSE",
+      "upstreamPath": "LICENSE",
+      "url": "https://raw.githubusercontent.com/lobehub/lobe-icons/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/LICENSE",
+      "sha256": "add9d7531d1b21646317a8958e38fc727506fa39d24bdecb44154d943c82753a",
+      "bytes": 1064,
+      "rendering": "license"
+    }
+  ]
+}

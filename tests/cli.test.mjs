@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { main } from "../src/cli.mjs";
 
 function capture() {
@@ -103,7 +105,8 @@ test("--subject=personal 等号语法被正确解析（不再静默丢弃）", (
   assert.equal(code, 0);
   const o = JSON.parse(out.get());
   assert.equal(o.command, "guide");
-  assert.ok(o.meta.summary.includes("personal") || JSON.stringify(o).includes("personal"), "主体应生效");
+  assert.match(o.meta.summary, /主体：个人/, "主体应以可读名称显示");
+  assert.ok(o.items.some(item => item.ruleId === "filing.individual-id-materials"), "个人主体规则应生效");
 });
 
 test("布尔开关误带 =值 报无法识别", () => {
@@ -152,4 +155,97 @@ test("guide 不接受位置参数（`guide personal` 漏写 --subject 不得看�
   assert.equal(code, 1);
   assert.match(err.get(), /guide 不接受位置参数/);
   assert.equal(out.get(), "");
+});
+
+test("guide CLI 保留未知，并分别表达明确是与否", () => {
+  for (const [flags, expectedStages, payment] of [[[], "6/8，待确认 2 个阶段", null], [["--payment", "--sensitive", "--domain"], "8/8", "涉及支付"], [["--no-payment", "--no-sensitive", "--no-domain"], "6/8，已跳过 2 个阶段", "不涉及支付"]]) {
+    const out = capture(), err = capture();
+    assert.equal(main(["node", "cli", "guide", ...flags, "--json"], out, err), 0, err.get());
+    const result = JSON.parse(out.get());
+    assert.ok(result.meta.summary.includes(expectedStages));
+    if (payment) assert.ok(result.notes.some(note => note.includes(`已记录${payment}`)));
+    else {
+      assert.ok(result.notes.some(note => note.includes("未知不等于不适用")));
+      assert.ok(result.notes.every(note => !note.includes("已记录") && !note.includes("跳过阶段")));
+    }
+  }
+});
+
+test("正反事实开关冲突与布尔等号取值都报错", () => {
+  for (const fact of ["payment", "sensitive", "domain"]) {
+    for (const args of [[`--${fact}`, `--no-${fact}`], [`--no-${fact}`, `--${fact}`], [`--${fact}=false`], [`--no-${fact}=true`]]) {
+      const out = capture(), err = capture();
+      assert.equal(main(["node", "cli", "guide", ...args, "--json"], out, err), 1);
+      assert.match(err.get(), args.length === 2 ? /冲突/ : /无法识别/);
+      assert.equal(out.get(), "");
+    }
+  }
+});
+
+test("中文主体在 CLI 边界归一化（check 与 guide）", () => {
+  for (const [alias, subject] of [["个人", "personal"], ["个体户", "individual_business"], ["个体工商户", "individual_business"], ["企业", "enterprise"]]) {
+    for (const command of [["guide"], ["check", "fixtures/sample-app"]]) {
+      const actual = capture(), expected = capture(), err = capture();
+      const status = main(["node", "cli", ...command, `--subject=${subject}`, "--json"], expected, err);
+      assert.equal(main(["node", "cli", ...command, "--subject", alias, "--json"], actual, err), status, err.get());
+      assert.deepEqual(JSON.parse(actual.get()), JSON.parse(expected.get()));
+    }
+  }
+});
+
+test("目录不存在或传入文件时显示中文路径与恢复指引", () => {
+  for (const [path, reason] of [["fixtures/no-such-project-r1", /目录不存在/], ["package.json", /不是目录/]]) {
+    const out = capture(), err = capture();
+    assert.equal(main(["node", "cli", "check", path], out, err), 1);
+    assert.match(err.get(), reason);
+    assert.ok(err.get().replaceAll("\\", "/").includes(path));
+    assert.match(err.get(), /请/);
+    assert.doesNotMatch(err.get(), /ENOENT|ENOTDIR|at .*\.mjs/);
+    assert.equal(out.get(), "");
+  }
+});
+
+test("guide 帮助说明三态与仅提示输入", () => {
+  const out = capture();
+  main(["node", "cli", "guide", "--help"], out, capture());
+  assert.match(out.get(), /未提供.*未知/);
+  assert.match(out.get(), /payment.*business.*仅.*提示.*不.*筛选/);
+  for (const fact of ["payment", "sensitive", "domain"]) assert.ok(out.get().includes(`--no-${fact}`));
+});
+
+test("目录拒权时保留中文原因和目标路径（注入 EACCES）", (t) => {
+  const original = fs.readdirSync;
+  t.mock.method(fs, "readdirSync", (path, options) => {
+    if (String(path).includes("denied-r1")) throw Object.assign(new Error("private internal detail"), { code: "EACCES", syscall: "scandir", path });
+    return original(path, options);
+  });
+  syncBuiltinESMExports();
+  try {
+    const out = capture(), err = capture();
+    assert.equal(main(["node", "cli", "check", "denied-r1"], out, err), 1);
+    assert.match(err.get(), /没有权限读取目录/);
+    assert.match(err.get(), /denied-r1/);
+    assert.match(err.get(), /请.*读取权限.*重试/);
+    assert.doesNotMatch(err.get(), /private internal|EACCES|at .*\.mjs/);
+    assert.equal(out.get(), "");
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
+});
+
+test("check 聚焦阻断时仍保留被隐藏条目的扫描限制", () => {
+  const baseline = capture();
+  assert.equal(main(["node", "cli", "check", "fixtures/sample-app", "--json"], baseline, capture()), 0);
+  const note = JSON.parse(baseline.get()).items.find(item => item.ruleId === "domain.request-whitelist").note;
+  assert.ok(note);
+  for (const format of ["--json", "--checklist", null]) {
+    const out = capture();
+    assert.equal(main(["node", "cli", "check", "fixtures/sample-app", "--blockers-only", ...(format ? [format] : [])], out, capture()), 0);
+    if (format === "--json") {
+      const result = JSON.parse(out.get());
+      assert.ok(result.items.every(item => item.severity === "blocker"));
+      assert.equal(result.notes.filter(value => value === note).length, 1);
+    } else assert.ok(out.get().includes(note), `${format || "Markdown"} 应保留完整扫描限制`);
+  }
 });

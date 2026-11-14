@@ -3,71 +3,75 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>上线船友 · 实时同步闭环图(docs/08 §6)</title>
+<title>上线船友 · 检查与更新</title>
 <link rel="stylesheet" href="app.css" />
+<link rel="stylesheet" href="responsive.css" />
+<style>
+  .diagram__inner { width: 100%; max-width: 800px; margin-inline: auto; padding: 32px 28px 48px; }
+  .diagram__inner h1 { font-size: 26px; line-height: 1.3; margin: 0 0 12px; }
+  .diagram__cap { background: none; padding: 0; font-size: 15px; line-height: 1.7; }
+  .dlabel { font-size: 14px; color: var(--text-2); margin-top: 28px; }
+  .dflow { display: flex; flex-direction: column; flex-wrap: nowrap; list-style: none; padding: 0; gap: 0; margin: 18px 0; }
+  .dflow .dnode { position: relative; flex: none; display: flex; flex-direction: row; align-items: flex-start; justify-content: flex-start; gap: 16px; text-align: left; background: none; border: 0; border-radius: 0; padding: 0 0 24px; }
+  .dnode:not(:last-child)::after { content: ''; position: absolute; top: 35px; bottom: 5px; left: 15px; width: 1px; background: var(--border-2); }
+  .dnode__number { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border: 1px solid var(--border-2); border-radius: 50%; font-size: 13px; color: var(--text-2); }
+  .dnode__t { font-size: 15px; line-height: 1.6; }
+  .dnode__sub { font-size: 14px; line-height: 1.6; color: var(--text-2); }
+  .dloop { justify-content: flex-start; padding: 12px 0; background: none; text-align: left; font-size: 13px; line-height: 1.6; }
+  .dband { border: 0; border-top: 1px solid var(--border); border-radius: 0; padding: 22px 0 0; margin-top: 20px; }
+  .dband__h { font-size: 15px; color: var(--text); margin: 0 0 8px; }
+  .dband__sub, .dnote, .sync-technical { font-size: 14px; line-height: 1.7; color: var(--text-2); }
+  .sync-technical { border-top: 1px solid var(--border); padding-top: 16px; }
+  .sync-technical summary { cursor: pointer; color: var(--text); min-height: 36px; }
+  .sync-technical p { margin: 4px 0; }
+  @media (max-width: 460px) { .diagram__inner { padding: 24px 17px 40px; } .diagram__inner h1 { font-size: 23px; } }
+</style>
 </head>
 <body data-theme="light">
-  <h2 class="sr-only">上线船友实时同步闭环图：源码变更经文件监听、全量重扫、IPC 广播、状态写入到 UI，LLM 在这条实时流上巡航。</h2>
+  <h2 class="sr-only">检查与更新规划说明：展示计划中的文件监听、结果更新与模型辅助，目前尚未接入这些能力。</h2>
 
   <div class="chrome">
-    <b>上线船友 · 实时同步闭环</b>
-    <span class="sub">docs/08 §6 — 确定性底座提供"真相的实时流"，LLM 在流上巡航</span>
+    <b>上线船友 · 同步方案说明</b>
+    <span class="sub">未来能力 / 尚未接入实时监听与模型</span>
     <button class="ctl" id="themeBtn">深色</button>
   </div>
 
   <div class="stage-wrap">
     <div class="win">
-      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="tt">上线船友 — 架构 · 实时同步闭环</span></div>
+      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="tt">上线船友 — 架构 · 同步方案说明</span></div>
 
       <section class="diagram scroll">
         <div class="diagram__inner">
-          <p class="diagram__cap">确定性底座提供<b>"真相的实时流"</b>，LLM 在这条流上巡航。<b>底座有多实时，AI 辅助就能扩多少。</b>下面是这条闭环——源码一变，毫秒级重扫，结果回流到 UI 与 AI。</p>
+          <h1>检查与更新如何衔接</h1><p class="diagram__cap">这是一份规划说明。当前桌面端可由你发起本地预检和流程导航；下图中的文件监听、结果广播与模型辅助尚未接入。</p><nav class="journey-actions"><a class="chip" href="main-four-region.html">返回上线工作台</a><a class="chip" href="audit.html">查看预检结果示例</a></nav>
 
-          <p class="dlabel">确定性实时流（自动）</p>
-          <div class="dflow">
-            <div class="dnode dnode--src"><div class="dnode__t">你改代码</div><div class="dnode__sub">项目文件夹</div></div>
-            <div class="darrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-            <div class="dnode"><div class="dnode__t">文件监听</div><div class="dnode__sub">notify + 300ms 去抖</div><span class="dnode__tag tag-rust">Rust 核</span></div>
-            <div class="darrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-            <div class="dnode"><div class="dnode__t">全量重扫</div><div class="dnode__sub">scanProject · 毫秒级</div><span class="dnode__tag tag-node">Node 大脑</span></div>
-            <div class="darrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-            <div class="dnode"><div class="dnode__t">结果广播</div><div class="dnode__sub">emit · preflight-result</div><span class="dnode__tag tag-ipc">Tauri IPC</span></div>
-            <div class="darrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-            <div class="dnode"><div class="dnode__t">写入状态</div><div class="dnode__sub">listen → Zustand</div><span class="dnode__tag tag-react">React</span></div>
-            <div class="darrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-            <div class="dnode"><div class="dnode__t">UI 实时更新</div><div class="dnode__sub">脊柱 / 报告 / step 卡</div><span class="dnode__tag tag-react">React</span></div>
-          </div>
-          <div class="dloop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg>实时闭环 · 你看到结果 → 继续改 → 毫秒级回流。不做增量、不手动重扫。</div>
+          <p class="dlabel">计划中的更新路径</p>
+          <ol class="dflow" aria-label="计划中的更新路径">
+            <li class="dnode"><span class="dnode__number" aria-hidden="true">1</span><div><div class="dnode__t">你改代码</div><div class="dnode__sub">在自己的项目文件夹中修改文件。</div></div></li>
+            <li class="dnode"><span class="dnode__number" aria-hidden="true">2</span><div><div class="dnode__t">文件监听</div><div class="dnode__sub">检测文件变更，准备下一次检查。</div></div></li>
+            <li class="dnode"><span class="dnode__number" aria-hidden="true">3</span><div><div class="dnode__t">全量重扫</div><div class="dnode__sub">使用本地规则重新检查项目。</div></div></li>
+            <li class="dnode"><span class="dnode__number" aria-hidden="true">4</span><div><div class="dnode__t">结果广播</div><div class="dnode__sub">将本次检查结果传递给工作区。</div></div></li>
+            <li class="dnode"><span class="dnode__number" aria-hidden="true">5</span><div><div class="dnode__t">写入状态</div><div class="dnode__sub">保留结果、来源与执行记录。</div></div></li>
+            <li class="dnode"><span class="dnode__number" aria-hidden="true">6</span><div><div class="dnode__t">UI 实时更新</div><div class="dnode__sub">在阶段导航与报告中呈现新的结果。</div></div></li>
+          </ol>
+          <div class="dloop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#rotate-ccw"></use></svg>规划目标：修改后重新检查，保留结果来源与执行记录。当前不进行后台监听。</div>
 
-          <div class="dband">
-            <p class="dband__h">LLM 在这条流上巡航（BYO-key 解锁）</p>
-            <p class="dband__sub">同一条实时流喂给 AI 辅助；无 key 时下面这些关闭，确定性预检照常跑。</p>
-            <div class="dband__chips">
-              <span class="chip">变更影响分析</span><span class="chip">主动巡航</span><span class="chip">回归守护</span>
-              <span class="chip">旅程规划</span><span class="chip">外部 agent 编排</span><span class="chip">进度叙述</span>
-            </div>
-          </div>
+          <section class="dband" aria-labelledby="model-planning">
+            <h2 class="dband__h" id="model-planning">模型辅助 · 后续评估</h2>
+            <p class="dband__sub">计划评估变更影响分析与结果解释。它们独立于本地规则预检；本页未接入模型，也不会发送请求。</p>
+          </section>
 
-          <div class="dnote"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg><span><b style="font-weight:500">触发边界（R3 铁律）</b>：preflight 在上传 / 上线边界跑、开发期静默——官方"每次预览都弹、还不能关"被开发者集体开骂；要懂"WIP 未用文件 ≠ 缺陷"。</span></div>
+          <p class="dnote">检查应由明确动作触发，运行过程可以停止；结果需要标明时间、项目和来源，避免重复通知打断当前工作。</p>
 
-          <div class="dlegend">
-            <span><i style="background:var(--block)"></i>Rust 核 · 监听 / IPC</span>
-            <span><i style="background:var(--ok)"></i>Node 大脑 · 扫描 / 规则</span>
-            <span><i style="background:var(--purple)"></i>Tauri IPC · 通道</span>
-            <span><i style="background:var(--accent)"></i>React · 状态 / UI</span>
-          </div>
+          <details class="sync-technical">
+            <summary>技术实现说明</summary>
+            <p>计划由 Rust 负责文件监听，Node 执行规则扫描，通过 Tauri IPC 传递检查结果，再更新前端状态。这是架构规划，不代表当前已接入自动监听或结果广播。</p>
+          </details>
         </div>
       </section>
     </div>
   </div>
 
-<script>
-  const themeBtn = document.getElementById('themeBtn');
-  themeBtn.addEventListener('click', () => {
-    const dark = document.body.getAttribute('data-theme') === 'dark';
-    document.body.setAttribute('data-theme', dark ? 'light' : 'dark');
-    themeBtn.textContent = dark ? '深色' : '浅色';
-  });
-</script>
+<script src="preview.js"></script>
+<script src="responsive.js"></script>
 </body>
 </html>

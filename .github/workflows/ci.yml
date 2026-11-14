@@ -9,6 +9,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 # E4：最小权限——CI 只读。
 permissions:
@@ -29,6 +30,8 @@ jobs:
           node-version: ${{ matrix.node }}
       # E2：去掉 `|| npm install` 兜底——lockfile 漂移应当响亮失败。
       - run: npm ci
+      # Agent broker tests resolve the SDK from its desktop-only dependency scope.
+      - run: npm ci --prefix desktop
       # E5：静态错误门禁（eslint:recommended 级，风格不管）。
       - run: npm run lint
       - run: npm test

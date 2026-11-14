@@ -76,9 +76,9 @@ function callTool(name, args = {}) {
       {
         subject_type: args.subject,
         business_type: args.business,
-        has_payment: !!args.payment,
-        collects_sensitive: !!args.sensitive,
-        has_server_domain: !!args.domain,
+        has_payment: args.payment,
+        collects_sensitive: args.sensitive,
+        has_server_domain: args.domain,
       },
       { includeDrafts: !!args.includeDrafts },
     );

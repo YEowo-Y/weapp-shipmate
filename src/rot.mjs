@@ -53,10 +53,10 @@ export function uniqueUrls(rules) {
   return [...m.entries()].map(([url, ids]) => ({ url, ids }));
 }
 
-/** 把 HTTP 状态归类：ok=2xx；dead=404/410 或网络错误（确定失效）；inconclusive=其余（如 403/405 反爬）。 */
+/** 网络失败无法证明来源失效；只有 404/410 表示请求地址不可用。 */
 export function classifyStatus(status) {
   if (status >= 200 && status < 300) return "ok";
-  if (status === 404 || status === 410 || status === 0) return "dead";
+  if (status === 404 || status === 410) return "dead";
   return "inconclusive";
 }
 

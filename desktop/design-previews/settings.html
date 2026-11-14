@@ -3,126 +3,172 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>上线船友 · 设置 · BYO-key 与全部区域(docs/08 §7/§8)</title>
+<title>上线船友 · 设置</title>
 <link rel="stylesheet" href="app.css" />
+<link rel="stylesheet" href="responsive.css" />
+<link rel="stylesheet" href="components/native-controls.css" />
+<link rel="stylesheet" href="components/ui-kit.css" />
+<link rel="stylesheet" href="settings.css" />
 </head>
-<body data-theme="light">
-  <h2 class="sr-only">上线船友设置区设计稿：模型与密钥(BYO-key broker)、外观、工程体检、隐私与安全、项目与扫描、规则库、关于。</h2>
+<body class="agent-workspace settings-page" data-theme="light">
+  <h2 class="sr-only">设置：模型与密钥、数据与会话、外观、关于。</h2>
 
   <div class="chrome">
     <b>上线船友 · 设置</b>
-    <span class="sub">完整区域 · docs/08 §7.3 BYO-key broker · §4/§6/§13 安全灶台</span>
+    <span class="sub">模型服务与个人偏好</span>
     <button class="ctl" id="themeBtn">深色</button>
   </div>
 
   <div class="stage-wrap">
     <div class="win">
-      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="tt">上线船友 — 设置</span></div>
       <div class="set-head">
-        <a class="back" href="main-four-region.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>返回</a>
+        <a class="back" data-settings-return href="main-four-region.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#arrow-left"></use></svg>返回</a>
         <h1>设置</h1>
       </div>
 
       <div class="set-main">
-        <nav class="set-nav scroll" id="nav"></nav>
-        <div class="set-content scroll"><div class="set-content__inner">
+        <nav class="set-nav scroll" id="nav" aria-label="设置分类"></nav>
+        <div class="set-content scroll" role="region" aria-label="设置内容" tabindex="0"><div class="set-content__inner">
+
+          <section class="set-empty" data-settings-empty hidden aria-labelledby="settings-empty-title">
+            <svg class="set-empty__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#search"></use></svg>
+            <h2 id="settings-empty-title">没有找到相关设置</h2>
+            <p>试试“模型”“外观”或“会话”，也可以清除搜索，返回刚才的分类。</p>
+            <wa-button type="button" appearance="outlined" variant="neutral" size="s" data-settings-clear>清除搜索</wa-button>
+          </section>
+
+          <aside class="settings-preview-note settings-preview-notice" data-settings-preview-notice hidden aria-label="设置设计预览">
+            <strong>设计预览 · 未实现选项仅展示</strong>
+            <p>工程体检、隐私与安全、项目与扫描、规则库尚未接入配置，不能保存或改变实际执行。</p>
+            <a class="back" href="settings.html#key" data-settings-preview-exit>退出设计预览，返回真实设置</a>
+          </aside>
+          <section class="set-unavailable" data-settings-unavailable hidden aria-labelledby="settings-unavailable-title">
+            <h2 id="settings-unavailable-title" data-settings-unavailable-title>此项设置尚未接入</h2>
+            <p>旧链接指向设计中的设置。当前无法保存或启用这些选项，也不会改变实际权限、扫描或规则。</p>
+            <div class="settings-actions">
+              <a class="back" href="#key">返回模型与密钥</a>
+              <a class="back" href="settings.html?preview=settings" data-settings-preview-link>查看设计预览</a>
+            </div>
+          </section>
 
           <!-- 1. 模型与密钥 -->
           <section class="set-panel on" data-p="key">
-            <h2>模型与密钥</h2>
-            <p class="desc">自带 LLM key（BYO key）。船友不托管模型、不代付算力，密钥与成本都在你这边——这也是"自建 agent + 纯公益"能成立的前提。</p>
-            <div class="banner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>确定性预检<b style="font-weight:500">无需 key 也能用</b>；key 只解锁 AI 辅助（变更影响分析 · 问诊访谈 · 拒因编排…）。</div>
-
-            <div class="field"><label>提供方</label>
-              <div class="seg" id="prov">
-                <button class="seg__opt on">Anthropic · Claude</button>
-                <button class="seg__opt">OpenAI · Codex</button>
-                <button class="seg__opt">Gemini</button>
-                <button class="seg__opt">Ollama · 本地</button>
-                <button class="seg__opt">自定义兼容</button>
-              </div>
+            <div class="model-settings-head"><h2>模型与密钥</h2><span class="model-default"><span id="default-provider-icon" aria-hidden="true"></span>默认聊天 · 本地演示</span></div>
+            <p class="settings-preview-note">连接服务商，同步模型目录，再到对话中选择模型。</p>
+            <details class="model-connection-note">
+              <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#chevron-right"></use></svg>凭据与使用说明</summary>
+              <p>凭据仅保存在本机服务内存，重启服务或闲置 60 分钟后失效。同步目录不发起模型推理；在对话中发送消息可能产生 API 费用。</p>
+              <p>支持 OpenAI、Anthropic、Google、OpenRouter 和 Ollama 文本聊天。目录验证后，返回对话选择文本模型；自定义服务仅保留本页草稿。</p>
+            </details>
+            <div class="provider-workspace" data-provider-settings>
+              <aside class="provider-sidebar" aria-label="模型服务商">
+                <div class="provider-sidebar-head"><h3>模型服务商</h3><span id="provider-count"></span></div>
+                <label class="provider-search"><span id="provider-search-icon" aria-hidden="true"></span><span class="sr-only">搜索服务商</span><input id="provider-search" type="search" placeholder="搜索服务商…" autocomplete="off" /></label>
+                <label class="provider-picker-label" for="provider-picker">当前服务商</label>
+                <select id="provider-picker" class="inp provider-picker" aria-controls="provider-detail" aria-describedby="provider-empty"></select>
+                <div id="provider-list" class="provider-list" role="group" aria-label="选择服务商"></div>
+                <p id="provider-empty" class="settings-muted" hidden>没有匹配的服务商</p>
+              </aside>
+              <section class="provider-detail" id="provider-detail" aria-label="服务商配置"></section>
             </div>
+            <noscript>请启用 JavaScript 体验服务商配置。当前未连接任何模型服务。</noscript>
+          </section>
 
-            <div class="field"><label>API Key</label>
-              <div class="inrow">
-                <input class="inp mono" type="password" value="sk-ant-••••••••••••••••••••••" />
-                <button class="btn-line">测试连接</button>
-                <span class="conn conn--ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>已连接</span>
-              </div>
-              <p class="hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>密钥存于系统钥匙串（macOS Keychain / Windows 凭据管理器），永不写入 localStorage、环境变量或命令行，永不上传。</p>
+          <section class="set-panel" data-p="data">
+            <h2>数据与会话</h2>
+            <p class="desc">整理历史、保留草稿，在需要时恢复自己的工作。</p>
+            <div class="set-row session-setting-row">
+              <div class="set-row__l"><h3 class="set-row__t">会话备份</h3><p class="set-row__d">导出消息、草稿、归档状态和模型选择。导入时追加新会话，保留已有记录。</p></div>
+              <wa-button appearance="outlined" variant="neutral" size="s" href="main-four-region.html?panel=data" data-session-management="data">管理备份</wa-button>
             </div>
-
-            <div class="field"><label>Base URL（可选）</label>
-              <input class="inp mono" type="text" placeholder="https://api.anthropic.com  —— 走国内网关或自建代理时填写" />
+            <div class="set-row session-setting-row">
+              <div class="set-row__l"><h3 class="set-row__t">已归档会话</h3><p class="set-row__d">从侧栏收起暂时完成的工作。消息和草稿仍保留，随时可以恢复。</p></div>
+              <wa-button appearance="outlined" variant="neutral" size="s" href="main-four-region.html?panel=archived" data-session-management="archived">管理归档</wa-button>
             </div>
-
-            <div class="field"><label>模型</label>
-              <select class="inp"><option>claude-opus-4-8（最强，复杂活）</option><option>claude-sonnet-4-6（日常）</option><option>claude-haiku-4-5（快速）</option></select>
-            </div>
-
-            <p class="divlabel">密钥怎么被保护（broker 模式）</p>
-            <div class="broker">[WebView] invoke("chat", {messages})        <span style="color:var(--text-3)">← 载荷里没有 key</span>
-[Rust 核] 1. 钥匙串取 <span class="k">key</span>  2. 拼 Authorization  3. 调 LLM  4. 只回 {content}
-[WebView] 只拿到 {content}                   <span style="color:var(--text-3)">← key 永不过 IPC / 日志 / 后端</span></div>
-
-            <div class="set-row" style="margin-top:14px;border-top:1px solid var(--border);padding-top:16px">
-              <div class="set-row__l"><div class="set-row__t">启用 AI 辅助</div><div class="set-row__d">关闭后仅保留 46 条规则的本地确定性预检</div></div>
-              <span class="switch on"></span>
+            <div class="session-data-scope">
+              <h3>备份包含哪些内容？</h3>
+              <p>备份仅包含当前工作区的会话记录，不包含模型密钥、登录授权或项目文件。消息中手动输入的内容会随记录导出，请妥善保管。</p>
+              <p>支持上线船友的 JSON 会话备份。导入前会校验格式并显示数量；历史任务不会自动重跑，旧审批需要重新确认。</p>
+              <p>记录保存在当前浏览器或桌面设备。本页不提供云端同步；换设备时可手动导出并追加导入。</p>
             </div>
           </section>
 
           <!-- 2. 外观 -->
           <section class="set-panel" data-p="appear">
             <h2>外观</h2>
-            <p class="desc">engineered calm：中性暖灰为底，只有赭橙 + 绿/黄/红四色承载意义。字体本地打包，离线可用、无 CDN。</p>
-            <div class="field"><label>主题</label><div class="seg"><button class="seg__opt on">跟随系统</button><button class="seg__opt">浅色</button><button class="seg__opt">深色</button></div></div>
-            <div class="field"><label>字号</label><div class="seg"><button class="seg__opt">紧凑</button><button class="seg__opt on">标准</button><button class="seg__opt">宽松</button></div></div>
-            <div class="field"><label>语言</label><select class="inp"><option>简体中文</option><option>English</option></select></div>
-            <p class="hint" style="font-size:11.5px;color:var(--text-3)">字体：Inter（界面）+ JetBrains Mono（终端 / 规则 id / 路径 / 已核验输出）——mono 是"可信工程工具"的廉价信号，也把已核验规则和 AI 散文在视觉上分开。</p>
+            <p class="desc">主题与对话文字大小即时生效；语言暂不支持切换。</p>
+            <fieldset class="native-options appearance-setting" aria-describedby="theme-hint">
+              <legend>主题</legend>
+              <div class="appearance-setting__row">
+                <p id="theme-hint">跟随设备，或选择固定的明暗模式。</p>
+                <div class="seg"><label class="seg__opt"><input type="radio" name="theme" value="system" checked /><span>跟随系统</span></label><label class="seg__opt"><input type="radio" name="theme" value="light" /><span>浅色</span></label><label class="seg__opt"><input type="radio" name="theme" value="dark" /><span>深色</span></label></div>
+              </div>
+            </fieldset>
+            <fieldset class="native-options appearance-setting" aria-describedby="font-size-hint">
+              <legend>对话文字大小</legend>
+              <div class="appearance-setting__row">
+                <p id="font-size-hint">应用于对话正文；输入框和代码块保持原字号。</p>
+                <div class="seg"><label class="seg__opt"><input type="radio" name="font-size" value="14" /><span>小 · 14</span></label><label class="seg__opt"><input type="radio" name="font-size" value="16" checked /><span>标准 · 16</span></label><label class="seg__opt"><input type="radio" name="font-size" value="18" /><span>大 · 18</span></label></div>
+              </div>
+              <div class="appearance-sample" aria-label="对话文字预览">
+                <span class="appearance-sample__label">阅读预览</span>
+                <p>先查看检查结果，再决定下一步。</p>
+                <p>每个问题都保留来源与建议，方便你逐项核对。</p>
+              </div>
+            </fieldset>
+            <div class="appearance-setting">
+              <label for="language">显示语言 <span class="settings-unavailable">暂不支持切换</span></label>
+              <div class="appearance-setting__row"><p id="language-hint">当前界面使用简体中文。</p><select id="language" class="inp" disabled aria-describedby="language-hint"><option>简体中文</option></select></div>
+            </div>
+            <p id="appearance-feedback" class="settings-feedback appearance-feedback" role="status" aria-live="polite">偏好仅保存在当前浏览器，不影响模型配置。</p>
           </section>
 
           <!-- 3. 工程体检 -->
-          <section class="set-panel" data-p="cap">
+          <section class="set-panel" data-p="cap" hidden>
             <h2>工程体检 · 能力开关</h2>
-            <p class="desc">每个开关 = 一个 MCP 工具的增减。关闭即该工具从 agent 的 <span style="font-family:var(--font-mono);font-size:12px">tools/list</span> 移除——agent 看不到、调不了，比塞 prompt 可靠。需 BYO-key 启用。</p>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">代码质量门禁</div><div class="set-row__d">编码规范 / 复杂度 / 技术债扫描</div></div><span class="switch"></span></div>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">静态安全扫描</div><div class="set-row__d">密钥泄露 / 明文请求 / 前端直连等</div></div><span class="switch"></span></div>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">回归 + 黄金快照</div><div class="set-row__d">改完跑 accuracy.mjs + 快照对比</div></div><span class="switch"></span></div>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">类目顾问</div><div class="set-row__d">按代码信号提示候选类目与资质</div></div><span class="switch"></span></div>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">旅程项目经理</div><div class="set-row__d">规划最快上线路径、并行化等待与代码活</div></div><span class="switch"></span></div>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">健康检查模式</div><div class="set-row__d">上线后监控合规漂移（类目 / 规范 / 备案变更）</div></div><span class="switch"></span></div>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">后台陪练 · 托盘通知</div><div class="set-row__d">读你的后台截图带你点，但不代点</div></div><span class="switch"></span></div>
+            <p class="settings-preview-note">设计预览 · 尚未接入配置，以下选项不会改变实际执行。</p>
+            <p class="desc">规划中的辅助检查能力。当前页面展示配置样式，尚未接入执行。</p>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-1">代码质量门禁</label><div class="set-row__d" id="setting-toggle-1-hint">编码规范 / 复杂度 / 技术债扫描</div></div><input disabled class="native-check" type="checkbox" id="setting-toggle-1" aria-describedby="setting-toggle-1-hint" /></div>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-2">静态安全扫描</label><div class="set-row__d" id="setting-toggle-2-hint">密钥泄露 / 明文请求 / 前端直连等</div></div><input disabled class="native-check" type="checkbox" id="setting-toggle-2" aria-describedby="setting-toggle-2-hint" /></div>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-3">改动回归检查</label><div class="set-row__d" id="setting-toggle-3-hint">检查改动是否影响既有行为</div></div><input disabled class="native-check" type="checkbox" id="setting-toggle-3" aria-describedby="setting-toggle-3-hint" /></div>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-4">类目顾问</label><div class="set-row__d" id="setting-toggle-4-hint">按代码信号提示候选类目与资质</div></div><input disabled class="native-check" type="checkbox" id="setting-toggle-4" aria-describedby="setting-toggle-4-hint" /></div>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-5">旅程项目经理</label><div class="set-row__d" id="setting-toggle-5-hint">整理上线步骤、依赖与待办事项</div></div><input disabled class="native-check" type="checkbox" id="setting-toggle-5" aria-describedby="setting-toggle-5-hint" /></div>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-6">健康检查模式</label><div class="set-row__d" id="setting-toggle-6-hint">上线后监控合规漂移（类目 / 规范 / 备案变更）</div></div><input disabled class="native-check" type="checkbox" id="setting-toggle-6" aria-describedby="setting-toggle-6-hint" /></div>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-7">后台陪练 · 托盘通知</label><div class="set-row__d" id="setting-toggle-7-hint">读你的后台截图带你点，但不代点</div></div><input disabled class="native-check" type="checkbox" id="setting-toggle-7" aria-describedby="setting-toggle-7-hint" /></div>
           </section>
 
           <!-- 4. 隐私与安全 -->
-          <section class="set-panel" data-p="sec">
+          <section class="set-panel" data-p="sec" hidden>
             <h2>隐私与安全</h2>
-            <p class="desc">默认最严，与"不做担保"同灶——源码不出本机，agent 永不替你提交官方后台。</p>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">预检 local-only<span class="lock">不可关</span></div><div class="set-row__d">源码只在本机扫描，绝不上传</div></div><span class="switch on locked"></span></div>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">忽略密钥 / 证照 / 私有配置文件</div><div class="set-row__d">扫描默认跳过 .env、密钥、证照文件</div></div><span class="switch on"></span></div>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">报告脱敏</div><div class="set-row__d">只报文件 + 键名 / 域名，绝不回显密钥值</div></div><span class="switch on"></span></div>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">子进程 env 清洗</div><div class="set-row__d">env_clear + 白名单，key 绝不进任何 MCP server</div></div><span class="switch on"></span></div>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">第三方 MCP 插件<span class="lock">P3 · 暂未开放</span></div><div class="set-row__d">需 M1–M9 安全基线，留作后期差异化弹药</div></div><span class="switch soon"></span></div>
+            <p class="settings-preview-note">设计预览 · 尚未接入配置，以下选项不会改变实际执行。</p>
+            <p class="desc">以下为隐私与安全设置预览。此页面不访问项目文件；模型连接会通过本机服务访问你选定的官方服务，Ollama 仅访问本机固定地址。</p>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-8">本地预检<span class="lock">预览</span></label><div class="set-row__d" id="setting-toggle-8-hint">正式桌面端支持本地预检；此页面不执行扫描</div></div><input class="native-check" type="checkbox" id="setting-toggle-8" aria-describedby="setting-toggle-8-hint" checked disabled /></div>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-9">忽略密钥 / 证照 / 私有配置文件</label><div class="set-row__d" id="setting-toggle-9-hint">敏感文件排除配置预览</div></div><input disabled class="native-check" type="checkbox" id="setting-toggle-9" aria-describedby="setting-toggle-9-hint" checked /></div>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-10">报告脱敏</label><div class="set-row__d" id="setting-toggle-10-hint">报告内容脱敏配置预览</div></div><input disabled class="native-check" type="checkbox" id="setting-toggle-10" aria-describedby="setting-toggle-10-hint" checked /></div>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-11">工具访问范围</label><div class="set-row__d" id="setting-toggle-11-hint">工具权限由正式服务端控制，本页无法修改</div></div><input disabled class="native-check" type="checkbox" id="setting-toggle-11" aria-describedby="setting-toggle-11-hint" checked /></div>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-12">第三方 MCP 插件<span class="lock">尚未接入</span></label><div class="set-row__d" id="setting-toggle-12-hint">接入前需要核验插件来源与所需权限</div></div><input class="native-check" type="checkbox" id="setting-toggle-12" aria-describedby="setting-toggle-12-hint" disabled /></div>
           </section>
 
           <!-- 5. 项目与扫描 -->
-          <section class="set-panel" data-p="scan">
+          <section class="set-panel" data-p="scan" hidden>
             <h2>项目与扫描</h2>
-            <p class="desc">在该弹的时候弹、开发期静默——官方代码扫描"每次预览都弹、还不能关"被开发者集体开骂，我们不重蹈。</p>
-            <div class="field"><label>扫描触发时机</label><div class="seg"><button class="seg__opt on">上传/上线边界</button><button class="seg__opt">手动</button><button class="seg__opt">实时</button></div>
-              <p class="hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>开发期不打扰 WIP；"未用文件 ≠ 缺陷"。</p>
+            <p class="settings-preview-note">设计预览 · 尚未接入配置，以下选项不会改变实际执行。</p>
+            <p class="desc">设置检查时机与排除目录。当前仅展示选项，尚未连接文件监听。</p>
+            <div class="field"><fieldset class="native-options"><legend>扫描触发时机</legend><div class="seg"><label class="seg__opt"><input disabled type="radio" name="scan-trigger" value="1" checked /><span>上传/上线边界</span></label><label class="seg__opt"><input disabled type="radio" name="scan-trigger" value="2" /><span>手动</span></label><label class="seg__opt"><input disabled type="radio" name="scan-trigger" value="3" /><span>实时</span></label></div></fieldset>
+              <p class="hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#clock"></use></svg>可按项目需要选择手动检查或自动检查。</p>
             </div>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">文件监听 · 实时重扫</div><div class="set-row__d">notify + 300ms 去抖，改完即重检（全量，毫秒级）</div></div><span class="switch on"></span></div>
-            <div class="field" style="margin-top:20px"><label>忽略目录</label><input class="inp mono" type="text" value="node_modules, dist, unpackage, platforms, .git" /></div>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-13">文件监听 · 实时重扫</label><div class="set-row__d" id="setting-toggle-13-hint">在文件变化后重新检查，当前预览未启用</div></div><input disabled class="native-check" type="checkbox" id="setting-toggle-13" aria-describedby="setting-toggle-13-hint" checked /></div>
+            <div class="field" style="margin-top:20px"><label for="ignored-directories">忽略目录</label><input disabled id="ignored-directories" class="inp mono" type="text" value="node_modules, dist, unpackage, platforms, .git" /></div>
           </section>
 
           <!-- 6. 规则库 -->
-          <section class="set-panel" data-p="rules">
+          <section class="set-panel" data-p="rules" hidden>
             <h2>规则库</h2>
-            <p class="desc">规则即数据，每条带官方来源 + 校验日期。官方核验集保住信任，你可在其上扩充项目特定的自定义规则。</p>
-            <div class="stat"><b class="tnum">49</b><span>条规则 · 官方核验 <b style="font-weight:500">46</b>（0 draft）· 我的自定义 <b style="font-weight:500">3</b></span></div>
+            <p class="settings-preview-note">设计预览 · 尚未接入配置，以下选项不会改变实际执行。</p>
+            <p class="desc">以下为规则管理示例，数量与条目不代表当前项目的核验结果。</p>
+            <div class="stat"><b class="tnum">49</b><span>条示例规则 · 内置示例 <b style="font-weight:500">46</b>（0 draft）· 我的自定义 <b style="font-weight:500">3</b></span></div>
 
-            <p class="divlabel">官方规则 · 按域分类</p>
+            <p class="divlabel">示例规则 · 按域分类</p>
             <div class="catgrid">
               <div class="catpill">备案 <b class="tnum">1</b></div>
               <div class="catpill">服务器域名 <b class="tnum">2</b></div>
@@ -138,29 +184,29 @@
               <div class="catpill">服务类目 <b class="tnum">2</b></div>
             </div>
 
-            <p class="divlabel">我的规则（自定义）</p>
-            <div class="banner" style="background:var(--surface-2);color:var(--text-2)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-3)"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>在官方核验规则之上，扩充你项目特定的检查。自定义规则标灰「自定义」、<b style="font-weight:500">不回链官方、不计入 precision 基线</b>，责任在你。</div>
-            <div class="rule-item"><div class="rule-item__l"><div class="rule-item__t">上线前禁止残留 console.log</div><div class="rule-item__id">custom.no-console</div></div><span class="badge badge--custom">自定义</span><span class="rule-item__act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></span></div>
-            <div class="rule-item"><div class="rule-item__l"><div class="rule-item__t">图片必须走团队 CDN 域名</div><div class="rule-item__id">custom.img-cdn-only</div></div><span class="badge badge--custom">自定义</span><span class="rule-item__act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></span></div>
-            <div class="rule-item"><div class="rule-item__l"><div class="rule-item__t">分包大小不超过 2MB</div><div class="rule-item__id">custom.subpkg-size</div></div><span class="badge badge--custom">自定义</span><span class="rule-item__act"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></span></div>
-            <div class="addrow"><button class="btn-line" style="border-color:var(--accent);color:var(--accent)">+ 添加规则</button><button class="btn-line">导入 YAML</button></div>
+            <p class="divlabel">自定义规则示例</p>
+            <div class="banner" style="background:var(--surface-2);color:var(--text-2)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-3)" aria-hidden="true" focusable="false"><use href="components/icons.svg#circle-alert"></use></svg>自定义规则用于补充项目检查。当前仅展示条目，导入与编辑尚未接入。</div>
+            <div class="rule-item"><div class="rule-item__l"><div class="rule-item__t">上线前禁止残留 console.log</div><div class="rule-item__id">custom.no-console</div></div><span class="badge badge--custom">自定义</span><span class="rule-item__act"><wa-button type="button" class="ui-action-icon" data-ui-control="action" appearance="plain" size="s" disabled aria-label="编辑规则：上线前禁止残留 console.log" data-preview-message="规则编辑仅为界面演示，未修改规则文件。"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#pencil"></use></svg></wa-button><wa-button type="button" class="ui-action-icon" data-ui-control="action" appearance="plain" size="s" disabled aria-label="删除规则：上线前禁止残留 console.log" data-preview-message="规则删除仅为界面演示，未修改规则文件。"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#trash"></use></svg></wa-button></span></div>
+            <div class="rule-item"><div class="rule-item__l"><div class="rule-item__t">图片必须走团队 CDN 域名</div><div class="rule-item__id">custom.img-cdn-only</div></div><span class="badge badge--custom">自定义</span><span class="rule-item__act"><wa-button type="button" class="ui-action-icon" data-ui-control="action" appearance="plain" size="s" disabled aria-label="编辑规则：图片必须走团队 CDN 域名" data-preview-message="规则编辑仅为界面演示，未修改规则文件。"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#pencil"></use></svg></wa-button><wa-button type="button" class="ui-action-icon" data-ui-control="action" appearance="plain" size="s" disabled aria-label="删除规则：图片必须走团队 CDN 域名" data-preview-message="规则删除仅为界面演示，未修改规则文件。"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#trash"></use></svg></wa-button></span></div>
+            <div class="rule-item"><div class="rule-item__l"><div class="rule-item__t">分包大小不超过 2MB</div><div class="rule-item__id">custom.subpkg-size</div></div><span class="badge badge--custom">自定义</span><span class="rule-item__act"><wa-button type="button" class="ui-action-icon" data-ui-control="action" appearance="plain" size="s" disabled aria-label="编辑规则：分包大小不超过 2MB" data-preview-message="规则编辑仅为界面演示，未修改规则文件。"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#pencil"></use></svg></wa-button><wa-button type="button" class="ui-action-icon" data-ui-control="action" appearance="plain" size="s" disabled aria-label="删除规则：分包大小不超过 2MB" data-preview-message="规则删除仅为界面演示，未修改规则文件。"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#trash"></use></svg></wa-button></span></div>
+            <div class="addrow"><button disabled class="btn-line" style="border-color:var(--accent);color:var(--accent)">+ 添加规则</button><button disabled class="btn-line">导入 YAML</button></div>
 
             <p class="divlabel">维护</p>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">规则新鲜度监控（rot）</div><div class="set-row__d">仅监控官方规则：last_verified 时效 + official_url 链接体检，每月定时</div></div><span class="switch on"></span></div>
-            <div class="set-row"><div class="set-row__l"><div class="set-row__t">最近核验</div><div class="set-row__d">官方规则最早 2026-06-13 · 最近 2026-06-20</div></div><button class="btn-line">检查更新</button></div>
-            <div class="foot-note" style="margin-top:22px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg><span>官方规则每条回链官方来源、不靠模型自由发挥；自定义规则不回链、不计入准确率基线，由你对其正确性负责。</span></div>
+            <div class="set-row"><div class="set-row__l"><label class="set-row__t" for="setting-toggle-14">规则新鲜度监控（rot）</label><div class="set-row__d" id="setting-toggle-14-hint">仅监控官方规则：last_verified 时效 + official_url 链接体检，每月定时</div></div><input disabled class="native-check" type="checkbox" id="setting-toggle-14" aria-describedby="setting-toggle-14-hint" checked /></div>
+            <div class="set-row"><div class="set-row__l"><div class="set-row__t">最近核验</div><div class="set-row__d">官方规则最早 2026-06-13 · 最近 2026-06-20</div></div><button disabled class="btn-line">检查更新</button></div>
+            <div class="foot-note" style="margin-top:22px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#shield"></use></svg><span>官方规则每条回链官方来源、不靠模型自由发挥；自定义规则不回链、不计入准确率基线，由你对其正确性负责。</span></div>
           </section>
 
           <!-- 7. 关于 -->
           <section class="set-panel" data-p="about">
-            <div class="about__logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14l9-9 9 9M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg></div>
+            <div class="about__logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#house"></use></svg></div>
             <h2>上线船友</h2>
-            <p class="desc">你写代码，我陪你上线。微信小程序上线合规导航 + 代码感知预检 · 纯公益 · 零运营成本（BYO-key）· 不做担保。</p>
+            <p class="desc">你写代码，我陪你上线。微信小程序上线合规导航 + 代码感知预检 · 纯公益 · 模型服务由用户自行配置· 不做担保。</p>
             <div class="stat"><b style="font-size:18px">v0.x</b><span>P2.0 · Tauri 桌面外壳 + 规则大脑 sidecar</span></div>
             <ul class="linklist">
-              <li><a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 0 0-1-2.6c3-.3 6-1.5 6-6.5a5 5 0 0 0-1.4-3.5 4.6 4.6 0 0 0-.1-3.5s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C6.6 1.7 5.5 2 5.5 2a4.6 4.6 0 0 0-.1 3.5A5 5 0 0 0 4 9c0 5 3 6.2 6 6.5a3.4 3.4 0 0 0-1 2.6V22"/></svg>GitHub 仓库 · MIT<span class="ext">↗</span></a></li>
-              <li><a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>反馈 · 提交 issue<span class="ext">↗</span></a></li>
-              <li><a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>微信官方文档<span class="ext">↗</span></a></li>
+              <li><a href="https://github.com/YEowo-Y/weapp-shipmate" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" data-brand-icon="true"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 0 0-1-2.6c3-.3 6-1.5 6-6.5a5 5 0 0 0-1.4-3.5 4.6 4.6 0 0 0-.1-3.5s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C6.6 1.7 5.5 2 5.5 2a4.6 4.6 0 0 0-.1 3.5A5 5 0 0 0 4 9c0 5 3 6.2 6 6.5a3.4 3.4 0 0 0-1 2.6V22"/></svg>GitHub 仓库 · MIT<span class="ext">↗</span></a></li>
+              <li><a href="https://github.com/YEowo-Y/weapp-shipmate/issues" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#message-square"></use></svg>反馈 · 提交 issue<span class="ext">↗</span></a></li>
+              <li><a href="https://developers.weixin.qq.com/miniprogram/dev/framework/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#book-open"></use></svg>微信官方文档<span class="ext">↗</span></a></li>
             </ul>
           </section>
 
@@ -169,41 +215,9 @@
     </div>
   </div>
 
-<script>
-  const S = (p, s=16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
-  const ICONS = {
-    key: '<path d="M21 2l-2 2m-7.6 7.6a5 5 0 1 0-7 7 5 5 0 0 0 7-7zm0 0L15 8m0 0l3 3 4-4-3-3"/>',
-    appear: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
-    cap: '<path d="M20 7h-9M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>',
-    sec: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
-    scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/>',
-    rules: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
-    about: '<circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/>'
-  };
-  const LABELS = { key:'模型与密钥', appear:'外观', cap:'工程体检', sec:'隐私与安全', scan:'项目与扫描', rules:'规则库', about:'关于' };
-  const GROUPS = [['智能',['key','cap']], ['项目',['scan','rules']], ['安全与隐私',['sec']], ['通用',['appear','about']]];
-  const nav = document.getElementById('nav');
-  nav.innerHTML = `<div class="set-search">${S('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>', 14)}<input placeholder="搜索设置…" /></div>` +
-    GROUPS.map(([g, ids]) => `<div class="set-nav__group">${g}</div>` + ids.map(id => `<button data-p="${id}" class="${id==='key'?'on':''}">${S(ICONS[id])}${LABELS[id]}</button>`).join('')).join('');
-  nav.addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-p]'); if (!b) return;
-    nav.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
-    document.querySelectorAll('.set-panel').forEach(p => p.classList.toggle('on', p.dataset.p === b.dataset.p));
-    document.querySelector('.set-content').scrollTop = 0;
-  });
-
-  document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', (e) => {
-    const o = e.target.closest('.seg__opt'); if (!o) return;
-    seg.querySelectorAll('.seg__opt').forEach(x => x.classList.remove('on')); o.classList.add('on');
-  }));
-  document.querySelectorAll('.switch:not(.locked):not(.soon)').forEach(sw => sw.addEventListener('click', () => sw.classList.toggle('on')));
-
-  const themeBtn = document.getElementById('themeBtn');
-  themeBtn.addEventListener('click', () => {
-    const dark = document.body.getAttribute('data-theme') === 'dark';
-    document.body.setAttribute('data-theme', dark ? 'light' : 'dark');
-    themeBtn.textContent = dark ? '深色' : '浅色';
-  });
-</script>
+<script type="module" src="settings-navigation.js"></script>
+<script src="preview.js"></script>
+<script src="responsive.js"></script>
+<script type="module" src="settings.js"></script>
 </body>
 </html>

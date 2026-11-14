@@ -62,9 +62,16 @@ test("classifyStatus 区分 ok / dead / inconclusive", () => {
   assert.equal(classifyStatus(200), "ok");
   assert.equal(classifyStatus(404), "dead");
   assert.equal(classifyStatus(410), "dead");
-  assert.equal(classifyStatus(0), "dead");
+  assert.equal(classifyStatus(0), "inconclusive");
   assert.equal(classifyStatus(403), "inconclusive");
   assert.equal(classifyStatus(301), "inconclusive");
+});
+
+test("网络失败不能证明官方来源失效，也不作为确认失效的处置项", () => {
+  const kind = classifyUrlHealth({ status: 0, requestedUrl: "https://developers.weixin.qq.com/miniprogram/dev/" });
+  assert.equal(kind, "inconclusive");
+  assert.equal(isActionableHealth(kind), false);
+  assert.equal(classifyUrlHealth({ status: 404, requestedUrl: "https://developers.weixin.qq.com/missing" }), "dead");
 });
 
 test("staleness: 未来 last_verified（超 1 天时区容差）标 invalid+stale——未来日期不得报'新鲜'逃逸监控", () => {

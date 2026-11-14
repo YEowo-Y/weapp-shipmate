@@ -1,0 +1,16 @@
+.handoff-dialog{width:min(720px,calc(100vw - 32px))}
+.handoff-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:16px 0}
+.handoff-actions svg{width:16px;height:16px;vertical-align:-.15em;margin-right:6px}
+.handoff-dialog #handoff-provenance{font-variant-numeric:tabular-nums;color:var(--text-2)}
+.handoff-dialog #handoff-warning{padding:10px 12px;border-radius:8px;background:var(--surface);color:var(--text-2)}
+.handoff-dialog #handoff-status:empty{display:none}
+.handoff-dialog #handoff-status[data-error=true]{color:var(--error,var(--text))}
+.handoff-content{overflow-wrap:anywhere;font-size:var(--message-font-size,16px);line-height:1.75;padding:8px 0 20px;text-wrap:pretty}
+.handoff-dialog .handoff-content p{font-size:inherit;color:var(--text);line-height:inherit}
+.handoff-dialog .handoff-content h2{font-size:1.25em;margin:24px 0 12px}
+.handoff-content h3{font-size:1.1em;margin:20px 0 8px}
+.handoff-content ul{padding-left:22px}.handoff-content li{margin:8px 0}
+.handoff-basis{overflow-wrap:anywhere}.handoff-basis p{font-variant-numeric:tabular-nums}
+.handoff-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:12px;flex:none}
+.handoff-footer p{margin:0}
+@media(max-width:480px){.handoff-actions{gap:8px}.handoff-actions wa-button{flex:1 0 auto;min-height:44px}.handoff-footer p{font-size:12px}}

@@ -3,202 +3,112 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>上线船友 · 主界面四区 · 已决形态(docs/08 §8)</title>
+<title>上线工作台 · 上线船友</title>
 <link rel="stylesheet" href="app.css" />
-<style>
-  /* 安静的实时同步状态（实时同步闭环的用户可见面：后台自动重扫，改完即更新但不打扰） */
-  .syncpill { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-3); white-space: nowrap; }
-  .syncpill i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); position: relative; flex-shrink: 0; }
-  @media (prefers-reduced-motion: no-preference) {
-    .syncpill i::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--ok); animation: syncpulse 2.4s ease-out infinite; }
-    @keyframes syncpulse { 0% { transform: scale(1); opacity: .55; } 100% { transform: scale(3.2); opacity: 0; } }
-  }
-</style>
+<link rel="stylesheet" href="components/ui-kit.css" />
+<link rel="stylesheet" href="components/workbench.css" />
+<link rel="stylesheet" href="components/provider-icons.css" />
+<link rel="stylesheet" href="components/native-controls.css" />
+
+
+<link rel="stylesheet" href="responsive.css" />
+<link rel="stylesheet" href="conversation.css" />
+<link rel="stylesheet" href="session-workspace.css" />
+<link rel="stylesheet" href="components/message.css" />
+<link rel="stylesheet" href="components/composer.css" />
+<link rel="stylesheet" href="components/review.css" />
+<link rel="stylesheet" href="main.css" />
 </head>
-<body data-theme="light">
-  <h2 class="sr-only">上线船友桌面 agent 主界面四区设计稿：左栏 8 阶段脊柱可展开、中间对话区含信任可视化、右栏 diff 审批。</h2>
+<body data-theme="light" class="workspace-preview agent-workspace">
+
 
   <div class="chrome">
-    <b>上线船友 · 主界面四区</b>
-    <span class="sub">已决形态 · docs/08 §8（engineered calm · 赭橙单强调 · Cline step 卡）</span>
-    <button class="ctl active" id="annotBtn">标注四区</button>
+    <a class="studio-brand" href="index.html" aria-label="上线船友 · 返回设计总览" title="上线船友 · 返回设计总览"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true" focusable="false" data-brand-icon="true"><path d="M5 19h18M8 16l6-11v11H8Zm7-6 6 6h-6v-6Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 22h12" stroke="currentColor" stroke-width="1.5"/></svg><b>上线船友<span>SHIPMATE</span></b></a>
+    <span class="sub">设计预览 <span aria-hidden="true">/</span> 上线工作台</span>
+    <button class="ctl" id="annotBtn" aria-pressed="false">布局标注</button>
     <button class="ctl" id="themeBtn">深色</button>
   </div>
 
   <div class="stage-wrap">
     <div class="win">
-      <div class="titlebar"><span class="dots"><i></i><i></i><i></i></span><span class="tt">上线船友 — my-miniprogram</span></div>
-
-      <div class="topbar">
-        <span class="pill">个人主体</span>
-        <span class="path">~/projects/my-miniprogram</span>
-        <span class="syncpill"><i></i>已随改动更新 · 刚刚</span>
-        <span class="cmdk"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>搜索 / 命令 <kbd>⌘K</kbd></span>
-      </div>
+      <div class="titlebar"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="tt">SHIPMATE / 上线工作台</span><span class="prototype-label">本机开发预览</span></div>
 
       <div class="main main--3">
-        <!-- 区① 左栏 -->
-        <aside class="region rail scroll">
-          <span class="rtag">① 左栏 · 项目 + 8 阶段脊柱 + 工程开关 + 设置</span>
-          <div class="proj">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.6-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
-            my-miniprogram
-            <svg class="chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-          </div>
-
-          <div>
-            <p class="rail__h">上线脊柱 · 8 阶段 · 点开看详情</p>
-            <ul class="spine" id="spine"></ul>
-          </div>
-
-          <div>
-            <p class="rail__h">工程体检 · 能力开关</p>
-            <div class="tog"><span>代码质量门禁</span><span class="switch"></span></div>
-            <div class="tog"><span>静态安全扫描</span><span class="switch"></span></div>
-            <div class="tog"><span>回归 + 黄金快照</span><span class="switch"></span></div>
-            <p class="rail__note">开关即 MCP 工具增减 · 需 BYO-key 启用 AI 辅助</p>
-          </div>
-
-          <div class="rail__foot">
-            <span class="keydot"></span><span class="who">Claude · key 已存钥匙串</span>
-            <svg class="gear" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
-          </div>
+        <aside class="region rail task-rail" aria-label="会话导航">
+          <a class="task-rail__brand" href="main-four-region.html">上线船友</a>
+          <div id="workspaceSessions"></div>
+          <div class="rail__foot"><a href="settings.html?from=workspace" class="task-settings"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true" focusable="false"><use href="components/icons.svg#sliders-horizontal"></use></svg>设置与模型连接</a></div>
         </aside>
 
         <!-- 区② 中间对话 -->
-        <section class="region center">
-          <span class="rtag">② 中 · 对话 / agent</span>
-          <div class="conv scroll"><div class="conv__inner">
-            <div class="msg">
-              <div class="msg__who"><span class="av you"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>你</div>
-              <div class="bubble you">我现在可以提交备案了吗？顺便把能修的先修了。</div>
-            </div>
-
-            <div class="msg">
-              <div class="msg__who"><span class="av ai"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 5L19 9.6 13.6 11 12 16l-1.6-5L5 9.6 10.4 8z"/></svg></span>船友 agent</div>
-              <div class="bubble ai">
-                <div class="step step--ok"><div class="step__bar"></div><div class="step__b"><div class="step__head"><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>读取项目文件 · 18 个<span class="st">过</span></div></div></div>
-                <div class="step step--ok"><div class="step__bar"></div><div class="step__b"><div class="step__head"><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>调用工具 weapp_shipmate_check<span class="st">过</span></div><div class="step__sub">命中 3 条规则：<b class="bk">1 阻断</b> · <b class="wn">1 警告</b> · 1 提示</div></div></div>
-                <div class="step step--warn"><div class="step__bar"></div><div class="step__b"><div class="step__head"><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>分析 ICP 备案就绪度<span class="st">分析中</span></div><div class="step__sub">前置：主体认证 ✓ · 备案信息字段就绪度…</div></div></div>
-                <div class="step step--act"><div class="step__bar"></div><div class="step__b"><div class="step__head"><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>已操作 · 写入 app.json (+2 行)<span class="st">待批准</span></div></div></div>
-
-                <div class="insight"><span class="lab"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>Insight</span>先修隐私声明再发起备案：两者无依赖、可并行；隐私声明缺失会在提审被直接驳回，先修成本最低。</div>
-
-                <div class="claim claim--ok"><p>可以发起备案——前置「主体认证」你已完成。备案五环节里，工信部短信核验需在收到后 24 小时内回复。</p><div class="meta"><span class="badge badge--ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>已核验</span><a class="src" href="#">record_guidelines · 2026-06-13</a></div></div>
-                <div class="claim claim--ai"><p>建议今天就发起：通管局审核 1–20 工作日，是整条路径上最长的人肉等待，越早越好。</p><div class="meta"><span class="badge badge--ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 5L19 9.6 13.6 11 12 16l-1.6-5L5 9.6 10.4 8z"/></svg>AI 生成 · 待你判断</span></div></div>
-
-                <div class="chips">
-                  <span class="chip chip--accent">打开备案后台 →</span>
-                  <span class="chip">查看提审材料清单</span>
-                  <span class="chip">解释这条阻断</span>
-                </div>
-
-                <div class="ckpt">checkpoint · 写入 app.json 之后 · 可回滚</div>
+        <section class="region center conversation-shell" data-chat-state="idle">
+          <header class="workspace-head">
+            <h1 id="workspaceTitle">新会话</h1>
+            <button type="button" class="task-home-toggle" id="workspaceHome" aria-controls="workspaceHomeContent">工作台</button>
+            <wa-dropdown id="workspaceActions" placement="bottom-end"><button type="button" slot="trigger" class="ihbtn" id="workspaceMore" aria-label="更多功能"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true" focusable="false"><use href="components/icons.svg#ellipsis"></use></svg></button><wa-dropdown-item value="history">搜索会话历史</wa-dropdown-item><wa-dropdown-item value="archived">已归档会话</wa-dropdown-item><wa-dropdown-item value="data">数据与会话</wa-dropdown-item><wa-dropdown-item value="guide">生成上线清单</wa-dropdown-item><wa-dropdown-item value="result" id="workspaceMenuResult" disabled>查看当前清单</wa-dropdown-item></wa-dropdown><wa-tooltip for="workspaceMore" without-arrow>更多功能</wa-tooltip>
+          </header>
+          <div class="conv scroll conversation-scroll" id="workspaceScroll" tabindex="0" aria-label="当前会话">
+            <section class="workbench-home" id="workspaceHomeContent" aria-labelledby="workspaceHomeTitle">
+<div class="workbench-heading"><p class="workbench-overline">SHIPMATE <span>/</span> 上线工作台</p><h2 id="workspaceHomeTitle">上线前，把准备工作理清楚。</h2><p class="workbench-intro">从检查项目到整理清单，让每一步都有据可循。</p></div>
+              <div class="workbench-section-head"><h3>开始一项任务</h3><span>本地工具 · 无需模型</span></div>
+              <div class="workbench-launch-grid">
+                <article class="workbench-launch-card workbench-launch-card--primary">
+                  <div class="workbench-card-top"><span class="workbench-card-icon"><svg class="app-icon"  width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#folder"></use></svg></span><wa-badge appearance="outlined" variant="neutral">桌面端</wa-badge></div>
+                  <h3>项目预检</h3><p>选择小程序项目，提前发现代码与配置中的上线问题。</p>
+                  <ul class="workbench-feature-list"><li>项目配置</li><li>隐私声明</li><li>接口与域名</li></ul>
+                  <wa-button id="workspacePreflight" variant="neutral" appearance="accent" size="s" aria-haspopup="dialog">了解桌面预检<svg class="app-icon" slot="end" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#arrow-right"></use></svg></wa-button>
+                </article>
+                <article class="workbench-launch-card">
+                  <div class="workbench-card-top"><span class="workbench-card-icon"><svg class="app-icon"  width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#list-checks"></use></svg></span><wa-badge appearance="outlined" variant="neutral">按主体生成</wa-badge></div>
+                  <h3>上线清单</h3><p>根据个人、个体工商户或企业主体，梳理需要完成的准备事项。</p>
+                  <ul class="workbench-feature-list"><li>资质材料</li><li>办理步骤</li><li>官方依据</li></ul>
+                  <wa-button id="workspaceGuide" appearance="outlined" variant="neutral" size="s" aria-haspopup="dialog">生成上线清单<svg class="app-icon" slot="end" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#arrow-right"></use></svg></wa-button>
+                </article>
               </div>
-            </div>
-          </div></div>
-
-          <div class="composer">
-            <div class="box">问船友，或按 ⌘K 调命令…</div>
-            <button class="send"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>
+              <div class="workbench-section-head workbench-section-head--secondary"><h3>工作区</h3><span>连接能力，查看成果</span></div>
+              <div class="workbench-support-grid">
+                <section class="workbench-support-card" aria-labelledby="workspaceModels-title">
+                  <div class="workbench-support-title"><svg class="app-icon"  width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#sliders-horizontal"></use></svg><h3 id="workspaceModels-title">模型连接</h3></div>
+                  <p>连接模型，围绕项目问题继续对话。</p>
+                  <div class="workbench-providers" aria-label="支持 OpenAI、Anthropic、Google、Ollama 和 OpenRouter"><span class="provider-brand" data-provider="openai" aria-hidden="true"></span><span class="provider-brand" data-provider="anthropic" aria-hidden="true"></span><img src="components/brands/google-color.svg" alt="" width="20" height="20" /><span class="provider-brand" data-provider="ollama" aria-hidden="true"></span><span class="provider-brand" data-provider="openrouter" aria-hidden="true"></span><span>多家服务商 / 本地模型</span></div>
+                  <a id="workspaceModels" href="settings.html?from=workspace" class="workbench-link">管理连接<svg class="app-icon" slot="end" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#arrow-right"></use></svg></a>
+                </section>
+                <section class="workbench-support-card" aria-labelledby="workspaceResult-title">
+                  <div class="workbench-support-title"><svg class="app-icon"  width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg><h3 id="workspaceResult-title">当前会话成果</h3></div>
+                  <p id="workspaceResult-summary">尚无上线清单。生成后可在这里回到结果，复制或下载。</p>
+                  <wa-button id="workspaceResult" appearance="plain" size="s" disabled>查看清单<svg class="app-icon" slot="end" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#arrow-right"></use></svg></wa-button>
+                </section>
+              </div>
+            </section>
+            <div class="conv__inner" id="workspaceMessages"></div>
           </div>
+
+          <button class="jump-latest" id="workspaceLatest" type="button" hidden>↓ 回到最新</button>
+          <div class="turn-status" id="workspaceStatus" role="status" aria-live="polite" aria-atomic="true">准备就绪</div>
+          <div id="workspaceComposer" data-composer-host></div>
         </section>
 
         <!-- 区③ 右栏 终端/diff -->
-        <aside class="region side">
+        <aside class="region side" id="workspaceReviewPanel" hidden>
           <span class="rtag">③ 右 · 终端 + diff/预览（agent 动手才现）</span>
-          <div class="side__tabs">
-            <button class="side__tab on"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 14h6M9 17h6"/></svg>diff</button>
-            <button class="side__tab"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>终端</button>
-            <span class="side__hd">待批准 1</span>
+          <div class="review-heading"><div><h2>审阅改动</h2><p>当前对话没有待审阅改动</p></div><button type="button" id="workspaceReviewClose" class="ihbtn" aria-label="关闭审阅面板" title="关闭审阅面板"><svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true" focusable="false"><use href="components/icons.svg#x"></use></svg></button></div>
+          <div class="side__tabs" aria-label="变更视图">
+            <button class="side__tab on"><svg class="app-icon " width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg>diff</button>
+            <button class="side__tab"><svg class="app-icon " width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#terminal"></use></svg>终端</button>
+            <span class="side__hd">暂无改动</span>
           </div>
           <div class="side__body scroll">
-            <div class="diff__file"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>app.json <span class="pm"><span class="a">+2</span> −0</span></div>
-            <div class="dl"><span class="gut"> </span>  "pages": ["pages/index/index"],</div>
-            <div class="dl"><span class="gut"> </span>  "window": { ... },</div>
-            <div class="dl dl--add"><span class="gut">+</span>  "requiredPrivateInfos": ["getLocation"],</div>
-            <div class="dl dl--add"><span class="gut">+</span>  "__note": "位置用途：附近门店定位",</div>
-            <div class="dl"><span class="gut"> </span>  "sitemapLocation": "sitemap.json"</div>
-            <div class="diff__act"><button class="btn-sm">拒绝</button><button class="btn-sm">看完整文件</button><button class="btn-sm approve">批准写入</button></div>
-            <div class="term" style="border-top:1px solid var(--border)"><div><span class="p">my-miniprogram ❯</span> <span class="c">claude</span> 已暂停</div><div style="color:var(--text-3)">等待用户对 app.json 的批准…</div></div>
+            <p id="workspaceReviewEmpty" class="workspace-review-empty" hidden>当前对话没有待审阅改动。生成本地改动示例后，可在这里查看差异。</p>
+            <div id="workspaceReview" hidden></div>
+            <div class="term" style="border-top:1px solid var(--border)"><div><span class="p">my-miniprogram ❯</span> <span class="c">本地演示</span> 已暂停</div><div style="color:var(--text-3)">等待用户对 app.json 的批准…</div></div>
           </div>
         </aside>
       </div>
     </div>
   </div>
 
-<script>
-  const S = (p, s=14, sw=1.75) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
-  const IC = {
-    check: '<path d="M20 6 9 17l-5-5"/>',
-    chev: '<path d="m9 18 6-6-6-6"/>',
-    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-    you: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
-    ai: '<rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4M9 13h.01M15 13h.01"/>',
-    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
-    dotIcon: '<circle cx="12" cy="12" r="3"/>'
-  };
-  const TIME = (t) => `<span class="stg__meta"></span>`;
-  const STAGES = [
-    { t:'注册小程序账号', s:'done', lede:'在微信公众平台用一个邮箱注册小程序账号。',
-      acts:[['you','准备一个没注册过公众平台的邮箱'],['you','激活邮箱、设置密码并登录']], meta:[['clock','约 10 分钟'],['you','需你本人']] },
-    { t:'主体认证 / 实名核验', s:'done', lede:'证明"这个小程序是谁的"——个人需身份证 + 人脸核验。',
-      acts:[['you','选择主体类型（个人 / 企业）'],['you','身份证 + 微信扫脸核验（个人免认证费）']], meta:[['clock','约 1 天'],['you','需你本人']] },
-    { t:'ICP 备案', s:'cur', lede:'向工信部登记小程序，没备案无法正式上线。', open:true,
-      acts:[['you','填写备案信息（主体 / 小程序 / 负责人）'],['ai','船友帮你核对字段完整度'],['you','工信部短信核验需 24h 内回复']],
-      meta:[['clock','最长 20 工作日'],['you','需你本人'],['ai','船友辅助']] },
-    { t:'选择服务类目', s:'todo', lede:'告诉微信你的小程序做什么——它决定你要哪些资质。',
-      acts:[['ai','船友按代码信号提示候选类目'],['you','个人主体类目受限（9 类）'],['you','部分类目需专项资质']], meta:[['clock','约 30 分钟'],['you','需你本人']] },
-    { t:'用户隐私保护指引', s:'todo', cond:'按需', lede:'凡收集用户信息（位置 / 相册 / 手机号…）都要声明。',
-      acts:[['ai','船友自动检出代码里的隐私接口'],['you','后台填写《隐私保护指引》'],['auto','调用接口前由系统弹授权']], meta:[['ai','船友自动检'],['you','后台填写']] },
-    { t:'服务器域名白名单', s:'todo', cond:'按需', lede:'小程序请求的后端域名要先加白名单，否则真机被拦。',
-      acts:[['ai','船友自动扫出出站域名'],['you','后台→开发设置→服务器域名配置'],['you','必须 HTTPS + 已备案']], meta:[['ai','船友自动扫'],['you','后台配置']] },
-    { t:'提交审核', s:'todo', lede:'把开发版提交微信审核——备案 + 类目过了才能提。',
-      acts:[['you','用开发者工具 / CI 上传代码'],['you','后台点"提交审核"'],['ai','被拒时船友用 explain 反查修复']], meta:[['clock','约 1–7 天'],['you','需你本人']] },
-    { t:'发布上线', s:'todo', lede:'审核通过后点"发布"，小程序正式可被搜索使用。',
-      acts:[['you','后台点"发布"（可灰度 / 全量）'],['ai','上线后进入健康检查模式']], meta:[['clock','即时'],['you','需你本人']] }
-  ];
-  const WHO = { you:['you','warn'], ai:['ai','ai'], auto:['check','auto'] };
-  const spine = document.getElementById('spine');
-  spine.innerHTML = STAGES.map((st, i) => {
-    const cls = st.s === 'done' ? 'stg--done' : st.s === 'cur' ? 'stg--cur' : '';
-    const dot = st.s === 'done' ? S(IC.check, 8, 2.6) : '';
-    const cond = st.cond ? `<span class="stg__cond">${st.cond}</span>` : '';
-    const acts = st.acts.map(([w, txt]) => `<li>${S(IC[WHO[w][0]] || IC.dotIcon, 13)}<span>${txt}</span></li>`).join('');
-    const meta = st.meta.map(([ic, label]) => `<span>${S(IC[ic], 12)}${label}</span>`).join('');
-    return `<li class="stg ${cls}" data-i="${i}" aria-expanded="${st.open ? 'true' : 'false'}">
-      <button class="stg__row" aria-controls="d${i}">
-        <span class="stg__dot">${dot}</span><span class="stg__t">${st.t}</span>${cond}
-        <span class="stg__exp">${S(IC.chev, 13)}</span>
-      </button>
-      <div class="stg__detail" id="d${i}">
-        <p class="stg__lede">${st.lede}</p>
-        <ul class="stg__acts">${acts}</ul>
-        <div class="stg__meta">${meta}</div>
-        <button class="stg__open" onclick="location.href='stage-workspace.html'">进入阶段工作区 ${S(IC.arrow, 13)}</button>
-      </div>
-    </li>`;
-  }).join('');
-
-  spine.addEventListener('click', (e) => {
-    const row = e.target.closest('.stg__row'); if (!row) return;
-    const li = row.parentElement; const open = li.getAttribute('aria-expanded') === 'true';
-    spine.querySelectorAll('.stg').forEach(x => x.setAttribute('aria-expanded', 'false'));
-    li.setAttribute('aria-expanded', open ? 'false' : 'true');
-  });
-
-  const annotBtn = document.getElementById('annotBtn');
-  document.body.classList.add('annot');
-  annotBtn.addEventListener('click', () => annotBtn.classList.toggle('active', document.body.classList.toggle('annot')));
-  const themeBtn = document.getElementById('themeBtn');
-  themeBtn.addEventListener('click', () => {
-    const dark = document.body.getAttribute('data-theme') === 'dark';
-    document.body.setAttribute('data-theme', dark ? 'light' : 'dark');
-    themeBtn.textContent = dark ? '深色' : '浅色';
-  });
-  document.querySelectorAll('.side__tab').forEach(t => t.addEventListener('click', () => {
-    document.querySelectorAll('.side__tab').forEach(x => x.classList.remove('on')); t.classList.add('on');
-  }));
-</script>
+<script src="preview.js"></script>
+<script type="module" src="main.js"></script>
+<script src="responsive.js"></script>
 </body>
 </html>

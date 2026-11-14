@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-source-freshness-check"
+description = "Enables the source_freshness_check command without any pre-configured scope."
+commands.allow = ["source_freshness_check"]
+
+[[permission]]
+identifier = "deny-source-freshness-check"
+description = "Denies the source_freshness_check command without any pre-configured scope."
+commands.deny = ["source_freshness_check"]

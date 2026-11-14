@@ -1,0 +1,87 @@
+{
+  "package": "@awesome.me/webawesome",
+  "version": "3.14.0",
+  "license": "MIT",
+  "commit": "201e49fdb9359416f411e4a52b5e4af1ac88f3b8",
+  "source": "https://github.com/shoelace-style/webawesome",
+  "build": "npm --prefix desktop run build:ui-kit",
+  "components": [
+    "button",
+    "badge",
+    "dropdown",
+    "dropdown-item",
+    "tooltip"
+  ],
+  "packages": [
+    {
+      "name": "@awesome.me/webawesome",
+      "version": "3.14.0",
+      "license": "MIT"
+    },
+    {
+      "name": "nanoid",
+      "version": "5.1.16",
+      "license": "MIT"
+    },
+    {
+      "name": "@floating-ui/core",
+      "version": "1.8.0",
+      "license": "MIT"
+    },
+    {
+      "name": "@floating-ui/dom",
+      "version": "1.8.0",
+      "license": "MIT"
+    },
+    {
+      "name": "@floating-ui/utils",
+      "version": "0.2.12",
+      "license": "MIT"
+    },
+    {
+      "name": "@lit/reactive-element",
+      "version": "2.1.2",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "@shoelace-style/localize",
+      "version": "3.2.3",
+      "license": "MIT"
+    },
+    {
+      "name": "composed-offset-position",
+      "version": "0.0.6",
+      "license": "MIT"
+    },
+    {
+      "name": "lit-element",
+      "version": "4.2.2",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "lit-html",
+      "version": "3.3.3",
+      "license": "BSD-3-Clause"
+    }
+  ],
+  "files": [
+    {
+      "file": "web-awesome.js",
+      "bytes": 247796,
+      "gzipBytes": 60495,
+      "sha256": "0a910614509bdc24b2660af44c075c65f71c72bd73eeabefd8063d42aae2acf8"
+    },
+    {
+      "file": "web-awesome.css",
+      "bytes": 51635,
+      "gzipBytes": 6797,
+      "sha256": "305220884e052cf511cd14ec490ea9d116476755ee393472e795056c0ae802f5"
+    },
+    {
+      "file": "THIRD-PARTY-NOTICES.txt",
+      "bytes": 12675,
+      "gzipBytes": 1666,
+      "sha256": "bb3973acbcea244e711963cdfa1fa6ebcc5600fe40320d6f1989d8f41b674615"
+    }
+  ]
+}

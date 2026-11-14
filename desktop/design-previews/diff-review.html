@@ -3,22 +3,22 @@
 <link rel="stylesheet" href="app.css"/>
 <style>
   /* ===== 屏专属组件：全屏 diff / 审阅(逐文件批准 + 回滚) ===== */
-  .rev { display: flex; flex-direction: column; min-height: 600px; background: var(--bg); }
+  .rev { display: flex; flex-direction: column; min-height: calc(100dvh - 48px); background: var(--bg); }
 
   /* 审阅头 */
   .rev__head { display: flex; align-items: center; gap: 14px; padding: 13px 18px; background: var(--surface); border-bottom: 1px solid var(--border); }
   .rev__ico { width: 30px; height: 30px; border-radius: var(--r-sm); background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .rev__ico svg { width: 16px; height: 16px; }
   .rev__l { min-width: 0; }
-  .rev__t { font-size: 13.5px; font-weight: 500; color: var(--text); letter-spacing: -.01em; }
-  .rev__sub { font-size: 11.5px; color: var(--text-3); margin-top: 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .rev__t { margin: 0; font-size: 18px; font-weight: 600; color: var(--text); letter-spacing: -.01em; }
+  .rev__sub { font-size: 13px; color: var(--text-2); margin-top: 5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .rev__sub .num { font-family: var(--font-mono); letter-spacing: -.02em; }
   .rev__sub .num .a { color: var(--ok); } .rev__sub .num .r { color: var(--block); }
   .rev__acts { margin-left: auto; display: flex; gap: 8px; flex-shrink: 0; }
-  .btn-primary { font: inherit; font-size: 12.5px; font-weight: 500; padding: 9px 15px; border-radius: var(--r); cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); display: inline-flex; align-items: center; gap: 7px; transition: background .14s var(--ease); }
-  .btn-primary:hover { background: var(--accent-2); }
+  .btn-primary { font: inherit; font-size: 13px; font-weight: 500; min-height: 36px; padding: 9px 15px; border-radius: var(--r); cursor: pointer; border: 1px solid var(--text); background: var(--text); color: var(--bg); display: inline-flex; align-items: center; gap: 7px; transition: background .14s var(--ease); }
+  .btn-primary:hover { background: var(--text-2); }
   .btn-primary svg { width: 14px; height: 14px; }
-  .btn-ghost { font: inherit; font-size: 12.5px; padding: 9px 15px; border-radius: var(--r); cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); transition: border-color .14s var(--ease); }
+  .btn-ghost { font: inherit; font-size: 13px; min-height: 36px; padding: 9px 15px; border-radius: var(--r); cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); transition: border-color .14s var(--ease); }
   .btn-ghost:hover { border-color: var(--border-2); }
 
   /* 两栏 grid */
@@ -26,19 +26,22 @@
 
   /* 左栏：文件列表 */
   .flist { background: var(--surface-2); border-right: 1px solid var(--border); padding: 12px 10px; overflow: auto; }
-  .flist__h { font-size: 10.5px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); margin: 2px 4px 10px; }
+  .flist__h { font-size: 12px; font-weight: 500; color: var(--text-2); margin: 4px 10px 12px; }
   .fitem { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; font: inherit; background: none; border: 1px solid transparent; border-radius: var(--r-sm); padding: 9px 10px; cursor: pointer; color: var(--text-2); transition: background .12s var(--ease), border-color .12s var(--ease); }
   .fitem:hover { background: var(--surface); }
   .fitem.on { background: var(--surface); border-color: var(--border); color: var(--text); }
   .fitem__ico { color: var(--text-3); flex-shrink: 0; display: flex; }
   .fitem__ico svg { width: 15px; height: 15px; }
   .fitem.on .fitem__ico { color: var(--accent); }
-  .fitem__name { font-family: var(--font-mono); font-size: 12px; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .fitem__name { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
   .fitem__pm { font-family: var(--font-mono); font-size: 11px; letter-spacing: -.02em; flex-shrink: 0; }
   .fitem__pm .a { color: var(--ok); } .fitem__pm .r { color: var(--block); }
   .fitem__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex-shrink: 0; }
   .fitem.on .fitem__dot { background: var(--accent); }
-  .flist__note { font-size: 11px; color: var(--text-3); line-height: 1.5; margin: 12px 4px 0; padding-top: 12px; border-top: 1px solid var(--border); }
+  .fitem[data-review-state="accepted"] .fitem__dot { background: var(--ok); }
+  .fitem[data-review-state="rejected"] .fitem__dot { background: var(--block); }
+  .fitem[data-review-state="stale"] .fitem__dot { background: var(--text-3); box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 3px var(--text-3); }
+  .flist__note { font-size: 12px; color: var(--text-3); line-height: 1.7; margin: 16px 10px 0; padding-top: 16px; border-top: 1px solid var(--border); }
 
   /* 右栏：选中文件的 diff */
   .dpane { display: flex; flex-direction: column; overflow: auto; background: var(--bg); }
@@ -53,33 +56,37 @@
   .btn-line.approve { border-color: var(--ok); color: var(--ok); }
   .btn-line.approve:hover { background: var(--ok-soft); }
   .btn-line.reject:hover { border-color: var(--block); color: var(--block); }
+  .btn-line:disabled, .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+  .file-state { margin-left: 4px; border-radius: 5px; padding: 3px 8px; background: var(--surface-2); color: var(--text-2); font-size: 12px; }
+  .file-state[data-state="accepted"] { color: var(--ok); background: var(--ok-soft); }
+  .file-state[data-state="rejected"] { color: var(--block); }
+  .file-state[data-state="stale"] { color: var(--warn); }
+  .regenerate[hidden] { display: none; }
 
   /* diff 区 */
   .diffview { flex: 1; padding: 12px 0; }
-  .diffhunk { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); letter-spacing: -.02em; padding: 4px 18px 8px; }
-  .drow { display: flex; font-family: var(--font-mono); font-size: 12px; line-height: 1.85; letter-spacing: -.02em; padding: 0 18px; white-space: pre-wrap; word-break: break-word; }
+  .diffhunk { font-family: var(--font-mono); font-size: 12px; color: var(--text-3); padding: 6px 18px 12px; }
+  .drow { display: flex; font-family: var(--font-mono); font-size: 13px; line-height: 1.85; padding: 0 18px; white-space: pre-wrap; word-break: break-word; }
   .drow .gut { display: inline-block; width: 16px; flex-shrink: 0; color: var(--text-3); user-select: none; }
   .drow--ctx { color: var(--text-2); }
   .drow--add { background: var(--ok-soft); color: var(--ok); }
   .drow--add .gut { color: var(--ok); }
+  .drow--del { background: var(--block-soft); color: var(--block); }
+  .drow--del .gut { color: var(--block); }
 
   /* checkpoint 行 */
   .ckptbar { display: flex; align-items: center; gap: 9px; margin: 8px 18px 4px; padding: 9px 12px; background: var(--surface-2); border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 11px; color: var(--text-3); letter-spacing: -.02em; }
   .ckptbar svg { width: 13px; height: 13px; flex-shrink: 0; color: var(--text-3); }
-  .ckptbar .roll { margin-left: auto; font-family: var(--font-ui); color: var(--accent); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+  .ckptbar .roll { margin-left: auto; padding: 0; border: 0; background: transparent; font-family: var(--font-ui); color: var(--accent); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
   .ckptbar .roll svg { color: var(--accent); }
-
-  /* 占位 diff(切到另一文件) */
-  .dempty { padding: 40px 18px; text-align: center; color: var(--text-3); }
-  .dempty svg { width: 26px; height: 26px; margin-bottom: 10px; }
-  .dempty p { font-size: 12.5px; margin: 0; line-height: 1.6; }
-  .dempty .fn { font-family: var(--font-mono); font-size: 12px; color: var(--text-2); letter-spacing: -.02em; }
+  .ckptbar .roll:disabled { color: var(--text-3); cursor: not-allowed; opacity: .55; }
 
   /* 底部审阅条 */
-  .revfoot { display: flex; gap: 10px; align-items: flex-start; padding: 12px 18px; background: var(--surface-2); border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-2); line-height: 1.6; }
+  .revfoot { display: flex; gap: 10px; align-items: flex-start; padding: 14px 18px; background: var(--bg); border-top: 1px solid var(--border); font-size: 13px; color: var(--text-2); line-height: 1.7; }
   .revfoot svg { width: 15px; height: 15px; color: var(--accent); flex-shrink: 0; margin-top: 1px; }
   .revfoot b { font-weight: 500; color: var(--text); }
-</style></head>
+</style><link rel="stylesheet" href="responsive.css" />
+</head>
 <body data-theme="light">
   <h2 class="sr-only">上线船友全屏 diff 审阅：agent 提议改动 2 个文件，逐文件批准并可一键回滚；备案、提审、发布等官方后台动作仍需你本人完成，船友不代提交。</h2>
 
@@ -96,16 +103,17 @@
       <!-- 审阅头 -->
       <div class="rev__head">
         <span class="rev__ico" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#list-checks"></use></svg>
         </span>
         <div class="rev__l">
-          <div class="rev__t">agent 提议的改动 · 2 个文件</div>
-          <div class="rev__sub"><span class="num"><span class="a">+7</span> <span class="r">−1</span></span><span>·</span><span>等待你逐文件批准</span></div>
+          <h1 class="rev__t">静态演示改动 · 2 个文件</h1>
+          <div class="rev__sub"><span class="num"><span class="a">+7</span> <span class="r">−1</span></span><span>·</span><span id="reviewSummary">2 个文件待审阅</span></div>
         </div>
         <div class="rev__acts">
+          <button class="btn-ghost" id="staleBtn">演示源文件变化</button>
           <button class="btn-ghost" id="cancelBtn">取消</button>
           <button class="btn-primary" id="approveAllBtn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
             全部批准
           </button>
         </div>
@@ -116,15 +124,15 @@
         <!-- 左栏：文件列表 -->
         <aside class="flist scroll">
           <p class="flist__h">改动文件</p>
-          <button class="fitem on" data-file="app" aria-current="true">
-            <span class="fitem__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
+          <button class="fitem on" data-file="app" data-review-state="pending" aria-current="true">
+            <span class="fitem__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg></span>
             <span class="fitem__name">app.json</span>
             <span class="fitem__pm"><span class="a">+2</span> <span class="r">−0</span></span>
             <span class="fitem__dot" aria-label="待审阅"></span>
           </button>
-          <button class="fitem" data-file="index">
-            <span class="fitem__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>
-            <span class="fitem__name">pages/index/index.js</span>
+          <button class="fitem" data-file="index" data-review-state="pending">
+            <span class="fitem__ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#file-text"></use></svg></span>
+            <span class="fitem__name" title="pages/index/index.js">pages/index/index.js</span>
             <span class="fitem__pm"><span class="a">+5</span> <span class="r">−1</span></span>
             <span class="fitem__dot" aria-label="待审阅"></span>
           </button>
@@ -135,14 +143,16 @@
         <div class="dpane scroll" id="dpane">
 
           <!-- app.json 的 diff(默认展示) -->
-          <div class="dfile" data-pane="app">
+          <div class="dfile" data-pane="app" data-review-state="pending">
             <div class="dpane__file">
               <span class="fn">app.json</span>
               <span class="pm"><span class="a">+2</span> <span class="r">−0</span></span>
+              <span class="file-state" data-file-state data-state="pending">待审阅</span>
               <div class="dpane__fa">
+                <button class="btn-line regenerate" type="button" hidden>重新生成</button>
                 <button class="btn-line reject">拒绝</button>
                 <button class="btn-line approve">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
                   批准
                 </button>
               </div>
@@ -158,28 +168,42 @@
             </div>
 
             <div class="ckptbar">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#rotate-ccw"></use></svg>
               checkpoint · 批准后可一键回滚
-              <span class="roll"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg>回滚</span>
+              <button class="roll" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#rotate-ccw"></use></svg>回滚</button>
             </div>
           </div>
 
-          <!-- pages/index/index.js 的 diff(占位简版) -->
-          <div class="dfile" data-pane="index" hidden>
+          <!-- pages/index/index.js 的静态示例 diff -->
+          <div class="dfile" data-pane="index" data-review-state="pending" hidden>
             <div class="dpane__file">
               <span class="fn">pages/index/index.js</span>
               <span class="pm"><span class="a">+5</span> <span class="r">−1</span></span>
+              <span class="file-state" data-file-state data-state="pending">待审阅</span>
               <div class="dpane__fa">
+                <button class="btn-line regenerate" type="button" hidden>重新生成</button>
                 <button class="btn-line reject">拒绝</button>
                 <button class="btn-line approve">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#check"></use></svg>
                   批准
                 </button>
               </div>
             </div>
-            <div class="dempty">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
-              <p><span class="fn">pages/index/index.js</span> 的 diff<br/>（此预览屏聚焦 app.json，点回左栏 app.json 看完整改动）</p>
+            <div class="diffview" aria-label="pages/index/index.js 静态示例差异">
+              <div class="diffhunk">@@ 页面初始化 · 隐私授权前置检查（静态演示） @@</div>
+              <div class="drow drow--ctx"><span class="gut"> </span>Page({</div>
+              <div class="drow drow--add"><span class="gut">+</span>  async onLoad() {</div>
+              <div class="drow drow--add"><span class="gut">+</span>    const privacy = await wx.getPrivacySetting()</div>
+              <div class="drow drow--add"><span class="gut">+</span>    this.setData({ needsPrivacyAuth: privacy.needAuthorization })</div>
+              <div class="drow drow--add"><span class="gut">+</span>  },</div>
+              <div class="drow drow--add"><span class="gut">+</span>  data: { needsPrivacyAuth: false },</div>
+              <div class="drow drow--del"><span class="gut">−</span>  data: {},</div>
+              <div class="drow drow--ctx"><span class="gut"> </span>})</div>
+            </div>
+            <div class="ckptbar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#rotate-ccw"></use></svg>
+              checkpoint · 批准后可一键回滚
+              <button class="roll" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#rotate-ccw"></use></svg>回滚</button>
             </div>
           </div>
 
@@ -188,15 +212,16 @@
 
       <!-- 底部审阅条 -->
       <div class="revfoot">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
-        <span><b>工具改代码需你逐文件批准</b>；备案 / 提审 / 发布等官方后台动作仍需你本人完成，船友不代提交。</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="components/icons.svg#shield-check"></use></svg>
+        <span><b>静态示例差异需你逐文件审阅</b>；这里仅更新原型状态，不写文件。备案 / 提审 / 发布等官方后台动作仍需你本人完成。</span>
       </div>
     </section>
 
   </div></div>
 
-  <script>
-    const tb=document.getElementById('themeBtn');tb.addEventListener('click',()=>{const d=document.body.getAttribute('data-theme')==='dark';document.body.setAttribute('data-theme',d?'light':'dark');tb.textContent=d?'深色':'浅色';});
+  <script type="module">
+    import { returnDestination } from './navigation.js';
+
     /* 本屏交互：左栏文件项点击切换选中高亮 + 右栏切换对应 diff */
     const items = document.querySelectorAll('.fitem');
     const panes = document.querySelectorAll('.dfile');
@@ -206,5 +231,19 @@
       const key = it.getAttribute('data-file');
       panes.forEach(p => { p.hidden = p.getAttribute('data-pane') !== key; });
     }));
+    document.getElementById('cancelBtn').addEventListener('click', () => { location.href = returnDestination(location.search); });
+    document.getElementById('staleBtn').addEventListener('click', async () => {
+      const key = document.querySelector('.fitem.on')?.dataset.file;
+      const ui = await window.shipmateUI.ready;
+      ui?.markFileStale(key, { reason: 'source-changed' });
+    });
+    document.addEventListener('click', async event => {
+      const button = event.target.closest('.regenerate');
+      if (!button) return;
+      const ui = await window.shipmateUI.ready;
+      ui?.regenerateFile(button.closest('.dfile')?.dataset.pane);
+    });
   </script>
+  <script src="preview.js"></script>
+<script src="responsive.js"></script>
 </body></html>

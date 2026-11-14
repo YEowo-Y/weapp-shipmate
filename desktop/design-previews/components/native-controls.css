@@ -1,0 +1,17 @@
+/* Keep platform form behavior; share the existing visual tokens. */
+.native-check {
+  width: 18px;
+  height: 18px;
+  margin: 4px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.native-check:disabled { cursor: not-allowed; opacity: .6; }
+.native-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.native-options { min-width: 0; padding: 0; margin: 0; border: 0; }
+.native-options legend { padding: 0; margin-bottom: 8px; font-size: 12.5px; font-weight: 500; color: var(--text); }
+.seg__opt { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; }
+.seg__opt input { margin: 0; accent-color: var(--accent); flex-shrink: 0; }
+.seg__opt:has(input:checked) { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 500; }
+.seg__opt:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }

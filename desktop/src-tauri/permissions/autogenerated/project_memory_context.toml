@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-project-memory-context"
+description = "Enables the project_memory_context command without any pre-configured scope."
+commands.allow = ["project_memory_context"]
+
+[[permission]]
+identifier = "deny-project-memory-context"
+description = "Denies the project_memory_context command without any pre-configured scope."
+commands.deny = ["project_memory_context"]

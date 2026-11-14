@@ -1,6 +1,5 @@
 // src/crosscheck.mjs —— 声明↔调用一致性核验（超越单向规则匹配的代码感知）
 // 复用 scanner 已抓取的 apis（调用）与 configKeys（app.json 声明），交叉比对出"调了但没声明"。
-// 已核验官方来源（2026-06-15，全局配置文档 requiredPrivateInfos）：纯逻辑 + 官方逐字 source_quote。
 import { apiMatches } from "./data.mjs";
 
 // 官方：使用以下 8 个地理位置接口须在 app.json 的 requiredPrivateInfos 声明，否则无法正常使用。
@@ -35,20 +34,21 @@ export function checkRequiredPrivateInfos(scan = {}) {
   if (!missing.length) return null;
   return {
     ruleId: "consistency.requiredPrivateInfos",
+    action_categories: ["code", "manual_check"],
     title: "位置接口未在 app.json 声明 requiredPrivateInfos",
     stage: "privacy",
     severity: "blocker",
-    why: "调用了地理位置接口但未在 app.json 的 requiredPrivateInfos 声明，提审会出现 61040 报错、真机调用会失败",
-    requires: [`在 app.json 的 requiredPrivateInfos 中补充声明：${missing.join("、")}`],
+    why: "2022 年 7 月 14 日后发布的小程序如使用下列位置接口，须在 app.json 的 requiredPrivateInfos 中声明，否则接口无法正常使用。请先核对小程序的发布日期。",
+    requires: [`若适用，在 app.json 的 requiredPrivateInfos 中补充声明：${missing.join("、")}`],
     warn: null,
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/reference/configuration/app.html#requiredPrivateInfos",
     source_quote: "自 2022 年 7 月 14 日后发布的小程序，使用以下8个地理位置相关接口时，需要声明该字段，否则将无法正常使用。",
-    last_verified: "2026-06-15",
+    last_verified: "2026-11-14",
     manual_required: true,
   };
 }
 
-// 微信服务端 API 域名（含容灾/就近接入点）——只该在后端调用，前端直连会泄露 AppSecret。
+// 微信服务端 API 域名（含容灾/就近接入点）——用于提示核对前端代码中出现的服务端域名。
 const BACKEND_HOSTS = [
   "api.weixin.qq.com",
   "api2.weixin.qq.com",
@@ -67,15 +67,16 @@ export function checkBackendApiInFrontend(scan = {}) {
   if (!hit.length) return null;
   return {
     ruleId: "security.backend-api-in-frontend",
-    title: "前端直连微信服务端 API（AppSecret 泄露风险）",
+    action_categories: ["code", "manual_check"],
+    title: "核对前端代码中的微信服务端域名",
     stage: "domain",
     severity: "blocker",
-    why: "在小程序前端调用 api.weixin.qq.com 等服务端接口，会把 AppSecret/access_token 暴露在客户端，且该域名无法配置进服务器域名白名单；须改为后端服务器调用",
-    requires: [`移除前端对以下微信服务端域名的直连，改由后端调用：${hit.join("、")}`],
+    why: "微信后端 API 应在后端服务器调用，以保护 access_token。请核对这些域名的用途，api.weixin.qq.com 无法配置为小程序服务器域名。",
+    requires: [`核对以下微信服务端域名，如有前端直连，改由后端调用：${hit.join("、")}`],
     warn: null,
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/server-ability/backend-api.html",
     source_quote: "后端 API 不能直接在小程序内通过 wx.request 调用，即 api.weixin.qq.com 不能被配置为服务器域名。",
-    last_verified: "2026-06-15",
+    last_verified: "2026-11-14",
     manual_required: true,
   };
 }
@@ -91,15 +92,16 @@ export function checkHardcodedSecrets(scan = {}) {
   const list = hints.map((h) => `${h.file}（${h.key}）`).join("、");
   return {
     ruleId: "security.hardcoded-secret",
+    action_categories: ["code", "manual_check"],
     title: "疑似硬编码密钥（AppSecret/商户密钥）",
     stage: "review",
     severity: "blocker",
-    why: "AppSecret/商户密钥等后端专用密钥不得打进小程序前端包，一旦随包下发即视为泄露，可被他人冒用",
-    requires: [`移除前端源码中的疑似密钥，改由后端持有并调用：${list}`],
+    why: "所引官方说明适用于 AppSecret：泄露后账号有被冒用的风险。对于商户密钥等其他键，请按其实际用途核实。",
+    requires: [`如确认是真实密钥，将其移出前端源码并在后端保管：${list}`],
     warn: null,
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/server/API/mp-access-token/api_getaccesstoken.html",
-    source_quote: "AppSecret是账号使用后台API接口的密钥，请开发者妥善保管，避免因泄露造成账号被其他人冒用等风险。",
-    last_verified: "2026-06-15",
+    source_quote: "AppSecret 是账号使用后台 API 接口的密钥，请开发者妥善保管，避免因泄露造成账号被其他人冒用等风险。",
+    last_verified: "2026-11-14",
     manual_required: true,
   };
 }
@@ -114,15 +116,16 @@ export function checkInsecureRequest(scan = {}) {
   if (!hosts.length) return null;
   return {
     ruleId: "security.insecure-request",
-    title: "明文 http/ws 请求（须改为 https/wss）",
+    action_categories: ["code", "manual_check"],
+    title: "核对明文 HTTP 或 WebSocket 请求",
     stage: "domain",
     severity: "warning",
-    why: "小程序网络请求只支持 https/wss，明文 http/ws 域名上线后会被拦截、无法通信",
-    requires: [`将以下域名改为 https/wss 协议：${hosts.join("、")}`],
+    why: "配置为服务器域名时，普通请求、上传和下载须使用 HTTPS，WebSocket 须使用 WSS。局域网 IP 另有适用条件。",
+    requires: [`核对以下地址的用途，用作服务器域名的地址应改为 HTTPS 或 WSS：${hosts.join("、")}`],
     warn: null,
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html",
-    source_quote: "域名只支持 https（wx.request、wx.uploadFile、wx.downloadFile）和 wss（wx.connectSocket）协议",
-    last_verified: "2026-06-15",
+    source_quote: "域名只支持 https (wx.request、wx.uploadFile、wx.downloadFile) 和 wss (wx.connectSocket) 协议",
+    last_verified: "2026-11-14",
     manual_required: true,
   };
 }
@@ -147,15 +150,16 @@ export function checkIpOrLocalhost(scan = {}) {
   if (!hits.length) return null;
   return {
     ruleId: "domain.ip-or-localhost",
-    title: "请求使用 IP/localhost（不可作合法服务器域名）",
+    action_categories: ["code", "console", "manual_check"],
+    title: "核对 IP 或 localhost 的服务器域名用途",
     stage: "domain",
     severity: "warning",
-    why: "服务器域名白名单不支持 IP 地址（局域网 IP 除外）或 localhost，上线后这些请求会被拦截",
-    requires: [`将以下 IP/localhost 改为已备案的域名：${hits.join("、")}`],
+    why: "服务器域名不能使用 IP 地址（小程序的局域网 IP 除外）或 localhost。请确认检出的地址是否用于网络请求。",
+    requires: [`若用作服务器域名，将以下地址改为已备案的域名：${hits.join("、")}`],
     warn: null,
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/framework/ability/network.html",
     source_quote: "域名不能使用 IP 地址（小程序的局域网 IP 除外）或 localhost",
-    last_verified: "2026-06-15",
+    last_verified: "2026-11-14",
     manual_required: true,
   };
 }

@@ -22,6 +22,39 @@ test("guide 按输入跳过隐私/域名阶段", () => {
   assert.ok(stages.has("filing"), "备案阶段应始终出现");
 });
 
+test("guide 摘要和阶段说明使用可读名称，规则阶段仍保留结构化标识", () => {
+  const { flow } = loadData();
+  const conditionalTitles = flow.filter(stage => ["privacy", "domain"].includes(stage.stage)).map(stage => stage.title).join("、");
+  for (const [subject_type, label] of [[undefined, "未指定"], ["personal", "个人"], ["individual_business", "个体工商户"], ["enterprise", "企业"]]) {
+    const result = runGuide({ subject_type });
+    assert.ok(result.meta.summary.startsWith(`主体：${label}；`));
+    assert.ok(result.notes.some(note => note.includes(conditionalTitles)));
+    assert.doesNotMatch(result.notes.join("\n"), /privacy|domain/);
+    assert.match(result.meta.summary, /适用阶段 6\/8，待确认 2 个阶段/);
+    assert.ok(result.items.every(item => !["privacy", "domain"].includes(item.stage)));
+    for (const [ruleId, signal] of [["flow.privacy", "收集敏感信息"], ["domain.must-icp-filed", "使用自有服务器域名"]]) {
+      const item = result.selfCheck.find(item => item.ruleId === ruleId);
+      assert.equal(item.conditional, true);
+      assert.deepEqual(item.signal, [signal]);
+    }
+    const skipped = runGuide({ subject_type, collects_sensitive: false, has_server_domain: false });
+    assert.ok(skipped.notes.some(note => note === `按你的输入跳过阶段：${conditionalTitles}`));
+    assert.ok(skipped.items.every(item => item.stage !== "privacy" && item.stage !== "domain"));
+    assert.ok(skipped.selfCheck.every(item => item.stage !== "privacy" && item.stage !== "domain"));
+  }
+});
+
+test("不同阶段分别按已知、未知、否定的项目事实归入清单", () => {
+  const mixed = runGuide({ subject_type: "personal", has_server_domain: true });
+  assert.match(mixed.meta.summary, /适用阶段 7\/8，待确认 1 个阶段/);
+  assert.ok(mixed.items.some(item => item.ruleId === "domain.must-icp-filed"));
+  assert.ok(mixed.selfCheck.some(item => item.ruleId === "flow.privacy"));
+  assert.ok(mixed.selfCheck.find(item => item.ruleId === "privacy.getLocation").signal.includes("wx.getLocation"));
+  const skipped = runGuide({ collects_sensitive: false });
+  assert.match(skipped.meta.summary, /适用阶段 6\/8，待确认 1 个阶段，已跳过 1 个阶段/);
+  assert.ok([...skipped.items, ...skipped.selfCheck].every(item => item.stage !== "privacy"));
+});
+
 test("guide 收集敏感信息时含隐私阶段", () => {
   const r = runGuide({ subject_type: "personal", collects_sensitive: true });
   const stages = new Set(r.items.map((i) => i.stage));
@@ -46,11 +79,15 @@ test("guide 默认含已核验的提交审核规则（review 阶段）", () => {
   assert.ok(reviewIds.length >= 6, "review 阶段应有 6 条已核验规则");
 });
 
-test("guide 默认含已核验的登录规范（无 signal → 确定适用，进 items）", () => {
+test("guide 默认排除待核验的登录草稿，显式开启后才包含", () => {
   const r = runGuide({ subject_type: "personal" });
   const ids = new Set(r.items.filter((i) => i.stage === "review").map((i) => i.ruleId));
-  assert.ok(ids.has("login.after-experience"), "应含登录后置规则");
-  assert.ok(ids.has("login.cancellable"), "应含可取消登录规则");
+  const drafts = runGuide({ subject_type: "personal" }, { includeDrafts: true });
+  for (const id of ["login.after-experience", "login.cancellable"]) {
+    assert.ok(!ids.has(id), `${id} 不应进入默认清单`);
+    assert.ok(drafts.items.some(item => item.ruleId === id), `${id} 应保留在显式草稿清单`);
+  }
+  assert.ok(drafts.notes.some(note => note.includes("draft")));
   assert.ok(ids.has("qualification.provide-materials"), "资质材料规则无 signal，应进 items");
 });
 
@@ -93,4 +130,76 @@ test("draft 门禁：默认集不含 draft 规则，--include-drafts 为其超�
   assert.ok(all.rules.length >= def.rules.length, "include-drafts 应为默认集的超集");
   const defIds = new Set(def.rules.map((r) => r.id));
   for (const r of all.rules) if (!defIds.has(r.id)) assert.ok(r.draft, `多出的 ${r.id} 必为 draft`);
+});
+
+test("guide 所有源码匹配条件均为自查，通用导航仍为确定条目", () => {
+  const result = runGuide({ subject_type: "personal", collects_sensitive: true, has_server_domain: true });
+  const { rules } = loadData();
+  for (const rule of rules.filter(r => ["both", "navigation"].includes(r.kind) && r.subject_type.includes("personal"))) {
+    const conditional = !!rule.signal?.length || !!Object.keys(rule.match || {}).length;
+    const target = conditional ? result.selfCheck : result.items;
+    assert.ok(target.some(item => item.ruleId === rule.id), `${rule.id}: conditional=${conditional}`);
+  }
+  const webview = result.selfCheck.find(item => item.ruleId === "domain.web-view-personal");
+  assert.equal(webview.conditional, true);
+  assert.match(webview.why, /尚未确认/);
+  assert.doesNotMatch(webview.why, /代码使用了/);
+});
+
+// 真实临时源码验证同一规则的未知、扫描未使用、扫描命中三种证据状态。
+test("web-view 未扫描只提示条件；扫描无组件不命中，有组件才确定命中", async () => {
+  const { mkdtempSync, writeFileSync, unlinkSync, rmdirSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { runCheck } = await import("../src/check.mjs");
+  const dir = mkdtempSync(join(tmpdir(), "shipmate-guide-evidence-"));
+  const file = join(dir, "App.vue");
+  try {
+    const guidance = runGuide({ subject_type: "personal", has_server_domain: true });
+    assert.ok(guidance.selfCheck.some(item => item.ruleId === "domain.web-view-personal"));
+    writeFileSync(file, '<template><view>Hello</view></template>');
+    const absent = runCheck(dir, { subjectType: "personal" });
+    assert.equal(absent.meta.scan.filesScanned, 1, "跨框架项目不需要 app.json");
+    assert.ok(!absent.items.some(item => item.ruleId === "domain.web-view-personal"));
+    writeFileSync(file, '<template><web-view src="https://example.com" /></template>');
+    const present = runCheck(dir, { subjectType: "personal" });
+    const finding = present.items.find(item => item.ruleId === "domain.web-view-personal");
+    assert.ok(finding);
+    assert.match(finding.why, /代码使用了/);
+    assert.equal(finding.conditional, undefined);
+  } finally {
+    unlinkSync(file);
+    rmdirSync(dir);
+  }
+});
+
+test("注册、身份核验与发布对个人、个体、未知主体均有入口和完成条件", () => {
+  for (const subject_type of ["personal", "individual_business", undefined]) {
+    const result = runGuide({ subject_type });
+    for (const stage of ["registration", "certification", "release"]) {
+      const entries = result.items.filter(item => item.stage === stage);
+      assert.equal(entries.length, 1, `${subject_type}/${stage} 不重复新增导航项`);
+      const item = entries[0];
+      assert.equal(item.severity, "info");
+      assert.ok(item.official_url?.startsWith("https://developers.weixin.qq.com/"));
+      const steps = item.requires.join("\n");
+      assert.match(steps, /https:\/\/mp.weixin.qq.com\//);
+      assert.match(steps, /完成条件：/);
+      assert.doesNotMatch(steps, /暂无细化规则/);
+      assert.ok(item.requires.length >= 3);
+    }
+  }
+});
+
+test("身份核验区分个人、个体与未知，不把材料核对当资格保证", () => {
+  const get = subject_type => runGuide({ subject_type }).items.find(item => item.stage === "certification");
+  assert.match(get("personal").requires.join("\n"), /个人.*管理员/);
+  assert.match(get("individual_business").requires.join("\n"), /营业执照/);
+  assert.match(get(undefined).requires.join("\n"), /主体类型尚未确认/);
+  for (const subject of ["personal", "individual_business", undefined]) {
+    const item = get(subject);
+    assert.match(item.requires.join("\n"), /不代表.*认证.*支付/);
+    assert.equal(item.source_quote, undefined, "人工导航不伪造规则摘录");
+    assert.equal(item.manual_required, true);
+  }
 });

@@ -1,0 +1,16 @@
+.project-backup { margin-top:24px; padding-block:20px; border-top:1px solid var(--border); }
+.project-backup p { font-size:13px; line-height:1.65; overflow-wrap:anywhere; }
+.project-backup .project-section-heading { margin-bottom:8px; }
+.project-backup-review { margin-top:16px; padding:16px; border-radius:12px; background:var(--surface); }
+.project-backup-review h4 { margin:0 0 8px; font-size:14px; }
+.project-backup-review label { display:block; margin-block:12px 6px; font-size:13px; }
+.project-backup [data-tone="error"] { color:var(--block); }
+.project-backup [data-tone="warning"] { color:var(--warn,var(--text)); }
+#project-storage-status { font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+#project-backup-status:empty { display:none; }
+@media (max-width:480px) {
+  .project-backup .project-section-heading { align-items:flex-start; }
+  .project-backup-review { padding:12px; }
+  .project-backup .project-directory-field { flex-wrap:wrap; }
+  .project-backup .project-directory-field input { flex-basis:100%; }
+}

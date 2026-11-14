@@ -35,7 +35,13 @@ jobs:
         run: |
           cargo +1.94.1 test --manifest-path desktop/security/glib-variant-iter/Cargo.toml --locked
           cargo +1.94.1 test --manifest-path desktop/security/glib-variant-iter/Cargo.toml --locked --release
+      # Direct Cargo commands do not run Tauri's beforeBuildCommand.
+      - run: npm ci
       - run: npm ci --prefix desktop
+      - name: Stage Windows runtime resources for Linux compile-only check
+        # The CLI intentionally accepts Windows only. This packaging API verifies
+        # and copies the same pinned resources; Linux never executes node.exe.
+        run: node --input-type=module -e "const { prepareRuntime } = await import('./desktop/scripts/prepare-runtime.mjs'); const manifest = await prepareRuntime(); console.log('Staged', manifest.platform, manifest.arch, Object.keys(manifest.files).length, 'files for compile-only validation');"
       - run: npm --prefix desktop run build
       - name: Compile the locked Tauri Linux dependency graph
         run: cargo +1.94.1 check --manifest-path desktop/src-tauri/Cargo.toml --locked
@@ -48,7 +54,9 @@ jobs:
         with:
           node-version: "24"
       - run: rustup toolchain install 1.94.1 --profile minimal
+      - run: npm ci
       - run: npm ci --prefix desktop
+      - run: npm --prefix desktop run prepare:runtime --if-present
       - run: npm --prefix desktop run build
       - run: cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked
       - name: Build the Windows desktop with production assets

@@ -1,0 +1,163 @@
+{
+  "recordType": "projection-of-REA-output-not-canonical-evidence",
+  "toolVersion": "6.4.0",
+  "nodeVersion": "v24.14.0",
+  "evidenceId": "ev_a997135f796e876f66c20a069a3f7a00e312cafaf97661eef2a5b56c8afd4f0d",
+  "canonicalOutput": ".omx/state/rea-components/analysis.json",
+  "canonicalOutputSha256": "8b10576054778bfa17ac9530734c87aebb041b650032349fdf3f3dfd1e928893",
+  "artifactSha256": "afa6fea48ca62db6c68bf408b37fad943441b01633ffcd0724f65ea8fc5c11f5",
+  "statistics": {
+    "relevant_files": 3,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 8157,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 3,
+    "visited_ast_nodes": 823,
+    "findings": 52,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "inventoryCoverage": {
+    "status": "complete",
+    "truncated": false,
+    "omitted_count": 0,
+    "limits": []
+  },
+  "semanticCoverage": "unknown",
+  "limitations": [
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+  ],
+  "toolExport": [
+    {
+      "label": "tool-call.tsx:ToolCall",
+      "properties": {
+        "semantic_role": "export-binding",
+        "module_path": "tool-call.tsx",
+        "relationship_kind": "export",
+        "exported_name": "ToolCall",
+        "local_name": "ToolCall",
+        "imported_name": null,
+        "declared_specifier": null
+      },
+      "evidence": {
+        "authority": "ast-static-analysis",
+        "state": "observed",
+        "confidence": "exact",
+        "artifact": {
+          "available": true,
+          "artifact_id": "art_71c673d273b02d5757ae06c8b3be006b29f6a522ebea344243e66977c2b7259b",
+          "sha256": "71c673d273b02d5757ae06c8b3be006b29f6a522ebea344243e66977c2b7259b"
+        },
+        "location": {
+          "available": true,
+          "value": {
+            "kind": "source-range",
+            "source": "tool-call.tsx",
+            "start": {
+              "line": 30,
+              "column": 7
+            },
+            "end": {
+              "line": 93,
+              "column": 1
+            }
+          }
+        },
+        "extractor": {
+          "name": "rea-javascript-artifact-reconstruction",
+          "version": "1",
+          "operation": "recover-module-export",
+          "executable_sha256": null
+        },
+        "coverage": {
+          "status": "complete",
+          "truncated": false,
+          "omitted_count": 0,
+          "limits": []
+        },
+        "limitations": [
+          "Cross-function mutation and dynamic property resolution remain unknown.",
+          "Local call, argument, return, and closure relations are static candidates and do not prove runtime invocation.",
+          "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+          "Return sites include only direct callable returns; nested callable returns remain separate.",
+          "Values and aliases were recovered from inert syntax only; no JavaScript was executed."
+        ],
+        "evidence_ids": []
+      }
+    }
+  ],
+  "sources": {
+    "retrievedAt": "2026-10-13T06:00:58.8816727Z",
+    "registryDiscovery": "https://ui.shadcn.com/r/registries.json",
+    "documentation": "https://www.assistant-ui.com/elements/tool-call",
+    "registryUrls": [
+      "https://r.assistant-ui.com/elements-tool-call.json",
+      "https://r.assistant-ui.com/elements-collapsible-root.json"
+    ],
+    "upstreamCommit": "c31385ee05068eaa539d10e3f7e5d4b8b5c396ef",
+    "sourceUrls": [
+      "https://raw.githubusercontent.com/assistant-ui/assistant-ui/c31385ee05068eaa539d10e3f7e5d4b8b5c396ef/packages/ui/src/components/react/assistant-ui/elements/tool-call.tsx",
+      "https://raw.githubusercontent.com/assistant-ui/assistant-ui/c31385ee05068eaa539d10e3f7e5d4b8b5c396ef/packages/ui/src/components/react/assistant-ui/elements/surfaces.tsx",
+      "https://raw.githubusercontent.com/assistant-ui/assistant-ui/c31385ee05068eaa539d10e3f7e5d4b8b5c396ef/LICENSE"
+    ],
+    "version": "Registry artifact has no version field; content pinned by SHA-256. tool-call registry content exactly matches pinned upstream source.",
+    "license": "MIT; Copyright (c) 2026 AgentbaseAI Inc.; full license retained.",
+    "limitations": [
+      "elements-surfaces registry endpoint timed out twice; surfaces.tsx acquired from pinned upstream instead.",
+      "collapsible-root registry content has not been matched to pinned upstream.",
+      "Selected sources import unprovided libraries/utils; no dependencies installed and no source executed.",
+      "Published rea-agents 6.4.0 CLI inspected by parent uses --format json and lacks main-documentation --source-path/--json flags; analyze selected extracted directory rather than assume main API."
+    ],
+    "files": [
+      {
+        "file": "collapsible-root.tsx",
+        "sha256": "ebea1fff3af62e619a63680227b3c4b89cec449fac059f5fcd6695cc128f38b8",
+        "bytes": 823
+      },
+      {
+        "file": "elements-collapsible-root.registry.json",
+        "sha256": "d94d35a03158ca55288f3e36adfed63f97d414feee95e5df91c4152701375d63",
+        "bytes": 1415
+      },
+      {
+        "file": "elements-tool-call.registry.json",
+        "sha256": "23a9267ba471511c162051ab9866b1d90e86f0f750451ee09843e1274242bcf2",
+        "bytes": 3701
+      },
+      {
+        "file": "LICENSE",
+        "sha256": "eafb05991a572efa34097474b31fef45b14a8879ed1d1a8fd77de62e6fa7d275",
+        "bytes": 1073
+      },
+      {
+        "file": "LICENSE.pinned",
+        "sha256": "eafb05991a572efa34097474b31fef45b14a8879ed1d1a8fd77de62e6fa7d275",
+        "bytes": 1073
+      },
+      {
+        "file": "surfaces.tsx",
+        "sha256": "5d81fbb669e67ae20026cd30ed57efc51a5e3ee0f4f5d265e1723de75359b8fa",
+        "bytes": 4462
+      },
+      {
+        "file": "tool-call.tsx",
+        "sha256": "71c673d273b02d5757ae06c8b3be006b29f6a522ebea344243e66977c2b7259b",
+        "bytes": 2872
+      },
+      {
+        "file": "tool-call.upstream.tsx",
+        "sha256": "71c673d273b02d5757ae06c8b3be006b29f6a522ebea344243e66977c2b7259b",
+        "bytes": 2872
+      },
+      {
+        "file": "upstream-commit.json",
+        "sha256": "40633e56e3c3fe5a7ce9beb72c64ae47f6777cc00c11cce21fd56bbcdf6920fe",
+        "bytes": 12436
+      }
+    ]
+  }
+}

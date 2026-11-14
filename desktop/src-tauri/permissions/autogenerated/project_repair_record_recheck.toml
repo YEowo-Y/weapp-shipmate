@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-project-repair-record-recheck"
+description = "Enables the project_repair_record_recheck command without any pre-configured scope."
+commands.allow = ["project_repair_record_recheck"]
+
+[[permission]]
+identifier = "deny-project-repair-record-recheck"
+description = "Denies the project_repair_record_recheck command without any pre-configured scope."
+commands.deny = ["project_repair_record_recheck"]

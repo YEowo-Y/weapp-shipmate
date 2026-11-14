@@ -1,0 +1,49 @@
+/* P4 connection settings reuse the app tokens and native controls. */
+#desktop-model-dialog { width:min(740px,calc(100vw - 32px)); }
+#desktop-model-dialog .desktop-model-detail { min-width:0; }
+#desktop-model-dialog .desktop-model-note { line-height:1.65; text-wrap:pretty; }
+#desktop-model-dialog .desktop-catalog-search input { padding-inline-start:36px; }
+#desktop-model-dialog .desktop-checkbox { display:flex; gap:8px; align-items:center; line-height:1.5; }
+#desktop-model-dialog .desktop-checkbox input { width:16px; height:16px; padding:0; flex:0 0 16px; }
+#desktop-provider-storage { width:100%; min-height:40px; padding:8px 10px; color:var(--text); background:var(--bg); border:1px solid var(--border-2); border-radius:8px; font:inherit; }
+#desktop-model-dialog .desktop-inference-panel { padding:16px 0; border-bottom:1px solid var(--border); }
+#desktop-model-dialog .desktop-inference-panel h4 { margin:0 0 8px; font-size:14px; font-weight:600; }
+#desktop-model-dialog .desktop-inference-panel p { line-height:1.6; }
+#desktop-inference-status { font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+@media (max-width:600px) {
+  #desktop-model-dialog { width:calc(100vw - 20px); }
+  #desktop-provider-storage { min-height:44px; font-size:16px; }
+}
+@media (prefers-reduced-motion:no-preference) {
+  #desktop-inference-status.is-busy { background:linear-gradient(100deg,var(--text-3) 25%,var(--text) 50%,var(--text-3) 75%); background-size:220% 100%; background-clip:text; color:transparent; animation:progress-text 1.8s linear infinite; }
+}
+/* Keep provider navigation and the dialog title reachable while detail content scrolls. */
+#desktop-model-dialog { overflow:hidden; max-height:min(720px,calc(100dvh - 32px)); }
+#desktop-model-dialog[open] { display:flex; flex-direction:column; }
+#desktop-model-dialog > header { position:relative; flex:0 0 auto; }
+#desktop-model-dialog .desktop-model-layout { min-height:0; flex:1 1 auto; overflow:hidden; }
+#desktop-model-dialog .desktop-provider-picker { min-height:0; overflow-y:auto; }
+.desktop-provider-picker { min-width:0; padding:12px; border-right:1px solid var(--border); }
+.desktop-provider-picker > label { display:block; font-size:13px; margin-bottom:8px; }
+.desktop-provider-picker input { box-sizing:border-box; width:100%; min-width:0; min-height:36px; padding:8px; font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:var(--ds-radius-sm,6px); }
+.desktop-provider-picker nav { margin-top:8px; }
+.preferences-dialog .desktop-provider-picker nav { padding:0; border:0; }
+.desktop-provider-picker nav button[hidden] { display:none !important; }
+.desktop-provider-picker nav button { min-width:0; white-space:normal; overflow-wrap:anywhere; }
+.desktop-provider-picker > p { font-size:13px; }
+#desktop-model-dialog .desktop-model-detail { overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
+#desktop-model-dialog [data-current-connection-actions] { margin-bottom:12px; }
+#desktop-model-dialog .desktop-model-catalog > label { margin-top:12px; }
+#desktop-model-dialog .desktop-model-list { max-height:200px; overflow-y:auto; }
+#desktop-connection-editor { margin-top:16px; }
+#desktop-connection-editor > summary { padding:10px 0; cursor:pointer; color:var(--text-2); font-size:13px; }
+#desktop-connection-editor > summary:hover { color:var(--text); }
+#desktop-connection-editor:not([open]) { padding-bottom:8px; }
+#desktop-model-dialog .desktop-inference-panel { padding:12px 0; }
+#desktop-model-dialog .desktop-inference-panel p { margin:6px 0; }
+@media (max-width:600px) {
+  #desktop-model-dialog .desktop-model-layout { grid-template-rows:auto minmax(0,1fr); }
+  #desktop-model-dialog .desktop-provider-picker { max-height:200px; }
+  #desktop-model-dialog .desktop-provider-picker nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  #desktop-model-dialog .desktop-model-list { max-height:160px; }
+}

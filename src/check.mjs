@@ -40,6 +40,8 @@ export function runCheck(dir, { subjectType, includeDrafts = false } = {}) {
   for (const finding of crossChecks(scan)) items.push(finding);
 
   const notes = [];
+  if (scan.readErrors) notes.push(`⚠️ ${scan.readErrors} 次文件或目录读取失败，扫描范围不完整，请恢复访问后重新检查。`);
+  if (scan.skippedLinks) notes.push(`已跳过 ${scan.skippedLinks} 个符号链接或目录联接；不读取链接目标，本次结果不支持完整范围比较。`);
   // FX-14：扫描 0 个文件时"未命中任何规则"是虚假安心（指错目录是新手最常见的第一步错误），
   // 必须显式声明本报告不构成任何结论。
   if (scan.filesScanned === 0)

@@ -154,7 +154,7 @@
 - [ ] `.mcpb` 旁路：复用现有极简依赖 Node MCP server；BYO key 走 `user_config` 的 `sensitive:true` 字段；`mcpb pack`+`sign`；以官方当前 manifest 版为准。
 
 **守住灶台（贯穿所有层）**
-- [ ] 规则预检默认 local-only，源码不出本机。
+- [ ] 规则预检默认 local-only，预检本身不发送源码。此项只验预检；桌面 agent、预览及体验版上传另见[治理承诺](../GOVERNANCE.md)。
 - [ ] 不输出"保证过审/已合规"；官方提交仍 `manual_required`。
 - [ ] 极简依赖偏好：外壳的每个新依赖都需论证；优先 Tauri 官方插件与标准 crate。
 

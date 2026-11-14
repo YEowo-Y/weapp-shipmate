@@ -2,23 +2,121 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="icon" type="image/svg+xml" href="/brand/shipmate.svg" />
+    <link rel="stylesheet" href="/design-previews/app.css" />
+    <link rel="stylesheet" href="/design-previews/components/vendor/open-claude-ui/tokens.css" />
+    <link rel="stylesheet" href="/src/design-system.css" />
+    <link rel="stylesheet" href="/design-previews/components/ui-kit.css" />
+    <link rel="stylesheet" href="/src/home.css" />
+    <link rel="stylesheet" href="/design-previews/conversation.css" />
+    <link rel="stylesheet" href="/design-previews/components/message.css" />
+    <link rel="stylesheet" href="/design-previews/components/composer.css" />
+    <link rel="stylesheet" href="/design-previews/session-workspace.css" />
+    <link rel="stylesheet" href="/design-previews/explain.css" />
+    <link rel="stylesheet" href="/design-previews/components/provider-icons.css" /><link rel="stylesheet" href="/src/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>上线船友 · 桌面预检</title>
     <script type="module" src="/src/main.ts" defer></script>
   </head>
 
-  <body>
-    <main class="container">
-      <header>
-        <h1>上线船友 <small>桌面预检 · P2.0</small></h1>
-        <p class="tagline">你写代码，我陪你上线 —— 选一个微信小程序文件夹，跑上线预检与流程导航。</p>
+  <body data-theme="light" class="desktop-app">
+    <div class="desktop-layout">
+      <aside class="desktop-sidebar" aria-label="会话导航">
+        <nav class="desktop-primary-navigation" aria-label="主要功能">
+          <button id="desktop-home-open" class="desktop-action" type="button" aria-label="工作台" title="工作台"><span data-icon="house"></span></button>
+          <button id="desktop-workflow-open" class="desktop-action" type="button" aria-label="上线进度" title="上线进度" aria-controls="desktop-workspace"><span data-icon="list-checks"></span></button>
+          <button id="desktop-results-open" class="desktop-action" type="button" aria-label="运行与报告" title="运行与报告" aria-controls="desktop-workspace"><span data-icon="file-text"></span></button>
+          <button id="desktop-memory-open" class="desktop-action" type="button" aria-label="项目记忆" title="项目记忆" aria-haspopup="dialog"><span data-icon="message-square"></span></button>
+          <button id="desktop-sources-open" class="desktop-action" type="button" aria-label="规则来源" title="规则来源" aria-haspopup="dialog"><span data-icon="book-open"></span></button>
+          <wa-dropdown id="desktop-actions" placement="right-start">
+            <button slot="trigger" class="desktop-action" id="desktop-more" type="button" aria-label="更多功能" title="更多功能"><span data-icon="ellipsis"></span></button>
+            <div class="desktop-menu-heading">会话管理</div>
+            <wa-dropdown-item value="rename"><span slot="icon" data-icon="pencil"></span>重命名会话</wa-dropdown-item>
+            <wa-dropdown-item value="find"><span slot="icon" data-icon="search"></span>在当前会话中查找</wa-dropdown-item>
+            <wa-dropdown-item value="history"><span slot="icon" data-icon="search"></span>搜索会话历史</wa-dropdown-item>
+            <wa-dropdown-item value="archived"><span slot="icon" data-icon="folder"></span>已归档会话</wa-dropdown-item>
+            <div class="desktop-menu-heading desktop-menu-heading--separated">项目与成果</div>
+            <wa-dropdown-item value="home"><span slot="icon" data-icon="house"></span>工作台</wa-dropdown-item>
+            <wa-dropdown-item value="explain"><span slot="icon" data-icon="circle-question-mark"></span>拒因反查</wa-dropdown-item>
+            <wa-dropdown-item value="report" id="desktop-menu-report" disabled><span slot="icon" data-icon="book-open"></span>查看当前报告</wa-dropdown-item>
+            <wa-dropdown-item value="handoff"><span slot="icon" data-icon="share-2"></span>修复交接</wa-dropdown-item>
+            <wa-dropdown-item value="repairs" id="desktop-repair-history" disabled><span slot="icon" data-icon="rotate-ccw"></span>本机修复记录</wa-dropdown-item>
+            <wa-dropdown-item value="health"><span slot="icon" data-icon="activity"></span>项目维护与重检</wa-dropdown-item>
+            <wa-dropdown-item value="memory"><span slot="icon" data-icon="file-text"></span>项目记忆</wa-dropdown-item>
+            <wa-dropdown-item value="sources"><span slot="icon" data-icon="book-open"></span>规则来源</wa-dropdown-item>
+          </wa-dropdown>
+          <div class="desktop-sidebar-footer">
+            <button id="desktop-preferences-open" class="desktop-action" type="button" aria-label="设置" title="设置" aria-haspopup="dialog" aria-controls="desktop-preferences"><span data-icon="sliders-horizontal"></span></button>
+          </div>
+        </nav>
+        <details class="desktop-navigation" id="desktop-navigation">
+          <summary><span data-icon="clock"></span>会话与历史</summary>
+          <div class="desktop-navigation-body">
+            <section id="desktop-project-navigation" class="desktop-project-switcher" aria-label="项目工作区">
+              <div class="project-folder-heading"><h2>项目</h2><button id="desktop-project-manage" class="desktop-action" type="button" aria-label="添加或管理项目" title="添加或管理项目" aria-haspopup="dialog"><span data-icon="plus"></span></button></div>
+              <select id="desktop-project-select" aria-label="当前项目" hidden disabled><option value="">正在读取项目…</option></select>
+              <div id="desktop-project-folders"></div>
+              <p id="desktop-project-status" role="status" aria-live="polite"></p>
+            </section>
+            <nav id="sessionHost" aria-label="本地会话">
+              <div id="desktop-sidebar-heading" class="desktop-sidebar-heading">
+                <span class="desktop-sidebar-title">Shipmate</span>
+                <button id="desktop-maintenance-open" class="desktop-action" type="button" aria-label="项目提醒" title="项目提醒" aria-haspopup="dialog" aria-controls="desktop-health"><span data-icon="bell"></span><span id="desktop-maintenance-count" class="visually-hidden">0 条提醒</span></button>
+              </div>
+            </nav>
+          </div>
+        </details>
+      </aside>
+      <main class="conversation-shell desktop-conversation" aria-labelledby="session-title">
+        <header class="desktop-header">
+          <h1 id="session-title">新会话</h1>
+          <div class="workbench-header-actions">
+            <button id="desktop-tools-toggle" class="desktop-action" type="button" aria-controls="desktop-tools" aria-expanded="false"><span data-icon="list-checks"></span><span>项目工具</span></button>
+          </div>
+        </header>
+        <section id="desktop-workspace" class="desktop-workspace" aria-label="项目工作区" hidden></section>
+        <div id="desktopScroll" class="conversation-scroll scroll" tabindex="0" aria-label="会话记录">
+          <section id="session-empty" class="desktop-home" aria-labelledby="desktop-home-title">
+            <header class="home-heading"><img src="/brand/shipmate.svg" alt="" width="30" height="30"><h2 id="desktop-home-title">一起推进你的项目</h2></header>
+            <section class="home-project" aria-labelledby="home-project-name">
+              <span data-icon="folder" aria-hidden="true"></span>
+              <div><h3 id="home-project-name">未选择项目</h3><p id="home-project-summary">选择项目后可预检代码；也可先按主体整理上线清单。</p></div>
+              <wa-button id="home-project-manage" appearance="plain" size="s" aria-haspopup="dialog" aria-controls="desktop-projects">选择或管理项目<span slot="end" data-icon="chevron-right"></span></wa-button>
+            </section>
+            <section aria-labelledby="home-start-title">
+              <div class="home-section-heading"><h3 id="home-start-title">下一步</h3><span>本机执行 · 无需模型</span></div>
+              <div class="home-start-actions">
+                <wa-button id="start-check" variant="neutral" appearance="accent" size="s" aria-controls="desktop-tools" title="检查配置、隐私声明与域名"><span id="start-check-label">配置预检</span><span slot="end" data-icon="arrow-right"></span></wa-button>
+                <wa-button id="start-guide" appearance="plain" size="s" aria-controls="desktop-tools"><span slot="start" data-icon="list-checks"></span>整理上线清单</wa-button>
+                <wa-button id="start-explain" appearance="plain" size="s" aria-haspopup="dialog"><span slot="start" data-icon="circle-question-mark"></span>查询审核拒因</wa-button>
+              </div>
+            </section>
+            <section class="home-continue" aria-labelledby="home-continue-title">
+              <div class="home-section-heading"><h3 id="home-continue-title">最近结果</h3><button id="home-results" class="desktop-action" type="button">全部运行记录<span data-icon="chevron-right"></span></button></div>
+              <article class="home-report" aria-labelledby="home-report-title">
+                <span data-icon="file-text" aria-hidden="true"></span><div><h4 id="home-report-title">当前报告</h4><p id="home-report-summary">尚未生成报告。运行工具后，可阅读并加入当前会话。</p></div><wa-button id="home-report" appearance="plain" size="s" aria-controls="desktop-report-reader" disabled>阅读报告<span slot="end" data-icon="arrow-right"></span></wa-button>
+              </article>
+            </section>
+          </section>
+          <div id="desktopMessages" class="conv__inner"></div>
+        </div>
+        <button id="desktopJump" class="jump-latest" type="button" hidden>回到最新</button>
+        <p id="desktopConversationStatus" class="turn-status" role="status" aria-live="polite"></p>
+        <div id="desktopComposer"></div>
+        <p class="desktop-storage-note">会话保存在此设备 · 项目报告由你决定是否分享</p>
+      </main>
+      <dialog id="desktop-tools" class="container desktop-tools" aria-labelledby="desktop-tools-title">
+      <header class="desktop-tools-header">
+        <div><h2 id="desktop-tools-title">项目工具</h2><p class="tagline">检查代码，整理上线步骤。</p></div>
+        <button id="desktop-tools-close" class="desktop-icon-button" type="button" aria-label="关闭项目工具" title="关闭项目工具"><span data-icon="x"></span></button>
       </header>
+      <div class="desktop-tools-body scroll">
 
-      <section class="controls">
+      <section class="controls" aria-label="预检设置">
         <div class="row">
-          <button id="pick-btn" type="button">📁 选择小程序文件夹…</button>
-          <code id="dir" class="dir">（未选择）</code>
+          <span class="project-label">小程序项目</span>
+          <button id="pick-btn" type="button" aria-describedby="dir"><span data-icon="folder"></span>选择项目文件夹</button>
+          <code id="dir" class="dir" aria-label="当前项目文件夹">尚未选择文件夹</code>
         </div>
         <div class="row">
           <label class="subject">主体类型
@@ -28,13 +126,127 @@
               <option value="enterprise">企业</option>
             </select>
           </label>
-          <button id="check-btn" class="primary" type="button" disabled>① 代码预检 check</button>
-          <button id="guide-btn" type="button">② 流程导航 guide</button>
+          <button id="check-btn" class="primary" type="button" disabled>运行项目预检</button>
+          <button id="guide-btn" type="button">生成上线清单</button>
+          <button id="stop-tool" type="button" aria-describedby="status" hidden disabled>停止执行</button>
         </div>
       </section>
+      <p class="bridge-note">检查在本机运行。报告不会自动发送给模型。</p>
 
-      <section id="status" class="status"></section>
-      <pre id="report" class="report"><span class="hint">报告将显示在这里。先选一个小程序项目文件夹，再点「代码预检」。</span></pre>
-    </main>
+      <p id="status" class="status" tabindex="-1" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div class="report-toolbar">
+        <h2 id="report-title">执行报告</h2>
+        <wa-button id="read-report" appearance="outlined" size="s" aria-controls="desktop-report-reader" disabled><span slot="start" data-icon="book-open"></span>阅读报告</wa-button>
+        <button id="handoff-report" type="button" aria-haspopup="dialog" aria-controls="desktop-handoff" disabled>修复交接</button>
+        <button id="repair-report" type="button" aria-haspopup="dialog" aria-controls="desktop-repair" title="仅检查当前项目本机预检报告支持的受限修复；导入报告请先重新预检。" disabled>检查可用修复</button>
+        <button id="save-report" type="button" disabled>加入当前会话</button>
+        <button id="copy-report" type="button" aria-describedby="copy-status" disabled>复制报告</button>
+      </div>
+      <p id="report-note" class="report-note">尚未生成报告。</p>
+      <p id="copy-status" class="copy-status" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div id="report" class="report report-markdown" role="region" aria-labelledby="report-title" aria-describedby="report-note" aria-busy="false" tabindex="0">报告将显示在这里。选择主体类型后，可运行项目预检或生成上线清单。</div>
+      </div>
+    </dialog>
+    </div>
+    <dialog id="desktop-projects" class="session-workspace-dialog desktop-project-dialog" aria-labelledby="project-dialog-title">
+      <header class="session-workspace-dialog__header"><div><h2 id="project-dialog-title">项目与成果</h2><p class="desktop-field-hint">保存工作目录，回看每次检查的依据与结果。</p></div><wa-button id="project-close" appearance="plain" size="s" aria-label="关闭项目与成果"><span data-icon="x"></span></wa-button></header>
+      <div class="session-workspace-dialog__body scroll">
+        <div class="project-section-heading"><h3 id="project-editor-title">项目设置</h3><wa-button id="project-new" appearance="plain" size="s"><span slot="start" data-icon="plus"></span>新建项目</wa-button></div>
+        <form id="project-form" class="project-form">
+          <div class="project-settings-field"><label for="project-name">项目名称</label><input id="project-name" required maxlength="120" autocomplete="off" placeholder="例如：门店小程序" /></div>
+          <div class="project-settings-field"><label for="project-directory">项目文件夹</label><div class="project-directory-field"><input id="project-directory" readonly required aria-describedby="project-directory-note" placeholder="请选择本机文件夹" /><wa-button id="project-choose-directory" appearance="outlined" size="s">选择位置</wa-button></div><p id="project-directory-note" class="desktop-field-hint"></p></div>
+          <div class="project-settings-field project-settings-subject"><label for="project-subject">主体类型</label><select id="project-subject"><option value="personal">个人</option><option value="individual_business">个体工商户</option><option value="enterprise">企业</option></select></div>
+          <div class="project-form-actions"><wa-button id="project-save" type="submit" variant="neutral" appearance="accent" size="s">保存并打开项目</wa-button><wa-button id="project-export" appearance="outlined" size="s">导出项目数据</wa-button></div>
+        </form>
+        <section class="project-association" aria-labelledby="project-association-title"><h3 id="project-association-title">当前会话的归属</h3><div class="project-association-body"><p class="desktop-field-hint">移动会话与草稿，不复制消息。旧会话默认保留在“未归属项目”。</p><label for="project-association-target">目标项目</label><div class="project-directory-field"><select id="project-association-target"></select><wa-button id="project-associate" appearance="outlined" size="s">移动当前会话</wa-button></div></div></section>
+        <section id="project-backup" class="project-backup" aria-labelledby="project-backup-title">
+          <div class="project-section-heading"><h3 id="project-backup-title">项目备份</h3></div>
+          <div class="preferences-group">
+            <div id="project-export-row" class="settings-row"><span><strong>导出项目备份</strong><small>包含历史报告与记忆，不包含源码、会话或模型密钥。</small></span></div>
+            <div class="settings-row"><span><strong>恢复项目备份</strong><small>追加为独立项目，并重新选择此设备上的源码文件夹。</small></span><wa-button id="project-import" appearance="outlined" size="s">导入项目备份</wa-button></div>
+          <section id="project-import-review" class="project-backup-review" aria-labelledby="project-import-title" hidden>
+            <h4 id="project-import-title">确认恢复范围</h4><p id="project-import-summary"></p><p id="project-import-warnings" class="desktop-field-hint"></p>
+            <label for="project-import-path">此设备上的源码文件夹</label><div class="project-directory-field"><input id="project-import-path" autocomplete="off" placeholder="选择文件夹，或粘贴本机绝对路径" aria-describedby="project-import-path-note" /><wa-button id="project-import-directory" appearance="outlined" size="s">选择源码位置</wa-button></div><p id="project-import-path-note" class="desktop-field-hint">恢复前会核验目录是否存在；不会采用备份中的旧路径。</p>
+            <div class="project-form-actions"><wa-button id="project-import-confirm" appearance="accent" variant="neutral" size="s" disabled>追加恢复项目</wa-button><wa-button id="project-import-cancel" appearance="plain" size="s">取消恢复</wa-button></div>
+          </section>
+          </div>
+          <h3 class="project-storage-heading">本机容量</h3>
+          <div class="preferences-group">
+            <div class="settings-row"><span><strong>已用容量</strong><small id="project-storage-status" role="status" aria-live="polite">尚未读取本机容量。</small></span><wa-button id="project-storage-refresh" appearance="outlined" size="s">刷新容量</wa-button></div>
+            <div class="settings-row"><span><strong>归档当前项目</strong><small>先保存恢复文件，再移出项目库。源码和会话内容保留。</small></span><wa-button id="project-archive" appearance="outlined" size="s">归档当前项目</wa-button></div>
+          <section id="project-archive-review" class="project-backup-review" aria-labelledby="project-archive-title" hidden>
+            <h4 id="project-archive-title">确认归档</h4><p id="project-archive-summary"></p>
+            <div class="project-form-actions"><wa-button id="project-archive-confirm" appearance="outlined" size="s">保存恢复文件并归档</wa-button><wa-button id="project-archive-cancel" appearance="plain" size="s">保留当前项目</wa-button></div>
+          </section>
+          </div>
+          <input id="project-import-file" type="file" accept=".json,application/json" hidden />
+          <p id="project-backup-status" role="status" aria-live="polite" aria-atomic="true"></p>
+        </section>
+        <div class="project-status-row"><p id="project-status" role="status" aria-live="polite"></p><wa-button id="project-retry" appearance="plain" size="s">重新加载</wa-button></div>
+        <section aria-labelledby="project-history-title"><h3 id="project-history-title">运行与成果</h3><p class="desktop-field-hint">最近运行摘要与各项目最近成果。保存的报告反映执行当时的项目与规则，不代表当前检查结果；完整记录可通过项目导出保留。</p><div class="project-comparison-controls"><label for="project-compare-before">较早预检</label><select id="project-compare-before"></select><label for="project-compare-after">较新预检</label><select id="project-compare-after"></select><wa-button id="project-compare" appearance="outlined" size="s">比较预检</wa-button></div><div id="project-comparison" class="project-comparison" role="status" aria-live="polite"></div><ul id="project-history" class="project-history"></ul></section>
+      </div>
+    </dialog>
+    <dialog id="desktop-workflow" class="session-workspace-dialog desktop-project-dialog desktop-workflow-dialog" aria-labelledby="workflow-heading" aria-describedby="workflow-title workflow-description">
+      <header class="session-workspace-dialog__header"><h2 id="workflow-heading">上线进度</h2><wa-button id="workflow-close" appearance="plain" size="s" aria-label="关闭上线进度"><span data-icon="x"></span></wa-button></header>
+      <div class="session-workspace-dialog__body scroll">
+        <p id="workflow-title" class="workflow-project-name"></p><p id="workflow-description" class="desktop-field-hint">按项目事实整理准备事项。人工确认不代表官方审核或发布完成。</p>
+        <div class="project-status-row"><p id="workflow-status" role="status" aria-live="polite"></p><wa-button id="workflow-retry" appearance="plain" size="s">重新加载</wa-button></div>
+        <div id="workflow-content" hidden>
+          <p id="workflow-overview" class="workflow-overview"></p>
+          <p id="workflow-next" class="workflow-next" role="status"></p>
+          <div class="workflow-overview-actions"><wa-button id="workflow-next-open" appearance="outlined" size="s">查看下一步</wa-button><wa-button id="workflow-facts-open" appearance="plain" size="s">编辑项目事实</wa-button><wa-button id="workflow-export" appearance="outlined" size="s" type="button" disabled>导出准备清单</wa-button></div>
+          <details id="workflow-facts" class="workflow-facts"><summary>项目事实 <span id="workflow-facts-summary" class="desktop-field-hint"></span></summary>
+            <form id="workflow-facts-form" class="project-form">
+              <label for="workflow-businessType">实际业务</label><textarea id="workflow-businessType" rows="3" maxlength="1000" placeholder="例如：餐饮门店预约，到店付款" aria-describedby="workflow-facts-note"></textarea>
+              <div class="workflow-fact-grid">
+                <label for="workflow-hasPayment">是否涉及支付<select id="workflow-hasPayment"><option value="unknown">尚未确认</option><option value="true">是</option><option value="false">否</option></select></label>
+                <label for="workflow-collectsSensitive">是否收集敏感信息<select id="workflow-collectsSensitive"><option value="unknown">尚未确认</option><option value="true">是</option><option value="false">否</option></select></label>
+                <label for="workflow-hasServerDomain">是否使用服务器域名<select id="workflow-hasServerDomain"><option value="unknown">尚未确认</option><option value="true">是</option><option value="false">否</option></select></label>
+              </div>
+              <p id="workflow-facts-note" class="desktop-field-hint">未知不会视为“否”。业务与支付仅提供规则线索，不能自动判断资质。事实变更后，旧确认需重新核对。</p>
+              <div class="project-form-actions"><wa-button id="workflow-save-facts" type="submit" appearance="outlined" size="s">保存项目事实</wa-button><wa-button id="workflow-generate-guide" type="button" appearance="outlined" size="s" aria-describedby="workflow-guide-note" disabled>更新上线清单</wa-button></div>
+              <p id="workflow-guide-note" class="desktop-field-hint">根据已保存事实生成新清单；历史报告保留原有内容。</p>
+            </form>
+          </details>
+          <div id="workflow-coverage" class="desktop-field-hint"></div>
+          <div id="workflow-stages" class="workflow-stages"></div>
+          <section class="workflow-categories" aria-labelledby="workflow-category-title"><h3 id="workflow-category-title">类目与资质线索</h3><div id="workflow-categories"></div></section>
+        </div>
+      </div>
+    </dialog>
+    <dialog id="desktop-explain" class="session-workspace-dialog desktop-explain-dialog" aria-labelledby="desktop-explain-title" aria-describedby="desktop-explain-description">
+      <header class="session-workspace-dialog__header">
+        <div><h2 id="desktop-explain-title">拒因反查</h2><p id="desktop-explain-description">从审核反馈找到相关规则与处理方向。</p></div>
+        <wa-button id="desktop-explain-close" data-ui-control="action" class="ui-action-icon" appearance="plain" size="s" aria-label="关闭拒因反查" title="关闭拒因反查"><span data-icon="x"></span></wa-button>
+      </header>
+      <div class="session-workspace-dialog__body">
+        <details class="rj-query" id="rjQuery" open>
+        <summary id="rjQuerySummary" hidden><span class="rj-query__label">审核反馈</span><span class="rj-query__text" id="rjQueryText"></span><span class="rj-query__edit">编辑查询</span></summary>
+        <form class="rj-form" id="rjForm">
+          <label class="rj-label" for="rjInput">审核拒绝原因</label>
+          <textarea class="rj-ta" id="rjInput" aria-describedby="rjHint rjStatus" maxlength="4096" spellcheck="false" placeholder="粘贴完整审核反馈，或输入隐私声明、诱导分享等关键词"></textarea>
+          <p class="rj-hint" id="rjHint">最多 4096 字 · 在本机查询，不发送给模型。</p>
+          <div class="rj-actions">
+            <wa-button id="rjBtn" data-ui-control="action" type="submit" form="rjForm" size="s" variant="neutral" appearance="accent">查询处理方向</wa-button>
+            <wa-button id="rjStop" data-ui-control="action" type="button" size="s" appearance="outlined" hidden>停止查询</wa-button>
+            <wa-button id="rjSample" data-ui-control="action" type="button" size="s" appearance="plain">填入位置权限示例</wa-button>
+          </div>
+        </form>
+        </details>
+        <p id="rjStatus" role="status" aria-live="polite" aria-atomic="true">输入审核反馈，查看可核对的规则与官方来源。</p>
+        <section class="rj-result" id="rjResult" aria-labelledby="rjResultHeading" hidden>
+          <h2 class="rj-result__h" id="rjResultHeading" tabindex="-1">查询结果</h2>
+          <div class="rj-result__actions" aria-label="结果操作">
+            <wa-button id="rjCopy" data-ui-control="action" size="s" appearance="outlined" disabled>复制结果</wa-button>
+            <wa-button id="rjDownload" data-ui-control="action" size="s" appearance="outlined" disabled>下载 Markdown</wa-button>
+            <wa-button id="rjSave" data-ui-control="action" size="s" appearance="outlined" hidden disabled>加入当前会话</wa-button>
+          </div>
+          <p id="rjActionStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+          <div id="rjResultItems"></div>
+        </section>
+        <p id="rjLinkStatus" role="status" aria-live="polite"></p>
+        <p class="guard-note">依据本地收录关键词匹配，未实时核验官方页面。请结合实际情况与官方要求核对。</p>
+      </div>
+    </dialog>
   </body>
 </html>

@@ -8,6 +8,7 @@
 schema_version: 1
 rules:
   - id: payment.virtual-must-use-official
+    action_categories: ["code", "manual_check"]
     title: "虚拟商品须用小程序虚拟支付，不得外跳"
     kind: navigation
     stage: review
@@ -18,13 +19,14 @@ rules:
     warn: "小程序内售卖虚拟商品（会员/解锁/订阅/虚拟币等）须接入『小程序虚拟支付』，不得引导用户到 App/公众号/H5/个人号/网站完成支付。"
     requires:
       - "虚拟商品的购买与支付接入小程序虚拟支付，不得外跳到 App/公众号/H5/网站等完成支付"
-    why: "虚拟商品绕开小程序虚拟支付、引导外部渠道支付会被限制功能或拒审"
+    why: "虚拟商品绕开小程序虚拟支付、引导外部渠道支付属于违规；平台会提醒限期调整，到期未调整则阶梯封禁相关 iOS 功能"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "购买和支付均需接入小程序虚拟支付；不得引导至app、公众号、h5、个人号、网站完成支付"
-    last_verified: "2026-07-16"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: payment.requires-merchant
+    action_categories: ["manual_check"]
     title: "微信支付需商户准入资质（个人主体不支持）"
     kind: preflight
     stage: review
@@ -37,7 +39,7 @@ rules:
     requires:
       - "确认主体具备微信支付准入资质：个体工商户/企业/事业单位/政府机关/社会组织之一；个人主体不在准入范围、无法开通微信支付"
     why: "调用 wx.requestPayment 需具备微信支付商户准入资质；个人主体不在准入主体范围内，无法开通微信支付（商户密钥泄露另见硬编码密钥核验）"
-    official_url: "https://pay.weixin.qq.com/docs/merchant/products/mini-program-payment/introduction.html"
+    official_url: "https://pay.weixin.qq.com/doc/v3/merchant/4012791894"
     source_quote: "支持的主体类型：个体工商户、企业、事业单位、政府机关、社会组织"
-    last_verified: "2026-06-21"
+    last_verified: "2026-11-13"
     manual_required: true

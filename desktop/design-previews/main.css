@@ -1,0 +1,44 @@
+/* Task workspace: one navigation, bounded conversation, results on demand. */
+.studio-brand { display: inline-flex; gap: 10px; align-items: center; text-decoration: none; color: var(--accent); }
+.studio-brand b { display: grid; gap: 3px; color: var(--text); font-size: 15px; }
+.studio-brand b span { font-family: var(--font-mono); font-size: 9px; letter-spacing: .19em; color: var(--text-2); }
+.workspace-preview .chrome .sub { padding-left: 22px; border-left: 1px solid var(--border-2); }
+.workspace-preview .chrome .sub span { margin-inline: 10px; }
+.prototype-label { font-size: 11px; color: var(--text-2); }
+.workspace-preview .main--3 { grid-template-columns: 224px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; }
+.workspace-preview .main--3:has(> .side:not([hidden])) { grid-template-columns: 224px minmax(0, 1fr) 320px; }
+.workspace-preview .task-rail { padding: 20px 12px 12px; gap: 20px; min-height: 0; }
+.task-rail__brand { padding: 4px 10px; color: var(--text); text-decoration: none; font-size: 15px; font-weight: 600; }
+#workspaceSessions { min-height: 0; flex: 1; }
+.task-settings { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 10px; color: var(--text-2); text-decoration: none; border-radius: 8px; font-size: 13px; }
+.task-settings:hover, .task-home-toggle:hover { background: var(--surface-3); color: var(--text); }
+.workspace-preview .rail__foot { display: block; margin-top: auto; }
+.workspace-preview .conversation-shell > .workspace-head { display: flex; gap: 12px; padding: 12px 24px; min-height: 58px; border-bottom: 1px solid var(--border); }
+.workspace-head h1 { margin: 0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; }
+.task-home-toggle { padding: 7px 10px; background: transparent; color: var(--text-2); border: 0; border-radius: 7px; cursor: pointer; font: inherit; font-size: 13px; }
+.workspace-preview .conv { padding: 24px 24px 8px; }
+.review-heading { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.review-heading > div { flex: 1; }
+.review-heading h2 { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+.review-heading p { font-size: 12px; color: var(--text-2); margin: 0; line-height: 1.5; }
+.workspace-review-empty { padding: 24px 18px; color: var(--text-2); font-size: 14px; line-height: 1.7; }
+.workspace-preview .term { font-size: 12px; line-height: 1.8; padding: 20px 17px; overflow-wrap: anywhere; }
+.workspace-preview [hidden] { display: none !important; }
+@media (max-width: 700px) {
+  .workspace-preview .main--3 { grid-template-columns: minmax(0, 1fr); }
+  .workspace-preview .chrome .sub { display: none; }
+  .workspace-preview .conversation-shell > .workspace-head { padding: 10px 16px; gap: 8px; }
+  .workspace-preview .conv { padding-inline: 18px; }
+}
+
+.workspace-preview .main--3 > .side { grid-column: auto; min-height: 0; border-top: 0; }
+
+@media (max-width: 700px) {
+  /* The drawer is the single scroll owner: recent rows must not escape a
+     percentage-height workspace and overlap the settings footer. */
+  .workspace-preview .mobile-navigation__body > * { flex: none; }
+  .workspace-preview .mobile-navigation__body #workspaceSessions { flex: none; }
+  .workspace-preview .mobile-navigation__body .session-workspace--sidebar { height: auto; }
+  .workspace-preview .mobile-navigation__body .session-workspace__recent { flex: none; overflow: visible; }
+  .workspace-preview .mobile-navigation__body .rail__foot { margin-top: 0; }
+}

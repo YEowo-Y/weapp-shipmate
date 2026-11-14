@@ -6,6 +6,7 @@ import { SUBJECT_ENUM } from "./data.mjs";
 import { runCheck } from "./check.mjs";
 import { runGuide } from "./guide.mjs";
 import { runExplain } from "./explain.mjs";
+import { interviewGuide } from "./guide-interview.mjs";
 import { render } from "./report.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -15,23 +16,29 @@ const HELP = `weapp-shipmate · 你写代码，我陪你上线
 
 用法：
   weapp-shipmate check [目录] [选项]   代码感知预检：扫描源码 → 个性化上线清单
-  weapp-shipmate guide [选项]          上线流程导航：你在哪一步、下一步做什么
+  weapp-shipmate guide [选项]          上线流程导航：按已知事实生成阶段清单
   weapp-shipmate explain <反馈|关键词>  拒因反查：审核反馈/关键词 → 对应规则 + 官方原文 + 修复步骤
 
 选项：
-  --subject <personal|individual_business|enterprise>   主体类型
+  --subject <personal|individual_business|enterprise>   主体类型（也支持：个人 / 个体户 / 个体工商户 / 企业）
   --json                输出 JSON（默认 Markdown）
-  --checklist           输出可勾选清单（只列待办动作，便于粘进任务清单/issue）
+  --checklist           输出可勾选清单（待办动作与检查限制，便于粘进任务清单/issue）
   --include-drafts      包含未核验来源的 draft 规则（默认排除）
   --blockers-only       只输出阻断项（severity=blocker），快速聚焦上线拦路项
   --help, -h            显示帮助
   --version, -v         显示版本
 
-guide 额外输入（布尔开关，出现即为 true）：
+guide 额外输入（未提供 = 未知；正向开关 = 是，--no- 开关 = 明确否）：
   --payment             涉及支付
   --sensitive           收集敏感信息（手机号/位置/头像等）
   --domain              有自有服务器域名
+  --no-payment          明确不涉及支付
+  --no-sensitive        明确不收集敏感信息
+  --no-domain           明确没有自有服务器域名
   --business <type>     业务类型
+  --interactive         交互问答补齐未知事实（仅终端，不能与 --json 同用）
+  --no-interactive      禁用问答；无选项 guide 仅在输入输出均为终端时自动问答
+  payment / business 仅用于提示，不参与规则筛选；正反开关不能同时使用。
 
 示例：
   weapp-shipmate check ./my-app --subject personal
@@ -41,8 +48,11 @@ guide 额外输入（布尔开关，出现即为 true）：
 
 注意：本工具只给"待你确认"的导航建议，不代办、不做合规担保。`;
 
+const SUBJECT_ALIASES = new Map([["个人", "personal"], ["个体户", "individual_business"], ["个体工商户", "individual_business"], ["企业", "enterprise"]]);
+const TOGGLE_FLAGS = new Set(["payment", "sensitive", "domain", "interactive"]);
+
 const VALUE_FLAGS = new Set(["subject", "business"]);
-const BOOL_FLAGS = new Set(["json", "checklist", "include-drafts", "blockers-only", "help", "version", "payment", "sensitive", "domain"]);
+const BOOL_FLAGS = new Set(["json", "checklist", "include-drafts", "blockers-only", "help", "version"]);
 
 // FX-16：未知/拼错选项必须报错——静默忽略会让 `--subjcet personal` 这类笔误
 // 产出主体维度错误却看起来正常的报告，比报错更糟。同时支持 --key=value 写法（CLI 常见习惯）。
@@ -70,6 +80,13 @@ export function parseFlags(args) {
       else f[key] = undefined; // 缺值：留给 main 报「缺少取值」，不吞下一个 flag
       continue;
     }
+    const fact = key.startsWith("no-") ? key.slice(3) : key;
+    if (TOGGLE_FLAGS.has(fact) && eq === -1) {
+      const value = !key.startsWith("no-");
+      if (fact in f && f[fact] !== value) (f._conflicts ??= []).push(fact);
+      f[fact] = value;
+      continue;
+    }
     if (BOOL_FLAGS.has(key) && eq === -1) { f[key] = true; continue; }
     (f._unknown ??= []).push(a); // 含布尔开关误带 =值 的写法
   }
@@ -89,6 +106,11 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
     err.write(`无法识别的选项：${flags._unknown.join("、")}\n用 \`weapp-shipmate --help\` 查看可用选项。\n`);
     return 1;
   }
+  if (flags._conflicts?.length) {
+    err.write(`选项冲突：${[...new Set(flags._conflicts)].map(fact => `--${fact} 与 --no-${fact}`).join("、")}不能同时使用。\n`);
+    return 1;
+  }
+  if (SUBJECT_ALIASES.has(flags.subject)) flags.subject = SUBJECT_ALIASES.get(flags.subject);
   if (flags.help) { out.write(HELP + "\n"); return 0; }
   if (flags.version) { out.write(VERSION + "\n"); return 0; }
   // FX-06：非法主体必须报错退出。静默接受会让主体专属规则全部跳过（check.mjs 按 subject 过滤），
@@ -96,6 +118,10 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
   if ("subject" in flags && !SUBJECT_ENUM.includes(flags.subject)) {
     const what = flags.subject === undefined ? "--subject 缺少取值" : `非法 --subject：${flags.subject}`;
     err.write(`${what}\n可选值：${SUBJECT_ENUM.join(" | ")}\n`);
+    return 1;
+  }
+  if ("interactive" in flags && cmd !== "guide") {
+    err.write("--interactive / --no-interactive 仅用于 guide。\n");
     return 1;
   }
   const format = flags.json ? "json" : flags.checklist ? "checklist" : "markdown";
@@ -106,6 +132,11 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
   // 否则 JSON 会一边只展示 blocker，一边声称命中了已隐藏的 warning/info。
   const focus = (result) => {
     if (!blockersOnly) return result;
+    // 聚焦规则不应隐藏扫描限制；guide 的业务自查提示仍随对应规则过滤。
+    if (result.command === "check")
+      result.notes = [...new Set([...result.notes, ...result.items
+        .filter(item => item.severity !== "blocker" && item.note)
+        .map(item => item.note)])];
     hiddenNonBlockerCount = result.items.filter((i) => i.severity !== "blocker").length;
     if (Array.isArray(result.selfCheck))
       hiddenNonBlockerCount += result.selfCheck.filter((i) => i.severity !== "blocker").length;
@@ -156,9 +187,9 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
       const inputs = {
         subject_type: flags.subject,
         business_type: flags.business,
-        has_payment: !!flags.payment,
-        collects_sensitive: !!flags.sensitive,
-        has_server_domain: !!flags.domain,
+        has_payment: flags.payment,
+        collects_sensitive: flags.sensitive,
+        has_server_domain: flags.domain,
       };
       const result = focus(runGuide(inputs, { includeDrafts }));
       out.write(render(result, format, { hiddenNonBlockerCount }) + "\n");
@@ -176,10 +207,64 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
       return 0;
     }
   } catch (e) {
-    err.write(`错误：${e.message}\n`);
+    const directoryErrors = {
+      ENOENT: "目录不存在，请核对路径拼写，并选择实际的小程序源码目录。",
+      ENOTDIR: "指定路径不是目录，请选择项目文件夹，而不是单个文件。",
+      EACCES: "没有权限读取目录，请确认当前账号有读取权限后重试。",
+      EPERM: "无法访问目录，请检查读取权限或文件占用后重试。",
+    };
+    if (cmd === "check" && e.syscall === "scandir" && directoryErrors[e.code])
+      err.write(`错误：${directoryErrors[e.code]}\n路径：${e.path || flags._[0] || "."}\n`);
+    else err.write(`错误：${e.message}\n`);
     return 1;
   }
 
   err.write(`未知命令：${cmd}\n用 \`weapp-shipmate --help\` 查看用法。\n`);
   return 1;
+}
+
+/** 异步终端入口；main 保持同步，供现有脚本/内嵌消费者使用。 */
+export async function runCLI(argv = process.argv, out = process.stdout, err = process.stderr, {
+  input = process.stdin, interview = interviewGuide,
+} = {}) {
+  const args = argv.slice(2);
+  const flags = parseFlags(args.slice(1));
+  const tty = !!input.isTTY && !!out.isTTY;
+  const interactive = flags.interactive === true || (args.length === 1 && tty);
+  if (args[0] !== "guide" || flags.help || flags.version || !interactive)
+    return main(argv, out, err);
+
+  // 先走同一参数校验路径；暂不输出报告，避免问答中断时留下部分结果。
+  const status = main(argv, { write() {} }, err);
+  if (status !== 0) return status;
+  if (!tty || flags.json) {
+    err.write("交互问答需要输入和输出均为终端，且不能与 --json 同用；请改用参数或 --no-interactive。\n");
+    return 1;
+  }
+  const facts = {};
+  if (flags.subject !== undefined) facts.subject = SUBJECT_ALIASES.get(flags.subject) || flags.subject;
+  for (const key of ["sensitive", "domain"]) if (flags[key] !== undefined) facts[key] = flags[key];
+  let answered;
+  try {
+    answered = await interview(facts, { input, output: out });
+  } catch (error) {
+    err.write("问答已取消或输入已结束，未生成报告。\n");
+    return error.exitCode === 130 ? 130 : 1;
+  }
+  const replay = args.filter(arg => arg !== "--interactive" && arg !== "--no-interactive");
+  replay.splice(1, 0, "--no-interactive");
+  for (const key of ["subject", "sensitive", "domain"]) {
+    if (flags[key] !== undefined || answered[key] === undefined) continue;
+    if (key === "subject") replay.push("--subject", answered[key]);
+    else replay.push(answered[key] ? `--${key}` : `--no-${key}`);
+  }
+  const code = main([...argv.slice(0, 2), ...replay], out, err);
+  if (code === 0) {
+    // Windows 默认 PowerShell；POSIX 使用单引号转义，保留业务描述等原始参数。
+    const quote = value => /^[\w./:=-]+$/.test(value) ? value
+      : process.platform === "win32" ? `'${value.replaceAll("'", "''")}'`
+        : `'${value.replaceAll("'", "'\"'\"'")}'`;
+    out.write(`\n可复现命令（${process.platform === "win32" ? "PowerShell" : "Shell"}）：\nweapp-shipmate ${replay.map(quote).join(" ")}\n`);
+  }
+  return code;
 }
