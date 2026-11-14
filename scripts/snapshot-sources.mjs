@@ -17,7 +17,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadData } from "../src/data.mjs";
+import { loadRuleReferences } from "../src/source-catalog.mjs";
 import { uniqueUrls } from "../src/rot.mjs";
 import { extractMainText, sha256 } from "../src/source-text.mjs";
 
@@ -39,7 +39,7 @@ async function main() {
   const index = existsSync(INDEX) ? JSON.parse(readFileSync(INDEX, "utf8")) : { schema_version: 1, snapshots: [] };
   const prev = new Map(index.snapshots.map((s) => [s.url, s]));
 
-  const { rules } = loadData({ includeDrafts: true });
+  const rules = loadRuleReferences({ includeDrafts: true });
   const urls = uniqueUrls(rules).map((u) => u.url);
 
   const out = [];
