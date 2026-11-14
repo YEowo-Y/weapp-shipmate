@@ -8,6 +8,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { collapseWhitespace, classifyQuote, verifyQuotes, isPassing, summarize, stripProvenanceHeader } from "../src/source-quotes.mjs";
 import { loadData } from "../src/data.mjs";
+import { CROSSCHECK_RULE_IDS } from "../src/crosscheck.mjs";
+import { loadRuleReferences } from "../src/source-catalog.mjs";
 import { loadSnapshots } from "../scripts/verify-source-quotes.mjs";
 
 test("collapseWhitespace 只折叠空白，不动标点与字词", () => {
@@ -107,7 +109,9 @@ test("summarize 汇总失败项", () => {
 });
 
 test("红线：仓库全部非 draft 规则的 source_quote 均为其 official_url 快照的连续子串", () => {
-  const { rules } = loadData({ includeDrafts: false });
+  const rules = loadRuleReferences();
+  const expectedIds = [...loadData().rules.map((rule) => rule.id), ...CROSSCHECK_RULE_IDS];
+  assert.deepEqual(rules.map((rule) => rule.id).sort(), expectedIds.sort());
   const snapshots = loadSnapshots();
   const { total, failures } = summarize(verifyQuotes(rules, snapshots));
   assert.ok(total > 0, "应至少核验一条规则");
@@ -120,7 +124,7 @@ test("红线：仓库全部非 draft 规则的 source_quote 均为其 official_u
 });
 
 test("每条非 draft 规则的 official_url 都有归档快照", () => {
-  const { rules } = loadData({ includeDrafts: false });
+  const rules = loadRuleReferences();
   const snapshots = loadSnapshots();
   const missing = [...new Set(rules.map((r) => r.official_url))].filter((u) => !snapshots[u]);
   assert.deepEqual(missing, [], "缺快照的来源无法离线核验，请先跑 npm run snapshot:sources");
