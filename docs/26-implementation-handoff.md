@@ -371,6 +371,46 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 | Rust 加固 | 耗时命令改异步；SQLite 开 WAL；错误用类型而非 `String`；有日志和 panic hook；CI 加 clippy 与 fmt | 数据模型变更；新 crate |
 | 前端收敛第一步 | `desktop/**` 进 ESLint 和类型检查；`desktop/src` 不再 import `design-previews`；启动包仍在预算内 | 无 |
 
+### T09 发布工程，先落地 T09A 演练门禁
+
+**状态**：范围 PR 中，等待维护者确认 T09A。T09B 在下面列出接入条件，待方案补齐后另开范围 PR。
+
+**依赖**：T02、T05、T06、T07 已合并。起点为 `main` 的 `270cff3`，包版本 `0.2.0-rc.3`。
+
+**探查结果（2026-11-14）**
+
+- 仓库为 private。现有 `release.yml` 由 `v*` tag 触发，安装根和桌面依赖，校验版本并打包，最终创建草稿 Release。
+- 发布工作流已有 lint、版本、测试与 coverage 门禁，缺少独立的 `verify:quotes` 步骤。测试中的逐字红线已覆盖引文，独立步骤可让发布日志直接展示核验结果。
+- `scripts/check-release-version.mjs` 核对八个文件中的十个版本字段。本地 `node scripts/check-release-version.mjs v0.2.0-rc.3` 退出 0。
+- npm 11.9.0 实跑预发布版 dry-run，省略 dist-tag 会失败；`npm publish --dry-run --ignore-scripts --tag next --json` 退出 0，报告 42 个文件、压缩大小 80158 字节、解包大小 245384 字节。npm 提示真实发布需要登录。本次证明打包演练通过，真实发布权限尚待发布阶段核实。
+- 当前 Actions 默认权限为 read，`can_approve_pull_request_reviews=false`。release-please 自动开 PR 需要仓库允许相应动作；由默认 `GITHUB_TOKEN` 创建的 PR 还需安排后续检查的触发方式。[官方接入说明](https://github.com/googleapis/release-please-action#github-credentials)
+
+#### T09A 发布演练与门禁（本次申请实施范围）
+
+**目标**：PR 和手动工作流能演练 npm 包，真实 tag 发布路径显式执行引文门禁。演练权限为 `contents: read`，输出包括包清单与执行日志；对外发布继续执行 §3 的审批约定。
+
+1. 从同步后的 `main` 开 `codex/t09-release-rehearsal`，按 §2 安装两处依赖并验证基线。
+2. 在 `tests/release.test.mjs` 增加针对工作流的回归检查，覆盖引文门禁早于打包、演练命令强制带 `--dry-run` 和预发布 dist-tag、演练仅授予读权限。先在原工作流上证明新增检查失败。
+3. 在 `release.yml` 的打包前补 `npm run verify:quotes`。新增独立演练工作流，由 `pull_request` 和 `workflow_dispatch` 触发，沿用 Node 22。版本来自 `package.json`，传入现有校验脚本，避免把 PR 分支名当成 tag。预发布版使用 `next`，稳定版使用 `latest`。
+4. 演练工作流执行两处 `npm ci`、lint、版本校验、全量测试、引文与 coverage 门禁，再运行 `npm publish --dry-run --ignore-scripts --tag <dist-tag> --json`。测试确认每个 publish 调用都处于 dry-run。沿用现有 CI 的 MCPB 暂存冒烟及 tag 工作流的真实打包检查。
+5. 将 dry-run JSON 与 `npm pack --dry-run --ignore-scripts --json` 的文件清单对账，确认 CLI、MCP 入口、规则与 `src/private-files.json` 在场。确认桌面目录、本机配置与凭据文件均在包外。两次命令的文件集合与大小应一致，校验以实际输出为准。
+6. 本地执行定向测试、§2 四条门禁和 dry-run。PR 的八项现有检查及新增演练均通过，记录各自验证的提交。合并后手动触发演练，核对 `headSha` 与最终主分支提交一致。
+7. 记录结果与包清单摘要，更新进度。真实 tag、Release、npm 发布按 §3 单独申请。
+
+**允许变更的文件**：`.github/workflows/release.yml`、新演练 workflow、`tests/release.test.mjs`、本交接文档和 `progress.txt`。实现确需小型校验脚本时，在 PR 说明用途并用现有测试覆盖；当前产品版本沿用 `0.2.0-rc.3`。
+
+**完成判据**：回归测试先红后绿；两种 dry-run 清单一致；PR 的八项既有检查与演练通过；合并后的手动演练通过；工作流发布调用有强制 dry-run 约束。npm dry-run 的行为以官方文档和运行结果共同核实。[npm publish 文档](https://docs.npmjs.com/cli/v11/commands/npm-publish/#dry-run)
+
+#### T09B 版本与变更日志生成（接入方案待补齐）
+
+采用方案文档选定的 release-please，配置 `skip-github-release: true`，以版本更新 PR 为交付物。其默认工作流会写入多个版本载体，因此落地前需要解决以下约束。[官方配置](https://github.com/googleapis/release-please-action#action-inputs)
+
+1. 以现有 `v0.2.0-rc.3` 的真实提交和版本为起点，确认历史范围以及预发布递增策略。新版本候选在范围 PR 中明确，历史 changelog 保留人工记录。
+2. 十个字段一次生成后共同通过现有版本门禁。Node、JSON 和 TOML 字段逐一列出更新策略，特别验证 Cargo.lock 只更新 `desktop` 包版本，独立 crate 与测试夹具各自保留版本。先用临时副本做演练，再形成实际版本 PR。[extra-files 配置](https://github.com/googleapis/release-please/blob/main/docs/customizing.md)
+3. 选择符合逐文件提交、追加提交和保留分支约定的生成方式，测试重复执行与未合并 PR 的处理。release-please 默认 PR 写入方式需要先核实，任何约定例外须明确批准。
+4. 把 Actions 创建 PR 所需权限与 CI 触发机制写成具体方案交维护者裁决。优先研究可审阅的生成产物与现有授权开 PR 路径；新凭据、仓库设置变更应单独说明。
+5. Actions 固定 SHA 与审计、MCPB 签名分别列出变更和验证证据，再按 §3 申请。T09 整体完成需要同时交付 T09A 与批准后的版本/changelog 自动化。
+
 **功能项**（编号与 `docs/25` §8 一致）
 
 | # | 功能 | 完成判据 | 依赖 | 关口 |
@@ -399,12 +439,6 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 - 功能 11：CloudBase MCP 以小程序身份登录的实际流程，以及白名单里能留下哪些工具；本机开发者工具版本的旧 CLI 是否仍提供那三条只读命令。
 - 功能 12：拿两三个真实的小程序项目（云开发、自建后端各至少一个）跑预检，看 `apis` 和 `domains` 能否分出后端类型；分不出的情况写进工单，改成在对话里问用户。
 
-## 7. 现在就能开始的一步
+## 7. 当前推进入口
 
-```powershell
-git fetch origin; git switch feat/ui-refresh-ocu-sync-20261025; git pull --ff-only
-npm ci; npm ci --prefix desktop
-npm run lint; npm test; npm run verify:quotes; npm run coverage
-```
-
-四条检查都通过后：先做 T01 第 1 步（开公示 issue，五分钟），然后在等公示的时候做 T02。T04 最晚 2026-11-24 开工。
+T01–T08 已完成。下一项为 §6 的 T09A，先确认范围 PR，再按该工单步骤从 `main` 开实施分支。通用基线和验证命令见 §2。T09B 随探查结果补全后另行确认。
