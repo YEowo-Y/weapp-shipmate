@@ -96,7 +96,7 @@ export function checkHardcodedSecrets(scan = {}) {
     title: "疑似硬编码密钥（AppSecret/商户密钥）",
     stage: "review",
     severity: "blocker",
-    why: "AppSecret 可用于调用后台接口，泄露后账号有被冒用的风险。请核实以下文件中的键是否存放真实密钥。",
+    why: "所引官方说明适用于 AppSecret：泄露后账号有被冒用的风险。对于商户密钥等其他键，请按其实际用途核实。",
     requires: [`如确认是真实密钥，将其移出前端源码并在后端保管：${list}`],
     warn: null,
     official_url: "https://developers.weixin.qq.com/miniprogram/dev/server/API/mp-access-token/api_getaccesstoken.html",
