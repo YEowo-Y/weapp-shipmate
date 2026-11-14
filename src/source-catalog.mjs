@@ -26,6 +26,13 @@ export function loadSourceReferences({ root = ROOT } = {}) {
   ];
 }
 
+// 引文门禁只核验 YAML 规则和内联核验项，流程及拒绝案例使用各自的来源约定。
+export function loadRuleReferences({ includeDrafts = false, root = ROOT } = {}) {
+  return loadSourceReferences({ root }).filter((item) =>
+    (item._file.startsWith('rules/') || item._file === 'src/crosscheck.mjs') &&
+    (includeDrafts || !item.draft));
+}
+
 export function createSourceCatalog({ root = ROOT } = {}) {
   const monitored = loadSourceReferences({ root });
   const byRule = new Map(monitored.map((item) => [item.id, item]));

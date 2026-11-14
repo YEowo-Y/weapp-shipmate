@@ -27,6 +27,14 @@
       "method": "fetch"
     },
     {
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/server-ability/backend-api.html",
+      "file": "am-dev-framework-server-ability-backend-api-html-e143b387.txt",
+      "sha256": "81ef3f47158fed403d18fe3e87db51f8b7b76915d813a0cbf968dd67fed6d7fd",
+      "chars": 759,
+      "fetched_at": "2026-11-14",
+      "method": "fetch"
+    },
+    {
       "url": "https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/",
       "file": "in-qq-com-miniprogram-dev-framework-user-privacy-778ac67d.txt",
       "sha256": "c9ba65c7ad8ab47f3b86463ad10fa17af585f8f5ad681826c3843892ba72b8d0",
@@ -48,6 +56,22 @@
       "sha256": "411ede6354b8733e16cf4b53fcd06d4dccb775f307e4cf54a42c712c146e01fe",
       "chars": 7321,
       "fetched_at": "2026-11-13",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/reference/configuration/app.html#requiredPrivateInfos",
+      "file": "ence-configuration-app-html-requiredPrivateInfos-30798767.txt",
+      "sha256": "948b9d5de396bc679c9902388f51650a1ca762da7b506b8d3bda1c853b3b397b",
+      "chars": 12968,
+      "fetched_at": "2026-11-14",
+      "method": "fetch"
+    },
+    {
+      "url": "https://developers.weixin.qq.com/miniprogram/dev/server/API/mp-access-token/api_getaccesstoken.html",
+      "file": "rver-API-mp-access-token-api-getaccesstoken-html-46f06650.txt",
+      "sha256": "946144c4f5cc7dbe0b35c62116be5e1a102aff3bff057858bf9251b3fd57567f",
+      "chars": 2332,
+      "fetched_at": "2026-11-14",
       "method": "fetch"
     },
     {

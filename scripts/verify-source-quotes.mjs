@@ -16,7 +16,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadData } from "../src/data.mjs";
+import { loadRuleReferences } from "../src/source-catalog.mjs";
 import { verifyQuotes, summarize, stripProvenanceHeader } from "../src/source-quotes.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -66,7 +66,7 @@ export function snapshotMethods({ index = INDEX } = {}) {
 }
 
 function main() {
-  const { rules } = loadData({ includeDrafts: false });
+  const rules = loadRuleReferences();
   const snapshots = loadSnapshots();
   const results = verifyQuotes(rules, snapshots);
   const { total, failures } = summarize(results);
