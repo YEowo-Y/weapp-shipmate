@@ -28,6 +28,7 @@ jobs:
       - run: npm run lint
       - run: npm run release:check
       - run: npm test
+      - run: npm run verify:quotes
       - run: npm run coverage
       # tgz：与 npm registry 发布物同源（registry 发布解锁后两渠道一致性由此保证）。
       - run: npm pack

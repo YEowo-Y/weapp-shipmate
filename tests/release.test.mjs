@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
+import { distributionTag, verifyPackageRehearsal } from "../scripts/verify-package-rehearsal.mjs";
 import {
   assertVersionIdentity,
   readRepositoryVersionIdentity,
@@ -172,4 +173,91 @@ test("release 必须创建 Draft 且不得自动公开：--draft 在场、prerel
   assert.ok(release, "release workflow 缺少资产上传步骤");
   assert.match(release.run, /--draft(\s|$)/, "gh release create 必须带 --draft：发布是不可逆动作，须留人工闸");
   assert.doesNotMatch(release.run, /--prerelease|--latest/, "prerelease/latest 标记须人工在 Draft 上决定，不得由 workflow 预设");
+});
+
+test("发布打包前必须单独核验官方引文", () => {
+  const workflow = yaml.load(readFileSync(join(ROOT, ".github/workflows/release.yml"), "utf8"));
+  const steps = workflow.jobs.release.steps;
+  const quotes = steps.findIndex((step) => step.run === "npm run verify:quotes");
+  assert.ok(quotes >= 0);
+  for (const command of ["npm pack", "npm run build:mcpb"]) {
+    assert.ok(quotes < steps.findIndex((step) => step.run === command));
+  }
+  assert.notEqual(steps[quotes]["continue-on-error"], true);
+});
+
+test("发布演练仅授予读权限，强制 dry-run 并对账包清单", () => {
+  const workflow = yaml.load(readFileSync(join(ROOT, ".github/workflows/release-rehearsal.yml"), "utf8"));
+  assert.deepEqual(Object.keys(workflow.on).sort(), ["pull_request", "workflow_dispatch"]);
+  assert.deepEqual(workflow.permissions, { contents: "read" });
+  const job = workflow.jobs.rehearsal;
+  assert.equal(job.permissions, undefined);
+  const commands = job.steps.filter((step) => step.run).map((step) => step.run);
+  for (const command of ["npm ci", "npm ci --prefix desktop", "npm run lint", "npm test", "npm run verify:quotes", "npm run coverage"]) {
+    assert.ok(commands.includes(command), command);
+  }
+  const publish = commands.find((command) => command.includes("npm publish"));
+  assert.ok(publish);
+  assert.match(publish, /npm publish --dry-run --ignore-scripts --tag "\$DIST_TAG" --json/);
+  assert.match(publish, /npm pack --dry-run --ignore-scripts --json/);
+  assert.match(publish, /node scripts\/verify-package-rehearsal\.mjs/);
+  assert.match(publish, /cat build\/release-rehearsal\/pack\.json build\/release-rehearsal\/publish\.json/);
+  assert.ok(commands.indexOf(publish) > commands.indexOf("npm run coverage"));
+  for (const line of commands.flatMap((command) => command.split("\n")).filter((line) => /\bnpm publish\b/.test(line))) {
+    assert.match(line, /^npm publish --dry-run --ignore-scripts --tag "\$DIST_TAG" --json > build\/release-rehearsal\/publish\.json$/);
+  }
+  const version = job.steps.find((step) => step.id === "version");
+  assert.match(version.run, /assertVersionIdentity\(readRepositoryVersionIdentity\(\)\)/);
+  assert.match(version.run, /distributionTag\(version\)/);
+  assert.equal(job.steps.find((step) => step.run === publish).env.DIST_TAG, "${{ steps.version.outputs.dist_tag }}");
+  for (const step of job.steps) {
+    assert.notEqual(step["continue-on-error"], true);
+    assert.doesNotMatch(step.run ?? "", /gh release|git push|NODE_AUTH_TOKEN|NPM_TOKEN/);
+  }
+});
+
+test("演练区分稳定版与预发布版，包括构建元数据", () => {
+  assert.equal(distributionTag("0.2.0-rc.3"), "next");
+  assert.equal(distributionTag("0.2.0-rc.3+build.1"), "next");
+  assert.equal(distributionTag("0.2.0"), "latest");
+  assert.equal(distributionTag("0.2.0+build-with-hyphen"), "latest");
+  assert.throws(() => distributionTag("main\nlatest"), /Invalid package version/);
+});
+
+const packageManifest = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+function rehearsalFixture() {
+  const paths = ["package.json", "README.md", "LICENSE", "flow.yaml", "rejections.yaml",
+    "src/private-files.json", "rules/example.yaml", "schemas/example.json", ...Object.values(packageManifest.bin)];
+  return { name: packageManifest.name, version: packageManifest.version, size: 100, unpackedSize: paths.length,
+    files: paths.map((path) => ({ path, size: 1, mode: 420 })) };
+}
+
+test("清单校验接受 npm pack 数组、publish 对象及不同文件顺序", () => {
+  const packed = rehearsalFixture();
+  const published = { ...packed, files: [...packed.files].reverse() };
+  assert.equal(verifyPackageRehearsal([packed], published, packageManifest).files, packed.files.length);
+  assert.throws(() => verifyPackageRehearsal([packed, packed], published, packageManifest), /Expected one package/);
+});
+
+test("清单校验拒绝遗漏入口、规则目录以及两次演练的内容或大小差异", () => {
+  for (const missing of ["src/private-files.json", "rules/example.yaml", ...Object.values(packageManifest.bin)]) {
+    const result = rehearsalFixture();
+    result.files = result.files.filter((file) => file.path !== missing);
+    assert.throws(() => verifyPackageRehearsal(result, result, packageManifest), /Missing package/);
+  }
+  const packed = rehearsalFixture();
+  const changed = JSON.parse(JSON.stringify(packed));
+  changed.files[0].size++;
+  assert.throws(() => verifyPackageRehearsal(packed, changed, packageManifest), /file lists differ/);
+  assert.throws(() => verifyPackageRehearsal(packed, { ...packed, size: 101 }, packageManifest), /size mismatch/);
+  assert.throws(() => verifyPackageRehearsal(packed, packed, { ...packageManifest, version: "99.0.0" }), /Unexpected package version/);
+});
+
+test("清单校验拒绝桌面内容、私有文件和越界路径", () => {
+  for (const path of ["desktop/package.json", "src/.env", "src/Secret.json", "src/project.private.config.json",
+    "src/id_rsa", "src/private.upload.key", "src/keys/key.json", "src/../outside.js", "src\\escape.js", "unlisted.js"]) {
+    const result = rehearsalFixture();
+    result.files.push({ path, size: 1, mode: 420 });
+    assert.throws(() => verifyPackageRehearsal(result, result, packageManifest), /package path|Desktop content/);
+  }
 });
