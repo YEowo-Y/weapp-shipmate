@@ -79,11 +79,15 @@ test("guide 默认含已核验的提交审核规则（review 阶段）", () => {
   assert.ok(reviewIds.length >= 6, "review 阶段应有 6 条已核验规则");
 });
 
-test("guide 默认含已核验的登录规范（无 signal → 确定适用，进 items）", () => {
+test("guide 默认排除待核验的登录草稿，显式开启后才包含", () => {
   const r = runGuide({ subject_type: "personal" });
   const ids = new Set(r.items.filter((i) => i.stage === "review").map((i) => i.ruleId));
-  assert.ok(ids.has("login.after-experience"), "应含登录后置规则");
-  assert.ok(ids.has("login.cancellable"), "应含可取消登录规则");
+  const drafts = runGuide({ subject_type: "personal" }, { includeDrafts: true });
+  for (const id of ["login.after-experience", "login.cancellable"]) {
+    assert.ok(!ids.has(id), `${id} 不应进入默认清单`);
+    assert.ok(drafts.items.some(item => item.ruleId === id), `${id} 应保留在显式草稿清单`);
+  }
+  assert.ok(drafts.notes.some(note => note.includes("draft")));
   assert.ok(ids.has("qualification.provide-materials"), "资质材料规则无 signal，应进 items");
 });
 
