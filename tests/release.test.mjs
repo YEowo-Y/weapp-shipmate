@@ -87,6 +87,20 @@ test("发布版本 CLI 使用 GITHUB_REF_NAME，并以退出码拒绝错误 tag"
   assert.match(bad.stderr, /tag/);
 });
 
+test("rule-rot 链接失败后仍检查漂移，安装失败或取消时不运行", () => {
+  const workflow = yaml.load(readFileSync(join(ROOT, ".github", "workflows", "rule-rot.yml"), "utf-8"));
+  const steps = workflow.jobs.rot.steps;
+  const install = steps.find(step => step.run === "npm ci");
+  const rot = steps.find(step => step.run === "npm run rot -- --links");
+  const snapshot = steps.find(step => step.run === "npm run snapshot:sources -- --check");
+  assert.equal(install.id, "install");
+  assert.equal(snapshot.if, "${{ !cancelled() && steps.install.outcome == 'success' }}");
+  assert.ok(steps.indexOf(install) < steps.indexOf(rot));
+  assert.ok(steps.indexOf(rot) < steps.indexOf(snapshot));
+  assert.notEqual(rot["continue-on-error"], true);
+  assert.notEqual(snapshot["continue-on-error"], true);
+});
+
 test("release workflow 在任何打包步骤前运行 lint 与版本契约", () => {
   const workflow = readFileSync(join(ROOT, ".github", "workflows", "release.yml"), "utf-8");
   const steps = yaml.load(workflow).jobs.release.steps;

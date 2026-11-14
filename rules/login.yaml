@@ -1,17 +1,18 @@
 # rules/login.yaml —— 账号登录规范（高频拒审）
-# 已核验官方来源（2026-06-14）：登录规范条款引自官方《小程序帐号登录规范要求与修改指引》与
-# 《运营规范》《常见拒绝情形》(reject.html 3.4.x)，均为平台明文规则，confidence=high、默认输出。
+# 社区帖的两条登录规则因登录墙未能重新核验，保留历史日期并降为 draft。
+# 《运营规范》《常见拒绝情形》(reject.html 3.4.x) 来源的其余规则已重新核验。
 # kind=navigation 内容/交互类，无法静态扫描，全部 manual_required: true。
 schema_version: 1
 rules:
   - id: login.after-experience
+    draft: true
     action_categories: ["code", "manual_check"]
     title: "体验范围开放的小程序不得未体验功能即要求授权登录"
     kind: navigation
     stage: review
     subject_type: ["personal", "individual_business", "enterprise"]
     severity: blocker
-    confidence: high
+    confidence: medium
     requires:
       - "先判定体验范围。『开放』（直接打开即可体验，或有账号限制但注册流程对外开放）：把授权登录后置，让用户先充分了解、体验功能服务，再由用户主动点击触发登录授权，勿一进首页就强制授权"
       - "『特定』（仅供特定人员使用、对外无开放注册流程，如学校 / 员工 / 社保卡信息系统）不适用上一条：官方对该情形允许首页即要求授权以拉取身份鉴定类信息，但要求首页有明显的使用范围说明，并为用户提供暂不登录 / 取消登录选项按钮"
@@ -22,13 +23,14 @@ rules:
     manual_required: true
 
   - id: login.cancellable
+    draft: true
     action_categories: ["code", "manual_check"]
     title: "登录须提供可取消/拒绝且有效"
     kind: navigation
     stage: review
     subject_type: ["personal", "individual_business", "enterprise"]
     severity: blocker
-    confidence: high
+    confidence: medium
     requires:
       - "授权登录界面提供『取消/拒绝登录』选项，且点击后须真正生效（可继续浏览），勿点了仍强制登录"
     why: "无取消/拒绝登录按钮、或按钮点击无响应仍强制登录，会被判登录规范不合规"
@@ -50,7 +52,7 @@ rules:
     why: "请求或诱导输入微信账号密码属明令拒审项"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "不得在小程序任何页面请求或诱导用户输入微信用户的用户名或密码"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: login.no-unauthorized-userdata
@@ -66,7 +68,7 @@ rules:
     why: "未经授权显示用户头像昵称等数据属明令拒审项"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "不得在未经用户授权同意的情况下，显示用户相关数据，比如：头像，昵称等信息"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: login.clear-data-on-refuse
@@ -82,5 +84,5 @@ rules:
     why: "拒绝授权后仍留存/使用用户头像昵称等数据违反运营规范"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "用户拒绝授权后，开发者有义务清除并不再继续使用该用户的微信头像、昵称等数据。"
-    last_verified: "2026-07-16"
+    last_verified: "2026-11-13"
     manual_required: true

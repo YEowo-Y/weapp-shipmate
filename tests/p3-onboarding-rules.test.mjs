@@ -17,7 +17,7 @@ test("new manual rules use archived verbatim primary sources and no scanner", ()
     assert.equal(rule.kind, "navigation");
     assert.equal(rule.manual_required, true);
     assert.equal(rule.match, undefined);
-    assert.equal(rule.last_verified, "2026-10-22");
+    assert.equal(rule.last_verified, "2026-11-13");
     assert.ok(snapshots[rule.official_url].includes(rule.source_quote), id);
   }
 });
@@ -57,8 +57,8 @@ test("filing uses the verified relocated page without altering unrelated freshne
   for (const id of ["filing.required-before-release", "filing.individual-id-materials", "filing.face-verification"]) {
     const rule = rules.find(rule => rule.id === id);
     assert.equal(rule.official_url, url);
-    assert.equal(rule.last_verified, "2026-10-22");
+    assert.equal(rule.last_verified, "2026-11-13");
     assert.ok(loadSnapshots()[url].includes(rule.source_quote));
   }
-  assert.equal(rules.find(rule => rule.id === "filing.keep-updated").last_verified, "2026-07-16");
+  assert.equal(rules.find(rule => rule.id === "filing.keep-updated").last_verified, "2026-11-13");
 });

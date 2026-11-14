@@ -1,9 +1,9 @@
-===== URL: https://pay.weixin.qq.com/docs/merchant/products/mini-program-payment/introduction.html
-===== FETCHED: 2026-07-17
+===== URL: https://pay.weixin.qq.com/doc/v3/merchant/4012791894
+===== FETCHED: 2026-11-13
 ===== METHOD: fetch + <main> extract
 
 产品介绍
-更新时间：2025.07.15 以 Markdown 格式查看 |复制给 LLM| 问 AI
+更新时间：2025.07.15 以 Markdown 格式查看 |复制给 LLM| 问 AI | 安装 Skill
 1、产品概述
 
 小程序支付，提供商户在自身微信小程序中使用微信支付收款的能力。

@@ -18,7 +18,7 @@ rules:
     why: "UGC 无内容过滤机制是常见拒审项，且涉违法有害信息风险"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "小程序的服务提供者必须提供过滤不当内容的措施。示例：设置对发布色情、赌博等涉嫌违法违规的词汇进行过滤提示的措施"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: content.ugc-consent
@@ -34,7 +34,7 @@ rules:
     why: "未经同意代用户发布/转交内容属明令拒审项"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/reject.html"
     source_quote: "小程序代替用户发表、发送、转交任何内容前，必须征得用户明确同意和授权"
-    last_verified: "2026-06-14"
+    last_verified: "2026-11-13"
     manual_required: true
 
   - id: content.no-illegal
@@ -47,8 +47,8 @@ rules:
     confidence: high
     requires:
       - "确保小程序发布 / 传送 / 传播 / 储存的所有内容不含国家法律法规禁止的信息（政治敏感、色情低俗、暴力恐怖、违法犯罪等）"
-    why: "发布国家法律法规禁止的内容会被直接拒审 / 封禁，并涉法律责任"
+    why: "运营规范将发布、传送、传播、储存国家法律法规禁止的内容列为违规，常见拒绝情形也列有相应内容限制"
     official_url: "https://developers.weixin.qq.com/miniprogram/product/"
     source_quote: "微信小程序不得发布、传送、传播、储存国家法律法规禁止的以下信息内容，否则视为违规："
-    last_verified: "2026-07-16"
+    last_verified: "2026-11-13"
     manual_required: true
