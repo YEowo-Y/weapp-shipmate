@@ -371,9 +371,9 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 | Rust 加固 | 耗时命令改异步；SQLite 开 WAL；错误用类型而非 `String`；有日志和 panic hook；CI 加 clippy 与 fmt | 数据模型变更；新 crate |
 | 前端收敛第一步 | `desktop/**` 进 ESLint 和类型检查；`desktop/src` 不再 import `design-previews`；启动包仍在预算内 | 无 |
 
-### T09 发布工程，先落地 T09A 演练门禁
+### T09 发布工程
 
-**状态**：T09A 范围已获维护者批准（#29），实施 PR 中。T09B 在下面列出接入条件，待方案补齐后另开范围 PR。
+**状态**：T09A 已完成。[#30 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/30#issuecomment-6897413822) 中的合并后 CI 与手动演练均通过。T09B 接入方案见下，待维护者确认范围。
 
 **依赖**：T02、T05、T06、T07 已合并。起点为 `main` 的 `270cff3`，包版本 `0.2.0-rc.3`。
 
@@ -385,7 +385,7 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 - npm 11.9.0 实跑预发布版 dry-run，省略 dist-tag 会失败；`npm publish --dry-run --ignore-scripts --tag next --json` 退出 0，报告 42 个文件、压缩大小 80158 字节、解包大小 245384 字节。npm 提示真实发布需要登录。本次证明打包演练通过，真实发布权限尚待发布阶段核实。
 - 当前 Actions 默认权限为 read，`can_approve_pull_request_reviews=false`。release-please 自动开 PR 需要仓库允许相应动作；由默认 `GITHUB_TOKEN` 创建的 PR 还需安排后续检查的触发方式。[官方接入说明](https://github.com/googleapis/release-please-action#github-credentials)
 
-#### T09A 发布演练与门禁（本次申请实施范围）
+#### T09A 发布演练与门禁（已验收）
 
 **目标**：PR 和手动工作流能演练 npm 包，真实 tag 发布路径显式执行引文门禁。演练权限为 `contents: read`，输出包括包清单与执行日志；对外发布继续执行 §3 的审批约定。
 
@@ -401,15 +401,32 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 **完成判据**：回归测试先红后绿；两种 dry-run 清单一致；PR 的八项既有检查与演练通过；合并后的手动演练通过；工作流发布调用有强制 dry-run 约束。npm dry-run 的行为以官方文档和运行结果共同核实。[npm publish 文档](https://docs.npmjs.com/cli/v11/commands/npm-publish/#dry-run)
 
-#### T09B 版本与变更日志生成（接入方案待补齐）
+#### T09B 版本与变更日志生成（申请实施范围）
 
-采用方案文档选定的 release-please，配置 `skip-github-release: true`，以版本更新 PR 为交付物。其默认工作流会写入多个版本载体，因此落地前需要解决以下约束。[官方配置](https://github.com/googleapis/release-please-action#action-inputs)
+**申请交付两张 PR**。第一张增加候选生成命令、隔离的工具依赖和测试，接入只读演练。第二张用该命令生成首个版本候选 `0.2.0-rc.4` 和变更日志，运行 §2 门禁与 T09A 演练。版本 PR 合并后，打 tag、创建 Release 和真实 npm 发布仍各按 §3 裁决。
 
-1. 以现有 `v0.2.0-rc.3` 的真实提交和版本为起点，确认历史范围以及预发布递增策略。新版本候选在范围 PR 中明确，历史 changelog 保留人工记录。
-2. 十个字段一次生成后共同通过现有版本门禁。Node、JSON 和 TOML 字段逐一列出更新策略，特别验证 Cargo.lock 只更新 `desktop` 包版本，独立 crate 与测试夹具各自保留版本。先用临时副本做演练，再形成实际版本 PR。[extra-files 配置](https://github.com/googleapis/release-please/blob/main/docs/customizing.md)
-3. 选择符合逐文件提交、追加提交和保留分支约定的生成方式，测试重复执行与未合并 PR 的处理。release-please 默认 PR 写入方式需要先核实，任何约定例外须明确批准。
-4. 把 Actions 创建 PR 所需权限与 CI 触发机制写成具体方案交维护者裁决。优先研究可审阅的生成产物与现有授权开 PR 路径；新凭据、仓库设置变更应单独说明。
-5. Actions 固定 SHA 与审计、MCPB 签名分别列出变更和验证证据，再按 §3 申请。T09 整体完成需要同时交付 T09A 与批准后的版本/changelog 自动化。
+**历史与版本。** 起点取带注释标签 `v0.2.0-rc.3^{commit}`（`f5dd8f91e571c5cdd54d920c2237977dc937bc9f`）。终点取生成时检出的完整 `main` 提交，两端 SHA 均写入 PR。对已验收的 `c6b21a5` 实测，这段历史共 824 个提交，只走第一父链会只看到 14 个。使用 `git log --no-merges -z --format=%H%x00%B <base>..<head>` 保留 #27 合入的分支内容，取得 797 个非合并提交。首次候选显式指定为 `rc.4`；命令校验同一 `X.Y.Z-rc.N` 序列只增一位，并检查基线可达、候选标签未被占用。转稳定版和以后的候选另选基线，不能反复从 rc.3 生成新版本。
+
+**候选生成。** 在独立发布工具目录锁定 `release-please@17.11.2` 及其 lockfile，使用 Node 22。只读演练检出完整历史，安装工具后从本地 Git 取输入。上游 `simple` 策略接收解析后的 Conventional Commits、基线 tag/SHA 和本次 `releaseAs`，设置 `skipGithubRelease: true`，取 `buildReleasePullRequest` 返回的 `body.releaseData[0]`。只消费版本与 notes；版本字段由下表更新。临时目录已用上述真实历史跑通，解析出 607 项，默认生成 168 条功能、修复和性能记录。生成时只提供仓库名称和默认分支，额外 SCM 调用即报错。实施时给这几个上游内部接口加契约测试，升级工具时重跑。[策略工厂](https://github.com/googleapis/release-please/blob/05c6a4f71022304d4edad24ea90c1c16324503d5/src/factory.ts#L126-L155) · [候选生成接口](https://github.com/googleapis/release-please/blob/05c6a4f71022304d4edad24ea90c1c16324503d5/src/strategies/base.ts#L277-L294)
+
+| 版本载体 | 精确更新目标 |
+|---|---|
+| `package.json`、`manifest.json`、`desktop/package.json`、`desktop/src-tauri/tauri.conf.json` | 各自顶层 `version` |
+| `package-lock.json`、`desktop/package-lock.json` | 各自顶层 `version` 和 `packages[""].version` |
+| `desktop/src-tauri/Cargo.toml` | `[package].version` |
+| `desktop/src-tauri/Cargo.lock` | 唯一名为 `desktop` 的 `[[package]]` 的 `version` |
+
+独立临时副本已验证八个文件只改十行，其他 crate 与 Rust 测试夹具逐字节相同。现有门禁 `node scripts/check-release-version.mjs v0.2.0-rc.4` 通过，传旧版本退出 1，重复投影得到相同字节。实施命令先在临时目录生成并核对完整差异，再将候选交给版本分支。
+
+**变更日志。** 保留 `CHANGELOG.md` 开头的公开版本说明，更新其中的当前候选。保留 `Unreleased` 标题，将其原有人工记录原样归到新候选下，另附上游生成的分类条目；从 `## [0.2.0-rc.3]` 起的历史逐字节校验。首次评审检查 168 条样本中与人工记录重叠的内容，以及默认策略未归类的重要改动。候选标题统一使用输入提交的 UTC 日期，去掉上游按运行日生成的标题；同一输入跨日重跑的完整文件散列应一致。[上游变更日志实现](https://github.com/googleapis/release-please/blob/05c6a4f71022304d4edad24ea90c1c16324503d5/src/changelog-notes/default.ts#L51-L79)
+
+**开 PR 与重跑。** Actions 只需 `contents: read`，在临时目录运行生成和对账。维护者使用现有登录身份从相同 SHA 本地复现，经普通分支 push 和 `gh pr create` 触发现有 CI。保留仓库默认读权限、禁止 Actions 创建或批准 PR 的设置；无需新增凭据。直接使用上游 PR 写入路径会让工具管理提交与分支，本方案只调用其生成接口。[上游生成与写入分支](https://github.com/googleapis/release-please/blob/05c6a4f71022304d4edad24ea90c1c16324503d5/src/bin/release-please.ts#L516-L565)
+
+工具 PR 在 CI 中运行待审工具，用事件的 base SHA 做演练。版本 PR 将生成时的源 `main` 完整 SHA 记录在候选提交的 Git trailer 中；CI 校验它在 `main` 历史上，取该 SHA 的源码、版本文件和日志作输入，在独立目录重新生成，与事件的 PR head 上八个版本文件及 `CHANGELOG.md` 逐字节比较。临时仓库测试要让源 SHA、PR head 与 GitHub 的模拟合并提交各不相同，改动一个候选字节应使对账失败。
+
+同一候选只用一个版本分支和一张 PR。首次逐文件提交后一次推送；重跑相同输入且无差异时直接复用。若 `main` 前进，用原 PR 的候选版本和新的源 SHA 重算，以普通 merge 同步并逐文件追加有差异的提交。推送发生竞争、已有人工修改或分支来源无法确认时保留原分支，展示差异供审阅。已经合并的候选再次运行时报告完成。
+
+**实施验收。** 用临时 Git 仓库覆盖首次生成、跨日重跑、已有 PR 的追加更新、合并后重跑、基线不匹配和标签已存在。逐项核对十字段、历史日志和变更文件清单；两张 PR 的全部检查通过。版本 PR 还须以 `rc.4` 通过版本门禁与 pack/publish dry-run 清单对账。此次范围 PR 已验证本地历史生成与版本投影；完整命令、跨日幂等和 PR 重跑流程留给实施测试。Actions 按 SHA 固定与审计、MCPB 签名另开范围。
 
 **功能项**（编号与 `docs/25` §8 一致）
 
@@ -441,4 +458,4 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ## 7. 当前推进入口
 
-T01–T08 已完成。§6 的 T09A 范围已批准，当前推进实施与验收。通用基线和验证命令见 §2。T09B 随探查结果补全后另行确认。
+T01–T08 与 T09A 已完成。下一步由维护者审阅 §6 的 T09B 接入范围，确认后开实施 PR。通用基线和验证命令见 §2。
