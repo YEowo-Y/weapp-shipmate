@@ -1,0 +1,16 @@
+{
+  "name": "weapp-shipmate-release-candidate",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "release-please": "17.11.2"
+  },
+  "overrides": {
+    "@google-automations/git-file-utils": {
+      "minimatch": "11.0.1"
+    }
+  }
+}

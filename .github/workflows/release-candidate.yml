@@ -1,0 +1,64 @@
+name: release-candidate
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/release-candidate.yml"
+      - "tools/release-candidate/**"
+      - "package.json"
+      - "CHANGELOG.md"
+  workflow_dispatch:
+    inputs:
+      base_tag:
+        description: Existing RC tag
+        required: true
+        default: v0.2.0-rc.3
+      version:
+        description: Next RC version
+        required: true
+        default: 0.2.0-rc.4
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - run: npm ci --ignore-scripts --prefix tools/release-candidate
+      - run: node --test tools/release-candidate/acceptance.mjs
+      - name: Reproduce the candidate from its source commit
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          read_version() { git show "$1:package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version"; }
+          base=$(read_version "$BASE_SHA")
+          head=$(read_version "$HEAD_SHA")
+          if [[ "$base" != "$head" ]]; then
+            node tools/release-candidate/cli.mjs verify-pr --repo . --main "$BASE_SHA" --candidate "$HEAD_SHA" --base-tag "v$base" --version "$head"
+          elif ! git diff --quiet "$BASE_SHA...$HEAD_SHA" -- tools/release-candidate .github/workflows/release-candidate.yml; then
+            if [[ "$base" =~ ^(.+-rc\.)([0-9]+)$ ]] && git show-ref --verify --quiet "refs/tags/v$base"; then
+              next="${BASH_REMATCH[1]}$((BASH_REMATCH[2] + 1))"
+              node tools/release-candidate/cli.mjs generate --repo . --source "$BASE_SHA" --base-tag "v$base" --version "$next" --output "$RUNNER_TEMP/candidate"
+            else
+              echo "The base version has no RC tag for a new candidate. The fixture tests ran above."
+            fi
+          fi
+      - name: Generate from the selected commit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          BASE_TAG: ${{ inputs.base_tag }}
+          VERSION: ${{ inputs.version }}
+        run: node tools/release-candidate/cli.mjs generate --repo . --source "$SOURCE_SHA" --base-tag "$BASE_TAG" --version "$VERSION" --output "$RUNNER_TEMP/candidate"
