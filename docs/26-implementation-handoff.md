@@ -373,7 +373,7 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ### T09 发布工程
 
-**状态**：T09A 已完成。[#30 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/30#issuecomment-6897413822) 中的合并后 CI 与手动演练均通过。维护者已批准 [#31](https://github.com/YEowo-Y/weapp-shipmate/pull/31) 的 T09B 两张 PR 范围，生成工具实施 PR 中。
+**状态**：T09A 已完成。[#30 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/30#issuecomment-6897413822) 中的合并后 CI 与手动演练均通过。维护者已批准 [#31](https://github.com/YEowo-Y/weapp-shipmate/pull/31) 的 T09B 两张 PR 范围，生成工具 [#32](https://github.com/YEowo-Y/weapp-shipmate/pull/32) 已合并且十项 CI 通过，rc.4 版本 PR 中。
 
 **依赖**：T02、T05、T06、T07 已合并。起点为 `main` 的 `270cff3`，包版本 `0.2.0-rc.3`。
 
@@ -462,4 +462,4 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ## 7. 当前推进入口
 
-T01–T08 与 T09A 已完成。T09B 两张 PR 范围已获批准，当前交付生成工具，合并后生成 rc.4 版本 PR。通用基线和验证命令见 §2。
+T01–T08 与 T09A 已完成。T09B 生成工具 #32 已交付，当前从其合并提交 `7f3472f978bf22ac0d76e84091c2457c968bca8f` 生成 rc.4 版本 PR。通用基线和验证命令见 §2。
