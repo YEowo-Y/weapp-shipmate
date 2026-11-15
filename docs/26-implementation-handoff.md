@@ -373,7 +373,7 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ### T09 发布工程
 
-**状态**：T09A 已完成。[#30 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/30#issuecomment-6897413822) 中的合并后 CI 与手动演练均通过。T09B 接入方案见下，待维护者确认范围。
+**状态**：T09A 已完成。[#30 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/30#issuecomment-6897413822) 中的合并后 CI 与手动演练均通过。维护者已批准 [#31](https://github.com/YEowo-Y/weapp-shipmate/pull/31) 的 T09B 两张 PR 范围，生成工具实施 PR 中。
 
 **依赖**：T02、T05、T06、T07 已合并。起点为 `main` 的 `270cff3`，包版本 `0.2.0-rc.3`。
 
@@ -428,6 +428,10 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 **实施验收。** 用临时 Git 仓库覆盖首次生成、跨日重跑、已有 PR 的追加更新、合并后重跑、基线不匹配和标签已存在。逐项核对十字段、历史日志和变更文件清单；两张 PR 的全部检查通过。版本 PR 还须以 `rc.4` 通过版本门禁与 pack/publish dry-run 清单对账。此次范围 PR 已验证本地历史生成与版本投影；完整命令、跨日幂等和 PR 重跑流程留给实施测试。Actions 按 SHA 固定与审计、MCPB 签名另开范围。
 
+**工具操作。** Node 22 执行 `npm ci --ignore-scripts --prefix tools/release-candidate`，再跑 `node --test tools/release-candidate/acceptance.mjs`。使用 `node tools/release-candidate/cli.mjs generate --repo . --source <main完整SHA> --base-tag v0.2.0-rc.3 --version 0.2.0-rc.4 --output <工作树外的新目录>` 生成九个文件。输出目录已有相同候选时复用，内容不同时换新目录。
+
+从记录的源 SHA 开版本分支，将输出的九文件按相对路径复制，逐文件提交，各提交正文包含 `Release-Source: <main完整SHA>`。所有候选提交完成后执行 `node tools/release-candidate/cli.mjs verify-pr --repo . --main <源SHA> --candidate <分支HEAD完整SHA> --base-tag v0.2.0-rc.3 --version 0.2.0-rc.4`，通过后按 §2 推送与开 PR。最后一条提交也应带此 trailer；追加文档或同步 main 后，在最后的候选文件提交中记录新源 SHA。候选工作流在 CI 中复现此检查。
+
 **功能项**（编号与 `docs/25` §8 一致）
 
 | # | 功能 | 完成判据 | 依赖 | 关口 |
@@ -458,4 +462,4 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ## 7. 当前推进入口
 
-T01–T08 与 T09A 已完成。下一步由维护者审阅 §6 的 T09B 接入范围，确认后开实施 PR。通用基线和验证命令见 §2。
+T01–T08 与 T09A 已完成。T09B 两张 PR 范围已获批准，当前交付生成工具，合并后生成 rc.4 版本 PR。通用基线和验证命令见 §2。
