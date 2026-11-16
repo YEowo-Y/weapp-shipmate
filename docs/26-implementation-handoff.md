@@ -373,7 +373,7 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ### T09 发布工程
 
-**状态**：T09A 已完成。[#30 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/30#issuecomment-6897413822) 中的合并后 CI 与手动演练均通过。维护者已批准 [#31](https://github.com/YEowo-Y/weapp-shipmate/pull/31) 的 T09B 两张 PR 范围，生成工具 [#32](https://github.com/YEowo-Y/weapp-shipmate/pull/32) 已合并且十项 CI 通过，rc.4 版本 PR 中。
+**状态**：T09A 与 T09B 已完成。T09A 的 [#30 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/30#issuecomment-6897413822) 和 T09B 的 [#33 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/33#issuecomment-6915500673) 均包含合并后验证。当前 `main@f70b071` 的版本为 `0.2.0-rc.4`，主分支八项检查、手动候选重跑与 npm 演练通过。T09C 的 Actions 固定与审计范围待维护者批准。
 
 **依赖**：T02、T05、T06、T07 已合并。起点为 `main` 的 `270cff3`，包版本 `0.2.0-rc.3`。
 
@@ -401,9 +401,9 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 **完成判据**：回归测试先红后绿；两种 dry-run 清单一致；PR 的八项既有检查与演练通过；合并后的手动演练通过；工作流发布调用有强制 dry-run 约束。npm dry-run 的行为以官方文档和运行结果共同核实。[npm publish 文档](https://docs.npmjs.com/cli/v11/commands/npm-publish/#dry-run)
 
-#### T09B 版本与变更日志生成（申请实施范围）
+#### T09B 版本与变更日志生成（已验收）
 
-**申请交付两张 PR**。第一张增加候选生成命令、隔离的工具依赖和测试，接入只读演练。第二张用该命令生成首个版本候选 `0.2.0-rc.4` 和变更日志，运行 §2 门禁与 T09A 演练。版本 PR 合并后，打 tag、创建 Release 和真实 npm 发布仍各按 §3 裁决。
+**已交付两张 PR**。第一张 [#32](https://github.com/YEowo-Y/weapp-shipmate/pull/32) 增加候选生成命令、隔离的工具依赖和测试，接入只读演练。第二张 [#33](https://github.com/YEowo-Y/weapp-shipmate/pull/33) 用该命令生成首个版本候选 `0.2.0-rc.4` 和变更日志，完成 §2 门禁与 T09A 演练。打 tag、创建 Release 和真实 npm 发布仍各按 §3 裁决。
 
 **历史与版本。** 起点取带注释标签 `v0.2.0-rc.3^{commit}`（`f5dd8f91e571c5cdd54d920c2237977dc937bc9f`）。终点取生成时检出的完整 `main` 提交，两端 SHA 均写入 PR。对已验收的 `c6b21a5` 实测，这段历史共 824 个提交，只走第一父链会只看到 14 个。使用 `git log --no-merges -z --format=%H%x00%B <base>..<head>` 保留 #27 合入的分支内容，取得 797 个非合并提交。首次候选显式指定为 `rc.4`；命令校验同一 `X.Y.Z-rc.N` 序列只增一位，并检查基线可达、候选标签未被占用。转稳定版和以后的候选另选基线，不能反复从 rc.3 生成新版本。
 
@@ -431,6 +431,40 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 **工具操作。** Node 22 执行 `npm ci --ignore-scripts --prefix tools/release-candidate`，再跑 `node --test tools/release-candidate/acceptance.mjs`。使用 `node tools/release-candidate/cli.mjs generate --repo . --source <main完整SHA> --base-tag v0.2.0-rc.3 --version 0.2.0-rc.4 --output <工作树外的新目录>` 生成九个文件。输出目录已有相同候选时复用，内容不同时换新目录。
 
 从记录的源 SHA 开版本分支，将输出的九文件按相对路径复制，逐文件提交，各提交正文包含 `Release-Source: <main完整SHA>`。所有候选提交完成后执行 `node tools/release-candidate/cli.mjs verify-pr --repo . --main <源SHA> --candidate <分支HEAD完整SHA> --base-tag v0.2.0-rc.3 --version 0.2.0-rc.4`，通过后按 §2 推送与开 PR。最后一条提交也应带此 trailer；追加文档或同步 main 后，在最后的候选文件提交中记录新源 SHA。候选工作流在 CI 中复现此检查。
+
+#### T09C Actions 固定与审计（申请实施范围）
+
+**目的与关口**。将当前直接引用的 Action 固定到已核实的完整提交，补齐 checkout 凭据设置和回归门禁。按 §3，Actions 按 SHA 固定需维护者明确批准；此范围 PR 记录探查证据，批准后开实施 PR。
+
+**探查结果（2026-11-16，`main@f70b071`）**
+
+- 六份 workflow、七个 job 共十四处 `uses`，均为 `actions/checkout@v7` 或 `actions/setup-node@v7`，两者各七处。官方仓库 ref API 与 `git ls-remote` 返回相同结果，以下版本标签均直接指向 commit；GitHub API 显示两个提交的签名验证为 `valid`。
+
+  | Action | 现有 v7 对应发布 | 拟固定的完整 commit SHA |
+  |---|---|---|
+  | actions/checkout | v7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` |
+  | actions/setup-node | v7.1.0 | `949feb2413d6458794dcd2491c4babbbce0c15c1` |
+
+  版本依据为官方发布记录。[checkout v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1) · [setup-node v7.1.0](https://github.com/actions/setup-node/releases/tag/v7.1.0)
+
+- 审阅上述提交的 `action.yml`，两者使用 `node24` 执行入口；checkout 的 `persist-credentials` 默认值为 true。目前只有两个发布演练工作流显式设为 false，其余五处需补齐。工作流后续步骤没有依赖 checkout 保存的凭据进行 Git 写入；Release 最后一步用独立环境变量执行 `gh release create --draft`。这项判断来自工作流和入口源码审阅，固定后的运行效果由实施 PR CI 验证。
+- 五份 workflow 为 `contents: read`；tag 发布 workflow 为 `contents: write`，覆盖整个构建 job。未发现 `pull_request_target`、`workflow_run`、`id-token: write` 或第三方 Action。候选工作流的 PR SHA 与手动输入经环境变量传入命令。
+- 当前 Dependabot 已按月检查 GitHub Actions。官方支持更新 SHA 引用及同一行的版本注释；实施采用 `uses: owner/repo@<SHA> # vX.Y.Z`，后续更新仍走普通 PR 全量 CI。[Dependabot 支持说明](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#github-actions)
+- 本机用官方 `actionlint 1.7.12` Windows amd64 包做只读检查，压缩包 SHA256 为 `6e7241b51e6817ea6a047693d8e6fed13b31819c9a0dd6c5a726e1592d22f6e9`，与官方校验和文件一致；执行 `actionlint -shellcheck= -pyflakes=` 退出 0。本次覆盖 Actions YAML 与表达式，ShellCheck 和 Pyflakes 尚未运行。[actionlint 发布与校验和](https://github.com/rhysd/actionlint/releases/tag/v1.7.12)
+
+**实施步骤与判据**
+
+1. 按 §2 同步、安装两处依赖、跑四项基线，从 `main` 开 `codex/t09c-actions`。实施前再次核对表中完整版本标签与提交；若浮动 v7 已前进，记录差异并继续使用本表明确获批的提交。
+2. 在 `tests/release.test.mjs` 遍历全部 workflow 的 job steps，增加完整 40 位 SHA 引用、显式关闭 checkout 凭据持久化的检查；同时检查只读工作流权限和 tag 发布的现有 draft 约束。测试识别 Action 名称与引用结构，使后续 Dependabot 的 SHA 更新能继续使用同一门禁。新增用例在当前浮动引用上应失败。
+3. 将十四处引用改为上表 SHA，并加对应发布版本注释；在另外五处 checkout 补 `with.persist-credentials: false`。`release-candidate.yml` 的 `ref` 和 `fetch-depth: 0` 继续满足候选复现需要。`.github/dependabot.yml` 仅更新原有“可变 tag”说明以匹配 SHA 管理方式。
+4. 复跑 actionlint、定向测试与 §2 四项门禁，新增用例应全绿。逐文件审阅最终 diff，确认引用和凭据设置改动与上述清单一致。独立冷读检查事件、权限、输入插值及凭据使用；在 PR 写出审阅范围和剩余限制。
+5. PR 的十项现有检查全部通过后合并并保留分支，核对 main 的六项 Node 和两项桌面检查。手动运行 `release-candidate` 与 `release-rehearsal`，记录相同合并 SHA 上候选已合入的结果与 npm dry-run 清单。tag 发布 workflow 的最终草稿 Release 步骤随未来批准的真实 tag 验证；月度 rule-rot 的在线来源检查沿用其既有日程。
+
+**允许变更的文件**。`.github/workflows/` 下现有六个 YAML、`.github/dependabot.yml`、`tests/release.test.mjs`、本文与 `progress.txt`。使用已有 js-yaml 解析工作流，actionlint 作为本机临时校验工具；实现与测试走现有 CI。
+
+**审计范围与后续事项**。本项核对直接 Action 的来源与引用、workflow 事件、权限及凭据路径。runner 镜像、Node 主版本、apt 包和打包器下载另有各自的版本来源，完整供应链审计需单列工作。GitHub 另提供 workflow dependency lockfiles；本项按已列出的直接 SHA 引用范围实施。[GitHub 安全指南](https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions)
+
+2026-11-16 只读查看 Dependabot 告警时，根 `package-lock.json` 的 minimatch 仍有中危告警 #21（GHSA-g3hv-75wg-m249）。T09B 已处理独立生成工具的对应依赖；根依赖需另做兼容性验证与修复。维护者暂缓 js-yaml #16 的决定继续有效。
 
 **功能项**（编号与 `docs/25` §8 一致）
 
@@ -462,4 +496,4 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ## 7. 当前推进入口
 
-T01–T08 与 T09A 已完成。T09B 生成工具 #32 已交付，当前从其合并提交 `7f3472f978bf22ac0d76e84091c2457c968bca8f` 生成 rc.4 版本 PR。通用基线和验证命令见 §2。
+T01–T08、T09A 与 T09B 已完成。当前补齐 T09C 的 Actions 固定与审计范围，批准后实施；后续按 §6 推进生态接入等工程底座。通用基线和验证命令见 §2。
