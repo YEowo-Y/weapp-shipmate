@@ -1,5 +1,5 @@
 // src/mcp.mjs —— 极简依赖 MCP 适配层（仅 js-yaml；stdio 传输，把 CLI 能力暴露给 Claude Code / Codex）
-// 协议：换行分隔的 JSON-RPC 2.0；仅实现 initialize / tools/list / tools/call / ping。
+// 协议：换行分隔的 JSON-RPC 2.0；旧版通过 initialize 握手，新版由每个请求的元数据选择协议。
 // 安全：复用 CLI 的本地预检；不新增远程上传能力（见 SECURITY.md）。stdout 只输出 JSON-RPC，日志走 stderr。
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -13,11 +13,30 @@ import { render } from "./report.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8")).version;
 const PROTOCOL_DEFAULT = "2025-06-18";
+const MODERN_VERSION = "2026-07-28";
+const SUPPORTED_VERSIONS = [MODERN_VERSION, PROTOCOL_DEFAULT];
+const VERSION_KEY = "io.modelcontextprotocol/protocolVersion";
+const CAPABILITIES_KEY = "io.modelcontextprotocol/clientCapabilities";
+const CACHE_HINTS = { ttlMs: 0, cacheScope: "private" };
 const SERVER_INFO = { name: "weapp-shipmate", version: VERSION };
+
+function toolOutput(command) {
+  const properties = {
+    command: { type: "string", const: command },
+    meta: { type: "object" },
+    items: { type: "array", items: { type: "object" } },
+    notes: { type: "array", items: { type: "string" } },
+  };
+  if (command === "guide") properties.selfCheck = { type: "array", items: { type: "object" } };
+  return { type: "object", properties, required: Object.keys(properties) };
+}
 
 export const TOOLS = [
   {
     name: "weapp_shipmate_check",
+    title: "项目上线预检",
+    annotations: { readOnlyHint: true },
+    outputSchema: toolOutput("check"),
     description:
       "扫描本地微信小程序源码，输出个性化上线预检清单（命中的隐私 API、需配白名单的请求域名、动态 URL 警示等）。仅本地执行，不上传源码或密钥。",
     inputSchema: {
@@ -33,6 +52,9 @@ export const TOOLS = [
   },
   {
     name: "weapp_shipmate_guide",
+    title: "上线流程导航",
+    annotations: { readOnlyHint: true },
+    outputSchema: toolOutput("guide"),
     description:
       "根据主体类型与功能特征，输出微信小程序上线流程的下一步导航清单（注册/认证/备案/类目/隐私/域名/审核/发布）。不代办、不做合规担保。",
     inputSchema: {
@@ -50,6 +72,9 @@ export const TOOLS = [
   },
   {
     name: "weapp_shipmate_explain",
+    title: "审核反馈解释",
+    annotations: { readOnlyHint: true },
+    outputSchema: toolOutput("explain"),
     description:
       "拒因反查：把审核反馈文案或关键词，反向索引到已核验规则的 why / 修复步骤 / 官方原文链接。仅引用已核验规则，不新增未核验断言。",
     inputSchema: {
@@ -91,8 +116,11 @@ function callTool(name, args = {}) {
   throw new Error(`未知工具: ${name}`);
 }
 
-function invalidRequest() {
-  return { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } };
+function invalidRequest(modern, id) {
+  const response = { jsonrpc: "2.0", error: { code: -32600, message: "Invalid Request" } };
+  if (!modern) response.id = null;
+  else if (typeof id === "string" || Number.isFinite(id)) response.id = id;
+  return response;
 }
 
 function hasValidRequestEnvelope(msg) {
@@ -109,20 +137,7 @@ function hasValidRequestEnvelope(msg) {
   return true;
 }
 
-function validateToolCall(params) {
-  if (typeof params !== "object" || params === null || Array.isArray(params))
-    return { error: "tools/call params 必须是对象" };
-
-  const tool = TOOL_BY_NAME.get(params.name);
-  if (!tool) return { error: `未知工具: ${params.name}` };
-
-  let args = {};
-  if (Object.hasOwn(params, "arguments")) {
-    if (typeof params.arguments !== "object" || params.arguments === null || Array.isArray(params.arguments))
-      return { error: "tools/call arguments 必须是对象" };
-    args = params.arguments;
-  }
-
+function validateToolArguments(tool, args) {
   for (const required of tool.inputSchema.required || []) {
     if (!Object.hasOwn(args, required)) return { error: `缺少必填参数: ${required}` };
   }
@@ -136,47 +151,66 @@ function validateToolCall(params) {
     if (schema.enum && !schema.enum.includes(value))
       return { error: `参数 ${name} 取值无效：可选值为 ${schema.enum.join(" | ")}` };
   }
-  return { args };
+  return null;
 }
 
 /** 处理单条 JSON-RPC 消息。通知（无 id）返回 null（不应答）。纯函数，便于测试。 */
 export async function dispatch(msg) {
-  if (!hasValidRequestEnvelope(msg)) return invalidRequest();
+  const meta = msg?.params?._meta;
+  const modern = meta != null && (Object.hasOwn(meta, VERSION_KEY) || Object.hasOwn(meta, CAPABILITIES_KEY));
+  if (!hasValidRequestEnvelope(msg) || (modern && msg.id === null)) return invalidRequest(modern, msg?.id);
   const { id, method, params } = msg;
-  const isNotification = !Object.hasOwn(msg, "id");
-  const ok = (result) => (isNotification ? null : { jsonrpc: "2.0", id, result });
-  const fail = (code, message) => (isNotification ? null : { jsonrpc: "2.0", id, error: { code, message } });
+  if (!Object.hasOwn(msg, "id")) return null;
+
+  const ok = (result) => ({
+    jsonrpc: "2.0", id,
+    result: modern ? { resultType: "complete", _meta: { "io.modelcontextprotocol/serverInfo": SERVER_INFO }, ...result } : result,
+  });
+  const fail = (code, message, data) => ({ jsonrpc: "2.0", id, error: { code, message, ...(data && { data }) } });
+  const toolError = (text) => ok({ content: [{ type: "text", text }], isError: true });
+  if (modern) {
+    const requested = meta[VERSION_KEY];
+    const caps = meta[CAPABILITIES_KEY];
+    if (typeof requested !== "string" || caps === null || typeof caps !== "object" || Array.isArray(caps))
+      return fail(-32602, "Invalid protocolVersion or clientCapabilities metadata");
+    if (requested !== MODERN_VERSION)
+      return fail(-32022, "Unsupported protocol version", { supported: SUPPORTED_VERSIONS, requested });
+  }
 
   switch (method) {
+    case "server/discover":
+      if (modern) return ok({ supportedVersions: SUPPORTED_VERSIONS, capabilities: { tools: {} }, ...CACHE_HINTS });
+      break;
     case "initialize":
-      return ok({
-        // B6：只声称我们实现的协议语义（2025-06-18，无 JSON-RPC 批处理）。回显客户端任意版本是
-        // 伪能力声明——旧版客户端会按批处理等我们没有的语义交互。规范允许：不支持所请求版本时，
-        // 返回服务端支持的版本，由客户端决定是否继续。
-        protocolVersion: PROTOCOL_DEFAULT,
-        capabilities: { tools: {} },
-        serverInfo: SERVER_INFO,
-      });
+      if (!modern) return ok({ protocolVersion: PROTOCOL_DEFAULT, capabilities: { tools: {} }, serverInfo: SERVER_INFO });
+      break;
     case "notifications/initialized":
     case "initialized":
-      return ok({});
     case "ping":
-      return ok({});
+      if (!modern) return ok({});
+      break;
     case "tools/list":
-      return ok({ tools: TOOLS });
+      return ok({ tools: TOOLS, ...(modern && CACHE_HINTS) });
     case "tools/call": {
-      const validation = validateToolCall(params);
-      if (validation.error) return fail(-32602, validation.error);
+      if (typeof params?.name !== "string") return fail(-32602, "tools/call name 必须是字符串");
+      const tool = TOOL_BY_NAME.get(params.name);
+      if (!tool) return fail(-32602, `未知工具: ${params.name}`);
+      const args = Object.hasOwn(params, "arguments") ? params.arguments : {};
+      if (args === null || typeof args !== "object" || Array.isArray(args))
+        return fail(-32602, "tools/call arguments 必须是对象");
+      const validation = validateToolArguments(tool, args);
+      if (validation) return modern ? toolError(validation.error) : fail(-32602, validation.error);
       try {
-        const { text, result } = callTool(params.name, validation.args);
-        return ok({ content: [{ type: "text", text }], structuredContent: result, isError: false });
+        const { text, result } = callTool(params.name, args);
+        const content = [{ type: "text", text }];
+        if (modern && args.format !== "json") content.push({ type: "text", text: JSON.stringify(result) });
+        return ok({ content, structuredContent: result, isError: false });
       } catch (e) {
-        return ok({ content: [{ type: "text", text: `错误：${e.message}` }], isError: true });
+        return toolError(`错误：${e.message}`);
       }
     }
-    default:
-      return fail(-32601, `Method not found: ${method}`);
   }
+  return fail(-32601, `Method not found: ${method}`);
 }
 
 /** 启动 stdio 服务：从 stdin 读换行分隔 JSON-RPC，向 stdout 写应答。 */
