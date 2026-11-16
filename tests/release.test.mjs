@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -87,6 +87,47 @@ test("发布版本 CLI 使用 GITHUB_REF_NAME，并以退出码拒绝错误 tag"
   assert.equal(bad.status, 1, bad.stdout);
   assert.match(bad.stderr, /tag/);
 });
+
+const workflowsDir = join(ROOT, ".github", "workflows");
+for (const file of readdirSync(workflowsDir).filter(name => /\.ya?ml$/.test(name))) {
+  const workflow = yaml.load(readFileSync(join(workflowsDir, file), "utf8"));
+
+  test(`${file} 的远端 Action 和可复用工作流固定到完整提交`, () => {
+    for (const [name, job] of Object.entries(workflow.jobs)) {
+      for (const { uses } of [job, ...(job.steps ?? [])]) {
+        if (!uses || uses.startsWith("./") || uses.startsWith("docker://")) continue;
+        assert.match(uses, /^[^@]+@[0-9a-f]{40}$/i, `${name}: ${uses}`);
+      }
+    }
+  });
+
+  test(`${file} 的 checkout 显式关闭凭据持久化`, () => {
+    for (const [name, job] of Object.entries(workflow.jobs)) {
+      for (const step of job.steps ?? []) {
+        if (/^actions\/checkout@/i.test(step.uses)) {
+          assert.equal(step.with?.["persist-credentials"], false, name);
+        }
+      }
+    }
+  });
+
+  test(`${file} 仅对 tag 发布授予内容写权限`, () => {
+    const release = file === "release.yml";
+    if (release) {
+      assert.deepEqual(workflow.on, { push: { tags: ["v*"] } });
+      const permissions = workflow.jobs.release.permissions ?? workflow.permissions;
+      assert.equal(permissions.contents, "write", "创建草稿 Release 需要 contents: write");
+    }
+    assert.deepEqual(workflow.permissions, { contents: release ? "write" : "read" });
+    for (const job of Object.values(workflow.jobs)) {
+      if (job.permissions !== undefined) {
+        for (const [scope, level] of Object.entries(job.permissions)) {
+          assert.ok(scope === "contents" && ["none", "read", workflow.permissions.contents].includes(level));
+        }
+      }
+    }
+  });
+}
 
 test("rule-rot 链接失败后仍检查漂移，安装失败或取消时不运行", () => {
   const workflow = yaml.load(readFileSync(join(ROOT, ".github", "workflows", "rule-rot.yml"), "utf-8"));
