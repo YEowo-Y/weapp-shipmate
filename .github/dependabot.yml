@@ -1,4 +1,4 @@
-# E4：依赖看护——actions 的可变 tag 与 npm 依赖月度巡检。
+# E4：每月检查固定到提交 SHA 的 Actions 和 npm 依赖。
 # 根生产依赖闭包为 js-yaml → argparse；开发依赖也纳入监控，PR 须过全量 CI 门禁才可合。
 version: 2
 updates:
