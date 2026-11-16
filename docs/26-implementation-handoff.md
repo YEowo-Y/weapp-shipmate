@@ -483,7 +483,7 @@ T10A 已在 [#39](https://github.com/YEowo-Y/weapp-shipmate/pull/39) 合并。MC
 
 #### T10B · Codex 与 Claude Code 的本地插件
 
-**申请范围。** 用户从本地市场安装 `weapp-shipmate` 后，在 Codex 或 Claude Code 中可找到随包安装的上线预检 skill，并通过宿主调用 T10A 的三个只读工具。本次验收针对 Windows 上的 Codex CLI 和 Claude Code CLI，以 `main@aaee398` 为基线。交付一个本地构建入口、两种宿主所需的清单、共用的 skill、验收脚本及 README 安装说明。Registry 登记与公开发布另按 §3 裁决。
+**已批准范围。** 维护者已批准按 [#40](https://github.com/YEowo-Y/weapp-shipmate/pull/40) 实施。用户从本地市场安装 `weapp-shipmate` 后，在 Codex 或 Claude Code 中可找到随包安装的上线预检 skill，并通过宿主调用 T10A 的三个只读工具。本次验收针对 Windows 上的 Codex CLI 和 Claude Code CLI，以 `main@aaee398` 为基线。交付一个本地构建入口、两种宿主所需的清单、共用的 skill、验收脚本及 README 安装说明。Registry 登记与公开发布另按 §3 裁决。
 
 **可行性实测。** Windows 上用两个独立临时配置安装合成插件。Codex CLI 0.164.0 从根 `plugin.json` 和 `mcp.json`（均声明 Agent Plugins 1.0.0 schema）正确展开 `${PLUGIN_ROOT}`，发现缓存中的 skill，并通过临时线程调用工具、取回预期标记。用 `.codex-plugin/plugin.json` 搭配 `.mcp.json` 的对照探针也显示安装成功，但实测将占位符原样传给 Node，MCP 握手失败，故采用根清单。Claude Code 2.1.300 从 `.claude-plugin/plugin.json`、`.mcp.json` 和 `skills/` 发现组件，在 stdio 参数中展开 `${CLAUDE_PLUGIN_ROOT}`。两次调用均取回预期结果；核对到的运行统计为输入、输出 token 均为 0。正式船友包仍须按下列步骤分别验收。
 
@@ -492,6 +492,8 @@ T10A 已在 [#39](https://github.com/YEowo-Y/weapp-shipmate/pull/39) 合并。MC
 3. **分别从空配置安装。** 在仓库外建立临时市场、测试工作目录和各自的宿主配置，记录 CLI 版本。在 Codex 执行 `codex plugin marketplace add <目录>`、`codex plugin add <插件>@<市场>`；在 Claude Code 执行 `claude plugin marketplace add <目录> --scope user`、`claude plugin install <插件>@<市场> --scope user`，user 指向本次临时配置。分别用全新宿主进程核对插件启用、skill 名称和安装路径，以及由插件提供的三个工具；验证环境不另行注册同名 MCP 服务。
 4. **通过两个宿主实调。** 每端都通过已安装插件执行 `check`（固定项目夹具）、`guide`（已知主体）和 `explain`（已知审核反馈），以 JSON 结果的 `command` 和各夹具预期的命中项验收。Codex 用验收进程的 `app-server --stdio`、`skills/list`、`mcpServerStatus/list` 和 `mcpServer/tool/call`；启用临时线程而不发起模型 turn。Claude Code 用临时验收配置中的 `UserPromptSubmit` MCP 工具 hook 驱动真实调用，检查宿主返回的工具结果，并在模型请求前终止。两个进程只传验收所需环境，不继承账号凭据。将每端的安装、skill 发现、实际调用分别记入验收记录。宿主缺失或调用失败时该端记为未通过。[Codex 宿主接口](https://developers.openai.com/codex/app-server) · [Claude Code 工具 hook](https://code.claude.com/docs/en/hooks#mcp-tool-hook-fields)
 5. **交付和复验。** README 提供从构建、本地安装到调用与卸载的命令及 Node 要求。普通 CI 用既有 Node 矩阵检查生成清单、路径、skill、运行时闭包和暂存入口；双宿主实调作为独立本机验收，在 PR 记录两个 CLI 的版本、实测结果及四项仓库门禁。回归同时覆盖 T10A 源码入口及原有 MCPB 暂存包。
+
+实施验收（Windows，2026-11-16）：`npm run build:plugins` 生成两个市场。Codex CLI 0.164.0 与 Claude Code 2.1.300 从仓库外含空格路径安装正式包，发现缓存中的 skill、通过宿主实调三个工具并命中夹具，卸载通过。Claude 三次调用均确认零模型 token。共用运行时和 MCPB 共存回归通过；全量测试 1699/1699、70 项定向回归、lint、69 条引文和 coverage 通过。
 
 **功能项**（编号与 `docs/25` §8 一致）
 
@@ -523,4 +525,4 @@ T10A 已在 [#39](https://github.com/YEowo-Y/weapp-shipmate/pull/39) 合并。MC
 
 ## 7. 当前推进入口
 
-T01–T08、T09A–T09C 和 T10A 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。当前待确认 §6 的 T10B 双宿主本地插件范围。通用基线和验证命令见 §2。
+T01–T08、T09A–T09C 和 T10A 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T10B 双宿主本地插件按已批准范围实施，状态为 PR 中。通用基线和验证命令见 §2。
