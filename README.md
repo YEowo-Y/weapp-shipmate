@@ -73,7 +73,11 @@ node bin/weapp-shipmate.mjs guide --subject 个人 --no-sensitive --domain --no-
 <details>
 <summary>MCP与MCPB：已有兼容宿主的用户</summary>
 
-stdio MCP服务端提供`weapp_shipmate_check`、`weapp_shipmate_guide`、`weapp_shipmate_explain`。源码方式的配置示例：
+本地 stdio 服务端提供三个只读工具：`weapp_shipmate_check`、`weapp_shipmate_guide` 和 `weapp_shipmate_explain`。`2025-06-18` 客户端通过 `initialize` 握手。`2026-07-28` 客户端在每次请求的 `params._meta` 中提供 `io.modelcontextprotocol/protocolVersion` 和 `io.modelcontextprotocol/clientCapabilities`，首次请求即可发现服务（`server/discover`）、列出工具或调用工具。
+
+客户端可用 `tools/list` 中各工具的 `outputSchema` 校验成功响应的 `structuredContent`。默认格式提供可读 Markdown，新版响应还附有相同结果的 JSON 文本。指定 `format: "json"` 可只取一份 JSON 文本，同时保留结构化结果。
+
+从源码启动的宿主配置示例：
 
 ```json
 {
