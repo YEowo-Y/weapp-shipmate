@@ -1,3 +1,4 @@
+import { INCLUDE } from "../scripts/stage-mcp-runtime.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
@@ -192,12 +193,7 @@ test("release 构建腿不得钉在已 EOL 的运行时（Node 20 EOL 2026-04-30
 });
 
 test("mcpb INCLUDE 清单 ⊇ package.json files ∪ {manifest.json, package.json}（0.1.0 漏包 rejections.yaml 事故的结构锁）", () => {
-  const src = readFileSync(join(ROOT, "scripts", "build-mcpb.mjs"), "utf-8");
-  const m = src.match(/const INCLUDE = \[([^\]]*)\]/);
-  assert.ok(m, "build-mcpb.mjs 应有 INCLUDE 字面量清单");
-  const include = new Set(
-    m[1].split(",").map((s) => s.trim().replace(/^"|"$/g, "")).filter(Boolean),
-  );
+  const include = new Set(INCLUDE);
   const files = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8")).files.map((f) =>
     f.replace(/\/$/, ""),
   );
