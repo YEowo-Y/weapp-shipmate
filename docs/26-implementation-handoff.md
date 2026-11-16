@@ -373,7 +373,7 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ### T09 发布工程
 
-**状态**：T09A 与 T09B 已完成。T09A 的 [#30 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/30#issuecomment-6897413822) 和 T09B 的 [#33 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/33#issuecomment-6915500673) 均包含合并后验证。当前 `main@f70b071` 的版本为 `0.2.0-rc.4`，主分支八项检查、手动候选重跑与 npm 演练通过。维护者已批准 [#34](https://github.com/YEowo-Y/weapp-shipmate/pull/34) 的 T09C 范围，实施 PR 中。
+**状态**：T09A 与 T09B 已完成。T09A 的 [#30 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/30#issuecomment-6897413822) 和 T09B 的 [#33 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/33#issuecomment-6915500673) 均包含合并后验证。T09B 验收提交 `f70b071` 的版本为 `0.2.0-rc.4`，主分支八项检查、手动候选重跑与 npm 演练通过。T09C 已按 [#34](https://github.com/YEowo-Y/weapp-shipmate/pull/34) 的范围交付，主分支八项检查与两项手动演练全部通过。[#35 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/35#issuecomment-6916488373)
 
 **依赖**：T02、T05、T06、T07 已合并。起点为 `main` 的 `270cff3`，包版本 `0.2.0-rc.3`。
 
@@ -432,7 +432,7 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 从记录的源 SHA 开版本分支，将输出的九文件按相对路径复制，逐文件提交，各提交正文包含 `Release-Source: <main完整SHA>`。所有候选提交完成后执行 `node tools/release-candidate/cli.mjs verify-pr --repo . --main <源SHA> --candidate <分支HEAD完整SHA> --base-tag v0.2.0-rc.3 --version 0.2.0-rc.4`，通过后按 §2 推送与开 PR。最后一条提交也应带此 trailer；追加文档或同步 main 后，在最后的候选文件提交中记录新源 SHA。候选工作流在 CI 中复现此检查。
 
-#### T09C Actions 固定与审计（实施 PR 中）
+#### T09C Actions 固定与审计（已验收）
 
 **目的与关口**。将当前直接引用的 Action 固定到已核实的完整提交，补齐 checkout 凭据设置和回归门禁。维护者已按 §3 批准表中两个 SHA 及下列凭据设置。
 
@@ -464,7 +464,7 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 **审计范围与后续事项**。本项核对直接 Action 的来源与引用、workflow 事件、权限及凭据路径。runner 镜像、Node 主版本、apt 包和打包器下载另有各自的版本来源，完整供应链审计需单列工作。GitHub 另提供 workflow dependency lockfiles；本项按已列出的直接 SHA 引用范围实施。[GitHub 安全指南](https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions)
 
-2026-11-16 只读查看 Dependabot 告警时，根 `package-lock.json` 的 minimatch 仍有中危告警 #21（GHSA-g3hv-75wg-m249）。T09B 已处理独立生成工具的对应依赖；根依赖需另做兼容性验证与修复。维护者暂缓 js-yaml #16 的决定继续有效。
+2026-11-16 只读查看 Dependabot 告警时，根 `package-lock.json` 的 minimatch 仍有中危告警 #21（GHSA-g3hv-75wg-m249）。T09B 已处理独立生成工具的对应依赖；根目录修复沿用现有 ESLint 开发依赖范围，在锁文件更新至 ESLint 10.15.0 和 minimatch 11.0.8，合并后核对告警状态。维护者暂缓 js-yaml #16 的决定继续有效。
 
 **功能项**（编号与 `docs/25` §8 一致）
 
@@ -496,4 +496,4 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ## 7. 当前推进入口
 
-T01–T08、T09A 与 T09B 已完成。T09C 的十四处引用已固定，五处 checkout 已补齐凭据设置，实施 PR 等待 CI 与合并后验收；后续按 §6 推进生态接入等工程底座。通用基线和验证命令见 §2。
+T01–T08 与 T09A–T09C 已完成。根目录 minimatch 告警修复后，按 §6 推进生态接入等工程底座。通用基线和验证命令见 §2。
