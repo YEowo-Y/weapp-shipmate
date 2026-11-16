@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync, rmSync, mkdirSync, cpSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { assertVersionIdentity, readRepositoryVersionIdentity } from "./check-release-version.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -61,43 +61,28 @@ mkdirSync(SMOKE_FIXTURE, { recursive: true });
 writeFileSync(join(SMOKE_FIXTURE, "app.json"), '{ "pages": ["pages/index/index"] }\n');
 writeFileSync(join(SMOKE_FIXTURE, "index.js"), 'wx.request({ url: "https://smoke.example.com/api" });\n');
 
-async function smoke() {
-  const child = spawn(process.execPath, [join(STAGE, "bin", "weapp-shipmate-mcp.mjs")], { cwd: STAGE });
-  let out = "";
-  const seen = {};
-  const WANT_IDS = [1, 2, 3, 4, 5];
-  const done = new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`冒烟自检超时（15s）：已收到 id=${Object.keys(seen).join(",") || "（无）"}`)),
-      15000,
-    );
-    child.stdout.setEncoding("utf-8");
-    child.stdout.on("data", (d) => {
-      out += d;
-      let i;
-      while ((i = out.indexOf("\n")) >= 0) {
-        const line = out.slice(0, i).trim();
-        out = out.slice(i + 1);
-        if (!line) continue;
-        const msg = JSON.parse(line);
-        seen[msg.id] = msg;
-        if (WANT_IDS.every((id) => seen[id])) {
-          clearTimeout(timer);
-          child.kill();
-          resolve(seen);
-        }
-      }
-    });
-    child.on("error", reject);
+function smokeRequests(requests) {
+  const input = requests.map(([id, method, params]) => JSON.stringify({ jsonrpc: "2.0", id, method, params })).join("\n");
+  const run = spawnSync(process.execPath, [join(STAGE, "bin", "weapp-shipmate-mcp.mjs")], {
+    cwd: STAGE, input: input + "\n", encoding: "utf8", timeout: 15000,
   });
-  const send = (id, method, params) =>
-    child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, ...(params !== undefined && { params }) }) + "\n");
-  send(1, "initialize", {});
-  send(2, "tools/list");
-  send(3, "tools/call", { name: "weapp_shipmate_check", arguments: { dir: SMOKE_FIXTURE } });
-  send(4, "tools/call", { name: "weapp_shipmate_guide", arguments: { subject: "personal" } });
-  send(5, "tools/call", { name: "weapp_shipmate_explain", arguments: { query: "诱导分享" } });
-  const res = await done;
+  if (run.error) throw run.error;
+  if (run.status !== 0) throw new Error(`冒烟进程失败：${run.status} ${run.stderr}`);
+  const replies = run.stdout.trimEnd().split("\n").map((line) => JSON.parse(line));
+  const byId = Object.fromEntries(replies.map(reply => [reply.id, reply]));
+  if (replies.length !== requests.length || !requests.every(([id]) => byId[id]?.jsonrpc === "2.0"))
+    throw new Error("暂存包的 JSON-RPC 响应数、版本或 ID 错误");
+  return byId;
+}
+
+function smoke() {
+  const res = smokeRequests([
+    [1, "initialize", {}],
+    [2, "tools/list"],
+    [3, "tools/call", { name: "weapp_shipmate_check", arguments: { dir: SMOKE_FIXTURE } }],
+    [4, "tools/call", { name: "weapp_shipmate_guide", arguments: { subject: "personal" } }],
+    [5, "tools/call", { name: "weapp_shipmate_explain", arguments: { query: "诱导分享" } }],
+  ]);
   const server = res[1]?.result?.serverInfo?.name;
   const tools = res[2]?.result?.tools?.map((t) => t.name) || [];
   if (server !== "weapp-shipmate") throw new Error(`冒烟失败：serverInfo.name=${server}`);
@@ -110,9 +95,22 @@ async function smoke() {
         `冒烟失败：tools/call ${label} 未返回正常结果——打包内容可能缺运行时数据文件（${JSON.stringify(res[id]?.error ?? r).slice(0, 300)}）`,
       );
   }
+  const _meta = { "io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {} };
+  const modern = smokeRequests([
+    [1, "tools/call", { _meta, name: "weapp_shipmate_check", arguments: { dir: SMOKE_FIXTURE } }],
+    [2, "server/discover", { _meta }],
+  ]);
+  const call = modern[1].result;
+  const discovery = modern[2].result;
+  if (call?.resultType !== "complete" || call.isError || call.structuredContent?.command !== "check")
+    throw new Error("暂存包的新版首次工具调用失败");
+  if (!discovery?.supportedVersions?.includes(_meta["io.modelcontextprotocol/protocolVersion"]) ||
+      discovery._meta?.["io.modelcontextprotocol/serverInfo"]?.name !== server)
+    throw new Error("暂存包的新版服务发现失败");
+  log("✓ 2026-07-28 首次直接调用和服务发现通过");
   log(`✓ 冒烟自检通过：server=${server}，tools=${tools.join(", ")}；check/guide/explain 三次 tools/call 正常（规则/流程/拒因数据均已实际加载）`);
 }
-await smoke();
+smoke();
 
 // CI/快速模式：只验"暂存 + 冒烟"（防分发回归的核心），跳过需联网的打包/签名。
 if (process.env.WEAPP_SHIPMATE_NO_PACK === "1") {
