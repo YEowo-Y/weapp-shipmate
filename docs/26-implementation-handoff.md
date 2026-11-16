@@ -464,7 +464,21 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 **审计范围与后续事项**。本项核对直接 Action 的来源与引用、workflow 事件、权限及凭据路径。runner 镜像、Node 主版本、apt 包和打包器下载另有各自的版本来源，完整供应链审计需单列工作。GitHub 另提供 workflow dependency lockfiles；本项按已列出的直接 SHA 引用范围实施。[GitHub 安全指南](https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions)
 
-2026-11-16 只读查看 Dependabot 告警时，根 `package-lock.json` 的 minimatch 仍有中危告警 #21（GHSA-g3hv-75wg-m249）。T09B 已处理独立生成工具的对应依赖；根目录修复沿用现有 ESLint 开发依赖范围，在锁文件更新至 ESLint 10.15.0 和 minimatch 11.0.8，合并后核对告警状态。维护者暂缓 js-yaml #16 的决定继续有效。
+2026-11-16 只读查看 Dependabot 告警时，根 `package-lock.json` 的 minimatch 仍有中危告警 #21（GHSA-g3hv-75wg-m249）。T09B 已处理独立生成工具的对应依赖；根目录锁文件已更新至 ESLint 10.15.0 和 minimatch 11.0.8，GitHub 已将告警 #21 标记为 fixed。维护者暂缓 js-yaml #16 的决定继续有效。
+
+### T10 生态接入
+
+**T10A 申请范围。** 为现有本地 stdio server 增加稳定版 `2026-07-28`，保留 `2025-06-18` 客户端行为，给三个只读工具补齐声明。按 §3 和 §6，维护者确认本节公共接口后实施。方案以官方发布提交 `5f5440bb26a62e2cf3440b92da5a667efa03b267` 为准。[稳定版发布](https://github.com/modelcontextprotocol/modelcontextprotocol/releases/tag/2026-07-28) · [协议类型与示例](https://github.com/modelcontextprotocol/modelcontextprotocol/tree/5f5440bb26a62e2cf3440b92da5a667efa03b267/schema/2026-07-28)
+
+**当前行为。** 在 `main@ec49459` 通过 `bin/weapp-shipmate-mcp.mjs` 逐行发送 JSON-RPC 请求。请求旧版、新版、未知版本或省略版本的 `initialize` 都返回 `2025-06-18`。三个工具已经同时返回文本和对象型 `structuredContent`，`tools/list` 只提供名称、描述和输入 schema。缺目录返回带文本的 `isError: true`；非法 subject 与未知工具返回 RPC `-32602`。MCP 定向测试 20/20 通过。
+
+1. **先固定兼容基线。** 用现有三个工具的夹具，分别记录 Markdown 默认文本、显式 JSON、结构化成功结果与错误分支。兼容旧版的空参数初始化、通知无响应、现有输入扩展和单行大小限制。新增真实 stdio 用例先在上述基线上检出缺少新版发现、直接调用与输出声明。
+2. **按请求识别协议。** 旧式初始化沿用现有回退，新式 stdio 从 `params._meta` 读取 `io.modelcontextprotocol/protocolVersion` 和 `io.modelcontextprotocol/clientCapabilities`。实现 `server/discover`，列出实际支持的版本、`capabilities.tools` 和 serverInfo。新版客户端可在首次请求直接列工具或调用工具。成功响应及工具执行错误结果带 `resultType: "complete"`。未知现代版本返回 `-32022` 和 `data.supported/requested`。测试覆盖错误元数据、未知版本后重试、显式旧版握手和同一进程中相邻请求的独立处理。[版本协商](https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning) · [stdio 传输](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio)
+3. **声明现有工具输出。** 三个工具各加可读 `title`、`annotations.readOnlyHint: true` 和各自的对象型 `outputSchema`。将 `command` 限定为该工具对应值，要求 `meta` 为对象、`items` 为对象数组、`notes` 为字符串数组；guide 另要求 `selfCheck` 对象数组。允许未来添加字段。用现有测试依赖校验三份真实成功结果，另用错 command、缺键与错类型证明 schema 能发现漂移。旧版保留文本块与格式；新版 Markdown 调用保留可读文本，并附结构化对象的 JSON 文本，显式 JSON 格式只需一份 JSON 文本。输入校验继续在服务端执行。[新版工具契约](https://modelcontextprotocol.io/specification/2026-07-28/server/tools) · [旧版工具契约](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)
+4. **分开验收错误行为。** 两条路径对未知工具和畸形调用信封返回协议错误。已知工具收到非法枚举、缺必填参数等业务输入时，新版返回 `isError: true` 的工具结果，旧版保持已测的 `-32602`；合法输入的执行失败在两版都给出工具错误。测试同时核对响应 id、通知静默和错误内容不携带成功结果。
+5. **打包与交付。** 改动限于 MCP 适配及必要的 stdio 入口、MCP 测试、现有 MCPB 暂存冒烟、README 的支持说明和交接记录。复用现有依赖。保留打包后旧握手和三次调用，再从暂存包验证新版发现及直接调用；使用夹具验证新旧响应、stdout 逐行 JSON 和 EOF 退出。跑 §2 四项门禁，在 PR 列出实际触发的 CI、Node 矩阵结果与打包验证证据。CLI 输出、工具名称和原有输入参数继续按现有契约运行。
+
+**后续验收。** T10B 再为 Codex 与 Claude Code 拟定 plugin 和 skill 的本地安装方案。验收需从干净的临时宿主配置完成安装、启动同一 stdio 入口并调通工具，分别记录两种宿主的结果。目前已核实两套 CLI 有 plugin 命令；本轮只实测 server 入口。Registry 登记、对外发布或新增远程连接另按 §3 裁决。
 
 **功能项**（编号与 `docs/25` §8 一致）
 
@@ -496,4 +510,4 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ## 7. 当前推进入口
 
-T01–T08 与 T09A–T09C 已完成。根目录 minimatch 告警修复后，按 §6 推进生态接入等工程底座。通用基线和验证命令见 §2。
+T01–T08 与 T09A–T09C 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。当前审阅 §6 的 T10A 协议与工具接口范围，确认后实施。通用基线和验证命令见 §2。
