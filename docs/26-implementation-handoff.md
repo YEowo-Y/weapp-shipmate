@@ -373,7 +373,7 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ### T09 发布工程
 
-**状态**：T09A 与 T09B 已完成。T09A 的 [#30 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/30#issuecomment-6897413822) 和 T09B 的 [#33 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/33#issuecomment-6915500673) 均包含合并后验证。当前 `main@f70b071` 的版本为 `0.2.0-rc.4`，主分支八项检查、手动候选重跑与 npm 演练通过。T09C 的 Actions 固定与审计范围待维护者批准。
+**状态**：T09A 与 T09B 已完成。T09A 的 [#30 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/30#issuecomment-6897413822) 和 T09B 的 [#33 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/33#issuecomment-6915500673) 均包含合并后验证。当前 `main@f70b071` 的版本为 `0.2.0-rc.4`，主分支八项检查、手动候选重跑与 npm 演练通过。维护者已批准 [#34](https://github.com/YEowo-Y/weapp-shipmate/pull/34) 的 T09C 范围，实施 PR 中。
 
 **依赖**：T02、T05、T06、T07 已合并。起点为 `main` 的 `270cff3`，包版本 `0.2.0-rc.3`。
 
@@ -432,9 +432,9 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 从记录的源 SHA 开版本分支，将输出的九文件按相对路径复制，逐文件提交，各提交正文包含 `Release-Source: <main完整SHA>`。所有候选提交完成后执行 `node tools/release-candidate/cli.mjs verify-pr --repo . --main <源SHA> --candidate <分支HEAD完整SHA> --base-tag v0.2.0-rc.3 --version 0.2.0-rc.4`，通过后按 §2 推送与开 PR。最后一条提交也应带此 trailer；追加文档或同步 main 后，在最后的候选文件提交中记录新源 SHA。候选工作流在 CI 中复现此检查。
 
-#### T09C Actions 固定与审计（申请实施范围）
+#### T09C Actions 固定与审计（实施 PR 中）
 
-**目的与关口**。将当前直接引用的 Action 固定到已核实的完整提交，补齐 checkout 凭据设置和回归门禁。按 §3，Actions 按 SHA 固定需维护者明确批准；此范围 PR 记录探查证据，批准后开实施 PR。
+**目的与关口**。将当前直接引用的 Action 固定到已核实的完整提交，补齐 checkout 凭据设置和回归门禁。维护者已按 §3 批准表中两个 SHA 及下列凭据设置。
 
 **探查结果（2026-11-16，`main@f70b071`）**
 
@@ -496,4 +496,4 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ## 7. 当前推进入口
 
-T01–T08、T09A 与 T09B 已完成。当前补齐 T09C 的 Actions 固定与审计范围，批准后实施；后续按 §6 推进生态接入等工程底座。通用基线和验证命令见 §2。
+T01–T08、T09A 与 T09B 已完成。T09C 的十四处引用已固定，五处 checkout 已补齐凭据设置，实施 PR 等待 CI 与合并后验收；后续按 §6 推进生态接入等工程底座。通用基线和验证命令见 §2。
