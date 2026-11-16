@@ -1,20 +1,17 @@
 // scripts/build-mcpb.mjs —— 把极简依赖 MCP server 打成 .mcpb Desktop 扩展（P1 轻量分发）。
 // 构建脚本自身只用 Node 内置模块；扩展包会捆绑服务端生产依赖闭包（js-yaml → argparse）。流程：版本校验 → 暂存纯生产副本 → 冒烟自检 → mcpb pack。
 // 设计要点：暂存目录是独立副本，绝不触碰开发用 node_modules（保留 ajv 等 devDeps 供 npm test）。
-import { readFileSync, writeFileSync, rmSync, mkdirSync, cpSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { assertVersionIdentity, readRepositoryVersionIdentity } from "./check-release-version.mjs";
+import { INCLUDE, stageMcpRuntime } from "./stage-mcp-runtime.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const STAGE = join(ROOT, "build", "mcpb-stage");
 const OUT = join(ROOT, "build", "weapp-shipmate.mcpb");
 const log = (m) => process.stdout.write(m + "\n");
-
-// 随服务端运行所需、与 package.json `files` 清单一致的内容（manifest + 入口 + 规则数据）。
-// rejections.yaml 是 explain（CLI 第三命令 / MCP 第三工具）的拒因库，漏掉则装包后 ENOENT。
-const INCLUDE = ["manifest.json", "package.json", "bin", "src", "schemas", "rules", "flow.yaml", "rejections.yaml"];
 
 function readJSON(p) {
   return JSON.parse(readFileSync(p, "utf-8"));
@@ -25,38 +22,19 @@ const pkg = readJSON(join(ROOT, "package.json"));
 assertVersionIdentity(readRepositoryVersionIdentity(ROOT));
 log(`✓ 版本一致：${pkg.version}`);
 
-// 2) 暂存纯生产副本。
-rmSync(join(ROOT, "build"), { recursive: true, force: true });
-mkdirSync(STAGE, { recursive: true });
-for (const item of INCLUDE) {
-  const src = join(ROOT, item);
-  if (!existsSync(src)) throw new Error(`缺少待打包内容：${item}`);
-  cpSync(src, join(STAGE, item), { recursive: true });
-}
+// 2) 每个构建只清理自己的产物，允许本地插件市场共存。
+rmSync(STAGE, { recursive: true, force: true });
+rmSync(OUT, { force: true });
+const copied = stageMcpRuntime(STAGE);
 log(`✓ 已暂存内容：${INCLUDE.join(", ")}`);
-
-// 3) 只复制生产依赖闭包（从 dependencies 出发递归），不带 devDependencies。
-const nmSrc = join(ROOT, "node_modules");
-const nmDst = join(STAGE, "node_modules");
-const copied = new Set();
-function copyDepClosure(name) {
-  if (copied.has(name)) return;
-  const depDir = join(nmSrc, name);
-  const depPkgPath = join(depDir, "package.json");
-  if (!existsSync(depPkgPath)) throw new Error(`未找到生产依赖 ${name}（请先 npm install）`);
-  cpSync(depDir, join(nmDst, name), { recursive: true });
-  copied.add(name);
-  const depPkg = readJSON(depPkgPath);
-  for (const child of Object.keys(depPkg.dependencies || {})) copyDepClosure(child);
-}
-for (const dep of Object.keys(pkg.dependencies || {})) copyDepClosure(dep);
-log(`✓ 已捆绑生产依赖闭包：${[...copied].join(", ") || "（无）"}`);
+log(`✓ 已捆绑生产依赖闭包：${copied.join(", ") || "（无）"}`);
 
 // 4) 冒烟自检：用暂存副本启动 server，跑 initialize + tools/list + 三次真实 tools/call 往返。
 // 2026-07-16 审计 A3：旧冒烟只发 initialize + tools/list，而规则/流程/拒因数据全部惰性加载——
 // 0.1.0 曾发生的"打包漏 rejections.yaml"事故类缺陷可穿透旧冒烟直达用户（装包后 explain 必 ENOENT）。
 // 三次 tools/call 恰好驱动三份运行时数据：check→rules+flow、guide→rules+flow、explain→rejections+rules。
 const SMOKE_FIXTURE = join(ROOT, "build", "smoke-fixture"); // 在 build/ 下、STAGE 之外——不进 .mcpb
+rmSync(SMOKE_FIXTURE, { recursive: true, force: true });
 mkdirSync(SMOKE_FIXTURE, { recursive: true });
 writeFileSync(join(SMOKE_FIXTURE, "app.json"), '{ "pages": ["pages/index/index"] }\n');
 writeFileSync(join(SMOKE_FIXTURE, "index.js"), 'wx.request({ url: "https://smoke.example.com/api" });\n');
