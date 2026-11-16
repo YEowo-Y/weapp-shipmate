@@ -468,7 +468,7 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ### T10 生态接入
 
-**T10A 申请范围。** 为现有本地 stdio server 增加稳定版 `2026-07-28`，保留 `2025-06-18` 客户端行为，给三个只读工具补齐声明。按 §3 和 §6，维护者确认本节公共接口后实施。方案以官方发布提交 `5f5440bb26a62e2cf3440b92da5a667efa03b267` 为准。[稳定版发布](https://github.com/modelcontextprotocol/modelcontextprotocol/releases/tag/2026-07-28) · [协议类型与示例](https://github.com/modelcontextprotocol/modelcontextprotocol/tree/5f5440bb26a62e2cf3440b92da5a667efa03b267/schema/2026-07-28)
+**T10A 已批准范围。** 为现有本地 stdio server 增加稳定版 `2026-07-28`，保留 `2025-06-18` 客户端行为，给三个只读工具补齐声明。维护者已批准按 [#38](https://github.com/YEowo-Y/weapp-shipmate/pull/38) 实施本节公共接口和验收。方案以官方发布提交 `5f5440bb26a62e2cf3440b92da5a667efa03b267` 为准。[稳定版发布](https://github.com/modelcontextprotocol/modelcontextprotocol/releases/tag/2026-07-28) · [协议类型与示例](https://github.com/modelcontextprotocol/modelcontextprotocol/tree/5f5440bb26a62e2cf3440b92da5a667efa03b267/schema/2026-07-28)
 
 **当前行为。** 在 `main@ec49459` 通过 `bin/weapp-shipmate-mcp.mjs` 逐行发送 JSON-RPC 请求。请求旧版、新版、未知版本或省略版本的 `initialize` 都返回 `2025-06-18`。三个工具已经同时返回文本和对象型 `structuredContent`，`tools/list` 只提供名称、描述和输入 schema。缺目录返回带文本的 `isError: true`；非法 subject 与未知工具返回 RPC `-32602`。MCP 定向测试 20/20 通过。
 
@@ -511,4 +511,4 @@ agent 模式的读、搜、改三类工具要走同一道检查（`docs/25` §5.
 
 ## 7. 当前推进入口
 
-T01–T08 与 T09A–T09C 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。当前审阅 §6 的 T10A 协议与工具接口范围，确认后实施。通用基线和验证命令见 §2。
+T01–T08 与 T09A–T09C 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T10A 双版本 stdio 与工具接口按已批准范围实施，状态为 PR 中。后续 T10B 将另拟两种宿主的安装验收范围。通用基线和验证命令见 §2。
