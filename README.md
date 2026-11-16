@@ -73,6 +73,45 @@ node bin/weapp-shipmate.mjs guide --subject 个人 --no-sensitive --domain --no-
 <details>
 <summary>MCP与MCPB：已有兼容宿主的用户</summary>
 
+Codex CLI 和 Claude Code 用户可安装本地插件，一并获得上线预检 skill 和三个 MCP 工具。先在仓库根目录构建，需要 Node ≥20 和已安装的宿主 CLI。
+
+```sh
+npm ci
+npm run build:plugins
+```
+
+Codex 安装命令如下。
+
+```sh
+codex plugin marketplace add "<仓库绝对路径>/build/plugins/codex"
+codex plugin add weapp-shipmate@weapp-shipmate-local
+```
+
+Claude Code 安装命令如下。
+
+```sh
+claude plugin marketplace add "<仓库绝对路径>/build/plugins/claude" --scope user
+claude plugin install weapp-shipmate@weapp-shipmate-local --scope user
+```
+
+安装后开启新会话，在 Codex 中使用 `$weapp-shipmate:weapp-shipmate`，在 Claude Code 中使用 `/weapp-shipmate:weapp-shipmate`，并提供小程序目录或审核反馈，例如“检查 D:/Projects/my-mini-app 的上线准备事项”。skill 会引导宿主调用对应工具。包内含规则和生产依赖，运行时需要 PATH 中的 Node；本地市场目录应保留以供后续管理。
+
+Windows 实测版本为 Codex CLI 0.164.0 和 Claude Code 2.1.300。维护者可在构建后运行以下验收命令。脚本在临时配置中安装包，发现 skill，并通过各宿主调用三个工具、核对夹具结果。Codex 使用 app-server 的工具调用接口，Claude Code 使用临时工具 hook，验收结束于模型推理前。
+
+```sh
+node scripts/verify-codex-plugin.mjs
+node scripts/verify-claude-plugin.mjs
+```
+
+卸载插件及本地市场可执行对应宿主的命令。
+
+```sh
+codex plugin remove weapp-shipmate@weapp-shipmate-local
+codex plugin marketplace remove weapp-shipmate-local
+claude plugin uninstall weapp-shipmate@weapp-shipmate-local --scope user
+claude plugin marketplace remove weapp-shipmate-local --scope user
+```
+
 本地 stdio 服务端提供三个只读工具：`weapp_shipmate_check`、`weapp_shipmate_guide` 和 `weapp_shipmate_explain`。`2025-06-18` 客户端通过 `initialize` 握手。`2026-07-28` 客户端在每次请求的 `params._meta` 中提供 `io.modelcontextprotocol/protocolVersion` 和 `io.modelcontextprotocol/clientCapabilities`，首次请求即可发现服务（`server/discover`）、列出工具或调用工具。
 
 客户端可用 `tools/list` 中各工具的 `outputSchema` 校验成功响应的 `structuredContent`。默认格式提供可读 Markdown，新版响应还附有相同结果的 JSON 文本。指定 `format: "json"` 可只取一份 JSON 文本，同时保留结构化结果。
