@@ -22,6 +22,9 @@ const HELP = `weapp-shipmate · 你写代码，我陪你上线
 选项：
   --subject <personal|individual_business|enterprise>   主体类型（也支持：个人 / 个体户 / 个体工商户 / 企业）
   --json                输出 JSON（默认 Markdown）
+  --json-version 1      与 --json 同用，增加 schemaVersion: 1；不能与 --checklist 同用
+  --fail-on <level>     仅 check：blocker | warning | info | none；按展示过滤前的发现项判定
+                        命中阈值退出 2，错误退出 1；退出 0 表示未触发阈值，扫描限制见报告
   --checklist           输出可勾选清单（待办动作与检查限制，便于粘进任务清单/issue）
   --include-drafts      包含未核验来源的 draft 规则（默认排除）
   --blockers-only       只输出阻断项（severity=blocker），快速聚焦上线拦路项
@@ -51,7 +54,13 @@ guide 额外输入（未提供 = 未知；正向开关 = 是，--no- 开关 = �
 const SUBJECT_ALIASES = new Map([["个人", "personal"], ["个体户", "individual_business"], ["个体工商户", "individual_business"], ["企业", "enterprise"]]);
 const TOGGLE_FLAGS = new Set(["payment", "sensitive", "domain", "interactive"]);
 
-const VALUE_FLAGS = new Set(["subject", "business"]);
+const VALUE_FLAGS = new Set(["subject", "business", "fail-on", "json-version"]);
+const FAIL_LEVELS = {
+  blocker: ["blocker"],
+  warning: ["blocker", "warning"],
+  info: ["blocker", "warning", "info"],
+  none: [],
+};
 const BOOL_FLAGS = new Set(["json", "checklist", "include-drafts", "blockers-only", "help", "version"]);
 
 // FX-16：未知/拼错选项必须报错——静默忽略会让 `--subjcet personal` 这类笔误
@@ -75,6 +84,8 @@ export function parseFlags(args) {
     const eq = a.indexOf("=");
     const key = eq === -1 ? a.slice(2) : a.slice(2, eq);
     if (VALUE_FLAGS.has(key)) {
+      if (["fail-on", "json-version"].includes(key) && Object.hasOwn(f, key))
+        (f._duplicates ??= []).push(key);
       if (eq !== -1) f[key] = a.slice(eq + 1);
       else if (args[i + 1] !== undefined && !args[i + 1].startsWith("--")) f[key] = args[++i];
       else f[key] = undefined; // 缺值：留给 main 报「缺少取值」，不吞下一个 flag
@@ -124,10 +135,28 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
     err.write("--interactive / --no-interactive 仅用于 guide。\n");
     return 1;
   }
+  if (flags._duplicates?.length) {
+    err.write(`选项不能重复：${[...new Set(flags._duplicates)].map(key => "--" + key).join("、")}\n`);
+    return 1;
+  }
+  const failOn = flags["fail-on"];
+  if (Object.hasOwn(flags, "fail-on") && (cmd !== "check" || !Object.hasOwn(FAIL_LEVELS, failOn))) {
+    err.write("--fail-on 仅用于 check，必须指定 blocker | warning | info | none。\n");
+    return 1;
+  }
+  if (Object.hasOwn(flags, "json-version") &&
+      (flags["json-version"] !== "1" || !flags.json || flags.checklist)) {
+    err.write("--json-version 仅支持 1，必须与 --json 同用，且不能与 --checklist 同用。\n");
+    return 1;
+  }
   const format = flags.json ? "json" : flags.checklist ? "checklist" : "markdown";
   const includeDrafts = !!flags["include-drafts"];
   const blockersOnly = !!flags["blockers-only"];
   let hiddenNonBlockerCount = 0;
+  const writeReport = (result) => {
+    const output = flags["json-version"] === "1" ? { ...result, schemaVersion: 1 } : result;
+    out.write(render(output, format, { hiddenNonBlockerCount }) + "\n");
+  };
   // 聚焦模式覆盖所有可渲染规则集合；摘要/派生备注也必须使用过滤后的计数，
   // 否则 JSON 会一边只展示 blocker，一边声称命中了已隐藏的 warning/info。
   const focus = (result) => {
@@ -174,9 +203,13 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
         return 1;
       }
       const dir = flags._[0] || ".";
-      const result = focus(runCheck(dir, { subjectType: flags.subject, includeDrafts }));
-      out.write(render(result, format, { hiddenNonBlockerCount }) + "\n");
-      return result.items.some((i) => i.severity === "blocker") ? 2 : 0;
+      const result = runCheck(dir, { subjectType: flags.subject, includeDrafts });
+      const levels = FAIL_LEVELS[failOn ?? "blocker"];
+      const failures = result.items.filter(item => levels.includes(item.severity)).length;
+      writeReport(focus(result));
+      if (failOn !== undefined && failures)
+        err.write(`--fail-on ${failOn} 命中 ${failures} 项。\n`);
+      return failures ? 2 : 0;
     }
     if (cmd === "guide") {
       // V5：guide 无位置参数语义；静默忽略会让 `guide personal`（漏写 --subject）看似生效。
@@ -192,7 +225,7 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
         has_server_domain: flags.domain,
       };
       const result = focus(runGuide(inputs, { includeDrafts }));
-      out.write(render(result, format, { hiddenNonBlockerCount }) + "\n");
+      writeReport(result);
       return 0;
     }
     if (cmd === "explain") {
@@ -203,7 +236,7 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
       }
       // explain 是信息查询而非上线门禁，不返回阻断退出码。
       const result = focus(runExplain(query, { includeDrafts }));
-      out.write(render(result, format, { hiddenNonBlockerCount }) + "\n");
+      writeReport(result);
       return 0;
     }
   } catch (e) {

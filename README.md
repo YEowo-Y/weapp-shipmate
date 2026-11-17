@@ -64,6 +64,25 @@ node bin/weapp-shipmate.mjs guide --subject 个人 --no-sensitive --domain --no-
 
 主体支持个人、个体户/个体工商户和企业。`--sensitive` / `--domain` / `--payment`表示确认涉及，`--no-*`表示明确否，不确定则不传；同一事实的正反开关不能同时传。`--include-drafts`显式包含草案规则；`--checklist`与`--blockers-only`仍保留解析和扫描范围等检查限制。
 
+自动化检查可通过 `check --fail-on` 选择退出阈值。默认遇 blocker 退出 2；显式指定阈值时，命中项数量同时写入 stderr，stdout 输出完整的所选格式报告。
+
+| 阈值 | 触发退出 2 的发现项 |
+|---|---|
+| `blocker` | blocker |
+| `warning` | blocker、warning |
+| `info` | blocker、warning、info |
+| `none` | 关闭发现项门禁 |
+
+`--blockers-only` 控制展示，阈值按过滤前的全部发现项计算。`--include-drafts` 选入的草稿也计入阈值。参数或运行错误退出 1；退出 0 表示命令成功且未触发所选阈值，扫描遗漏、截断和待确认事项仍需查看报告。
+
+三条命令均可用 `--json --json-version 1` 输出含整数 `schemaVersion: 1` 的报告，并用包内的 [CLI JSON v1 schema](schemas/cli-report-v1.schema.json) 校验。单独使用 `--json` 继续输出原格式。新参数支持 `--参数=值` 形式，重复指定会报错。`--json-version` 必须与 `--json` 同用，且不能与 `--checklist` 同用。
+
+```bash
+node bin/weapp-shipmate.mjs check ./my-app --fail-on warning --json --json-version 1
+node bin/weapp-shipmate.mjs guide --subject personal --json --json-version 1
+node bin/weapp-shipmate.mjs explain "诱导分享" --json --json-version 1
+```
+
 规则报告的可选 `confidence` 字段保留规则库的 `high` / `medium` / `low`，Markdown 与可勾选清单显示为高/中/低。这是规则维护者对规则准确性的把握，不是命中概率或过审保证，也不改变严重度。流程导航项、合成检查及缺少字段的历史报告不补造评级；低置信规则仍只通过显式包含草案显示。
 
 历史GitHub tag或tarball可以用于复现历史版本，但不应作为当前修复后的候选。构建和验证入口见[首跑说明](docs/14-first-run-and-trial.md)。
