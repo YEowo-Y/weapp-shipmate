@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 
 const UNAVAILABLE: &str = "系统凭据存储不可用，请重试或明确选择仅本次连接。";
 const INVALID: &str = "系统凭据请求格式无效。";
+#[cfg(any(windows, test))]
 const TOO_LARGE: &str = "凭据超过系统存储限制，请明确选择仅本次连接。";
 
 #[derive(Deserialize, Serialize)]
@@ -44,6 +45,7 @@ fn provider(id: &str) -> bool {
     ]
     .contains(&id)
 }
+#[cfg(any(windows, test))]
 fn valid_record(id: &str, record: &Record) -> bool {
     let method = match id {
         "ollama" => record.method == "local" && record.key.is_empty(),
@@ -80,6 +82,7 @@ fn valid_record(id: &str, record: &Record) -> bool {
 }
 
 pub struct CredentialStore {
+    #[cfg_attr(not(windows), allow(dead_code))]
     namespace: String,
 }
 impl CredentialStore {
