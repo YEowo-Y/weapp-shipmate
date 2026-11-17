@@ -1,4 +1,4 @@
-fn parse_envelope(text: &str, kind: &str) -> Result<(String, serde_json::Value), String> {
+fn parse_envelope(text: &str, kind: &str) -> crate::error::DesktopResult<(String, serde_json::Value)> {
     if text.len() > 2 * 1024 * 1024 {
         return Err("结构化成果超过保存限制。".into());
     }
@@ -63,7 +63,7 @@ fn finish_structured(
     markdown: String,
     data: serde_json::Value,
     failures: &Mutex<BTreeMap<String, Run>>,
-) -> Result<Artifact, String> {
+) -> crate::error::DesktopResult<Artifact> {
     let result = finish_payload(c, run.clone(), Ok(markdown), Some(data));
     if let Err(error) = &result {
         let _ = finish_recoverable(
@@ -76,13 +76,25 @@ fn finish_structured(
     result
 }
 
-fn catalog(app: &tauri::AppHandle) -> Result<serde_json::Value, String> {
+fn catalog(app: &tauri::AppHandle) -> crate::error::DesktopResult<serde_json::Value> {
     let path = app
         .path()
         .resource_dir()
-        .map_err(|_| "无法定位规则。")?
+        .map_err(|_| {
+            crate::error::DesktopError::runtime_unavailable(
+                "project_workflow",
+                "missing_resource_dir",
+                "无法定位规则。",
+            )
+        })?
         .join("runtime/workflow-catalog.json");
-    let data = std::fs::read(path).map_err(|_| "阶段资料缺失，请重新安装。")?;
+    let data = std::fs::read(path).map_err(|_| {
+        crate::error::DesktopError::runtime_unavailable(
+            "project_workflow",
+            "missing_workflow_catalog",
+            "阶段资料缺失，请重新安装。",
+        )
+    })?;
     let value: serde_json::Value = serde_json::from_slice(&data).map_err(|_| "阶段资料损坏。")?;
     if value["schemaVersion"] != 1 || !value["stages"].is_array() || !value["rules"].is_array() {
         return Err("阶段资料无效。".into());
@@ -90,7 +102,7 @@ fn catalog(app: &tauri::AppHandle) -> Result<serde_json::Value, String> {
     validate_catalog(&value)?;
     Ok(value)
 }
-fn validate_catalog(v: &serde_json::Value) -> Result<(), String> {
+fn validate_catalog(v: &serde_json::Value) -> crate::error::DesktopResult<()> {
     let stages = v["stages"].as_array().ok_or("阶段目录无效。")?;
     if stages.is_empty() || stages.len() > 16 {
         return Err("阶段目录数量无效。".into());
@@ -127,7 +139,7 @@ fn validate_catalog(v: &serde_json::Value) -> Result<(), String> {
         id: &'a str,
         edges: &BTreeMap<&'a str, Vec<&'a str>>,
         path: &mut Vec<&'a str>,
-    ) -> Result<(), String> {
+    ) -> crate::error::DesktopResult<()> {
         if path.contains(&id) {
             return Err("阶段依赖存在循环。".into());
         }
@@ -143,7 +155,7 @@ fn validate_catalog(v: &serde_json::Value) -> Result<(), String> {
     }
     Ok(())
 }
-fn persist_project(c: &Connection, p: &mut Project) -> Result<(), String> {
+fn persist_project(c: &Connection, p: &mut Project) -> crate::error::DesktopResult<()> {
     p.revision = p
         .revision
         .checked_add(1)
@@ -164,7 +176,7 @@ fn validate_stage(
     rules: &str,
     stage_id: &str,
     state: &str,
-) -> Result<(), String> {
+) -> crate::error::DesktopResult<()> {
     validate_stage_depth(c, p, catalog, rules, stage_id, state, 0)
 }
 fn validate_stage_depth(
@@ -175,7 +187,7 @@ fn validate_stage_depth(
     stage_id: &str,
     state: &str,
     depth: usize,
-) -> Result<(), String> {
+) -> crate::error::DesktopResult<()> {
     if depth > 16 {
         return Err("阶段依赖存在循环或过深。".into());
     }
@@ -228,58 +240,72 @@ fn validate_stage_depth(
     Ok(())
 }
 #[tauri::command]
-pub fn project_facts_save(
+pub async fn project_facts_save(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     project_id: String,
     expected_revision: u64,
     facts: ProjectFacts,
-) -> Result<Project, String> {
+) -> crate::error::DesktopResult<Project> {
     crate::runtime::authorize(&window)?;
     if facts.business_type.chars().count() > 1000
         || facts.business_type.chars().any(char::is_control)
     {
         return Err("业务说明无效。".into());
     }
-    let result = state.access(&app, |c| {
-        let tx = c
-            .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(db_error)?;
-        let mut p = project(&tx, &project_id)?;
-        if p.revision != expected_revision {
-            return Err("项目已改变，请刷新重试。".into());
-        }
-        if p.facts != facts {
-            p.context_revision += 1;
-            p.facts = facts;
-        }
-        persist_project(&tx, &mut p)?;
-        tx.commit().map_err(db_error)?;
-        Ok(p)
-    })?;
-    crate::project_maintenance::sync_after_project_change(&app);
-    Ok(result)
+    let store = state.inner().clone();
+    crate::error::run_blocking("project_workflow", "保存项目事实意外退出，请重试。", move || {
+        let result = store.access(&app, |c| {
+            let tx = c
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(db_error)?;
+            let mut p = project(&tx, &project_id)?;
+            if p.revision != expected_revision {
+                return Err(crate::error::DesktopError::conflict(
+                    "项目已改变，请刷新重试。",
+                ));
+            }
+            if p.facts != facts {
+                p.context_revision += 1;
+                p.facts = facts;
+            }
+            persist_project(&tx, &mut p)?;
+            tx.commit().map_err(db_error)?;
+            Ok(p)
+        })?;
+        crate::project_maintenance::sync_after_project_change(&app);
+        Ok(result)
+    })
+    .await
 }
 #[tauri::command]
-pub fn project_workflow(
+pub async fn project_workflow(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     project_id: String,
-) -> Result<serde_json::Value, String> {
+) -> crate::error::DesktopResult<serde_json::Value> {
     crate::runtime::authorize(&window)?;
-    let catalog = catalog(&app)?;
-    let (_, rules) = versions(&app)?;
-    state.access(&app, |c| {
-        let project = project(c,&project_id)?;
-        let confirmations: Vec<serde_json::Value> = rows(c,"SELECT data FROM stage_confirmations WHERE project_id=? ORDER BY id",Some(&project_id))?;
-        Ok(serde_json::json!({"project":project,"catalog":catalog,"rulesVersion":rules,"confirmations":confirmations}))
+    let store = state.inner().clone();
+    crate::error::run_blocking("project_workflow", "读取上线流程意外退出，请重试。", move || {
+        let catalog = catalog(&app)?;
+        let (_, rules) = versions(&app)?;
+        store.access(&app, |c| {
+            let project = project(c, &project_id)?;
+            let confirmations: Vec<serde_json::Value> = rows(
+                c,
+                "SELECT data FROM stage_confirmations WHERE project_id=? ORDER BY id",
+                Some(&project_id),
+            )?;
+            Ok(serde_json::json!({"project":project,"catalog":catalog,"rulesVersion":rules,"confirmations":confirmations}))
+        })
     })
+    .await
 }
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub fn project_stage_confirm(
+pub async fn project_stage_confirm(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     store: tauri::State<'_, ProjectStore>,
@@ -289,57 +315,83 @@ pub fn project_stage_confirm(
     stage_id: String,
     state: String,
     note: String,
-) -> Result<Project, String> {
+) -> crate::error::DesktopResult<Project> {
     crate::runtime::authorize(&window)?;
-    let (_, rules) = versions(&app)?;
-    if rules != expected_rules_version
-        || !["confirmed", "not_applicable", "pending"].contains(&state.as_str())
-        || note.chars().count() > 2000
-        || (state == "not_applicable" && note.trim().is_empty())
-    {
-        return Err("确认参数或规则版本无效，请刷新。".into());
-    }
-    let trusted_catalog = catalog(&app)?;
-    if !trusted_catalog["stages"]
-        .as_array()
-        .ok_or("阶段资料无效。")?
-        .iter()
-        .any(|s| s["stage"] == stage_id)
-    {
-        return Err("阶段不存在。".into());
-    }
-    store.access(&app,|c| {
-        let tx = c.transaction_with_behavior(TransactionBehavior::Immediate).map_err(db_error)?;
-        let mut p = project(&tx,&project_id)?;
-        if p.revision != expected_revision { return Err("项目已改变，请重新核对。".into()); }
-        validate_stage(&tx, &p, &trusted_catalog, &rules, &stage_id, &state)?;
-        let count: u32 = tx.query_row("SELECT count(*) FROM stage_confirmations",[],|r|r.get(0)).map_err(db_error)?;
-        if count >= 10000 { return Err("确认历史已达上限，请在项目管理中备份并归档旧项目后重试。".into()); }
-        let record = serde_json::json!({"stageId":stage_id,"state":state,"note":note,"recordedAt":now(),"contextRevision":p.context_revision,"rulesVersion":rules});
-        tx.execute("INSERT INTO stage_confirmations(project_id,data) VALUES(?,?)",params![project_id,encode(&record)?]).map_err(db_error)?;
-        persist_project(&tx,&mut p)?;
-        tx.commit().map_err(db_error)?;
-        Ok(p)
+    let store = store.inner().clone();
+    crate::error::run_blocking("project_workflow", "保存阶段确认意外退出，请重试。", move || {
+        let (_, rules) = versions(&app)?;
+        if rules != expected_rules_version
+            || !["confirmed", "not_applicable", "pending"].contains(&state.as_str())
+            || note.chars().count() > 2000
+            || (state == "not_applicable" && note.trim().is_empty())
+        {
+            return Err("确认参数或规则版本无效，请刷新。".into());
+        }
+        let trusted_catalog = catalog(&app)?;
+        if !trusted_catalog["stages"]
+            .as_array()
+            .ok_or("阶段资料无效。")?
+            .iter()
+            .any(|s| s["stage"] == stage_id)
+        {
+            return Err("阶段不存在。".into());
+        }
+        store.access(&app, |c| {
+            let tx = c
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(db_error)?;
+            let mut p = project(&tx, &project_id)?;
+            if p.revision != expected_revision {
+                return Err(crate::error::DesktopError::conflict(
+                    "项目已改变，请重新核对。",
+                ));
+            }
+            validate_stage(&tx, &p, &trusted_catalog, &rules, &stage_id, &state)?;
+            let count: u32 = tx
+                .query_row("SELECT count(*) FROM stage_confirmations", [], |r| r.get(0))
+                .map_err(db_error)?;
+            if count >= 10000 {
+                return Err(crate::error::DesktopError::conflict(
+                    "确认历史已达上限，请在项目管理中备份并归档旧项目后重试。",
+                ));
+            }
+            let record = serde_json::json!({"stageId":stage_id,"state":state,"note":note,"recordedAt":now(),"contextRevision":p.context_revision,"rulesVersion":rules});
+            tx.execute(
+                "INSERT INTO stage_confirmations(project_id,data) VALUES(?,?)",
+                params![project_id, encode(&record)?],
+            )
+            .map_err(db_error)?;
+            persist_project(&tx, &mut p)?;
+            tx.commit().map_err(db_error)?;
+            Ok(p)
+        })
     })
+    .await
 }
 #[tauri::command]
-pub fn project_compare(
+pub async fn project_compare(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     project_id: String,
     before_artifact_id: String,
     after_artifact_id: String,
-) -> Result<serde_json::Value, String> {
+) -> crate::error::DesktopResult<serde_json::Value> {
     crate::runtime::authorize(&window)?;
-    state.access(&app, |c| compare_artifacts(c, &project_id, &before_artifact_id, &after_artifact_id))
+    let store = state.inner().clone();
+    crate::error::run_blocking("project_workflow", "比较预检报告意外退出，请重试。", move || {
+        store.access(&app, |c| {
+            compare_artifacts(c, &project_id, &before_artifact_id, &after_artifact_id)
+        })
+    })
+    .await
 }
 pub(crate) fn compare_artifacts(
     c: &Connection,
     project_id: &str,
     before_artifact_id: &str,
     after_artifact_id: &str,
-) -> Result<serde_json::Value, String> {
+) -> crate::error::DesktopResult<serde_json::Value> {
         project(c,project_id)?;
         let a = artifact(c,before_artifact_id)?;
         let b = artifact(c,after_artifact_id)?;

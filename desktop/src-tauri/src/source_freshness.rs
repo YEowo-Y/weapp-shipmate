@@ -166,7 +166,7 @@ fn official_url(value: &str) -> bool {
     })
 }
 
-fn validate_catalog(catalog: &SourceCatalog) -> Result<(), String> {
+fn validate_catalog(catalog: &SourceCatalog) -> crate::error::DesktopResult<()> {
     if catalog.schema_version != 1
         || catalog.stale_days != 180
         || !hex(&catalog.catalog_version, 64)
@@ -207,7 +207,7 @@ fn validate_catalog(catalog: &SourceCatalog) -> Result<(), String> {
     Ok(())
 }
 
-fn parse_catalog(bytes: &[u8]) -> Result<SourceCatalog, String> {
+fn parse_catalog(bytes: &[u8]) -> crate::error::DesktopResult<SourceCatalog> {
     if bytes.len() > CATALOG_LIMIT {
         return Err(INVALID_CATALOG.into());
     }
@@ -216,32 +216,51 @@ fn parse_catalog(bytes: &[u8]) -> Result<SourceCatalog, String> {
     Ok(catalog)
 }
 
-fn catalog_at(root: &Path) -> Result<SourceCatalog, String> {
-    let root = root
-        .join("runtime")
-        .canonicalize()
-        .map_err(|_| INVALID_CATALOG)?;
+fn catalog_at(root: &Path) -> crate::error::DesktopResult<SourceCatalog> {
+    let root = root.join("runtime").canonicalize().map_err(|_| {
+        crate::error::DesktopError::runtime_unavailable(
+            "source_freshness",
+            "missing_runtime_dir",
+            INVALID_CATALOG,
+        )
+    })?;
     let path = root
         .join("source-catalog.json")
         .canonicalize()
-        .map_err(|_| INVALID_CATALOG)?;
+        .map_err(|_| {
+            crate::error::DesktopError::runtime_unavailable(
+                "source_freshness",
+                "missing_source_catalog",
+                INVALID_CATALOG,
+            )
+        })?;
     if !path.starts_with(root) || !path.is_file() {
-        return Err(INVALID_CATALOG.into());
+        return Err(crate::error::DesktopError::runtime_unavailable(
+            "source_freshness",
+            "invalid_source_catalog_path",
+            INVALID_CATALOG,
+        ));
     }
     let mut bytes = Vec::new();
     std::fs::File::open(path)
-        .map_err(|_| INVALID_CATALOG)?
+        .map_err(|_| crate::error::DesktopError::io(INVALID_CATALOG))?
         .take((CATALOG_LIMIT + 1) as u64)
         .read_to_end(&mut bytes)
-        .map_err(|_| INVALID_CATALOG)?;
+        .map_err(|_| crate::error::DesktopError::io(INVALID_CATALOG))?;
     parse_catalog(&bytes)
 }
 
-fn load_catalog(app: &tauri::AppHandle) -> Result<SourceCatalog, String> {
-    catalog_at(&app.path().resource_dir().map_err(|_| INVALID_CATALOG)?)
+fn load_catalog(app: &tauri::AppHandle) -> crate::error::DesktopResult<SourceCatalog> {
+    catalog_at(&app.path().resource_dir().map_err(|_| {
+        crate::error::DesktopError::runtime_unavailable(
+            "source_freshness",
+            "missing_resource_dir",
+            INVALID_CATALOG,
+        )
+    })?)
 }
 
-fn lookup<'a>(catalog: &'a SourceCatalog, id: &str) -> Result<&'a Source, String> {
+fn lookup<'a>(catalog: &'a SourceCatalog, id: &str) -> crate::error::DesktopResult<&'a Source> {
     catalog
         .sources
         .iter()
@@ -261,7 +280,7 @@ fn validate_result(
     catalog: &SourceCatalog,
     source: &Source,
     clock: u64,
-) -> Result<(), String> {
+) -> crate::error::DesktopResult<()> {
     if result.schema_version != 1
         || result.catalog_version != catalog.catalog_version
         || result.source_id != source.id
@@ -331,7 +350,7 @@ fn parse_result(
     source: &Source,
     started_at: u64,
     clock: u64,
-) -> Result<CheckResult, String> {
+) -> crate::error::DesktopResult<CheckResult> {
     if output.len() > RECORD_LIMIT {
         return Err(INVALID_RESULT.into());
     }
@@ -352,19 +371,21 @@ fn validate_record(
     catalog: &SourceCatalog,
     source: &Source,
     clock: u64,
-) -> Result<(), String> {
+) -> crate::error::DesktopResult<()> {
     if record.source_id != source.id {
-        return Err(INVALID_RECORD.into());
+        return Err(crate::error::DesktopError::database(INVALID_RECORD));
     }
-    validate_result(&record.latest, catalog, source, clock).map_err(|_| INVALID_RECORD)?;
+    validate_result(&record.latest, catalog, source, clock)
+        .map_err(|_| crate::error::DesktopError::database(INVALID_RECORD))?;
     if let Some(previous) = &record.last_evidence {
-        validate_result(previous, catalog, source, clock).map_err(|_| INVALID_RECORD)?;
+        validate_result(previous, catalog, source, clock)
+            .map_err(|_| crate::error::DesktopError::database(INVALID_RECORD))?;
         if !evidence(previous) || previous.checked_at > record.latest.checked_at {
-            return Err(INVALID_RECORD.into());
+            return Err(crate::error::DesktopError::database(INVALID_RECORD));
         }
     }
     if evidence(&record.latest) && record.last_evidence.as_ref() != Some(&record.latest) {
-        return Err(INVALID_RECORD.into());
+        return Err(crate::error::DesktopError::database(INVALID_RECORD));
     }
     Ok(())
 }
@@ -374,7 +395,7 @@ fn read_record(
     catalog: &SourceCatalog,
     source: &Source,
     clock: u64,
-) -> Result<Option<CheckRecord>, String> {
+) -> crate::error::DesktopResult<Option<CheckRecord>> {
     let value: Option<Option<String>> = connection
         .query_row(
             "SELECT CASE WHEN length(CAST(value AS BLOB)) <= 4096 THEN value ELSE NULL END FROM settings WHERE key=?",
@@ -385,9 +406,10 @@ fn read_record(
         .map_err(db_error)?;
     match value {
         None => Ok(None),
-        Some(None) => Err(INVALID_RECORD.into()),
+        Some(None) => Err(crate::error::DesktopError::database(INVALID_RECORD)),
         Some(Some(value)) => {
-            let record = serde_json::from_str(&value).map_err(|_| INVALID_RECORD)?;
+            let record = serde_json::from_str(&value)
+                .map_err(|_| crate::error::DesktopError::database(INVALID_RECORD))?;
             validate_record(&record, catalog, source, clock)?;
             Ok(Some(record))
         }
@@ -400,7 +422,7 @@ fn save_result(
     source: &Source,
     result: CheckResult,
     clock: u64,
-) -> Result<CheckRecord, String> {
+) -> crate::error::DesktopResult<CheckRecord> {
     validate_result(&result, catalog, source, clock)?;
     let tx = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -411,7 +433,9 @@ fn save_result(
         .as_ref()
         .is_some_and(|old| old.latest.checked_at > result.checked_at)
     {
-        return Err("已有更新的来源检查，请刷新后重试。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "已有更新的来源检查，请刷新后重试。",
+        ));
     }
     let record = CheckRecord {
         source_id: source.id.clone(),
@@ -434,12 +458,12 @@ fn snapshot(
     connection: &Connection,
     catalog: SourceCatalog,
     clock: u64,
-) -> Result<FreshnessSnapshot, String> {
+) -> crate::error::DesktopResult<FreshnessSnapshot> {
     let checks = catalog
         .sources
         .iter()
         .map(|source| read_record(connection, &catalog, source, clock))
-        .collect::<Result<Vec<_>, _>>()?
+        .collect::<crate::error::DesktopResult<Vec<_>>>()?
         .into_iter()
         .flatten()
         .collect();
@@ -447,14 +471,22 @@ fn snapshot(
 }
 
 #[tauri::command]
-pub fn source_freshness_snapshot(
+pub async fn source_freshness_snapshot(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
-) -> Result<FreshnessSnapshot, String> {
+) -> crate::error::DesktopResult<FreshnessSnapshot> {
     crate::runtime::authorize(&window)?;
-    let catalog = load_catalog(&app)?;
-    state.access(&app, |connection| snapshot(connection, catalog, now()))
+    let store = state.inner().clone();
+    crate::error::run_blocking(
+        "source_freshness",
+        "读取来源新鲜度意外退出，请重试。",
+        move || {
+            let catalog = load_catalog(&app)?;
+            store.access(&app, |connection| snapshot(connection, catalog, now()))
+        },
+    )
+    .await
 }
 
 #[tauri::command]
@@ -465,39 +497,45 @@ pub async fn source_freshness_check(
     runner: tauri::State<'_, ToolRunner>,
     source_id: String,
     run_id: String,
-) -> Result<CheckRecord, String> {
+) -> crate::error::DesktopResult<CheckRecord> {
     crate::runtime::authorize(&window)?;
     // Establish cancellation identity before catalog reads or SQLite preparation.
     let reservation = runner.reserve_guard(&run_id)?;
-    let catalog = load_catalog(&app)?;
-    let source = lookup(&catalog, &source_id)?.clone();
-    let mut command = crate::runtime::node_command(&app, "desktop/server/source-check.mjs", false)?;
-    command.arg(source_id);
     let store = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        // Reject corrupt current records before contacting a source, without holding the DB lock during I/O.
-        store.access(&app, |connection| {
-            read_record(connection, &catalog, &source, now())
-        })?;
-        let started_at = now();
-        let output = reservation
-            .run_retained(command)
-            .map_err(|error| error.to_string())?;
-        let result = parse_result(&output, &catalog, &source, started_at, now())?;
-        reservation
-            .commit(|| {
-                // A runtime replacement cannot label output against a different installed catalog.
-                if load_catalog(&app)?.catalog_version != catalog.catalog_version {
-                    return Err("内置来源目录已更新，请刷新后重新检查。".into());
-                }
-                store.access(&app, |connection| {
-                    save_result(connection, &catalog, &source, result, now())
+    crate::error::run_blocking(
+        "source_freshness",
+        "来源检查任务意外退出，请重试。",
+        move || {
+            let catalog = load_catalog(&app)?;
+            let source = lookup(&catalog, &source_id)?.clone();
+            let mut command =
+                crate::runtime::node_command(&app, "desktop/server/source-check.mjs", false)?;
+            command.arg(source_id);
+            // Reject corrupt current records before contacting a source, without holding the DB lock during I/O.
+            store.access(&app, |connection| {
+                read_record(connection, &catalog, &source, now())
+            })?;
+            let started_at = now();
+            let output = reservation
+                .run_retained(command)
+                .map_err(crate::error::DesktopError::from)?;
+            let result = parse_result(&output, &catalog, &source, started_at, now())?;
+            reservation
+                .commit(|| {
+                    // A runtime replacement cannot label output against a different installed catalog.
+                    if load_catalog(&app)?.catalog_version != catalog.catalog_version {
+                        return Err(crate::error::DesktopError::conflict(
+                            "内置来源目录已更新，请刷新后重新检查。",
+                        ));
+                    }
+                    store.access(&app, |connection| {
+                        save_result(connection, &catalog, &source, result, now())
+                    })
                 })
-            })
-            .map_err(|error| error.to_string())
-    })
+                .map_err(crate::error::DesktopError::from)
+        },
+    )
     .await
-    .map_err(|_| "来源检查任务意外退出，请重试。".to_string())?
 }
 
 #[cfg(test)]

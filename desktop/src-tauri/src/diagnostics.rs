@@ -430,15 +430,22 @@ pub fn record_sqlite_error(subsystem: &'static str, code: &'static str, sqlite_c
 }
 
 #[cfg(test)]
+pub(crate) fn with_test_sink<R>(dir: PathBuf, action: impl FnOnce() -> R) -> R {
+    let _guard = tests::TEST_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let _scope = tests::SinkScope::set(dir);
+    action()
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::Mutex as StdMutex;
 
-    static TEST_SERIAL: StdMutex<()> = StdMutex::new(());
+    pub(super) static TEST_SERIAL: StdMutex<()> = StdMutex::new(());
 
-    struct SinkScope(Option<PathBuf>);
+    pub(super) struct SinkScope(Option<PathBuf>);
     impl SinkScope {
-        fn set(dir: PathBuf) -> Self {
+        pub(super) fn set(dir: PathBuf) -> Self {
             let mut guard = sink().lock().unwrap_or_else(|p| p.into_inner());
             let previous = guard.replace(dir);
             Self(previous)

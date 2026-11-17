@@ -16,44 +16,72 @@ pub(crate) fn now() -> u64 {
         .unwrap_or_default()
         .as_millis() as u64
 }
-pub(crate) fn db_error(error: rusqlite::Error) -> String {
+pub(crate) fn db_error(error: rusqlite::Error) -> crate::error::DesktopError {
     use rusqlite::ErrorCode;
     crate::diagnostics::record_sqlite_error(
         "project_store",
         "sqlite_error",
         error.sqlite_error_code().map(|code| code as i32),
     );
-    let guidance = match error.sqlite_error_code() {
-        Some(ErrorCode::DiskFull) => {
-            "磁盘空间不足，无法保存本次操作；请释放空间后重试，并检查运行历史。"
-        }
-        Some(ErrorCode::ReadOnly | ErrorCode::PermissionDenied) => {
-            "项目数据库不可写；请检查应用数据目录的写入权限后重试。"
-        }
-        Some(ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked) => {
-            "项目数据库正被占用；请等待其他操作结束后重试。"
-        }
-        Some(ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase) => {
-            "项目数据库损坏或格式不正确；请保留原文件并从备份恢复。"
-        }
-        Some(ErrorCode::CannotOpen | ErrorCode::SystemIoFailure) => {
-            "无法访问项目数据库；请检查磁盘连接、可用空间和目录权限。"
-        }
-        _ => "项目数据操作失败；请重新打开应用并检查运行历史，勿重复覆盖数据库。",
+    let (guidance, is_conflict, is_io) = match error.sqlite_error_code() {
+        Some(ErrorCode::DiskFull) => (
+            "磁盘空间不足，无法保存本次操作；请释放空间后重试，并检查运行历史。",
+            false,
+            true,
+        ),
+        Some(ErrorCode::ReadOnly | ErrorCode::PermissionDenied) => (
+            "项目数据库不可写；请检查应用数据目录的写入权限后重试。",
+            false,
+            true,
+        ),
+        Some(ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked) => (
+            "项目数据库正被占用；请等待其他操作结束后重试。",
+            true,
+            false,
+        ),
+        Some(ErrorCode::DatabaseCorrupt | ErrorCode::NotADatabase) => (
+            "项目数据库损坏或格式不正确；请保留原文件并从备份恢复。",
+            false,
+            false,
+        ),
+        Some(ErrorCode::CannotOpen | ErrorCode::SystemIoFailure) => (
+            "无法访问项目数据库；请检查磁盘连接、可用空间和目录权限。",
+            false,
+            true,
+        ),
+        _ => (
+            "项目数据操作失败；请重新打开应用并检查运行历史，勿重复覆盖数据库。",
+            false,
+            false,
+        ),
     };
-    format!("{guidance} ({error})")
+    let text = format!("{guidance} ({error})");
+    if is_conflict {
+        crate::error::DesktopError::conflict(text)
+    } else if is_io {
+        crate::error::DesktopError::io(text)
+    } else {
+        crate::error::DesktopError::database(text)
+    }
 }
-pub(crate) fn encode(value: &impl Serialize) -> Result<String, String> {
-    serde_json::to_string(value).map_err(|_| "无法编码项目数据。".into())
+pub(crate) fn encode(value: &impl Serialize) -> crate::error::DesktopResult<String> {
+    serde_json::to_string(value)
+        .map_err(|_| crate::error::DesktopError::database("无法编码项目数据。"))
 }
-pub(crate) fn decode<T: serde::de::DeserializeOwned>(value: String) -> Result<T, String> {
-    serde_json::from_str(&value).map_err(|_| "项目记录格式损坏，请保留数据库并从备份恢复。".into())
+pub(crate) fn decode<T: serde::de::DeserializeOwned>(
+    value: String,
+) -> crate::error::DesktopResult<T> {
+    serde_json::from_str(&value).map_err(|_| {
+        crate::error::DesktopError::database("项目记录格式损坏，请保留数据库并从备份恢复。")
+    })
 }
-pub(crate) fn id(value: &str) -> Result<(), String> {
+pub(crate) fn id(value: &str) -> crate::error::DesktopResult<()> {
     if crate::runtime::valid_id(value) {
         Ok(())
     } else {
-        Err("项目或运行编号无效。".into())
+        Err(crate::error::DesktopError::validation(
+            "项目或运行编号无效。",
+        ))
     }
 }
 #[derive(Clone, Serialize, Deserialize, Debug, Default, PartialEq)]
@@ -162,17 +190,19 @@ struct StoreConnection {
     // from declaring a still-running operation interrupted during startup recovery.
     _lease: std::fs::File,
 }
-fn open_store(path: &Path) -> Result<StoreConnection, String> {
+fn open_store(path: &Path) -> crate::error::DesktopResult<StoreConnection> {
     let lease = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
         .open(path.with_extension("lock"))
-        .map_err(|e| format!("无法打开项目存储锁：{e}"))?;
-    lease
-        .try_lock()
-        .map_err(|_| "项目数据正在被另一个应用实例使用，请关闭该实例后重试。")?;
+        .map_err(|e| crate::error::DesktopError::io(format!("无法打开项目存储锁：{e}")))?;
+    lease.try_lock().map_err(|_| {
+        crate::error::DesktopError::conflict(
+            "项目数据正在被另一个应用实例使用，请关闭该实例后重试。",
+        )
+    })?;
     Ok(StoreConnection {
         connection: open_database(path)?,
         _lease: lease,
@@ -182,7 +212,7 @@ fn rows<T: serde::de::DeserializeOwned>(
     connection: &Connection,
     sql: &str,
     project: Option<&str>,
-) -> Result<Vec<T>, String> {
+) -> crate::error::DesktopResult<Vec<T>> {
     let mut statement = connection.prepare(sql).map_err(db_error)?;
     let mut result = Vec::new();
     let mut query = if sql.contains('?') {
@@ -195,7 +225,10 @@ fn rows<T: serde::de::DeserializeOwned>(
     }
     Ok(result)
 }
-pub(crate) fn project(connection: &Connection, id_value: &str) -> Result<Project, String> {
+pub(crate) fn project(
+    connection: &Connection,
+    id_value: &str,
+) -> crate::error::DesktopResult<Project> {
     id(id_value)?;
     let data = connection
         .query_row("SELECT data FROM projects WHERE id=?", [id_value], |row| {
@@ -203,12 +236,12 @@ pub(crate) fn project(connection: &Connection, id_value: &str) -> Result<Project
         })
         .optional()
         .map_err(db_error)?
-        .ok_or("项目不存在，请刷新项目列表。")?;
+        .ok_or_else(|| crate::error::DesktopError::validation("项目不存在，请刷新项目列表。"))?;
     let mut value: Project = decode(data)?;
     value.directory_available = Path::new(&value.directory).is_dir();
     Ok(value)
 }
-fn migrate(connection: &mut Connection, ddl: &str) -> Result<(), String> {
+fn migrate(connection: &mut Connection, ddl: &str) -> crate::error::DesktopResult<()> {
     let tx = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(db_error)?;
@@ -223,14 +256,16 @@ fn migrate(connection: &mut Connection, ddl: &str) -> Result<(), String> {
         )
         .map_err(db_error)?;
     if version != 0 || tables != 0 {
-        return Err("迁移期间数据库版本或结构已改变，未执行迁移，请重新打开应用。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "迁移期间数据库版本或结构已改变，未执行迁移，请重新打开应用。",
+        ));
     }
     tx.execute_batch(ddl).map_err(db_error)?;
     tx.pragma_update(None, "user_version", 1)
         .map_err(db_error)?;
     tx.commit().map_err(db_error)
 }
-fn migrate_v2(connection: &mut Connection) -> Result<(), String> {
+fn migrate_v2(connection: &mut Connection) -> crate::error::DesktopResult<()> {
     let tx = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(db_error)?;
@@ -238,7 +273,9 @@ fn migrate_v2(connection: &mut Connection) -> Result<(), String> {
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .map_err(db_error)?;
     if version != 1 {
-        return Err("迁移期间数据库版本已改变，请重新打开应用。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "迁移期间数据库版本已改变，请重新打开应用。",
+        ));
     }
     tx.prepare("SELECT p.data,p.revision,r.state,r.data,a.run_id,a.data,s.value FROM projects p,runs r,artifacts a,settings s LIMIT 0").map_err(db_error)?;
     tx.execute_batch("CREATE TABLE stage_confirmations(id INTEGER PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), data TEXT NOT NULL CHECK(json_valid(data))); CREATE INDEX confirmations_project ON stage_confirmations(project_id);").map_err(db_error)?;
@@ -246,7 +283,7 @@ fn migrate_v2(connection: &mut Connection) -> Result<(), String> {
         .map_err(db_error)?;
     tx.commit().map_err(db_error)
 }
-fn backup(source: &Connection, path: &Path) -> Result<(), String> {
+fn backup(source: &Connection, path: &Path) -> crate::error::DesktopResult<()> {
     let version: u32 = source
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .map_err(db_error)?;
@@ -263,7 +300,7 @@ fn backup(source: &Connection, path: &Path) -> Result<(), String> {
                 "db_backup_failed",
                 "create_backup_file_failed",
             );
-            format!("无法创建迁移备份：{e}")
+            crate::error::DesktopError::io(format!("无法创建迁移备份：{e}"))
         })?;
     let mut destination = Connection::open(&target).map_err(db_error)?;
     destination
@@ -279,7 +316,9 @@ fn backup(source: &Connection, path: &Path) -> Result<(), String> {
                 "db_backup_failed",
                 "backup_timeout",
             );
-            return Err("迁移备份超时，未修改原数据库。".into());
+            return Err(crate::error::DesktopError::io(
+                "迁移备份超时，未修改原数据库。",
+            ));
         }
         match handle.step(128).map_err(db_error)? {
             rusqlite::backup::StepResult::Done => break,
@@ -297,7 +336,9 @@ fn backup(source: &Connection, path: &Path) -> Result<(), String> {
             "db_backup_failed",
             "backup_integrity_failed",
         );
-        return Err("迁移备份完整性检查失败，未修改原数据库。".into());
+        return Err(crate::error::DesktopError::database(
+            "迁移备份完整性检查失败，未修改原数据库。",
+        ));
     }
     Ok(())
 }
@@ -322,7 +363,7 @@ fn is_wal_header(path: &Path) -> bool {
         && header[18] == 2
         && header[19] == 2
 }
-fn open_database(path: &Path) -> Result<Connection, String> {
+fn open_database(path: &Path) -> crate::error::DesktopResult<Connection> {
     use rusqlite::config::DbConfig;
     let existing = path.exists();
     if existing {
@@ -357,7 +398,9 @@ fn open_database(path: &Path) -> Result<Connection, String> {
                 "db_open_rejected",
                 "quick_check_failed",
             );
-            return Err("项目数据库损坏，未修改原文件，请从备份恢复。".into());
+            return Err(crate::error::DesktopError::database(
+                "项目数据库损坏，未修改原文件，请从备份恢复。",
+            ));
         }
         let version: u32 = probe
             .query_row("PRAGMA user_version", [], |row| row.get(0))
@@ -369,7 +412,9 @@ fn open_database(path: &Path) -> Result<Connection, String> {
                 "db_open_rejected",
                 "future_user_version",
             );
-            return Err("项目数据库来自更新版本，请升级应用；未修改原文件。".into());
+            return Err(crate::error::DesktopError::conflict(
+                "项目数据库来自更新版本，请升级应用；未修改原文件。",
+            ));
         }
         if version >= 1 {
             probe.prepare("SELECT p.data,p.revision,r.state,r.data,a.run_id,a.data,s.value FROM projects p,runs r,artifacts a,settings s LIMIT 0").map_err(db_error)?;
@@ -394,7 +439,9 @@ fn open_database(path: &Path) -> Result<Connection, String> {
                     "db_open_rejected",
                     "unknown_v0_tables",
                 );
-                return Err("无法识别旧项目数据库，未修改原文件。".into());
+                return Err(crate::error::DesktopError::database(
+                    "无法识别旧项目数据库，未修改原文件。",
+                ));
             }
             backup(&probe, path)?;
         }
@@ -411,7 +458,9 @@ fn open_database(path: &Path) -> Result<Connection, String> {
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .map_err(db_error)?;
     if version > 2 {
-        return Err("项目数据库来自更新版本，未修改原文件。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "项目数据库来自更新版本，未修改原文件。",
+        ));
     }
     if version == 0 {
         migrate(&mut connection, SCHEMA)?;
@@ -436,7 +485,9 @@ fn open_database(path: &Path) -> Result<Connection, String> {
             "db_wal_failed",
             "unexpected_journal_mode",
         );
-        return Err("无法启用项目数据库预写日志模式，请检查应用数据目录权限与文件系统。".into());
+        return Err(crate::error::DesktopError::database(
+            "无法启用项目数据库预写日志模式，请检查应用数据目录权限与文件系统。",
+        ));
     }
     connection
         .pragma_update(None, "synchronous", "FULL")
@@ -461,10 +512,12 @@ fn open_database(path: &Path) -> Result<Connection, String> {
     Ok(connection)
 }
 impl ProjectStore {
-    fn snapshot(&self, app: &tauri::AppHandle) -> Result<Snapshot, String> {
+    fn snapshot(&self, app: &tauri::AppHandle) -> crate::error::DesktopResult<Snapshot> {
         let mut snapshot = self.access(app, |c| snapshot(c))?;
         snapshot.rules_version = versions(app).ok().map(|(_, rules)| rules);
-        let failures = self.1.lock().map_err(|_| "运行恢复状态不可用。")?;
+        let failures = self.1.lock().map_err(|_| {
+            crate::error::DesktopError::state_unavailable("project_store", "运行恢复状态不可用。")
+        })?;
         for failure in failures.values() {
             if let Some(run) = snapshot.runs.iter_mut().find(|r| r.id == failure.id) {
                 *run = failure.clone();
@@ -482,7 +535,7 @@ impl ProjectStore {
         app: &tauri::AppHandle,
         run: Run,
         outcome: Result<String, crate::tool_runner::ToolFailure>,
-    ) -> Result<Artifact, String> {
+    ) -> crate::error::DesktopResult<Artifact> {
         self.access(app, |connection| {
             finish_recoverable(connection, run, outcome, &self.1)
         })
@@ -491,7 +544,7 @@ impl ProjectStore {
         &self,
         app: &tauri::AppHandle,
         project_id: &str,
-    ) -> Result<Project, String> {
+    ) -> crate::error::DesktopResult<Project> {
         self.access(app, |connection| project(connection, project_id))
     }
     pub(crate) fn context_report(
@@ -499,7 +552,7 @@ impl ProjectStore {
         app: &tauri::AppHandle,
         project_id: &str,
         artifact_id: &str,
-    ) -> Result<Artifact, String> {
+    ) -> crate::error::DesktopResult<Artifact> {
         self.access(app, |connection| {
             context_artifact(connection, project_id, artifact_id)
         })
@@ -509,7 +562,7 @@ impl ProjectStore {
         app: &tauri::AppHandle,
         project_id: &str,
         artifact_id: &str,
-    ) -> Result<(Project, Artifact, Run), String> {
+    ) -> crate::error::DesktopResult<(Project, Artifact, Run)> {
         self.access(app, |connection| {
             let project = project(connection, project_id)?;
             let artifact = context_artifact(connection, project_id, artifact_id)?;
@@ -528,24 +581,36 @@ impl ProjectStore {
     pub(crate) fn access<T>(
         &self,
         app: &tauri::AppHandle,
-        action: impl FnOnce(&mut Connection) -> Result<T, String>,
-    ) -> Result<T, String> {
-        let mut guard = self.0.lock().map_err(|_| "项目存储状态不可用。")?;
+        action: impl FnOnce(&mut Connection) -> crate::error::DesktopResult<T>,
+    ) -> crate::error::DesktopResult<T> {
+        let mut guard = self.0.lock().map_err(|_| {
+            crate::error::DesktopError::state_unavailable("project_store", "项目存储状态不可用。")
+        })?;
         if matches!(*guard, StoreState::Closed) {
-            return Err("应用正在退出。".into());
+            return Err(crate::error::DesktopError::state_unavailable(
+                "project_store",
+                "应用正在退出。",
+            ));
         }
         if matches!(*guard, StoreState::Uninitialized) {
-            let directory = app
-                .path()
-                .app_data_dir()
-                .map_err(|_| "无法定位项目存储目录。")?;
-            std::fs::create_dir_all(&directory)
-                .map_err(|e| format!("无法创建项目存储目录：{e}"))?;
+            let directory = app.path().app_data_dir().map_err(|_| {
+                crate::error::DesktopError::runtime_unavailable(
+                    "project_store",
+                    "missing_app_data_dir",
+                    "无法定位项目存储目录。",
+                )
+            })?;
+            std::fs::create_dir_all(&directory).map_err(|e| {
+                crate::error::DesktopError::io(format!("无法创建项目存储目录：{e}"))
+            })?;
             *guard = StoreState::Open(open_store(&directory.join("projects.sqlite3"))?);
         }
         match &mut *guard {
             StoreState::Open(store) => action(&mut store.connection),
-            _ => Err("项目存储不可用。".into()),
+            _ => Err(crate::error::DesktopError::state_unavailable(
+                "project_store",
+                "项目存储不可用。",
+            )),
         }
     }
     pub fn shutdown(&self) {
@@ -578,7 +643,7 @@ fn context_artifact(
     connection: &Connection,
     project_id: &str,
     artifact_id: &str,
-) -> Result<Artifact, String> {
+) -> crate::error::DesktopResult<Artifact> {
     project(connection, project_id)?;
     let value = artifact(connection, artifact_id)?;
     if value.project_id.as_deref() != Some(project_id) {
@@ -586,7 +651,7 @@ fn context_artifact(
     }
     Ok(value)
 }
-fn save(connection: &mut Connection, input: ProjectInput) -> Result<Project, String> {
+fn save(connection: &mut Connection, input: ProjectInput) -> crate::error::DesktopResult<Project> {
     id(&input.id)?;
     crate::tool_runner::subject(&input.subject)?;
     let name = input.name.trim();
@@ -613,7 +678,9 @@ fn save(connection: &mut Connection, input: ProjectInput) -> Result<Project, Str
     let (revision, created_at, facts, context_revision) = if let Some(data) = previous {
         let previous: Project = decode(data)?;
         if input.expected_revision != Some(previous.revision) {
-            return Err("项目已被其他操作更新，请刷新后重试。".into());
+            return Err(crate::error::DesktopError::conflict(
+                "项目已被其他操作更新，请刷新后重试。",
+            ));
         }
         (
             previous
@@ -628,13 +695,17 @@ fn save(connection: &mut Connection, input: ProjectInput) -> Result<Project, Str
         )
     } else {
         if input.expected_revision.is_some() {
-            return Err("项目不存在，无法更新。".into());
+            return Err(crate::error::DesktopError::conflict(
+                "项目不存在，无法更新。",
+            ));
         }
         let count: u32 = tx
             .query_row("SELECT count(*) FROM projects", [], |r| r.get(0))
             .map_err(db_error)?;
         if count >= 200 {
-            return Err("项目数量已达 200 个，请在项目管理中归档不再使用的项目后重试。".into());
+            return Err(crate::error::DesktopError::conflict(
+                "项目数量已达 200 个，请在项目管理中归档不再使用的项目后重试。",
+            ));
         }
         (1, timestamp, ProjectFacts::default(), 0)
     };
@@ -654,7 +725,7 @@ fn save(connection: &mut Connection, input: ProjectInput) -> Result<Project, Str
     tx.commit().map_err(db_error)?;
     Ok(value)
 }
-fn snapshot(connection: &Connection) -> Result<Snapshot, String> {
+fn snapshot(connection: &Connection) -> crate::error::DesktopResult<Snapshot> {
     let mut projects: Vec<Project> = rows(
         connection,
         "SELECT data FROM projects ORDER BY rowid DESC LIMIT 200",
@@ -686,7 +757,7 @@ fn snapshot(connection: &Connection) -> Result<Snapshot, String> {
     for value in &mut artifacts {
         value
             .as_object_mut()
-            .ok_or("成果记录格式损坏。")?
+            .ok_or_else(|| crate::error::DesktopError::database("成果记录格式损坏。"))?
             .remove("markdown");
     }
     Ok(Snapshot {
@@ -697,7 +768,10 @@ fn snapshot(connection: &Connection) -> Result<Snapshot, String> {
         artifacts,
     })
 }
-pub(crate) fn artifact(connection: &Connection, artifact_id: &str) -> Result<Artifact, String> {
+pub(crate) fn artifact(
+    connection: &Connection,
+    artifact_id: &str,
+) -> crate::error::DesktopResult<Artifact> {
     id(artifact_id)?;
     let data = connection
         .query_row(
@@ -714,7 +788,7 @@ fn local_session_artifact(
     connection: &Connection,
     project_id: &str,
     artifact_id: &str,
-) -> Result<Artifact, String> {
+) -> crate::error::DesktopResult<Artifact> {
     id(project_id)?;
     id(artifact_id)?;
     let mismatch = "未找到与当前项目匹配的本机成功运行和报告。";
@@ -750,14 +824,26 @@ fn local_session_artifact(
     }
     Ok(artifact)
 }
-pub(crate) fn versions(app: &tauri::AppHandle) -> Result<(String, String), String> {
+pub(crate) fn versions(app: &tauri::AppHandle) -> crate::error::DesktopResult<(String, String)> {
     let root = app
         .path()
         .resource_dir()
-        .map_err(|_| "无法定位应用资源。")?
+        .map_err(|_| {
+            crate::error::DesktopError::runtime_unavailable(
+                "project_store",
+                "missing_resource_dir",
+                "无法定位应用资源。",
+            )
+        })?
         .join("runtime");
-    let read = |path: PathBuf| -> Result<serde_json::Value, String> {
-        let data = std::fs::read(path).map_err(|_| "应用版本资料缺失，请重新安装。")?;
+    let read = |path: PathBuf| -> crate::error::DesktopResult<serde_json::Value> {
+        let data = std::fs::read(path).map_err(|_| {
+            crate::error::DesktopError::runtime_unavailable(
+                "project_store",
+                "missing_version_manifest",
+                "应用版本资料缺失，请重新安装。",
+            )
+        })?;
         serde_json::from_slice(&data).map_err(|_| "应用版本资料无效。".into())
     };
     let package = read(root.join("package.json"))?;
@@ -790,7 +876,7 @@ fn begin(
     run_id: String,
     subject: Option<String>,
     version: (String, String),
-) -> Result<(Run, Option<String>, String), String> {
+) -> crate::error::DesktopResult<(Run, Option<String>, String)> {
     id(&run_id)?;
     if !["check", "guide", "explain"].contains(&kind.as_str()) {
         return Err("工具类型无效。".into());
@@ -806,13 +892,17 @@ fn begin(
         .map_err(db_error)?
         .is_some()
     {
-        return Err("此运行编号已使用，不会重复执行。请查看历史成果或新建运行。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "此运行编号已使用，不会重复执行。请查看历史成果或新建运行。",
+        ));
     }
     let count: u32 = tx
         .query_row("SELECT count(*) FROM runs", [], |r| r.get(0))
         .map_err(db_error)?;
     if count >= 10000 {
-        return Err("运行历史已达 10000 条，请在项目管理中备份并归档旧项目后重试。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "运行历史已达 10000 条，请在项目管理中备份并归档旧项目后重试。",
+        ));
     }
     let value = project_id.as_deref().map(|p| project(&tx, p)).transpose()?;
     if kind == "check" && value.is_none() {
@@ -858,7 +948,7 @@ fn finish(
     connection: &mut Connection,
     run: Run,
     result: Result<String, crate::tool_runner::ToolFailure>,
-) -> Result<Artifact, String> {
+) -> crate::error::DesktopResult<Artifact> {
     finish_payload(connection, run, result, None)
 }
 fn finish_payload(
@@ -866,7 +956,7 @@ fn finish_payload(
     mut run: Run,
     result: Result<String, crate::tool_runner::ToolFailure>,
     structured: Option<serde_json::Value>,
-) -> Result<Artifact, String> {
+) -> crate::error::DesktopResult<Artifact> {
     let tx = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(db_error)?;
@@ -913,7 +1003,7 @@ fn finish_payload(
                 )
                 .map_err(db_error)?;
             if bytes + data.len() as i64 > 64 * 1024 * 1024 {
-                return Err("历史成果已达 64 MiB 保存上限，未覆盖旧成果；请在项目管理中备份并归档旧项目后重试。".into());
+                return Err(crate::error::DesktopError::conflict("历史成果已达 64 MiB 保存上限，未覆盖旧成果；请在项目管理中备份并归档旧项目后重试。"));
             }
             tx.execute(
                 "INSERT INTO artifacts(id,run_id,project_id,data) VALUES(?,?,?,?)",
@@ -929,9 +1019,9 @@ fn finish_payload(
                 "failed"
             }
             .into();
-            let message = error.to_string();
-            run.error = Some(message.chars().take(2048).collect());
-            Err(message)
+            let desktop_error: crate::error::DesktopError = error.into();
+            run.error = Some(desktop_error.message().chars().take(2048).collect());
+            Err(desktop_error)
         }
     };
     let changed = tx
@@ -941,7 +1031,9 @@ fn finish_payload(
         )
         .map_err(db_error)?;
     if changed != 1 {
-        return Err("运行状态已改变，未覆盖历史成果。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "运行状态已改变，未覆盖历史成果。",
+        ));
     }
     tx.commit().map_err(db_error)?;
     output
@@ -951,7 +1043,7 @@ fn finish_recoverable(
     run: Run,
     outcome: Result<String, crate::tool_runner::ToolFailure>,
     failures: &Mutex<BTreeMap<String, Run>>,
-) -> Result<Artifact, String> {
+) -> crate::error::DesktopResult<Artifact> {
     let result = finish(connection, run.clone(), outcome);
     if let Err(error) = &result {
         let stored_state =
@@ -977,7 +1069,12 @@ fn finish_recoverable(
                 terminal.error = Some(format!("运行已结束，但状态未能保存；本次状态仅在当前应用可见，重启后显示中断。请释放空间或恢复写入权限。{error}"));
                 failures
                     .lock()
-                    .map_err(|_| "运行恢复状态不可用。")?
+                    .map_err(|_| {
+                        crate::error::DesktopError::state_unavailable(
+                            "project_store",
+                            "运行恢复状态不可用。",
+                        )
+                    })?
                     .insert(terminal.id.clone(), terminal);
             }
             drop(recovery);
@@ -985,7 +1082,7 @@ fn finish_recoverable(
     }
     result
 }
-fn select(connection: &Connection, project_id: Option<String>) -> Result<(), String> {
+fn select(connection: &Connection, project_id: Option<String>) -> crate::error::DesktopResult<()> {
     if let Some(value) = &project_id {
         project(connection, value)?;
     }
@@ -995,11 +1092,14 @@ fn select(connection: &Connection, project_id: Option<String>) -> Result<(), Str
     ).map_err(db_error)?;
     Ok(())
 }
-fn export(connection: &mut Connection, project_id: &str) -> Result<String, String> {
+fn export(connection: &mut Connection, project_id: &str) -> crate::error::DesktopResult<String> {
     let tx = connection.transaction().map_err(db_error)?;
     export_snapshot(&tx, project_id)
 }
-fn export_snapshot(connection: &Connection, project_id: &str) -> Result<String, String> {
+fn export_snapshot(
+    connection: &Connection,
+    project_id: &str,
+) -> crate::error::DesktopResult<String> {
     let value = project(connection, project_id)?;
     let runs: Vec<Run> = rows(
         connection,
@@ -1023,20 +1123,32 @@ fn export_snapshot(connection: &Connection, project_id: &str) -> Result<String, 
     )
 }
 #[tauri::command]
-pub fn project_snapshot(
+pub async fn project_snapshot(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
-) -> Result<Snapshot, String> {
+) -> crate::error::DesktopResult<Snapshot> {
     crate::runtime::authorize(&window)?;
-    state.snapshot(&app)
+    let store = state.inner().clone();
+    crate::error::run_blocking(
+        "project_store",
+        "读取项目列表意外退出，请重试。",
+        move || store.snapshot(&app),
+    )
+    .await
 }
-pub(crate) fn active_agent_project(app: &tauri::AppHandle, project_id: &str) -> Result<(), String> {
+pub(crate) fn active_agent_project(
+    app: &tauri::AppHandle,
+    project_id: &str,
+) -> crate::error::DesktopResult<()> {
     id(project_id)?;
     app.state::<ProjectStore>()
         .access(app, |c| validate_agent_project(c, project_id))
 }
-pub(crate) fn validate_agent_project(c: &Connection, project_id: &str) -> Result<(), String> {
+pub(crate) fn validate_agent_project(
+    c: &Connection,
+    project_id: &str,
+) -> crate::error::DesktopResult<()> {
     let active: Option<String> = c
         .query_row(
             "SELECT value FROM settings WHERE key='active_project'",
@@ -1047,7 +1159,9 @@ pub(crate) fn validate_agent_project(c: &Connection, project_id: &str) -> Result
         .map_err(db_error)?
         .flatten();
     if active.as_deref() != Some(project_id) {
-        return Err("请先选择当前项目，再启用项目工具。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "请先选择当前项目，再启用项目工具。",
+        ));
     }
     project(c, project_id)?;
     Ok(())
@@ -1061,52 +1175,82 @@ pub(crate) struct AgentRun {
 }
 
 #[tauri::command]
-pub fn project_save(
+pub async fn project_save(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     project: ProjectInput,
-) -> Result<Project, String> {
+) -> crate::error::DesktopResult<Project> {
     crate::runtime::authorize(&window)?;
-    let result = state.access(&app, |c| save(c, project))?;
-    crate::project_maintenance::sync_after_project_change(&app);
-    Ok(result)
+    let store = state.inner().clone();
+    crate::error::run_blocking(
+        "project_store",
+        "保存项目意外退出，请重试。",
+        move || {
+            let result = store.access(&app, |c| save(c, project))?;
+            crate::project_maintenance::sync_after_project_change(&app);
+            Ok(result)
+        },
+    )
+    .await
 }
 #[tauri::command]
-pub fn project_select(
+pub async fn project_select(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     project_id: Option<String>,
-) -> Result<(), String> {
+) -> crate::error::DesktopResult<()> {
     crate::runtime::authorize(&window)?;
-    state.access(&app, |c| select(c, project_id))?;
-    crate::project_maintenance::sync_after_project_change(&app);
-    Ok(())
+    let store = state.inner().clone();
+    crate::error::run_blocking(
+        "project_store",
+        "切换项目意外退出，请重试。",
+        move || {
+            store.access(&app, |c| select(c, project_id))?;
+            crate::project_maintenance::sync_after_project_change(&app);
+            Ok(())
+        },
+    )
+    .await
 }
 #[tauri::command]
-pub fn project_artifact(
+pub async fn project_artifact(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     artifact_id: String,
     local_project_id: Option<String>,
-) -> Result<Artifact, String> {
+) -> crate::error::DesktopResult<Artifact> {
     crate::runtime::authorize(&window)?;
-    state.access(&app, |c| match local_project_id {
-        Some(project_id) => local_session_artifact(c, &project_id, &artifact_id),
-        None => artifact(c, &artifact_id),
-    })
+    let store = state.inner().clone();
+    crate::error::run_blocking(
+        "project_store",
+        "读取报告意外退出，请重试。",
+        move || {
+            store.access(&app, |c| match local_project_id {
+                Some(project_id) => local_session_artifact(c, &project_id, &artifact_id),
+                None => artifact(c, &artifact_id),
+            })
+        },
+    )
+    .await
 }
 #[tauri::command]
-pub fn project_export(
+pub async fn project_export(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     project_id: String,
-) -> Result<String, String> {
+) -> crate::error::DesktopResult<String> {
     crate::runtime::authorize(&window)?;
-    state.access(&app, |c| export(c, &project_id))
+    let store = state.inner().clone();
+    crate::error::run_blocking(
+        "project_store",
+        "导出项目意外退出，请重试。",
+        move || store.access(&app, |c| export(c, &project_id)),
+    )
+    .await
 }
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
@@ -1119,7 +1263,7 @@ pub async fn project_run(
     run_id: String,
     subject: Option<String>,
     query: Option<String>,
-) -> Result<Artifact, String> {
+) -> crate::error::DesktopResult<Artifact> {
     crate::runtime::authorize(&window)?;
     run_internal(
         app,
@@ -1132,7 +1276,7 @@ pub async fn project_run(
         None,
     )
     .await
-    .map_err(|error| error.to_string())
+    .map_err(Into::into)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1194,114 +1338,118 @@ async fn run_internal_guarded(
             agent.reservation,
             Some((agent.request_id, agent.session_id, agent.tool_call_id)),
         )
-    } else if maintenance.is_some() {
-        (runner.reserve_guard_outcome(&run_id)?, None)
     } else {
-        (runner.reserve_guard(&run_id)?, None)
-    };
-    if let Some(binding) = &maintenance {
-        app.state::<crate::project_maintenance::ProjectMaintenance>()
-            .validate_run(&app, binding)?;
-        app.state::<crate::project_maintenance::ProjectMaintenance>()
-            .started(&app, binding, &run_id)?;
-    }
-    let version = versions(&app)?;
-    let query = query.unwrap_or_default();
-    if kind == "explain" && (query.trim().is_empty() || query.chars().count() > 4096) {
-        return Err("请输入 1–4096 字拒因。".into());
-    }
-    let (mut run, directory, _) = store.access(&app, |c| {
-        begin(c, project_id, kind, run_id, subject, version)
-    })?;
-    let prepared = (|| {
-        if let Some((request_id, session_id, tool_call_id)) = linkage {
-            run.agent_request_id = Some(request_id);
-            run.session_id = Some(session_id);
-            run.tool_call_id = Some(tool_call_id);
-        }
-        let mut input: serde_json::Value =
-            serde_json::from_str(&run.input_summary).map_err(|_| "工具输入无效。")?;
-        input["query"] = serde_json::json!(query);
-        run.input_summary = encode(&input)?;
-        store.access(&app, |c| {
-            c.execute(
-                "UPDATE runs SET data=? WHERE id=?",
-                params![encode(&run)?, run.id],
-            )
-            .map_err(db_error)?;
-            Ok(())
-        })?;
-        if run.kind == "check" {
-            crate::tool_runner::directory(directory.as_deref().ok_or("项目目录缺失。")?)?;
-        }
-        let mut command = crate::runtime::node_command(&app, "src/project-tool.mjs", false)?;
-        command.arg(&run.kind).arg(encode(&input)?);
-        Ok::<_, String>(command)
-    })();
-    let command = match prepared {
-        Ok(command) => command,
-        Err(error) => {
-            return store
-                .finish(&app, run, Err(error.into()))
-                .map_err(Into::into)
-        }
+        (runner.reserve_guard_outcome(&run_id)?, None)
     };
     // Reserve before dispatch so stopping while the worker is queued prevents process launch.
-    let application = app.clone();
-    let completion_binding = maintenance.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let _reservation = reservation;
+    tauri::async_runtime::spawn_blocking(move || {
+        let reservation = reservation;
+        if let Some(binding) = &maintenance {
+            app.state::<crate::project_maintenance::ProjectMaintenance>()
+                .validate_run(&app, binding)?;
+            app.state::<crate::project_maintenance::ProjectMaintenance>()
+                .started(&app, binding, &run_id)?;
+        }
+        let version = versions(&app)?;
+        let query = query.unwrap_or_default();
+        if kind == "explain" && (query.trim().is_empty() || query.chars().count() > 4096) {
+            return Err(crate::error::DesktopError::validation("请输入 1–4096 字拒因。").into());
+        }
+        let (mut run, directory, _) = store.access(&app, |c| {
+            begin(c, project_id, kind, run_id, subject, version)
+        })?;
+        let prepared = (|| {
+            if let Some((request_id, session_id, tool_call_id)) = linkage {
+                run.agent_request_id = Some(request_id);
+                run.session_id = Some(session_id);
+                run.tool_call_id = Some(tool_call_id);
+            }
+            let mut input: serde_json::Value = serde_json::from_str(&run.input_summary)
+                .map_err(|_| crate::error::DesktopError::validation("工具输入无效。"))?;
+            input["query"] = serde_json::json!(query);
+            run.input_summary = encode(&input)?;
+            store.access(&app, |c| {
+                c.execute(
+                    "UPDATE runs SET data=? WHERE id=?",
+                    params![encode(&run)?, run.id],
+                )
+                .map_err(db_error)?;
+                Ok(())
+            })?;
+            if run.kind == "check" {
+                crate::tool_runner::directory(
+                    directory
+                        .as_deref()
+                        .ok_or_else(|| crate::error::DesktopError::validation("项目目录缺失。"))?,
+                )?;
+            }
+            let mut command = crate::runtime::node_command(&app, "src/project-tool.mjs", false)?;
+            command.arg(&run.kind).arg(encode(&input)?);
+            Ok::<_, crate::error::DesktopError>(command)
+        })();
+        let command = match prepared {
+            Ok(command) => command,
+            Err(error) => {
+                return store
+                    .finish(&app, run, Err(error.into()))
+                    .map_err(Into::into)
+            }
+        };
         let validate = || match &maintenance {
-            Some(binding) => application
+            Some(binding) => app
                 .state::<crate::project_maintenance::ProjectMaintenance>()
-                .validate_run(&application, binding),
+                .validate_run(&app, binding),
             None => Ok(()),
         };
         let result = validate()
-            .and_then(|()| {
-                runner.run_reserved_outcome(command, run.id.clone(), run.kind == "check")
-            })
+            .and_then(|()| reservation.run_reserved_outcome(command, run.kind == "check"))
             .and_then(|text| validate().map(|()| text));
-        match result {
-            Ok(text) => match parse_envelope(&text, &run.kind) {
-                Ok((markdown, data)) => {
-                    if let Some(binding) = &maintenance {
-                        let saved = application
-                            .state::<crate::project_maintenance::ProjectMaintenance>()
-                            .commit_run(&application, binding, |c| {
-                                finish_structured(c, run.clone(), markdown, data, &store.1)
-                            });
-                        if let Err(error) = &saved {
-                            let _ = store.finish(&application, run, Err(error.clone()));
+        let outcome =
+            match result {
+                Ok(text) => match parse_envelope(&text, &run.kind) {
+                    Ok((markdown, data)) => {
+                        if let Some(binding) = &maintenance {
+                            let saved = app
+                                .state::<crate::project_maintenance::ProjectMaintenance>()
+                                .commit_run(&app, binding, |c| {
+                                    finish_structured(c, run.clone(), markdown, data, &store.1)
+                                });
+                            if let Err(error) = &saved {
+                                let _ = store.finish(&app, run, Err(error.clone()));
+                            }
+                            saved
+                        } else {
+                            store
+                                .access(&app, |c| {
+                                    finish_structured(c, run, markdown, data, &store.1)
+                                })
+                                .map_err(Into::into)
                         }
-                        saved
-                    } else {
-                        store
-                            .access(&application, |c| {
-                                finish_structured(c, run, markdown, data, &store.1)
-                            })
-                            .map_err(Into::into)
                     }
-                }
+                    Err(error) => store
+                        .finish(&app, run, Err(error.into()))
+                        .map_err(Into::into),
+                },
                 Err(error) => store
-                    .finish(&application, run, Err(error.into()))
-                    .map_err(Into::into),
-            },
-            Err(error) => store
-                .finish(&application, run, Err(error.clone()))
-                .map_err(|message| match error {
-                    crate::tool_runner::ToolFailure::Failed(_) => message.into(),
-                    other => other,
-                }),
+                    .finish(&app, run, Err(error.clone()))
+                    .map_err(|message| match error {
+                        crate::tool_runner::ToolFailure::Failed(_) => message.into(),
+                        other => other,
+                    }),
+            };
+        if let Ok(report) = &outcome {
+            app.state::<crate::project_maintenance::ProjectMaintenance>()
+                .completed(&app, report, maintenance.as_ref());
         }
+        outcome
     })
     .await
-    .map_err(|_| "本地任务异常退出；运行记录会在重启后恢复为中断。".to_string())?;
-    if let Ok(report) = &result {
-        app.state::<crate::project_maintenance::ProjectMaintenance>()
-            .completed(&app, report, completion_binding.as_ref());
-    }
-    result
+    .map_err(|_| {
+        crate::error::DesktopError::task_aborted(
+            "project_store",
+            "本地任务异常退出；运行记录会在重启后恢复为中断。",
+        )
+    })?
 }
 
 include!("project_workflow.rs");

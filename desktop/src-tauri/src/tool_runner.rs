@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
     process::{Child, Command, Stdio},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
     time::{Duration, Instant},
@@ -18,7 +18,7 @@ pub enum ToolFailure {
     Canceled,
     TimedOut,
     Busy,
-    Failed(String),
+    Failed(crate::error::DesktopError),
 }
 impl ToolFailure {
     pub fn code(&self) -> &'static str {
@@ -29,6 +29,18 @@ impl ToolFailure {
             Self::Failed(_) => "tool_failed",
         }
     }
+    pub fn into_desktop_error(self) -> crate::error::DesktopError {
+        match self {
+            Self::Canceled => crate::error::DesktopError::conflict("已停止本地工具。"),
+            Self::TimedOut => {
+                crate::error::DesktopError::io("本地工具运行超时，请缩小检查范围后重试。")
+            }
+            Self::Busy => {
+                crate::error::DesktopError::conflict("已有本地工具正在运行，请先停止或等待完成。")
+            }
+            Self::Failed(error) => error,
+        }
+    }
 }
 impl std::fmt::Display for ToolFailure {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -36,18 +48,28 @@ impl std::fmt::Display for ToolFailure {
             Self::Canceled => formatter.write_str("已停止本地工具。"),
             Self::TimedOut => formatter.write_str("本地工具运行超时，请缩小检查范围后重试。"),
             Self::Busy => formatter.write_str("已有本地工具正在运行，请先停止或等待完成。"),
-            Self::Failed(message) => formatter.write_str(message),
+            Self::Failed(error) => formatter.write_str(error.message()),
         }
+    }
+}
+impl From<crate::error::DesktopError> for ToolFailure {
+    fn from(value: crate::error::DesktopError) -> Self {
+        Self::Failed(value)
+    }
+}
+impl From<ToolFailure> for crate::error::DesktopError {
+    fn from(value: ToolFailure) -> Self {
+        value.into_desktop_error()
     }
 }
 impl From<String> for ToolFailure {
     fn from(value: String) -> Self {
-        Self::Failed(value)
+        Self::Failed(crate::error::DesktopError::from(value))
     }
 }
-impl From<&str> for ToolFailure {
-    fn from(value: &str) -> Self {
-        Self::Failed(value.into())
+impl From<&'static str> for ToolFailure {
+    fn from(value: &'static str) -> Self {
+        Self::Failed(crate::error::DesktopError::from(value))
     }
 }
 
@@ -57,40 +79,71 @@ pub struct ToolRunner(Arc<Inner>);
 struct Inner {
     active: Mutex<Option<Active>>,
     closed: AtomicBool,
+    next_token: AtomicU64,
 }
 /// Owns a reservation across preparation/queueing and releases it on every early exit.
 pub struct Reservation {
     runner: ToolRunner,
     id: String,
+    token: u64,
 }
 impl Reservation {
+    pub(crate) fn run_reserved(
+        &self,
+        command: Command,
+        check: bool,
+    ) -> crate::error::DesktopResult<String> {
+        self.run_reserved_outcome(command, check)
+            .map_err(Into::into)
+    }
+
+    pub(crate) fn run_reserved_outcome(
+        &self,
+        command: Command,
+        check: bool,
+    ) -> Result<String, ToolFailure> {
+        self.runner.execute_inner(
+            command,
+            self.id.clone(),
+            Some(self.token),
+            check,
+            TIMEOUT,
+            false,
+        )
+    }
+
     /// Keep this slot cancellable after the child exits, while its output is validated.
     pub(crate) fn run_retained(&self, command: Command) -> Result<String, ToolFailure> {
-        self.runner
-            .execute_inner(command, self.id.clone(), false, TIMEOUT, true)
+        self.runner.execute_inner(
+            command,
+            self.id.clone(),
+            Some(self.token),
+            false,
+            TIMEOUT,
+            true,
+        )
     }
 
     /// Linearize a short persistence operation with cancellation and shutdown.
     /// The callback must not call the runner or wait for a process.
     pub(crate) fn commit<T>(
         &self,
-        action: impl FnOnce() -> Result<T, String>,
+        action: impl FnOnce() -> crate::error::DesktopResult<T>,
     ) -> Result<T, ToolFailure> {
-        let guard = self
-            .runner
-            .0
-            .active
-            .lock()
-            .map_err(|_| "本地工具状态不可用。")?;
+        let guard = self.runner.0.active.lock().map_err(|_| {
+            crate::error::DesktopError::state_unavailable("tool_runner", "本地工具状态不可用。")
+        })?;
         let active = guard
             .as_ref()
-            .filter(|active| active.id == self.id)
+            .filter(|active| active.token == self.token && active.id == self.id)
             .ok_or(ToolFailure::Canceled)?;
         if active.cancelled || self.runner.0.closed.load(Ordering::Acquire) {
             return Err(ToolFailure::Canceled);
         }
         if active.child.is_some() {
-            return Err("工具尚未完成，不能保存结果。".into());
+            return Err(
+                crate::error::DesktopError::conflict("工具尚未完成，不能保存结果。").into(),
+            );
         }
         action().map_err(ToolFailure::Failed)
     }
@@ -99,23 +152,24 @@ impl Drop for Reservation {
     fn drop(&mut self) {
         drop(Lease {
             runner: &self.runner,
-            id: &self.id,
+            token: self.token,
         });
     }
 }
 struct Active {
     id: String,
+    token: u64,
     child: Option<Child>,
     cancelled: bool,
 }
 struct Lease<'a> {
     runner: &'a ToolRunner,
-    id: &'a str,
+    token: u64,
 }
 impl Drop for Lease<'_> {
     fn drop(&mut self) {
         if let Ok(mut active) = self.runner.0.active.lock() {
-            if active.as_ref().is_some_and(|a| a.id == self.id) {
+            if active.as_ref().is_some_and(|a| a.token == self.token) {
                 if let Some(mut child) = active.take().and_then(|a| a.child) {
                     let _ = child.kill();
                     let _ = child.wait();
@@ -125,28 +179,36 @@ impl Drop for Lease<'_> {
     }
 }
 
-pub fn subject(value: &str) -> Result<(), String> {
+pub fn subject(value: &str) -> crate::error::DesktopResult<()> {
     if ["personal", "individual_business", "enterprise"].contains(&value) {
         Ok(())
     } else {
-        Err("请选择有效的主体类型。".into())
+        Err(crate::error::DesktopError::validation(
+            "请选择有效的主体类型。",
+        ))
     }
 }
-pub fn directory(value: &str) -> Result<PathBuf, String> {
+pub fn directory(value: &str) -> crate::error::DesktopResult<PathBuf> {
     if value.trim().is_empty() {
-        return Err("请先选择小程序项目文件夹。".into());
+        return Err(crate::error::DesktopError::validation(
+            "请先选择小程序项目文件夹。",
+        ));
     }
     let path = PathBuf::from(value)
         .canonicalize()
         .map_err(|error| match error.kind() {
-            std::io::ErrorKind::NotFound => "项目文件夹不存在，请重新选择。",
-            std::io::ErrorKind::PermissionDenied => {
-                "没有访问项目文件夹的权限，请选择可访问的文件夹。"
+            std::io::ErrorKind::NotFound => {
+                crate::error::DesktopError::io("项目文件夹不存在，请重新选择。")
             }
-            _ => "无法读取项目文件夹，请检查路径后重试。",
+            std::io::ErrorKind::PermissionDenied => {
+                crate::error::DesktopError::io("没有访问项目文件夹的权限，请选择可访问的文件夹。")
+            }
+            _ => crate::error::DesktopError::io("无法读取项目文件夹，请检查路径后重试。"),
         })?;
     if !path.is_dir() {
-        return Err("请选择文件夹，不能选择文件。".into());
+        return Err(crate::error::DesktopError::validation(
+            "请选择文件夹，不能选择文件。",
+        ));
     }
     Ok(path)
 }
@@ -174,46 +236,53 @@ fn report(
     check: bool,
     output: Vec<u8>,
     stderr: &[u8],
-) -> Result<String, String> {
+) -> crate::error::DesktopResult<String> {
     if !(code == Some(0) || check && code == Some(2)) {
         let status = code.map_or_else(
             || "进程异常终止".to_string(),
             |code| format!("退出码 {code}"),
         );
         let detail = diagnostic(stderr);
-        return Err(format!(
+        return Err(crate::error::DesktopError::io(format!(
             "本地工具执行失败（{status}）。{}",
             if detail.is_empty() {
                 "未提供错误详情，请重试。".to_string()
             } else {
                 format!("\n{detail}")
             }
-        ));
+        )));
     }
-    let text = String::from_utf8(output).map_err(|_| "本地工具返回了无效文本。")?;
+    let text = String::from_utf8(output)
+        .map_err(|_| crate::error::DesktopError::io("本地工具返回了无效文本。"))?;
     if text.trim().is_empty() {
-        return Err("本地工具没有返回报告，请重试。".into());
+        return Err(crate::error::DesktopError::io(
+            "本地工具没有返回报告，请重试。",
+        ));
     }
     Ok(text)
 }
-fn drain(mut pipe: impl Read, overflow: Arc<AtomicBool>) -> Result<Vec<u8>, String> {
+fn drain(mut pipe: impl Read, overflow: Arc<AtomicBool>) -> crate::error::DesktopResult<Vec<u8>> {
     let mut output = Vec::new();
     pipe.by_ref()
         .take((OUTPUT_LIMIT + 1) as u64)
         .read_to_end(&mut output)
-        .map_err(|_| "读取本地工具输出失败。")?;
+        .map_err(|_| crate::error::DesktopError::io("读取本地工具输出失败。"))?;
     if output.len() > OUTPUT_LIMIT {
         overflow.store(true, Ordering::Release);
-        return Err("本地工具报告过大，请缩小检查范围。".into());
+        return Err(crate::error::DesktopError::validation(
+            "本地工具报告过大，请缩小检查范围。",
+        ));
     }
     Ok(output)
 }
 impl ToolRunner {
-    pub fn cancel(&self, id: &str) -> Result<(), String> {
+    pub fn cancel(&self, id: &str) -> crate::error::DesktopResult<()> {
         if !crate::runtime::valid_id(id) {
-            return Err("运行编号无效。".into());
+            return Err(crate::error::DesktopError::validation("运行编号无效。"));
         }
-        let mut active = self.0.active.lock().map_err(|_| "本地工具状态不可用。")?;
+        let mut active = self.0.active.lock().map_err(|_| {
+            crate::error::DesktopError::state_unavailable("tool_runner", "本地工具状态不可用。")
+        })?;
         if let Some(active) = active.as_mut().filter(|a| a.id == id) {
             active.cancelled = true;
             if let Some(child) = active.child.as_mut() {
@@ -236,47 +305,58 @@ impl ToolRunner {
             self.0.closed.store(true, Ordering::Release);
         }
     }
-    pub fn reserve(&self, id: &str) -> Result<(), String> {
-        self.reserve_outcome(id).map_err(|error| error.to_string())
+    #[cfg(test)]
+    pub fn reserve(&self, id: &str) -> crate::error::DesktopResult<()> {
+        self.reserve_outcome(id).map(|_| ()).map_err(Into::into)
     }
-    fn reserve_outcome(&self, id: &str) -> Result<(), ToolFailure> {
+    fn reserve_outcome(&self, id: &str) -> Result<u64, ToolFailure> {
         if !crate::runtime::valid_id(id) {
-            return Err("运行编号无效。".into());
+            return Err(crate::error::DesktopError::validation("运行编号无效。").into());
         }
-        let mut active = self.0.active.lock().map_err(|_| "本地工具状态不可用。")?;
+        let mut active = self.0.active.lock().map_err(|_| {
+            crate::error::DesktopError::state_unavailable("tool_runner", "本地工具状态不可用。")
+        })?;
         if self.0.closed.load(Ordering::Acquire) {
-            return Err("应用正在退出。".into());
+            return Err(crate::error::DesktopError::state_unavailable(
+                "tool_runner",
+                "应用正在退出。",
+            )
+            .into());
         }
         if active.is_some() {
             return Err(ToolFailure::Busy);
         }
+        let token = self.0.next_token.fetch_add(1, Ordering::Relaxed) + 1;
         *active = Some(Active {
             id: id.to_owned(),
+            token,
             child: None,
             cancelled: false,
         });
-        Ok(())
+        Ok(token)
     }
-    pub fn reserve_guard(&self, id: &str) -> Result<Reservation, String> {
-        self.reserve_guard_outcome(id)
-            .map_err(|error| error.to_string())
+    pub fn reserve_guard(&self, id: &str) -> crate::error::DesktopResult<Reservation> {
+        self.reserve_guard_outcome(id).map_err(Into::into)
     }
     pub fn reserve_guard_outcome(&self, id: &str) -> Result<Reservation, ToolFailure> {
-        self.reserve_outcome(id)?;
+        let token = self.reserve_outcome(id)?;
         Ok(Reservation {
             runner: self.clone(),
             id: id.into(),
+            token,
         })
     }
+    #[cfg(test)]
     pub fn run_reserved(
         &self,
         command: Command,
         id: String,
         check: bool,
-    ) -> Result<String, String> {
+    ) -> crate::error::DesktopResult<String> {
         self.run_reserved_outcome(command, id, check)
-            .map_err(|error| error.to_string())
+            .map_err(Into::into)
     }
+    #[cfg(test)]
     pub fn run_reserved_outcome(
         &self,
         command: Command,
@@ -286,7 +366,12 @@ impl ToolRunner {
         self.execute(command, id, check, TIMEOUT)
     }
     #[cfg(test)]
-    fn run(&self, command: Command, id: String, check: bool) -> Result<String, String> {
+    fn run(
+        &self,
+        command: Command,
+        id: String,
+        check: bool,
+    ) -> crate::error::DesktopResult<String> {
         self.run_with_timeout(command, id, check, TIMEOUT)
     }
     #[cfg(test)]
@@ -296,11 +381,12 @@ impl ToolRunner {
         id: String,
         check: bool,
         timeout: Duration,
-    ) -> Result<String, String> {
+    ) -> crate::error::DesktopResult<String> {
         self.reserve(&id)?;
         self.execute(command, id, check, timeout)
-            .map_err(|error| error.to_string())
+            .map_err(Into::into)
     }
+    #[cfg(test)]
     fn execute(
         &self,
         command: Command,
@@ -308,27 +394,39 @@ impl ToolRunner {
         check: bool,
         timeout: Duration,
     ) -> Result<String, ToolFailure> {
-        self.execute_inner(command, id, check, timeout, false)
+        self.execute_inner(command, id, None, check, timeout, false)
     }
     fn execute_inner(
         &self,
         mut command: Command,
         id: String,
+        expected_token: Option<u64>,
         check: bool,
         timeout: Duration,
         retained: bool,
     ) -> Result<String, ToolFailure> {
-        let lease = (!retained).then(|| Lease {
-            runner: self,
-            id: &id,
-        });
-        let (stdout, stderr) = {
+        let mut lease = None;
+        let (slot_token, stdout, stderr) = {
             // Spawn under the same lock used by shutdown, so shutdown cannot miss a new child.
-            let mut active = self.0.active.lock().map_err(|_| "本地工具状态不可用。")?;
+            let mut active = self.0.active.lock().map_err(|_| {
+                crate::error::DesktopError::state_unavailable("tool_runner", "本地工具状态不可用。")
+            })?;
             let active = active
                 .as_mut()
-                .filter(|a| a.id == id)
-                .ok_or("本地工具状态不可用。")?;
+                .filter(|a| a.id == id && expected_token.is_none_or(|t| a.token == t))
+                .ok_or_else(|| {
+                    crate::error::DesktopError::state_unavailable(
+                        "tool_runner",
+                        "本地工具状态不可用。",
+                    )
+                })?;
+            let slot_token = active.token;
+            if !retained {
+                lease = Some(Lease {
+                    runner: self,
+                    token: slot_token,
+                });
+            }
             if active.cancelled {
                 return Err(ToolFailure::Canceled);
             }
@@ -337,12 +435,21 @@ impl ToolRunner {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()
-                .map_err(|_| "无法启动内置工具，请修复或重新安装应用。")?;
+                .map_err(|_| {
+                    crate::error::DesktopError::io("无法启动内置工具，请修复或重新安装应用。")
+                })?;
             active.child = Some(child);
             let child = active.child.as_mut().unwrap();
             (
-                child.stdout.take().ok_or("工具输出通道不可用。")?,
-                child.stderr.take().ok_or("工具错误通道不可用。")?,
+                slot_token,
+                child
+                    .stdout
+                    .take()
+                    .ok_or_else(|| crate::error::DesktopError::io("工具输出通道不可用。"))?,
+                child
+                    .stderr
+                    .take()
+                    .ok_or_else(|| crate::error::DesktopError::io("工具错误通道不可用。"))?,
             )
         };
         let overflow = Arc::new(AtomicBool::new(false));
@@ -356,14 +463,30 @@ impl ToolRunner {
                 .0
                 .active
                 .lock()
-                .map_err(|_| ToolFailure::from("本地工具状态不可用。"))
+                .map_err(|_| {
+                    ToolFailure::from(crate::error::DesktopError::state_unavailable(
+                        "tool_runner",
+                        "本地工具状态不可用。",
+                    ))
+                })
                 .and_then(|mut active| {
-                    let active = active.as_mut().ok_or("本地工具状态不可用。")?;
+                    let active = active
+                        .as_mut()
+                        .filter(|a| a.token == slot_token)
+                        .ok_or_else(|| {
+                            crate::error::DesktopError::state_unavailable(
+                                "tool_runner",
+                                "本地工具状态不可用。",
+                            )
+                        })?;
                     if active.cancelled {
                         return Err(ToolFailure::Canceled);
                     }
                     if overflow.load(Ordering::Acquire) {
-                        return Err("本地工具报告过大，请缩小检查范围。".into());
+                        return Err(crate::error::DesktopError::validation(
+                            "本地工具报告过大，请缩小检查范围。",
+                        )
+                        .into());
                     }
                     if start.elapsed() >= timeout {
                         return Err(ToolFailure::TimedOut);
@@ -371,9 +494,16 @@ impl ToolRunner {
                     active
                         .child
                         .as_mut()
-                        .ok_or("工具进程不可用。")?
+                        .ok_or_else(|| {
+                            crate::error::DesktopError::state_unavailable(
+                                "tool_runner",
+                                "工具进程不可用。",
+                            )
+                        })?
                         .try_wait()
-                        .map_err(|_| "无法读取工具退出状态。".into())
+                        .map_err(|_| {
+                            crate::error::DesktopError::io("无法读取工具退出状态。").into()
+                        })
                 });
             match state {
                 Ok(Some(status)) => break Ok(status.code()),
@@ -386,7 +516,7 @@ impl ToolRunner {
             if let Ok(mut active) = self.0.active.lock() {
                 if let Some(mut child) = active
                     .as_mut()
-                    .filter(|active| active.id == id)
+                    .filter(|active| active.token == slot_token)
                     .and_then(|active| active.child.take())
                 {
                     let _ = child.kill();
@@ -395,8 +525,12 @@ impl ToolRunner {
             }
         }
         drop(lease);
-        let output = stdout.join().map_err(|_| "工具输出读取失败。".to_string());
-        let error_output = stderr.join().map_err(|_| "工具错误读取失败。".to_string());
+        let output = stdout.join().map_err(|_| {
+            crate::error::DesktopError::task_aborted("tool_runner", "工具输出读取失败。")
+        });
+        let error_output = stderr.join().map_err(|_| {
+            crate::error::DesktopError::task_aborted("tool_runner", "工具错误读取失败。")
+        });
         let code = outcome?;
         let output = output??;
         let error_output = error_output??;
@@ -687,6 +821,7 @@ mod tests {
         let runner = ToolRunner::default();
         *runner.0.active.lock().unwrap() = Some(Active {
             id: "new".into(),
+            token: 1,
             child: None,
             cancelled: false,
         });
@@ -707,5 +842,23 @@ mod tests {
             .unwrap_err()
             .contains("停止"));
         assert!(runner.0.active.lock().unwrap().is_none());
+    }
+    #[test]
+    fn dropping_completed_reservation_does_not_evict_reused_run_id() {
+        let runner = ToolRunner::default();
+        let res1 = runner.reserve_guard("reused-run").unwrap();
+        res1.run_reserved(fixture("success"), false).unwrap();
+        let res2 = runner.reserve_guard("reused-run").unwrap();
+        drop(res1);
+        assert_eq!(res2.commit(|| Ok("ok")).unwrap(), "ok");
+        drop(res2);
+
+        let res3 = runner.reserve_guard("reused-run-legacy").unwrap();
+        runner
+            .run_reserved(fixture("success"), "reused-run-legacy".into(), false)
+            .unwrap();
+        let res4 = runner.reserve_guard("reused-run-legacy").unwrap();
+        drop(res3);
+        assert_eq!(res4.commit(|| Ok("ok")).unwrap(), "ok");
     }
 }

@@ -14,7 +14,12 @@ use tauri::ipc::Channel;
 use tauri::Manager;
 
 type Channels = Arc<Mutex<HashMap<String, Channel<Value>>>>;
-pub struct ModelBridge(Mutex<Option<Runtime>>, AtomicBool);
+#[derive(Clone, Default)]
+pub struct ModelBridge(Arc<ModelBridgeInner>);
+struct ModelBridgeInner {
+    runtime: Mutex<Option<Runtime>>,
+    closed: AtomicBool,
+}
 struct Runtime {
     agent_tools: crate::agent_tools::AgentTools,
     tool_runner: crate::tool_runner::ToolRunner,
@@ -24,9 +29,12 @@ struct Runtime {
     reader_closed: Arc<AtomicBool>,
     stopping: Arc<AtomicBool>,
 }
-impl Default for ModelBridge {
+impl Default for ModelBridgeInner {
     fn default() -> Self {
-        Self(Mutex::new(None), AtomicBool::new(false))
+        Self {
+            runtime: Mutex::new(None),
+            closed: AtomicBool::new(false),
+        }
     }
 }
 impl Runtime {
@@ -46,19 +54,24 @@ fn fail_pending(channels: &Channels) {
         }
     }
 }
-impl ModelBridge {
-    pub fn shutdown(&self) {
-        self.1.store(true, Ordering::Release);
-        if let Ok(mut runtime) = self.0.lock() {
+impl ModelBridgeInner {
+    fn shutdown(&self) {
+        self.closed.store(true, Ordering::Release);
+        if let Ok(mut runtime) = self.runtime.lock() {
             if let Some(mut child) = runtime.take() {
                 child.stop();
             }
         }
     }
 }
-impl Drop for ModelBridge {
+impl Drop for ModelBridgeInner {
     fn drop(&mut self) {
         self.shutdown();
+    }
+}
+impl ModelBridge {
+    pub fn shutdown(&self) {
+        self.0.shutdown();
     }
 }
 
@@ -142,7 +155,7 @@ fn write_frame(stdin: &Arc<Mutex<ChildStdin>>, value: &Value) -> Result<(), ()> 
         .and_then(|_| stdin.flush())
         .map_err(|_| ())
 }
-fn start(app: &tauri::AppHandle) -> Result<Runtime, String> {
+fn start(app: &tauri::AppHandle) -> crate::error::DesktopResult<Runtime> {
     let tool_runner = app
         .state::<crate::tool_runner::ToolRunner>()
         .inner()
@@ -152,7 +165,7 @@ fn start(app: &tauri::AppHandle) -> Result<Runtime, String> {
     let output_runner = tool_runner.clone();
     let output_app = app.clone();
     let credentials = crate::credential_store::CredentialStore::new(&app.config().identifier)
-        .map_err(str::to_owned)?;
+        .map_err(crate::error::DesktopError::validation)?;
 
     let mut command = crate::runtime::node_command(app, "desktop/server/desktop-bridge.mjs", true)?;
     command
@@ -166,14 +179,14 @@ fn start(app: &tauri::AppHandle) -> Result<Runtime, String> {
             "broker_spawn_failed",
             "spawn_error",
         );
-        "无法启动内置模型服务，请修复或重新安装应用。".to_string()
+        crate::error::DesktopError::io("无法启动内置模型服务，请修复或重新安装应用。")
     })?;
     let (stdin, stdout) = match (child.stdin.take(), child.stdout.take()) {
         (Some(stdin), Some(stdout)) => (stdin, stdout),
         _ => {
             let _ = child.kill();
             let _ = child.wait();
-            return Err("无法创建模型服务通信通道。".into());
+            return Err(crate::error::DesktopError::io("无法创建模型服务通信通道。"));
         }
     };
     let stdin = Arc::new(Mutex::new(stdin));
@@ -315,7 +328,9 @@ fn start(app: &tauri::AppHandle) -> Result<Runtime, String> {
     if reader.is_err() {
         let _ = child.kill();
         let _ = child.wait();
-        return Err("无法启动模型服务输出读取器，请重试。".into());
+        return Err(crate::error::DesktopError::io(
+            "无法启动模型服务输出读取器，请重试。",
+        ));
     }
     Ok(Runtime {
         agent_tools,
@@ -329,88 +344,123 @@ fn start(app: &tauri::AppHandle) -> Result<Runtime, String> {
 }
 
 #[tauri::command]
-pub fn model_request(
+pub async fn model_request(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
-    state: tauri::State<ModelBridge>,
+    state: tauri::State<'_, ModelBridge>,
     request: ModelRequest,
     on_event: Channel<Value>,
-) -> Result<(), String> {
+) -> crate::error::DesktopResult<()> {
     authorize(&window)?;
     if !validate(&request) {
-        return Err("桌面模型请求格式无效。".into());
+        return Err(crate::error::DesktopError::validation(
+            "桌面模型请求格式无效。",
+        ));
     }
     let permission = if agent_route(&request.path) {
         Some(crate::agent_tools::permission(request.body.as_deref())?)
     } else {
         None
     };
-    let mut guard = state.0.lock().map_err(|_| "模型服务状态不可用。")?;
-    if state.1.load(Ordering::Acquire) {
-        return Err("应用正在退出。".into());
-    }
-    if guard.as_mut().is_some_and(|runtime| {
-        runtime.reader_closed.load(Ordering::Acquire)
-            || !matches!(runtime.child.try_wait(), Ok(None))
-    }) {
-        if let Some(mut runtime) = guard.take() {
-            runtime.stop();
-        }
-    }
-    if guard.is_none() {
-        *guard = Some(start(&app)?);
-    }
-    let runtime = guard.as_mut().unwrap();
-    {
-        let mut pending = runtime
-            .channels
-            .lock()
-            .map_err(|_| "模型服务状态不可用。")?;
-        if pending.len() >= 16 || pending.contains_key(&request.id) {
-            return Err("请求过多或请求编号重复，请稍后重试。".into());
-        }
-        if let Some(permission) = permission {
-            runtime
-                .agent_tools
-                .register(&app, &request.id, permission)?;
-        }
-        pending.insert(request.id.clone(), on_event);
-    }
-    let frame = json!({"type":"request","request":request});
-    if write_frame(&runtime.stdin, &frame).is_err() {
-        crate::diagnostics::record_reason(
-            "model_bridge",
-            "warn",
-            "broker_disconnected",
-            "request_stdin_write_failed",
-        );
-        runtime.stop();
-        *guard = None;
-        return Err("模型服务已退出，请重试。".into());
-    }
-    Ok(())
+    let bridge = state.inner().clone();
+    crate::error::run_blocking(
+        "model_bridge",
+        "模型请求任务意外退出，请重试。",
+        move || {
+            let mut guard = bridge.0.runtime.lock().map_err(|_| {
+                crate::error::DesktopError::state_unavailable(
+                    "model_bridge",
+                    "模型服务状态不可用。",
+                )
+            })?;
+            if bridge.0.closed.load(Ordering::Acquire) {
+                return Err(crate::error::DesktopError::state_unavailable(
+                    "model_bridge",
+                    "应用正在退出。",
+                ));
+            }
+            if guard.as_mut().is_some_and(|runtime| {
+                runtime.reader_closed.load(Ordering::Acquire)
+                    || !matches!(runtime.child.try_wait(), Ok(None))
+            }) {
+                if let Some(mut runtime) = guard.take() {
+                    runtime.stop();
+                }
+            }
+            if guard.is_none() {
+                *guard = Some(start(&app)?);
+            }
+            let runtime = guard.as_mut().unwrap();
+            {
+                let mut pending = runtime.channels.lock().map_err(|_| {
+                    crate::error::DesktopError::state_unavailable(
+                        "model_bridge",
+                        "模型服务状态不可用。",
+                    )
+                })?;
+                if pending.len() >= 16 || pending.contains_key(&request.id) {
+                    return Err(crate::error::DesktopError::conflict(
+                        "请求过多或请求编号重复，请稍后重试。",
+                    ));
+                }
+                if let Some(permission) = permission {
+                    runtime
+                        .agent_tools
+                        .register(&app, &request.id, permission)?;
+                }
+                pending.insert(request.id.clone(), on_event);
+            }
+            let frame = json!({"type":"request","request":request});
+            if write_frame(&runtime.stdin, &frame).is_err() {
+                crate::diagnostics::record_reason(
+                    "model_bridge",
+                    "warn",
+                    "broker_disconnected",
+                    "request_stdin_write_failed",
+                );
+                runtime.stop();
+                *guard = None;
+                return Err(crate::error::DesktopError::io("模型服务已退出，请重试。"));
+            }
+            Ok(())
+        },
+    )
+    .await
 }
 #[tauri::command]
-pub fn model_cancel(
+pub async fn model_cancel(
     window: tauri::WebviewWindow,
-    state: tauri::State<ModelBridge>,
+    state: tauri::State<'_, ModelBridge>,
     id: String,
-) -> Result<(), String> {
+) -> crate::error::DesktopResult<()> {
     authorize(&window)?;
     if !valid_id(&id) {
-        return Err("请求编号无效。".into());
+        return Err(crate::error::DesktopError::validation("请求编号无效。"));
     }
-    let mut guard = state.0.lock().map_err(|_| "模型服务状态不可用。")?;
-    if let Some(runtime) = guard.as_mut() {
-        runtime.agent_tools.revoke(&id, &runtime.tool_runner);
-        let frame = json!({"type":"cancel","id":id});
-        if write_frame(&runtime.stdin, &frame).is_err() {
-            runtime.stop();
-            *guard = None;
-            return Err("模型服务已退出，请重试。".into());
-        }
-    }
-    Ok(())
+    let bridge = state.inner().clone();
+    crate::error::run_blocking(
+        "model_bridge",
+        "模型取消任务意外退出。",
+        move || {
+            let mut guard = bridge.0.runtime.lock().map_err(|_| {
+                crate::error::DesktopError::state_unavailable(
+                    "model_bridge",
+                    "模型服务状态不可用。",
+                )
+            })?;
+            if let Some(runtime) = guard.as_mut() {
+                runtime.agent_tools.revoke(&id, &runtime.tool_runner);
+                let frame = json!({"type":"cancel","id":id});
+                if write_frame(&runtime.stdin, &frame).is_err() {
+                    runtime.stop();
+                    *guard = None;
+                    return Err(crate::error::DesktopError::io("模型服务已退出，请重试。"));
+                }
+            }
+            Ok(())
+        },
+    )
+    .await
 }
 
 #[cfg(test)]

@@ -66,7 +66,7 @@ impl From<MemoryDocument> for MemorySnapshot {
     }
 }
 
-fn validate_entry(entry_id: &str, title: &str, text: &str) -> Result<(), String> {
+fn validate_entry(entry_id: &str, title: &str, text: &str) -> crate::error::DesktopResult<()> {
     id(entry_id)?;
     if title.trim().is_empty() || title.chars().count() > 80 || title.chars().any(char::is_control)
     {
@@ -77,13 +77,18 @@ fn validate_entry(entry_id: &str, title: &str, text: &str) -> Result<(), String>
     Ok(())
 }
 
-fn validate_document(document: &MemoryDocument, project_id: &str) -> Result<(), String> {
+fn validate_document(
+    document: &MemoryDocument,
+    project_id: &str,
+) -> crate::error::DesktopResult<()> {
     if document.schema_version != 1
         || document.project_id != project_id
         || document.revision > MAX_REVISION
         || (document.revision == 0 && !document.entries.is_empty())
     {
-        return Err("项目记忆版本或所属项目不匹配，请保留数据库并检查备份。".into());
+        return Err(crate::error::DesktopError::database(
+            "项目记忆版本或所属项目不匹配，请保留数据库并检查备份。",
+        ));
     }
     if document.entries.len() > MAX_ENTRIES {
         return Err("每个项目最多保存 20 条记忆，请先删除不再需要的内容。".into());
@@ -97,7 +102,9 @@ fn validate_document(document: &MemoryDocument, project_id: &str) -> Result<(), 
             || entry.updated_at < entry.created_at
             || entry.updated_at > MAX_REVISION
         {
-            return Err("项目记忆记录无效，请保留数据库并检查备份。".into());
+            return Err(crate::error::DesktopError::database(
+                "项目记忆记录无效，请保留数据库并检查备份。",
+            ));
         }
         bytes += entry.text.len();
     }
@@ -107,7 +114,10 @@ fn validate_document(document: &MemoryDocument, project_id: &str) -> Result<(), 
     Ok(())
 }
 
-fn read_document(connection: &Connection, project_id: &str) -> Result<MemoryDocument, String> {
+fn read_document(
+    connection: &Connection,
+    project_id: &str,
+) -> crate::error::DesktopResult<MemoryDocument> {
     id(project_id)?;
     // Bound decoding even if a local database was modified outside the application.
     let stored: Option<Option<String>> = connection
@@ -126,20 +136,29 @@ fn read_document(connection: &Connection, project_id: &str) -> Result<MemoryDocu
             entries: vec![],
         },
         Some(Some(value)) => decode(value)?,
-        Some(None) => return Err("项目记忆数据为空或超出上限，请保留数据库并检查备份。".into()),
+        Some(None) => {
+            return Err(crate::error::DesktopError::database(
+                "项目记忆数据为空或超出上限，请保留数据库并检查备份。",
+            ))
+        }
     };
     validate_document(&document, project_id)?;
     Ok(document)
 }
 
-fn check_revision(document: &MemoryDocument, expected: u64) -> Result<(), String> {
+fn check_revision(document: &MemoryDocument, expected: u64) -> crate::error::DesktopResult<()> {
     if document.revision != expected {
-        return Err("项目记忆已发生变化，请刷新后重新编辑，避免覆盖其他修改。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "项目记忆已发生变化，请刷新后重新编辑，避免覆盖其他修改。",
+        ));
     }
     Ok(())
 }
 
-fn persist(connection: &Connection, document: &mut MemoryDocument) -> Result<(), String> {
+fn persist(
+    connection: &Connection,
+    document: &mut MemoryDocument,
+) -> crate::error::DesktopResult<()> {
     document.revision = document
         .revision
         .checked_add(1)
@@ -157,7 +176,7 @@ fn persist(connection: &Connection, document: &mut MemoryDocument) -> Result<(),
 pub(crate) fn snapshot(
     connection: &mut Connection,
     project_id: &str,
-) -> Result<MemorySnapshot, String> {
+) -> crate::error::DesktopResult<MemorySnapshot> {
     let tx = connection.transaction().map_err(db_error)?;
     validate_agent_project(&tx, project_id)?;
     Ok(read_document(&tx, project_id)?.into())
@@ -168,7 +187,7 @@ pub(crate) fn save(
     project_id: &str,
     expected_revision: u64,
     input: MemoryInput,
-) -> Result<MemorySnapshot, String> {
+) -> crate::error::DesktopResult<MemorySnapshot> {
     let tx = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(db_error)?;
@@ -207,7 +226,7 @@ pub(crate) fn delete(
     project_id: &str,
     expected_revision: u64,
     entry_id: &str,
-) -> Result<MemorySnapshot, String> {
+) -> crate::error::DesktopResult<MemorySnapshot> {
     let tx = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(db_error)?;
@@ -219,7 +238,9 @@ pub(crate) fn delete(
         .entries
         .iter()
         .position(|entry| entry.id == entry_id)
-        .ok_or("这条项目记忆已被删除，请刷新后重试。")?;
+        .ok_or_else(|| {
+            crate::error::DesktopError::conflict("这条项目记忆已被删除，请刷新后重试。")
+        })?;
     document.entries.remove(index);
     persist(&tx, &mut document)?;
     tx.commit().map_err(db_error)?;
@@ -230,7 +251,7 @@ pub(crate) fn resolve(
     connection: &mut Connection,
     project_id: &str,
     entry_ids: &[String],
-) -> Result<Vec<ContextSnapshot>, String> {
+) -> crate::error::DesktopResult<Vec<ContextSnapshot>> {
     let tx = connection.transaction().map_err(db_error)?;
     validate_agent_project(&tx, project_id)?;
     if entry_ids.is_empty() || entry_ids.len() > 8 {
@@ -251,9 +272,15 @@ pub(crate) fn resolve(
                 .entries
                 .iter()
                 .find(|entry| &entry.id == entry_id)
-                .ok_or("所选项目记忆已被删除，请移除这条引用后重试。")?;
+                .ok_or_else(|| {
+                    crate::error::DesktopError::conflict(
+                        "所选项目记忆已被删除，请移除这条引用后重试。",
+                    )
+                })?;
             if !entry.enabled {
-                return Err("所选项目记忆已停用引用，请移除这条引用或重新启用。".into());
+                return Err(crate::error::DesktopError::conflict(
+                    "所选项目记忆已停用引用，请移除这条引用或重新启用。",
+                ));
             }
             Ok(ContextSnapshot {
                 id: format!("memory:{}", entry.id),
@@ -272,62 +299,92 @@ pub(crate) fn resolve(
 pub(crate) fn export_document(
     connection: &Connection,
     project_id: &str,
-) -> Result<serde_json::Value, String> {
+) -> crate::error::DesktopResult<serde_json::Value> {
     serde_json::to_value(read_document(connection, project_id)?)
-        .map_err(|_| "无法编码项目记忆。".into())
+        .map_err(|_| crate::error::DesktopError::database("无法编码项目记忆。"))
 }
 
 #[tauri::command]
-pub fn project_memory_snapshot(
+pub async fn project_memory_snapshot(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     project_id: String,
-) -> Result<MemorySnapshot, String> {
+) -> crate::error::DesktopResult<MemorySnapshot> {
     crate::runtime::authorize(&window)?;
-    state.access(&app, |connection| snapshot(connection, &project_id))
+    let store = state.inner().clone();
+    crate::error::run_blocking(
+        "project_memory",
+        "读取项目记忆意外退出，请重试。",
+        move || store.access(&app, |connection| snapshot(connection, &project_id)),
+    )
+    .await
 }
 
 #[tauri::command]
-pub fn project_memory_save(
+pub async fn project_memory_save(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     project_id: String,
     expected_revision: u64,
     entry: MemoryInput,
-) -> Result<MemorySnapshot, String> {
+) -> crate::error::DesktopResult<MemorySnapshot> {
     crate::runtime::authorize(&window)?;
-    state.access(&app, |connection| {
-        save(connection, &project_id, expected_revision, entry)
-    })
+    let store = state.inner().clone();
+    crate::error::run_blocking(
+        "project_memory",
+        "保存项目记忆意外退出，请重试。",
+        move || {
+            store.access(&app, |connection| {
+                save(connection, &project_id, expected_revision, entry)
+            })
+        },
+    )
+    .await
 }
 
 #[tauri::command]
-pub fn project_memory_delete(
+pub async fn project_memory_delete(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     project_id: String,
     expected_revision: u64,
     entry_id: String,
-) -> Result<MemorySnapshot, String> {
+) -> crate::error::DesktopResult<MemorySnapshot> {
     crate::runtime::authorize(&window)?;
-    state.access(&app, |connection| {
-        delete(connection, &project_id, expected_revision, &entry_id)
-    })
+    let store = state.inner().clone();
+    crate::error::run_blocking(
+        "project_memory",
+        "删除项目记忆意外退出，请重试。",
+        move || {
+            store.access(&app, |connection| {
+                delete(connection, &project_id, expected_revision, &entry_id)
+            })
+        },
+    )
+    .await
 }
 
 #[tauri::command]
-pub fn project_memory_context(
+pub async fn project_memory_context(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     project_id: String,
     entry_ids: Vec<String>,
-) -> Result<Vec<ContextSnapshot>, String> {
+) -> crate::error::DesktopResult<Vec<ContextSnapshot>> {
     crate::runtime::authorize(&window)?;
-    state.access(&app, |connection| {
-        resolve(connection, &project_id, &entry_ids)
-    })
+    let store = state.inner().clone();
+    crate::error::run_blocking(
+        "project_memory",
+        "解析项目记忆意外退出，请重试。",
+        move || {
+            store.access(&app, |connection| {
+                resolve(connection, &project_id, &entry_ids)
+            })
+        },
+    )
+    .await
 }

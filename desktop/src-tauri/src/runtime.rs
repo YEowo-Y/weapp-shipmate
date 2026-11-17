@@ -27,39 +27,60 @@ fn local_origin(label: &str, url: &tauri::Url, development: bool) -> bool {
                 && url.port() == Some(1420)))
 }
 
-pub fn authorize(window: &tauri::WebviewWindow) -> Result<(), String> {
-    let url = window.url().map_err(|_| "无法验证桌面窗口来源。")?;
+pub fn authorize(window: &tauri::WebviewWindow) -> crate::error::DesktopResult<()> {
+    let url = window
+        .url()
+        .map_err(|_| crate::error::DesktopError::unauthorized("无法验证桌面窗口来源。"))?;
     if local_origin(window.label(), &url, cfg!(debug_assertions)) {
         Ok(())
     } else {
-        Err("此窗口不能调用本机能力。".into())
+        Err(crate::error::DesktopError::unauthorized(
+            "此窗口不能调用本机能力。",
+        ))
     }
 }
 
-fn bundled_file(root: &Path, relative: &str) -> Result<PathBuf, String> {
-    let root = root
-        .join("runtime")
-        .canonicalize()
-        .map_err(|_| "应用运行时缺失，请重新安装应用。")?;
-    let path = root
-        .join(relative)
-        .canonicalize()
-        .map_err(|_| "应用运行时文件缺失，请重新安装应用。")?;
+fn bundled_file(root: &Path, relative: &str) -> crate::error::DesktopResult<PathBuf> {
+    let root = root.join("runtime").canonicalize().map_err(|_| {
+        crate::error::DesktopError::runtime_unavailable(
+            "runtime",
+            "missing_runtime_dir",
+            "应用运行时缺失，请重新安装应用。",
+        )
+    })?;
+    let path = root.join(relative).canonicalize().map_err(|_| {
+        crate::error::DesktopError::runtime_unavailable(
+            "runtime",
+            "missing_runtime_file",
+            "应用运行时文件缺失，请重新安装应用。",
+        )
+    })?;
     if !path.starts_with(&root) || !path.is_file() {
-        return Err("应用运行时路径无效。".into());
+        return Err(crate::error::DesktopError::runtime_unavailable(
+            "runtime",
+            "invalid_runtime_path",
+            "应用运行时路径无效。",
+        ));
     }
     Ok(path)
 }
 
-pub fn node_command(app: &tauri::AppHandle, script: &str, broker: bool) -> Result<Command, String> {
-    let root = app
-        .path()
-        .resource_dir()
-        .map_err(|_| "无法定位应用资源。")?;
+pub fn node_command(
+    app: &tauri::AppHandle,
+    script: &str,
+    broker: bool,
+) -> crate::error::DesktopResult<Command> {
+    let root = app.path().resource_dir().map_err(|_| {
+        crate::error::DesktopError::runtime_unavailable(
+            "runtime",
+            "missing_resource_dir",
+            "无法定位应用资源。",
+        )
+    })?;
     command_at(&root, script, broker)
 }
 
-fn command_at(root: &Path, script: &str, broker: bool) -> Result<Command, String> {
+fn command_at(root: &Path, script: &str, broker: bool) -> crate::error::DesktopResult<Command> {
     let node = bundled_file(root, if cfg!(windows) { "node.exe" } else { "node" })?;
     let script = bundled_file(root, script)?;
     let mut command = Command::new(node);

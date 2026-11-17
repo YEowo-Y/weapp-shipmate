@@ -1,6 +1,7 @@
 mod agent_tools;
 mod credential_store;
 mod diagnostics;
+mod error;
 mod model_bridge;
 mod project_context;
 mod project_maintenance;
@@ -22,17 +23,21 @@ async fn run_check(
     dir: String,
     subject: String,
     run_id: String,
-) -> Result<String, String> {
+) -> error::DesktopResult<String> {
     runtime::authorize(&window)?;
     tool_runner::subject(&subject)?;
-    let dir = tool_runner::directory(&dir)?;
-    let mut command = runtime::node_command(&app, "bin/weapp-shipmate.mjs", false)?;
-    command.arg("check").arg(dir).arg("--subject").arg(subject);
-    let runner = state.inner().clone();
-    runner.reserve(&run_id)?;
-    tauri::async_runtime::spawn_blocking(move || runner.run_reserved(command, run_id, true))
-        .await
-        .map_err(|_| "本地工具任务意外退出。".to_string())?
+    let reservation = state.reserve_guard(&run_id)?;
+    error::run_blocking(
+        "tool_runner",
+        "本地工具任务意外退出。",
+        move || {
+            let dir = tool_runner::directory(&dir)?;
+            let mut command = runtime::node_command(&app, "bin/weapp-shipmate.mjs", false)?;
+            command.arg("check").arg(dir).arg("--subject").arg(subject);
+            reservation.run_reserved(command, true)
+        },
+    )
+    .await
 }
 
 #[tauri::command]
@@ -42,26 +47,36 @@ async fn run_guide(
     state: tauri::State<'_, tool_runner::ToolRunner>,
     subject: String,
     run_id: String,
-) -> Result<String, String> {
+) -> error::DesktopResult<String> {
     runtime::authorize(&window)?;
     tool_runner::subject(&subject)?;
-    let mut command = runtime::node_command(&app, "bin/weapp-shipmate.mjs", false)?;
-    command.arg("guide").arg("--subject").arg(subject);
-    let runner = state.inner().clone();
-    runner.reserve(&run_id)?;
-    tauri::async_runtime::spawn_blocking(move || runner.run_reserved(command, run_id, false))
-        .await
-        .map_err(|_| "本地工具任务意外退出。".to_string())?
+    let reservation = state.reserve_guard(&run_id)?;
+    error::run_blocking(
+        "tool_runner",
+        "本地工具任务意外退出。",
+        move || {
+            let mut command = runtime::node_command(&app, "bin/weapp-shipmate.mjs", false)?;
+            command.arg("guide").arg("--subject").arg(subject);
+            reservation.run_reserved(command, false)
+        },
+    )
+    .await
 }
 
 #[tauri::command]
-fn run_cancel(
+async fn run_cancel(
     window: tauri::WebviewWindow,
     state: tauri::State<'_, tool_runner::ToolRunner>,
     run_id: String,
-) -> Result<(), String> {
+) -> error::DesktopResult<()> {
     runtime::authorize(&window)?;
-    state.cancel(&run_id)
+    let runner = state.inner().clone();
+    error::run_blocking(
+        "tool_runner",
+        "停止本地工具意外退出。",
+        move || runner.cancel(&run_id),
+    )
+    .await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

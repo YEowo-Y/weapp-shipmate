@@ -4,8 +4,8 @@ const BACKUP_MAX_BYTES: usize = 80 * 1024 * 1024;
 const BACKUP_MAX_REVISION: u64 = 9_007_199_254_740_991;
 const ARCHIVE_TTL_MS: u64 = 15 * 60 * 1000;
 
-#[derive(Default)]
-pub struct ProjectArchives(Mutex<Option<PendingArchive>>);
+#[derive(Clone, Default)]
+pub struct ProjectArchives(Arc<Mutex<Option<PendingArchive>>>);
 struct PendingArchive {
     token: String,
     project_id: String,
@@ -35,10 +35,12 @@ struct BackupMemory {
     revision: u64,
     entries: Vec<crate::project_memory::MemoryEntry>,
 }
-fn backup_error() -> String {
-    "项目备份格式、大小或记录关联无效；未修改现有数据。请使用应用导出的完整项目 JSON。".into()
+fn backup_error() -> crate::error::DesktopError {
+    crate::error::DesktopError::validation(
+        "项目备份格式、大小或记录关联无效；未修改现有数据。请使用应用导出的完整项目 JSON。",
+    )
 }
-fn backup_keys(value: &serde_json::Value, allowed: &[&str]) -> Result<(), String> {
+fn backup_keys(value: &serde_json::Value, allowed: &[&str]) -> crate::error::DesktopResult<()> {
     if value
         .as_object()
         .is_none_or(|o| o.keys().any(|key| !allowed.contains(&key.as_str())))
@@ -56,7 +58,7 @@ fn backup_number(value: u64) -> bool {
 fn backup_state(value: &str) -> bool {
     ["running", "succeeded", "failed", "canceled", "interrupted"].contains(&value)
 }
-fn parse_backup(raw: &str) -> Result<ProjectBackup, String> {
+fn parse_backup(raw: &str) -> crate::error::DesktopResult<ProjectBackup> {
     if raw.is_empty() || raw.len() > BACKUP_MAX_BYTES {
         return Err(backup_error());
     }
@@ -295,7 +297,7 @@ fn parse_backup(raw: &str) -> Result<ProjectBackup, String> {
     }
     Ok(data)
 }
-fn storage_status(c: &Connection) -> Result<serde_json::Value, String> {
+fn storage_status(c: &Connection) -> crate::error::DesktopResult<serde_json::Value> {
     let projects: i64 = c
         .query_row("SELECT count(*) FROM projects", [], |r| r.get(0))
         .map_err(db_error)?;
@@ -319,20 +321,21 @@ fn storage_status(c: &Connection) -> Result<serde_json::Value, String> {
 fn backup_preview(data: &ProjectBackup) -> serde_json::Value {
     serde_json::json!({"projectName":data.project.name,"sourceProjectId":data.project.id,"runs":data.runs.len(),"artifacts":data.artifacts.len(),"memoryEntries":data.memory.as_ref().map_or(0,|m|m.entries.len()),"warnings":["恢复只追加新项目；必须重新选择源码目录，备份不包含源码。","历史成果来自外部备份，未在本机执行；阶段确认需重新核对。","记忆默认关闭，不恢复工具授权、文件监听、通知或模型凭据。"]})
 }
-fn random_backup_id(c: &Connection, prefix: &str) -> Result<String, String> {
+fn random_backup_id(c: &Connection, prefix: &str) -> crate::error::DesktopResult<String> {
     let random: String = c
         .query_row("SELECT lower(hex(randomblob(16)))", [], |r| r.get(0))
         .map_err(db_error)?;
     Ok(format!("{prefix}-{random}"))
 }
 #[cfg(test)]
-fn read_backup_file(path: &Path) -> Result<String, String> {
+fn read_backup_file(path: &Path) -> crate::error::DesktopResult<String> {
     use std::io::Read;
-    let file = std::fs::File::open(path).map_err(|_| "无法读取保留的备份；未更改项目。")?;
+    let file = std::fs::File::open(path)
+        .map_err(|_| crate::error::DesktopError::io("无法读取保留的备份；未更改项目。"))?;
     let mut raw = String::new();
     file.take(BACKUP_MAX_BYTES as u64 + 1)
         .read_to_string(&mut raw)
-        .map_err(|_| "保留备份无法读取为 UTF-8。")?;
+        .map_err(|_| crate::error::DesktopError::io("保留备份无法读取为 UTF-8。"))?;
     if raw.len() > BACKUP_MAX_BYTES {
         return Err(backup_error());
     }
@@ -355,12 +358,19 @@ fn backup_linked(metadata: &std::fs::Metadata) -> bool {
         metadata.file_type().is_symlink()
     }
 }
-fn retain_backup(directory: &Path, file_id: &str, raw: &str) -> Result<RetainedBackup, String> {
+fn retain_backup(
+    directory: &Path,
+    file_id: &str,
+    raw: &str,
+) -> crate::error::DesktopResult<RetainedBackup> {
     use std::io::{Read, Seek, SeekFrom, Write};
     id(file_id)?;
-    std::fs::create_dir_all(directory).map_err(|_| "无法创建项目归档目录；未清理项目。")?;
-    if backup_linked(&std::fs::symlink_metadata(directory).map_err(|_| "归档目录不可访问。")?)
-    {
+    std::fs::create_dir_all(directory)
+        .map_err(|_| crate::error::DesktopError::io("无法创建项目归档目录；未清理项目。"))?;
+    if backup_linked(
+        &std::fs::symlink_metadata(directory)
+            .map_err(|_| crate::error::DesktopError::io("归档目录不可访问。"))?,
+    ) {
         return Err("归档目录不能是符号链接。".into());
     }
     #[cfg(windows)]
@@ -371,8 +381,12 @@ fn retain_backup(directory: &Path, file_id: &str, raw: &str) -> Result<RetainedB
             .share_mode(3)
             .custom_flags(0x02200000)
             .open(directory)
-            .map_err(|_| "归档目录正在变更或不可访问。")?;
-        if backup_linked(&file.metadata().map_err(|_| "归档目录信息不可读取。")?) {
+            .map_err(|_| crate::error::DesktopError::io("归档目录正在变更或不可访问。"))?;
+        if backup_linked(
+            &file
+                .metadata()
+                .map_err(|_| crate::error::DesktopError::io("归档目录信息不可读取。"))?,
+        ) {
             return Err("归档目录不能是链接。".into());
         }
         file
@@ -389,34 +403,45 @@ fn retain_backup(directory: &Path, file_id: &str, raw: &str) -> Result<RetainedB
         Ok(mut file) => {
             file.write_all(raw.as_bytes())
                 .and_then(|_| file.sync_all())
-                .map_err(|_| "备份写入失败；未清理项目，请检查可用空间。")?;
+                .map_err(|_| {
+                    crate::error::DesktopError::io("备份写入失败；未清理项目，请检查可用空间。")
+                })?;
             file
         }
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            let meta = std::fs::symlink_metadata(&path).map_err(|_| "备份文件不可访问。")?;
+            let meta = std::fs::symlink_metadata(&path)
+                .map_err(|_| crate::error::DesktopError::io("备份文件不可访问。"))?;
             if !meta.is_file() || backup_linked(&meta) {
                 return Err("备份路径无效。".into());
             }
             options.create_new(false);
             options
                 .open(&path)
-                .map_err(|_| "备份正被占用或已改变；未修改项目。")?
+                .map_err(|_| crate::error::DesktopError::io("备份正被占用或已改变；未修改项目。"))?
         }
-        Err(_) => return Err("无法写入备份；未清理项目。".into()),
+        Err(_) => {
+            return Err(crate::error::DesktopError::io(
+                "无法写入备份；未清理项目。",
+            ))
+        }
     };
-    let metadata = file.metadata().map_err(|_| "备份信息不可读取。")?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| crate::error::DesktopError::io("备份信息不可读取。"))?;
     if !metadata.is_file() || backup_linked(&metadata) || metadata.len() > BACKUP_MAX_BYTES as u64 {
         return Err(backup_error());
     }
     file.seek(SeekFrom::Start(0))
-        .map_err(|_| "无法校验备份内容。")?;
+        .map_err(|_| crate::error::DesktopError::io("无法校验备份内容。"))?;
     let mut saved = String::new();
     (&mut file)
         .take(BACKUP_MAX_BYTES as u64 + 1)
         .read_to_string(&mut saved)
-        .map_err(|_| "无法校验备份内容。")?;
+        .map_err(|_| crate::error::DesktopError::io("无法校验备份内容。"))?;
     if saved != raw {
-        return Err("保留备份内容与当前操作不一致；未修改项目。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "保留备份内容与当前操作不一致；未修改项目。",
+        ));
     }
     parse_backup(&saved)?;
     Ok(RetainedBackup {
@@ -432,7 +457,7 @@ fn restore_backup(
     directory: &str,
     request_id: &str,
     archives: &Path,
-) -> Result<serde_json::Value, String> {
+) -> crate::error::DesktopResult<serde_json::Value> {
     id(request_id)?;
     if request_id.len() > 70 {
         return Err("恢复请求编号过长。".into());
@@ -568,7 +593,7 @@ fn restore_backup(
     tx.commit().map_err(db_error)?;
     Ok(receipt)
 }
-fn ensure_no_running(c: &Connection, project_id: &str) -> Result<(), String> {
+fn ensure_no_running(c: &Connection, project_id: &str) -> crate::error::DesktopResult<()> {
     let count: i64 = c
         .query_row(
             "SELECT count(*) FROM runs WHERE project_id=? AND state='running'",
@@ -577,7 +602,9 @@ fn ensure_no_running(c: &Connection, project_id: &str) -> Result<(), String> {
         )
         .map_err(db_error)?;
     if count > 0 {
-        return Err("项目仍有运行中的任务，请停止并等待任务结束后再归档。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "项目仍有运行中的任务，请停止并等待任务结束后再归档。",
+        ));
     }
     Ok(())
 }
@@ -585,7 +612,7 @@ fn prepare_archive(
     c: &mut Connection,
     project_id: &str,
     pending: &ProjectArchives,
-) -> Result<serde_json::Value, String> {
+) -> crate::error::DesktopResult<serde_json::Value> {
     let tx = c
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(db_error)?;
@@ -594,7 +621,9 @@ fn prepare_archive(
     let data = parse_backup(&raw)?;
     let token = random_backup_id(&tx, "archive")?;
     let result = serde_json::json!({"token":token,"backupJson":raw,"projectName":data.project.name,"runs":data.runs.len(),"artifacts":data.artifacts.len(),"expiresAt":now()+ARCHIVE_TTL_MS});
-    *pending.0.lock().map_err(|_| "归档预览状态不可用。")? = Some(PendingArchive {
+    *pending.0.lock().map_err(|_| {
+        crate::error::DesktopError::state_unavailable("project_backup", "归档预览状态不可用。")
+    })? = Some(PendingArchive {
         token,
         project_id: project_id.into(),
         backup: raw,
@@ -609,24 +638,32 @@ fn commit_archive(
     token: &str,
     pending: &ProjectArchives,
     archives: &Path,
-) -> Result<serde_json::Value, String> {
-    let mut guard = pending.0.lock().map_err(|_| "归档预览状态不可用。")?;
+) -> crate::error::DesktopResult<serde_json::Value> {
+    let mut guard = pending.0.lock().map_err(|_| {
+        crate::error::DesktopError::state_unavailable("project_backup", "归档预览状态不可用。")
+    })?;
     let entry = guard
         .as_mut()
         .filter(|e| e.token == token && e.project_id == project_id)
-        .ok_or("归档确认无效，请重新预览。")?;
+        .ok_or_else(|| {
+            crate::error::DesktopError::conflict("归档确认无效，请重新预览。")
+        })?;
     if let Some(receipt) = &entry.receipt {
         return Ok(receipt.clone());
     }
     if now().saturating_sub(entry.prepared_at) > ARCHIVE_TTL_MS {
-        return Err("归档预览已过期，请重新预览。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "归档预览已过期，请重新预览。",
+        ));
     }
     let tx = c
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(db_error)?;
     ensure_no_running(&tx, project_id)?;
     if export_snapshot(&tx, project_id)? != entry.backup {
-        return Err("项目数据已改变，请重新导出并确认归档；未清理任何记录。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "项目数据已改变，请重新导出并确认归档；未清理任何记录。",
+        ));
     }
     let path = retain_backup(archives, token, &entry.backup)?;
     // A verified durable file exists before the first DELETE, and the DB write lock
@@ -659,76 +696,103 @@ fn commit_archive(
     entry.receipt = Some(receipt.clone());
     Ok(receipt)
 }
-fn archives_directory(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+fn archives_directory(app: &tauri::AppHandle) -> crate::error::DesktopResult<PathBuf> {
     Ok(app
         .path()
         .app_data_dir()
-        .map_err(|_| "无法定位项目归档目录。")?
+        .map_err(|_| {
+            crate::error::DesktopError::runtime_unavailable(
+                "project_backup",
+                "missing_app_data_dir",
+                "无法定位项目归档目录。",
+            )
+        })?
         .join("project-archives"))
 }
 #[tauri::command]
-pub fn project_storage_status(
+pub async fn project_storage_status(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
-) -> Result<serde_json::Value, String> {
+) -> crate::error::DesktopResult<serde_json::Value> {
     crate::runtime::authorize(&window)?;
-    state.access(&app, |c| storage_status(c))
+    let store = state.inner().clone();
+    crate::error::run_blocking("project_backup", "读取项目存储状态意外退出，请重试。", move || {
+        store.access(&app, |c| storage_status(c))
+    })
+    .await
 }
 #[tauri::command]
-pub fn project_import_preview(
+pub async fn project_import_preview(
     window: tauri::WebviewWindow,
     backup_json: String,
-) -> Result<serde_json::Value, String> {
+) -> crate::error::DesktopResult<serde_json::Value> {
     crate::runtime::authorize(&window)?;
-    Ok(backup_preview(&parse_backup(&backup_json)?))
+    crate::error::run_blocking("project_backup", "预览项目备份意外退出，请重试。", move || {
+        Ok(backup_preview(&parse_backup(&backup_json)?))
+    })
+    .await
 }
 #[tauri::command]
-pub fn project_import(
+pub async fn project_import(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     backup_json: String,
     directory: String,
     request_id: String,
-) -> Result<serde_json::Value, String> {
+) -> crate::error::DesktopResult<serde_json::Value> {
     crate::runtime::authorize(&window)?;
-    let archives = archives_directory(&app)?;
-    state.access(&app, |c| {
-        restore_backup(c, &backup_json, &directory, &request_id, &archives)
+    let store = state.inner().clone();
+    crate::error::run_blocking("project_backup", "导入项目备份意外退出，请重试。", move || {
+        let archives = archives_directory(&app)?;
+        store.access(&app, |c| {
+            restore_backup(c, &backup_json, &directory, &request_id, &archives)
+        })
     })
+    .await
 }
 #[tauri::command]
-pub fn project_archive_prepare(
+pub async fn project_archive_prepare(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     archives: tauri::State<'_, ProjectArchives>,
     project_id: String,
-) -> Result<serde_json::Value, String> {
+) -> crate::error::DesktopResult<serde_json::Value> {
     crate::runtime::authorize(&window)?;
-    state.access(&app, |c| {
-        crate::project_repair::ensure_no_pending_recovery(&app, &project_id)?;
-        prepare_archive(c, &project_id, &archives)
+    let store = state.inner().clone();
+    let archives = archives.inner().clone();
+    crate::error::run_blocking("project_backup", "准备项目归档意外退出，请重试。", move || {
+        store.access(&app, |c| {
+            crate::project_repair::ensure_no_pending_recovery(&app, &project_id)?;
+            prepare_archive(c, &project_id, &archives)
+        })
     })
+    .await
 }
 #[tauri::command]
-pub fn project_archive_commit(
+pub async fn project_archive_commit(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     archives: tauri::State<'_, ProjectArchives>,
     project_id: String,
     token: String,
-) -> Result<serde_json::Value, String> {
+) -> crate::error::DesktopResult<serde_json::Value> {
     crate::runtime::authorize(&window)?;
-    let directory = archives_directory(&app)?;
-    let result = state.access(&app, |c| {
-        crate::project_repair::ensure_no_pending_recovery(&app, &project_id)?;
-        commit_archive(c, &project_id, &token, &archives, &directory)
-    })?;
-    crate::project_maintenance::sync_after_project_change(&app);
-    Ok(result)
+    let store = state.inner().clone();
+    let archives = archives.inner().clone();
+    crate::error::run_blocking("project_backup", "归档项目意外退出，请重试。", move || {
+        let directory = archives_directory(&app)?;
+        let result = store.access(&app, |c| {
+            crate::project_repair::ensure_no_pending_recovery(&app, &project_id)?;
+            commit_archive(c, &project_id, &token, &archives, &directory)
+        })?;
+        crate::project_maintenance::sync_after_project_change(&app);
+        Ok(result)
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -792,7 +856,7 @@ mod project_backup_tests {
             self.c.execute("INSERT INTO stage_confirmations(project_id,data) VALUES('original',?)",[serde_json::json!({"stageId":"registration","state":"confirmed","note":"原设备确认","recordedAt":now(),"contextRevision":0,"rulesVersion":"rules"}).to_string()]).unwrap();
             export(&mut self.c, "original").unwrap()
         }
-        fn restore(&mut self, raw: &str, request: &str) -> Result<serde_json::Value, String> {
+        fn restore(&mut self, raw: &str, request: &str) -> crate::error::DesktopResult<serde_json::Value> {
             restore_backup(
                 &mut self.c,
                 raw,
