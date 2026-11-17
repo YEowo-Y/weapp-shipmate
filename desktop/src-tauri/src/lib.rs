@@ -1,12 +1,13 @@
 mod agent_tools;
 mod credential_store;
+mod diagnostics;
 mod model_bridge;
 mod project_context;
 mod project_maintenance;
 mod project_memory;
 mod project_repair;
-mod repair_writer;
 mod project_store;
+mod repair_writer;
 mod runtime;
 mod source_freshness;
 mod system_notifications;
@@ -65,6 +66,7 @@ fn run_cancel(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    diagnostics::install_panic_hook();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -76,6 +78,10 @@ pub fn run() {
         .manage(project_repair::ProjectRepairs::default())
         .manage(project_maintenance::ProjectMaintenance::default())
         .manage(system_notifications::SystemNotifications::default())
+        .setup(|app| {
+            diagnostics::init_for_app(app.handle());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             project_store::project_snapshot,
             project_store::project_save,
@@ -132,6 +138,8 @@ pub fn run() {
                     .shutdown(app);
                 app.state::<tool_runner::ToolRunner>().shutdown();
                 app.state::<model_bridge::ModelBridge>().shutdown();
+                app.state::<project_store::ProjectStore>().shutdown();
+                diagnostics::record_reason("app", "info", "shutdown", "clean_exit");
             }
         });
 }

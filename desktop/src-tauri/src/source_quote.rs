@@ -261,6 +261,7 @@ pub fn source_quote_snapshot(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn source_quote_check(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,

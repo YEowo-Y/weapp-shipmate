@@ -18,6 +18,11 @@ pub(crate) fn now() -> u64 {
 }
 pub(crate) fn db_error(error: rusqlite::Error) -> String {
     use rusqlite::ErrorCode;
+    crate::diagnostics::record_sqlite_error(
+        "project_store",
+        "sqlite_error",
+        error.sqlite_error_code().map(|code| code as i32),
+    );
     let guidance = match error.sqlite_error_code() {
         Some(ErrorCode::DiskFull) => {
             "磁盘空间不足，无法保存本次操作；请释放空间后重试，并检查运行历史。"
@@ -143,10 +148,14 @@ pub struct Snapshot {
     pub artifacts: Vec<serde_json::Value>,
 }
 #[derive(Clone, Default)]
-pub struct ProjectStore(
-    Arc<Mutex<Option<StoreConnection>>>,
-    Arc<Mutex<BTreeMap<String, Run>>>,
-);
+pub struct ProjectStore(Arc<Mutex<StoreState>>, Arc<Mutex<BTreeMap<String, Run>>>);
+#[derive(Default)]
+enum StoreState {
+    #[default]
+    Uninitialized,
+    Open(StoreConnection),
+    Closed,
+}
 struct StoreConnection {
     connection: Connection,
     // The OS releases this lock even after a crash. It prevents a second app instance
@@ -247,7 +256,15 @@ fn backup(source: &Connection, path: &Path) -> Result<(), String> {
         .write(true)
         .create_new(true)
         .open(&target)
-        .map_err(|e| format!("无法创建迁移备份：{e}"))?;
+        .map_err(|e| {
+            crate::diagnostics::record_reason(
+                "project_store",
+                "error",
+                "db_backup_failed",
+                "create_backup_file_failed",
+            );
+            format!("无法创建迁移备份：{e}")
+        })?;
     let mut destination = Connection::open(&target).map_err(db_error)?;
     destination
         .busy_timeout(Duration::from_millis(100))
@@ -256,6 +273,12 @@ fn backup(source: &Connection, path: &Path) -> Result<(), String> {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         if Instant::now() >= deadline {
+            crate::diagnostics::record_reason(
+                "project_store",
+                "error",
+                "db_backup_failed",
+                "backup_timeout",
+            );
             return Err("迁移备份超时，未修改原数据库。".into());
         }
         match handle.step(128).map_err(db_error)? {
@@ -268,28 +291,84 @@ fn backup(source: &Connection, path: &Path) -> Result<(), String> {
         .query_row("PRAGMA integrity_check", [], |r| r.get(0))
         .map_err(db_error)?;
     if check != "ok" {
+        crate::diagnostics::record_reason(
+            "project_store",
+            "error",
+            "db_backup_failed",
+            "backup_integrity_failed",
+        );
         return Err("迁移备份完整性检查失败，未修改原数据库。".into());
     }
     Ok(())
 }
+fn wal_sidecar(path: &Path) -> PathBuf {
+    let mut raw = path.as_os_str().to_os_string();
+    raw.push("-wal");
+    PathBuf::from(raw)
+}
+fn journal_sidecar(path: &Path) -> PathBuf {
+    let mut raw = path.as_os_str().to_os_string();
+    raw.push("-journal");
+    PathBuf::from(raw)
+}
+fn is_wal_header(path: &Path) -> bool {
+    use std::io::Read;
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut header = [0u8; 20];
+    file.read_exact(&mut header).is_ok()
+        && &header[..16] == b"SQLite format 3\0"
+        && header[18] == 2
+        && header[19] == 2
+}
 fn open_database(path: &Path) -> Result<Connection, String> {
+    use rusqlite::config::DbConfig;
     let existing = path.exists();
     if existing {
-        let probe = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-            .map_err(db_error)?;
+        // Preserve byte-for-byte non-modification on rollback-journal or future/corrupt WAL files:
+        // disable checkpoint-on-close on the probe connection so rejecting a DB never checkpoints
+        // WAL frames into `projects.sqlite3` or unlinks `-wal`/`-shm`.
+        let recover_wal_index =
+            wal_sidecar(path).exists() && is_wal_header(path) && !journal_sidecar(path).exists();
+        let probe = if recover_wal_index {
+            let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)
+                .map_err(db_error)?;
+            let _ = conn.set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, true);
+            conn.pragma_update(None, "query_only", true)
+                .map_err(db_error)?;
+            conn
+        } else {
+            let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+                .map_err(db_error)?;
+            let _ = conn.set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, true);
+            conn
+        };
         probe
-            .busy_timeout(Duration::from_secs(2))
+            .busy_timeout(Duration::from_secs(5))
             .map_err(db_error)?;
         let check: String = probe
             .query_row("PRAGMA quick_check", [], |row| row.get(0))
             .map_err(db_error)?;
         if check != "ok" {
+            crate::diagnostics::record_reason(
+                "project_store",
+                "error",
+                "db_open_rejected",
+                "quick_check_failed",
+            );
             return Err("项目数据库损坏，未修改原文件，请从备份恢复。".into());
         }
         let version: u32 = probe
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .map_err(db_error)?;
         if version > 2 {
+            crate::diagnostics::record_reason(
+                "project_store",
+                "warn",
+                "db_open_rejected",
+                "future_user_version",
+            );
             return Err("项目数据库来自更新版本，请升级应用；未修改原文件。".into());
         }
         if version >= 1 {
@@ -309,14 +388,21 @@ fn open_database(path: &Path) -> Result<Connection, String> {
                 )
                 .map_err(db_error)?;
             if tables != 0 {
+                crate::diagnostics::record_reason(
+                    "project_store",
+                    "error",
+                    "db_open_rejected",
+                    "unknown_v0_tables",
+                );
                 return Err("无法识别旧项目数据库，未修改原文件。".into());
             }
             backup(&probe, path)?;
         }
     }
     let mut connection = Connection::open(path).map_err(db_error)?;
+    let _ = connection.set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, true);
     connection
-        .busy_timeout(Duration::from_secs(2))
+        .busy_timeout(Duration::from_secs(5))
         .map_err(db_error)?;
     connection
         .pragma_update(None, "foreign_keys", true)
@@ -337,8 +423,21 @@ fn open_database(path: &Path) -> Result<Connection, String> {
         backup(&connection, path)?;
         migrate_v2(&mut connection)?;
     }
-    // Validate every expected table before any recovery writes.
+    // Validate every expected table before enabling WAL or performing recovery writes.
     connection.prepare("SELECT p.data,r.state,a.run_id,s.value FROM projects p,runs r,artifacts a,settings s LIMIT 0").map_err(db_error)?;
+    let _ = connection.set_db_config(DbConfig::SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, false);
+    let journal_mode: String = connection
+        .query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))
+        .map_err(db_error)?;
+    if !journal_mode.eq_ignore_ascii_case("wal") {
+        crate::diagnostics::record_reason(
+            "project_store",
+            "error",
+            "db_wal_failed",
+            "unexpected_journal_mode",
+        );
+        return Err("无法启用项目数据库预写日志模式，请检查应用数据目录权限与文件系统。".into());
+    }
     connection
         .pragma_update(None, "synchronous", "FULL")
         .map_err(db_error)?;
@@ -414,7 +513,13 @@ impl ProjectStore {
         self.access(app, |connection| {
             let project = project(connection, project_id)?;
             let artifact = context_artifact(connection, project_id, artifact_id)?;
-            let data: String = connection.query_row("SELECT data FROM runs WHERE id=?", [&artifact.run_id], |row| row.get(0)).map_err(db_error)?;
+            let data: String = connection
+                .query_row(
+                    "SELECT data FROM runs WHERE id=?",
+                    [&artifact.run_id],
+                    |row| row.get(0),
+                )
+                .map_err(db_error)?;
             let run: Run = decode(data)?;
             crate::project_repair::trusted_source(&project, &artifact, &run, &versions(app)?)?;
             Ok((project, artifact, run))
@@ -426,16 +531,47 @@ impl ProjectStore {
         action: impl FnOnce(&mut Connection) -> Result<T, String>,
     ) -> Result<T, String> {
         let mut guard = self.0.lock().map_err(|_| "项目存储状态不可用。")?;
-        if guard.is_none() {
+        if matches!(*guard, StoreState::Closed) {
+            return Err("应用正在退出。".into());
+        }
+        if matches!(*guard, StoreState::Uninitialized) {
             let directory = app
                 .path()
                 .app_data_dir()
                 .map_err(|_| "无法定位项目存储目录。")?;
             std::fs::create_dir_all(&directory)
                 .map_err(|e| format!("无法创建项目存储目录：{e}"))?;
-            *guard = Some(open_store(&directory.join("projects.sqlite3"))?);
+            *guard = StoreState::Open(open_store(&directory.join("projects.sqlite3"))?);
         }
-        action(&mut guard.as_mut().ok_or("项目存储不可用。")?.connection)
+        match &mut *guard {
+            StoreState::Open(store) => action(&mut store.connection),
+            _ => Err("项目存储不可用。".into()),
+        }
+    }
+    pub fn shutdown(&self) {
+        if let Ok(mut guard) = self.0.lock() {
+            let previous = std::mem::replace(&mut *guard, StoreState::Closed);
+            if let StoreState::Open(store) = previous {
+                match store
+                    .connection
+                    .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+                        row.get::<_, i64>(0)
+                    }) {
+                    Ok(0) => {}
+                    Ok(_) => crate::diagnostics::record_reason(
+                        "project_store",
+                        "warn",
+                        "db_shutdown_checkpoint",
+                        "checkpoint_busy",
+                    ),
+                    Err(err) => crate::diagnostics::record_sqlite_error(
+                        "project_store",
+                        "db_shutdown_checkpoint_failed",
+                        err.sqlite_error_code().map(|c| c as i32),
+                    ),
+                }
+            }
+        }
     }
 }
 fn context_artifact(
@@ -574,7 +710,11 @@ pub(crate) fn artifact(connection: &Connection, artifact_id: &str) -> Result<Art
         .ok_or("成果不存在。")?;
     decode(data)
 }
-fn local_session_artifact(connection: &Connection, project_id: &str, artifact_id: &str) -> Result<Artifact, String> {
+fn local_session_artifact(
+    connection: &Connection,
+    project_id: &str,
+    artifact_id: &str,
+) -> Result<Artifact, String> {
     id(project_id)?;
     id(artifact_id)?;
     let mismatch = "未找到与当前项目匹配的本机成功运行和报告。";
@@ -592,12 +732,19 @@ fn local_session_artifact(connection: &Connection, project_id: &str, artifact_id
         .ok_or(mismatch)?;
     let artifact: Artifact = decode(artifact_data)?;
     let run: Run = decode(run_data)?;
-    if artifact.provenance.is_some() || run.provenance.is_some()
-        || artifact.id != artifact_id || artifact.run_id != run_id || run.id != run_id
-        || artifact.project_id.as_deref() != Some(project_id) || run.project_id != artifact.project_id
-        || run.state != "succeeded" || run.kind != artifact.kind
-        || run.project_revision != artifact.project_revision || run.context_revision != artifact.context_revision
-        || run.tool_version != artifact.tool_version || run.rules_version != artifact.rules_version
+    if artifact.provenance.is_some()
+        || run.provenance.is_some()
+        || artifact.id != artifact_id
+        || artifact.run_id != run_id
+        || run.id != run_id
+        || artifact.project_id.as_deref() != Some(project_id)
+        || run.project_id != artifact.project_id
+        || run.state != "succeeded"
+        || run.kind != artifact.kind
+        || run.project_revision != artifact.project_revision
+        || run.context_revision != artifact.context_revision
+        || run.tool_version != artifact.tool_version
+        || run.rules_version != artifact.rules_version
     {
         return Err(mismatch.into());
     }
@@ -2158,7 +2305,8 @@ mod tests {
                 .any(|a| a["id"] == format!("{prefix}-obsolete")));
             assert!(!s.runs.iter().any(|r| r.id == format!("{prefix}-obsolete")));
             if let Some(project_id) = project_id {
-                let old = local_session_artifact(&c, project_id, &format!("{prefix}-obsolete")).unwrap();
+                let old =
+                    local_session_artifact(&c, project_id, &format!("{prefix}-obsolete")).unwrap();
                 assert_eq!(old.run_id, format!("{prefix}-obsolete"));
             }
         }
@@ -2190,10 +2338,18 @@ mod tests {
         ] {
             let tx = c.transaction().unwrap();
             tx.execute(update, []).unwrap();
-            assert!(local_session_artifact(&tx, "one", "first-run").is_err(), "{update}");
+            assert!(
+                local_session_artifact(&tx, "one", "first-run").is_err(),
+                "{update}"
+            );
             tx.rollback().unwrap();
         }
-        assert_eq!(local_session_artifact(&c, "one", "first-run").unwrap().markdown, "local report");
+        assert_eq!(
+            local_session_artifact(&c, "one", "first-run")
+                .unwrap()
+                .markdown,
+            "local report"
+        );
     }
     #[test]
     fn export_is_complete_and_project_scoped_while_selection_survives_restart() {
@@ -2355,5 +2511,145 @@ mod tests {
             )
             .is_err());
         assert!(snapshot(&c).unwrap().runs.is_empty());
+    }
+    #[test]
+    fn wal_mode_is_enabled_recovers_missing_shm_and_checkpoints_on_shutdown() {
+        let f = Fixture::new();
+        let store = open_store(&f.path).unwrap();
+        let mode: String = store
+            .connection
+            .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+            .unwrap();
+        assert!(mode.eq_ignore_ascii_case("wal"));
+        let sync_mode: i64 = store
+            .connection
+            .query_row("PRAGMA synchronous", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(sync_mode, 2);
+        drop(store);
+
+        // Legacy v1 rollback-journal database upgrades to v2 and switches to WAL.
+        let legacy_fixture = Fixture::new();
+        let mut legacy = Connection::open(&legacy_fixture.path).unwrap();
+        migrate(&mut legacy, SCHEMA).unwrap();
+        save(&mut legacy, legacy_fixture.input("legacy", None)).unwrap();
+        drop(legacy);
+        let mut upgraded = open_database(&legacy_fixture.path).unwrap();
+        let upgraded_mode: String = upgraded
+            .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+            .unwrap();
+        assert!(upgraded_mode.eq_ignore_ascii_case("wal"));
+        save(&mut upgraded, legacy_fixture.input("legacy", Some(1))).unwrap();
+        let pre_v2_backup = std::fs::read_dir(&legacy_fixture.root)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .find(|p| p.to_string_lossy().contains("pre-v2"))
+            .unwrap();
+        let backup_conn = Connection::open(&pre_v2_backup).unwrap();
+        let integrity: String = backup_conn
+            .query_row("PRAGMA integrity_check", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(integrity, "ok");
+        drop(backup_conn);
+
+        // Existing v2 rollback-journal database (`DELETE`) also upgrades cleanly to WAL.
+        let v2_rollback = Fixture::new();
+        let mut v2_conn = Connection::open(&v2_rollback.path).unwrap();
+        migrate(&mut v2_conn, SCHEMA).unwrap();
+        migrate_v2(&mut v2_conn).unwrap();
+        let prev_mode: String = v2_conn
+            .query_row("PRAGMA journal_mode=DELETE", [], |r| r.get(0))
+            .unwrap();
+        assert!(prev_mode.eq_ignore_ascii_case("delete"));
+        drop(v2_conn);
+        let v2_opened = open_database(&v2_rollback.path).unwrap();
+        let v2_mode: String = v2_opened
+            .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+            .unwrap();
+        assert!(v2_mode.eq_ignore_ascii_case("wal"));
+        drop(v2_opened);
+
+        // Simulate uncheckpointed WAL frames (including a `running` run) left without `-shm` after an abrupt crash.
+        let raw_wal = wal_sidecar(&legacy_fixture.path);
+        drop(upgraded);
+        let mut writer = Connection::open(&legacy_fixture.path).unwrap();
+        let _: String = writer
+            .query_row("PRAGMA journal_mode=WAL", [], |r| r.get(0))
+            .unwrap();
+        writer
+            .pragma_update(None, "wal_autocheckpoint", 0i64)
+            .unwrap();
+        save(&mut writer, legacy_fixture.input("after-crash", None)).unwrap();
+        start(&mut writer, Some("after-crash"), "crash-running");
+        assert!(raw_wal.exists() && std::fs::metadata(&raw_wal).unwrap().len() > 0);
+        let crash_fixture = Fixture::new();
+        std::fs::copy(&legacy_fixture.path, &crash_fixture.path).unwrap();
+        std::fs::copy(&raw_wal, wal_sidecar(&crash_fixture.path)).unwrap();
+        drop(writer);
+
+        let recovered_store = ProjectStore::default();
+        *recovered_store.0.lock().unwrap() =
+            StoreState::Open(open_store(&crash_fixture.path).unwrap());
+        {
+            let guard = recovered_store.0.lock().unwrap();
+            let StoreState::Open(store) = &*guard else {
+                panic!("expected open store");
+            };
+            let conn = &store.connection;
+            assert_eq!(project(conn, "after-crash").unwrap().revision, 1);
+            assert_eq!(project(conn, "legacy").unwrap().revision, 2);
+            let recovered_run = snapshot(conn)
+                .unwrap()
+                .runs
+                .into_iter()
+                .find(|r| r.id == "crash-running")
+                .unwrap();
+            assert_eq!(recovered_run.state, "interrupted");
+        }
+        recovered_store.shutdown();
+        assert!(matches!(
+            *recovered_store.0.lock().unwrap(),
+            StoreState::Closed
+        ));
+        let wal_after = wal_sidecar(&crash_fixture.path);
+        if wal_after.exists() {
+            assert_eq!(std::fs::metadata(&wal_after).unwrap().len(), 0);
+        }
+        let reopened = open_database(&crash_fixture.path).unwrap();
+        assert_eq!(project(&reopened, "after-crash").unwrap().revision, 1);
+        drop(reopened);
+
+        // Future (`user_version > 2`) WAL database with uncheckpointed `-wal` (without `-shm`)
+        // must remain byte-identical on both main DB and `-wal` when rejected!
+        let future_wal_src = Fixture::new();
+        let future_conn = Connection::open(&future_wal_src.path).unwrap();
+        let _: String = future_conn
+            .query_row("PRAGMA journal_mode=WAL", [], |r| r.get(0))
+            .unwrap();
+        future_conn
+            .pragma_update(None, "wal_autocheckpoint", 0i64)
+            .unwrap();
+        future_conn
+            .execute_batch("CREATE TABLE future_data(v TEXT); PRAGMA user_version=9;")
+            .unwrap();
+        future_conn
+            .execute("INSERT INTO future_data VALUES('uncheckpointed-v9')", [])
+            .unwrap();
+        let future_copy = Fixture::new();
+        std::fs::copy(&future_wal_src.path, &future_copy.path).unwrap();
+        std::fs::copy(
+            wal_sidecar(&future_wal_src.path),
+            wal_sidecar(&future_copy.path),
+        )
+        .unwrap();
+        drop(future_conn);
+        let orig_db_bytes = std::fs::read(&future_copy.path).unwrap();
+        let orig_wal_bytes = std::fs::read(wal_sidecar(&future_copy.path)).unwrap();
+        assert!(open_database(&future_copy.path).is_err());
+        assert_eq!(std::fs::read(&future_copy.path).unwrap(), orig_db_bytes);
+        assert_eq!(
+            std::fs::read(wal_sidecar(&future_copy.path)).unwrap(),
+            orig_wal_bytes
+        );
     }
 }

@@ -429,3 +429,45 @@ test("release-rehearsal 提供仅手动触发的只读 Windows 安装器与 SHA2
     assert.doesNotMatch(step.run ?? "", /gh release|git push|\bnpm publish\b|NODE_AUTH_TOKEN|NPM_TOKEN/);
   }
 });
+
+test("glib-backport 双端强制执行锁定版 rustfmt 与 clippy 零告警门禁", () => {
+  const workflow = yaml.load(readFileSync(join(ROOT, ".github/workflows/glib-backport.yml"), "utf8"));
+  assert.deepEqual(Object.keys(workflow.jobs).sort(), ["linux-regression", "windows-compatibility"]);
+  const linux = workflow.jobs["linux-regression"];
+  const windows = workflow.jobs["windows-compatibility"];
+  const linuxRuns = linux.steps.filter((step) => step.run).map((step) => step.run).join("\n");
+  const windowsRuns = windows.steps.filter((step) => step.run).map((step) => step.run).join("\n");
+
+  for (const [label, runs] of [["linux", linuxRuns], ["windows", windowsRuns]]) {
+    assert.match(runs, /rustup toolchain install 1\.94\.1 --profile minimal --component rustfmt --component clippy/, label);
+    assert.match(runs, /cargo \+1\.94\.1 fmt --manifest-path desktop\/src-tauri\/Cargo\.toml --all -- --check/, label);
+  }
+  assert.match(linuxRuns, /cargo \+1\.94\.1 fmt --manifest-path desktop\/security\/glib-variant-iter\/Cargo\.toml --all -- --check/);
+  assert.match(linuxRuns, /cargo \+1\.94\.1 clippy --manifest-path desktop\/security\/glib-variant-iter\/Cargo\.toml --all-targets --locked -- -D warnings/);
+  assert.match(linuxRuns, /cargo \+1\.94\.1 clippy --manifest-path desktop\/src-tauri\/Cargo\.toml --locked -- -D warnings/);
+  assert.match(windowsRuns, /cargo \+1\.94\.1 clippy --manifest-path desktop\/src-tauri\/Cargo\.toml --all-targets --locked -- -D warnings/);
+
+  const linuxStep = (pattern) => linux.steps.findIndex((step) => pattern.test(step.run ?? ""));
+  const linuxRustup = linuxStep(/rustup toolchain install 1\.94\.1/);
+  const linuxGlibClippy = linuxStep(/clippy --manifest-path desktop\/security\/glib-variant-iter\/Cargo\.toml/);
+  const linuxPrepare = linuxStep(/prepareRuntime\(\)/);
+  const linuxDesktopBuild = linuxStep(/^npm --prefix desktop run build$/);
+  const linuxTauriClippy = linuxStep(/clippy --manifest-path desktop\/src-tauri\/Cargo\.toml/);
+  assert.ok(linuxRustup >= 0 && linuxRustup < linuxGlibClippy && linuxPrepare < linuxDesktopBuild && linuxDesktopBuild < linuxTauriClippy);
+
+  const winStep = (pattern) => windows.steps.findIndex((step) => pattern.test(step.run ?? ""));
+  const winRustup = winStep(/rustup toolchain install 1\.94\.1/);
+  const winPrepare = winStep(/npm --prefix desktop run prepare:runtime/);
+  const winDesktopBuild = winStep(/^npm --prefix desktop run build$/);
+  const winFmt = winStep(/cargo \+1\.94\.1 fmt --manifest-path desktop\/src-tauri\/Cargo\.toml/);
+  const winClippy = winStep(/cargo \+1\.94\.1 clippy --manifest-path desktop\/src-tauri\/Cargo\.toml/);
+  const winTest = winStep(/cargo \+1\.94\.1 test --manifest-path desktop\/src-tauri\/Cargo\.toml/);
+  assert.ok(winRustup >= 0 && winPrepare < winDesktopBuild && winDesktopBuild < winFmt && winFmt < winClippy && winClippy < winTest);
+
+  for (const job of [linux, windows]) {
+    for (const step of job.steps) {
+      assert.notEqual(step["continue-on-error"], true);
+      assert.doesNotMatch(step.run ?? "", /\$\{\{/);
+    }
+  }
+});
