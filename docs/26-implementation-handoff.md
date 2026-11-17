@@ -535,6 +535,35 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 **允许变更的文件。** `src/cli.mjs`、CLI 配置读取模块、CLI 配置 schema、相关 CLI/问答/分发测试与必要夹具、README、本文和 progress.txt。读取模块使用既有私有文件清单，不改扫描器行为。范围基线四项门禁通过：全量 1722/1722、69 条引文与 coverage 红线通过；配置能力尚未实现。
 
+### T12 · 桌面分发
+
+**依赖与拆分。** T02、T06、T07、T09A–T09C 已完成，十处版本载体已统一为 `0.2.0-rc.4`，`tauri.conf.json` 已限定 `targets: ["nsis"]`。按 §3、§6 关口将「桌面分发」拆为两步：**T12A** 负责 CI 构建 Windows x64 NSIS 安装器并产出带自检的扁平 `SHA256SUMS.txt`（无新增依赖、无新增外部 Action、无应用联网变更、不触发真实 Release）；**T12B** 负责桌面端只读版本更新检查（涉及联网边界与私仓状态，待维护者确认下列裁决项后单列范围）。按 §6 确认本节后实施 T12A；本范围 PR 仅更新交接与进度。
+
+**探查结果（2026-11-18，独立工作树 `main@4f61722`）**
+
+- 现有 `.github/workflows/release.yml` 在 `ubuntu-latest` 运行，只打包 `weapp-shipmate-*.tgz` 与 `weapp-shipmate.mcpb` 并写入 `SHA256SUMS.txt`；`glib-backport.yml` 的 `windows-compatibility` 只执行 `cargo build --features tauri/custom-protocol` 编译验证，CI 中尚无 Windows NSIS 安装器产物与校验和。
+- 干净工作树执行 `npm --prefix desktop run prepare:runtime` 准备锁定版 Node `24.22.1`（`win32-x64`，618 个文件），`tests/desktop-runtime-package.test.mjs` 3/3 通过；`cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked` 为 116 通过、0 失败、2 项既有忽略。
+- 在 `RUSTUP_TOOLCHAIN=1.94.1` 下实跑 `npm --prefix desktop run tauri -- build -- --locked` 退出码 0，生成唯一安装器 `desktop/src-tauri/target/release/bundle/nsis/weapp-shipmate-desktop_0.2.0-rc.4_x64-setup.exe`（28,292,580 字节，SHA256 `ec43da39fd847a3f8652331cecf3d02eeadf1891e4efc45c6745c1c31304b601`），`bundle/` 下无 `.msi`。构建期间锁定的 `@tauri-apps/cli` 从 `tauri-apps` 官方发布源下载并校验 `nsis-3.11` 与 `nsis_tauri_utils-v0.5.3` 哈希。
+- 对该安装器执行现有只读核验脚本 `scripts/verify-windows-candidate.ps1` 与 `SHIPMATE_WINDOWS_CANDIDATE=<exe> node --test tests/windows-candidate.test.mjs`（4/4 通过）：PE 容器头有效，`authenticode.status` 为 `NotSigned`，与 `docs/25` §9 私有期未签名附 SHA256 现状一致。
+- 同机实测 Windows 下 `npm pack` / `npm publish --dry-run --ignore-scripts --tag next --json`（43 个文件，82,861 字节，`verify-package-rehearsal.mjs` 对账通过）、`WEAPP_SHIPMATE_REQUIRE_PACK=1 npm run build:mcpb`（82 个归档条目，核对无反斜杠与 `..` 路径）以及 Git Bash `sha256sum` 生成与 `sha256sum -c` 回验均退出 0。因此 `release.yml` 可在单个 `windows-latest` job（`shell: bash`）内同源构建三件资产，无需新增 `actions/upload-artifact` / `actions/download-artifact`（不触碰 §3 Action SHA 关口，也不增加跨 job 产物中转面）。
+
+#### T12A · CI 构建 Windows 安装器与 SHA256 清单（范围待确认）
+
+1. **先补发布工作流门禁测试。** 在 `tests/release.test.mjs` 增加回归断言：`release.yml` 的 `release` job 运行于 `windows-latest`（Node ≥22、锁定 Rust `1.94.1`），在任何打包步骤前完成双层 `npm ci`、`lint`、`release:check`、`npm test`、`verify:quotes`、`coverage` 及 `cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked`；包含带 `--locked` 的 Tauri NSIS 构建、只读 `verify-windows-candidate.ps1` 核验、唯一 `weapp-shipmate-desktop_<version>_x64-setup.exe` 及零 `.msi` 断言；`checksums` 步骤以无路径前缀的扁平文件名覆盖 `.tgz`、`.mcpb` 与桌面安装器 `.exe`，并当场执行 `sha256sum -c SHA256SUMS.txt`；草稿 Release 上传步骤挂齐三件资产与 `SHA256SUMS.txt`，保留 `--draft` 且不含 `--prerelease` / `--latest`。同时断言 `release-rehearsal.yml` 新增的桌面安装器演练 job 仅在 `workflow_dispatch` 运行、仅具读权限、不含 `gh release`、`git push` 或非 dry-run 发布。
+   判据：修改 workflow 前，`node --test tests/release.test.mjs` 因新增断言失败。
+2. **更新 `release.yml` 同源产出三件资产与校验和。** 保留 `on.push.tags: ["v*"]`、`permissions: contents: write` 以及 T09C 已固定的 `actions/checkout`、`actions/setup-node` 完整 SHA（`persist-credentials: false`）。将 `jobs.release` 迁至 `windows-latest` 并设 `defaults.run.shell: bash`；安装 Rust `1.94.1`（`--profile minimal`），全量门禁与 Rust 测试通过后依次执行 `npm pack`、`WEAPP_SHIPMATE_REQUIRE_PACK=1 npm run build:mcpb`、`RUSTUP_TOOLCHAIN=1.94.1 npm --prefix desktop run tauri -- build -- --locked`。核对 `bundle/nsis/` 恰好存在一个与仓库版本一致的 `weapp-shipmate-desktop_${VERSION}_x64-setup.exe` 且 `bundle/` 下无 `.msi`，运行 `pwsh -NoLogo -NoProfile -NonInteractive -File scripts/verify-windows-candidate.ps1` 校验容器头与签名状态；将 `.mcpb` 与安装器复制到工作目录根，执行 `sha256sum weapp-shipmate-*.tgz weapp-shipmate.mcpb weapp-shipmate-desktop_*_x64-setup.exe > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt && cat SHA256SUMS.txt`，最后将该四项传入 `gh release create --draft`。
+3. **在 `release-rehearsal.yml` 增加手动只读安装器演练。** 新增 `desktop-installer` job（`if: github.event_name == 'workflow_dispatch'`，`runs-on: windows-latest`，沿用顶层 `contents: read`），日常 PR 推送不运行以避免双倍消耗私有仓库 Windows 分钟数（PR 上的桌面与 Rust 编译继续由 `glib-backport.yml` 把关）。手动触发时在 `$RUNNER_TEMP` 暂存目录完整跑通上述锁定构建、`verify-windows-candidate.ps1` JSON 报告落盘、三件扁平资产复制、`SHA256SUMS.txt` 生成与 `sha256sum -c` 回验，并校验 `SHA256SUMS.txt` 中安装器哈希与候选报告 `sha256` 一致。
+4. **文档校对与合并后实跑验收。** 将 `docs/14-first-run-and-trial.md` 第 53 行关于当前构建配置版本的文字更新为与统一版本载体一致的表述（保留各历史候选记录不改）。本地通过 `tests/release.test.mjs` 与 §2 四项门禁；实施 PR 合并后执行 `gh workflow run release-rehearsal.yml --ref main`，核对 GitHub `windows-latest` 实跑产出的 NSIS 安装器大小、SHA256、`verify-windows-candidate.ps1` 结论与 `SHA256SUMS.txt` 自检结果并记入验收记录。不打 tag，不创建真实或草稿 Release。
+
+**允许变更的文件。** `.github/workflows/release.yml`、`.github/workflows/release-rehearsal.yml`、`tests/release.test.mjs`、`docs/14-first-run-and-trial.md`（仅第 53 行当前配置说明）、本文与 `progress.txt`。不新增依赖，不新增 GitHub Action。
+
+#### T12B · 桌面只读版本更新检查（待裁决后单列范围）
+
+桌面端当前无 `tauri-plugin-updater` 或任何版本查询代码，Webview CSP `connect-src` 仅允许本机 `self` 与 `ipc:`。后续实施前需维护者按 §3、§6 裁决两点：
+
+1. **私有仓库与只读交互边界**：仓库当前 `private=true` 且候选 Release 为草稿，不带凭据访问公开 GitHub Releases API 返回 HTTP `404`，而桌面端按 `SECURITY.md` 不内置任何令牌。拟采用与 `source_freshness` 相同的架构：启动不联网、后台不轮询，仅在用户手动点击「检查更新」时经随包 Node 请求固定公开 Release 元数据接口，Rust 校验有界 JSON 后只展示当前版本、最新公开版本及由系统浏览器打开的发布页链接，不自动下载安装包、不自动执行更新、不引入新 crate；私仓或尚无公开正式版时如实提示「暂无公开版本信息」。
+2. **安全措辞与排期**：请确认 ① 按上述手动只读边界单列 T12B 实施步骤，并在 `SECURITY.md` 第 7 行同步补记手动点击的版本元数据读取说明（触及 `SECURITY.md` 时合并前须维护者批准），或 ② 待仓库准备公开并发布首个非草稿 Release 前再启动 T12B。
+
 **功能项**（编号与 `docs/25` §8 一致）
 
 | # | 功能 | 完成判据 | 依赖 | 关口 |
