@@ -249,6 +249,7 @@ test("发布演练仅授予读权限，强制 dry-run 并对账包清单", () =>
   assert.equal(job.steps.find((step) => step.run === publish).env.DIST_TAG, "${{ steps.version.outputs.dist_tag }}");
   for (const step of job.steps) {
     assert.notEqual(step["continue-on-error"], true);
+    assert.doesNotMatch(step.run ?? "", /\$\{\{/);
     assert.doesNotMatch(step.run ?? "", /gh release|git push|NODE_AUTH_TOKEN|NPM_TOKEN/);
   }
 });
@@ -296,5 +297,135 @@ test("清单校验拒绝桌面内容、私有文件和越界路径", () => {
     const result = rehearsalFixture();
     result.files.push({ path, size: 1, mode: 420 });
     assert.throws(() => verifyPackageRehearsal(result, result, packageManifest), /package path|Desktop content/);
+  }
+});
+
+test("release workflow 在 Windows 上锁定 Rust 1.94.1 同源构建安装器、核验候选并校验全部扁平 SHA256 资产", () => {
+  const workflow = yaml.load(readFileSync(join(ROOT, ".github", "workflows", "release.yml"), "utf8"));
+  assert.deepEqual(Object.keys(workflow.jobs), ["release"]);
+  const job = workflow.jobs.release;
+  assert.equal(job["runs-on"], "windows-latest");
+  assert.equal(job.defaults?.run?.shell, "bash");
+  const steps = job.steps;
+  const indexOfRun = (command) => steps.findIndex((step) => step.run === command);
+  const rustup = indexOfRun("rustup toolchain install 1.94.1 --profile minimal");
+  const install = indexOfRun("npm ci");
+  const desktopInstall = indexOfRun("npm ci --prefix desktop");
+  const prepareRuntime = indexOfRun("npm --prefix desktop run prepare:runtime");
+  const desktopBuild = indexOfRun("npm --prefix desktop run build");
+  const lint = indexOfRun("npm run lint");
+  const versionCheck = indexOfRun("npm run release:check");
+  const testStep = indexOfRun("npm test");
+  const quotes = indexOfRun("npm run verify:quotes");
+  const coverage = indexOfRun("npm run coverage");
+  const cargoTest = indexOfRun("cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked");
+  const npmPack = indexOfRun("npm pack");
+  const mcpbPack = indexOfRun("npm run build:mcpb");
+  const tauriBuild = indexOfRun("npm --prefix desktop run tauri -- build -- --locked");
+  const verifyCandidate = steps.findIndex((step) => step.name === "verify windows installer candidate");
+  const checksums = steps.findIndex((step) => step.name === "checksums");
+  const draftRelease = steps.findIndex((step) => step.name === "create draft release with assets");
+
+  assert.ok(rustup >= 0 && rustup < cargoTest, "release workflow 必须先安装锁定版 Rust 1.94.1 再运行桌面测试");
+  assert.ok(
+    desktopInstall >= 0 && desktopInstall < prepareRuntime && prepareRuntime < desktopBuild && desktopBuild < testStep && testStep < cargoTest,
+    "必须在 npm test 与 cargo test 前准备 runtime 和前端产物，激活便携 runtime 测试并满足 tauri::generate_context!",
+  );
+  for (const gate of [install, desktopInstall, prepareRuntime, desktopBuild, lint, versionCheck, testStep, quotes, coverage, cargoTest]) {
+    assert.ok(gate >= 0, "release workflow 缺少打包前门禁步骤");
+    for (const pack of [npmPack, mcpbPack, tauriBuild]) {
+      assert.ok(gate < pack, "所有质量门禁必须早于任一打包步骤");
+    }
+  }
+  assert.equal(steps[mcpbPack].env?.WEAPP_SHIPMATE_REQUIRE_PACK, "1");
+  assert.ok(tauriBuild >= 0, "release workflow 缺少 Tauri NSIS 构建步骤");
+  assert.equal(steps[tauriBuild].env?.RUSTUP_TOOLCHAIN, "1.94.1");
+
+  assert.ok(npmPack < checksums && mcpbPack < checksums && tauriBuild < verifyCandidate && verifyCandidate < checksums && checksums < draftRelease);
+  assert.match(steps[verifyCandidate].run, /MSYS_NO_PATHCONV=1\s+pwsh\b[\s\S]*scripts\/verify-windows-candidate\.ps1/);
+  assert.match(steps[verifyCandidate].run, /-SourceCommit\s+"\$GITHUB_SHA"/);
+  assert.match(steps[verifyCandidate].run, /-SourceDirty\s+false/);
+  assert.match(steps[verifyCandidate].run, /mkdtempSync/);
+  assert.match(steps[verifyCandidate].run, /\.msi/);
+  assert.match(steps[verifyCandidate].run, /weapp-shipmate-desktop_\$\{version\}_x64-setup\.exe/);
+
+  const checksumStep = steps[checksums];
+  const hashedArgs = checksumStep.run.match(/sha256sum\s+([^>]+)>/)[1].trim().split(/\s+/);
+  assert.deepEqual(hashedArgs, [
+    "weapp-shipmate-*.tgz",
+    "weapp-shipmate.mcpb",
+    "weapp-shipmate-desktop_*_x64-setup.exe",
+  ]);
+  assert.match(checksumStep.run, /sha256sum -c SHA256SUMS\.txt/);
+  assert.match(checksumStep.run, /report\.sha256/);
+
+  const releaseStep = steps[draftRelease];
+  for (const asset of ["weapp-shipmate-*.tgz", "weapp-shipmate.mcpb", "weapp-shipmate-desktop_*_x64-setup.exe", "SHA256SUMS.txt"]) {
+    assert.ok(releaseStep.run.includes(asset), `草稿 Release 漏挂资产：${asset}`);
+  }
+  assert.ok(!releaseStep.run.includes("target/"), "上传资产必须使用工作目录扁平文件名");
+  for (const step of steps) {
+    assert.notEqual(step["continue-on-error"], true);
+    assert.doesNotMatch(step.run ?? "", /\$\{\{/, "shell 脚本内不得直接插值 GitHub 表达式");
+  }
+});
+
+test("release-rehearsal 提供仅手动触发的只读 Windows 安装器与 SHA256 演练", () => {
+  const workflow = yaml.load(readFileSync(join(ROOT, ".github/workflows/release-rehearsal.yml"), "utf8"));
+  assert.deepEqual(Object.keys(workflow.jobs).sort(), ["desktop-installer", "rehearsal"]);
+  const job = workflow.jobs["desktop-installer"];
+  assert.ok(job, "release-rehearsal 缺少 desktop-installer 演练 job");
+  assert.equal(job.if, "github.event_name == 'workflow_dispatch'");
+  assert.equal(job["runs-on"], "windows-latest");
+  assert.equal(job.defaults?.run?.shell, "bash");
+  assert.equal(job.permissions, undefined);
+
+  const setupNode = job.steps.find((step) => step.uses?.startsWith("actions/setup-node"));
+  assert.ok(setupNode);
+  assert.match(String(setupNode.with["node-version"]), /^(2[2-9]|[3-9]\d)(\.|$)/);
+
+  const indexOfRun = (command) => job.steps.findIndex((step) => step.run === command);
+  const rustup = indexOfRun("rustup toolchain install 1.94.1 --profile minimal");
+  const install = indexOfRun("npm ci");
+  const desktopInstall = indexOfRun("npm ci --prefix desktop");
+  const prepareRuntime = indexOfRun("npm --prefix desktop run prepare:runtime");
+  const runtimeTest = indexOfRun("node --test tests/desktop-runtime-package.test.mjs");
+  const desktopBuild = indexOfRun("npm --prefix desktop run build");
+  const cargoTest = indexOfRun("cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked");
+  const npmPack = indexOfRun("npm pack");
+  const mcpbPack = indexOfRun("npm run build:mcpb");
+  const tauriBuild = indexOfRun("npm --prefix desktop run tauri -- build -- --locked");
+  const verifyIndex = job.steps.findIndex((step) => step.name === "verify installer and checksums");
+
+  assert.ok(
+    rustup >= 0 &&
+    install >= 0 &&
+    install < desktopInstall &&
+    desktopInstall < prepareRuntime &&
+    prepareRuntime < runtimeTest &&
+    runtimeTest < desktopBuild &&
+    desktopBuild < cargoTest &&
+    rustup < cargoTest,
+  );
+  for (const pack of [npmPack, mcpbPack, tauriBuild]) {
+    assert.ok(cargoTest < pack && pack < verifyIndex, "desktop-installer 门禁、打包与核验顺序错误");
+  }
+  assert.equal(job.steps[tauriBuild].env?.RUSTUP_TOOLCHAIN, "1.94.1");
+  assert.equal(job.steps[mcpbPack].env?.WEAPP_SHIPMATE_REQUIRE_PACK, "1");
+
+  const verifyStep = job.steps[verifyIndex];
+  assert.match(verifyStep.run, /assertVersionIdentity\(readRepositoryVersionIdentity\(\)\)/);
+  assert.match(verifyStep.run, /MSYS_NO_PATHCONV=1\s+pwsh\b[\s\S]*scripts\/verify-windows-candidate\.ps1/);
+  assert.match(verifyStep.run, /mkdtempSync/);
+  assert.match(verifyStep.run, /RUNNER_TEMP/);
+  assert.match(verifyStep.run, /\.msi/);
+  assert.match(verifyStep.run, /sha256sum weapp-shipmate-\*\.tgz weapp-shipmate\.mcpb weapp-shipmate-desktop_\*_x64-setup\.exe > SHA256SUMS\.txt/);
+  assert.match(verifyStep.run, /sha256sum -c SHA256SUMS\.txt/);
+  assert.match(verifyStep.run, /report\.sha256/);
+
+  for (const step of job.steps) {
+    assert.notEqual(step["continue-on-error"], true);
+    assert.doesNotMatch(step.run ?? "", /\$\{\{/);
+    assert.doesNotMatch(step.run ?? "", /gh release|git push|\bnpm publish\b|NODE_AUTH_TOKEN|NPM_TOKEN/);
   }
 });

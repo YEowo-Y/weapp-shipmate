@@ -43,3 +43,109 @@ jobs:
           npm publish --dry-run --ignore-scripts --tag "$DIST_TAG" --json > build/release-rehearsal/publish.json
           node scripts/verify-package-rehearsal.mjs build/release-rehearsal/pack.json build/release-rehearsal/publish.json
           cat build/release-rehearsal/pack.json build/release-rehearsal/publish.json
+
+  desktop-installer:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - run: rustup toolchain install 1.94.1 --profile minimal
+      - run: npm ci
+      - run: npm ci --prefix desktop
+      - run: npm --prefix desktop run prepare:runtime
+      - run: node --test tests/desktop-runtime-package.test.mjs
+      - run: npm --prefix desktop run build
+      - run: cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked
+      - run: npm pack
+      - name: build mcpb bundle
+        run: npm run build:mcpb
+        env:
+          WEAPP_SHIPMATE_REQUIRE_PACK: "1"
+      - name: build windows nsis installer
+        run: npm --prefix desktop run tauri -- build -- --locked
+        env:
+          RUSTUP_TOOLCHAIN: "1.94.1"
+      - name: verify installer and checksums
+        run: |
+          set -euo pipefail
+          version="$(node --input-type=module -e "
+            import { assertVersionIdentity, readRepositoryVersionIdentity } from './scripts/check-release-version.mjs';
+            const { version } = assertVersionIdentity(readRepositoryVersionIdentity());
+            process.stdout.write(version);
+          ")"
+          expected="desktop/src-tauri/target/release/bundle/nsis/weapp-shipmate-desktop_${version}_x64-setup.exe"
+          node -e "
+            const { existsSync, readdirSync } = require('node:fs');
+            const { join } = require('node:path');
+            const msis = [];
+            const walk = (dir) => {
+              if (!existsSync(dir)) return;
+              for (const entry of readdirSync(dir, { withFileTypes: true })) {
+                const full = join(dir, entry.name);
+                if (entry.isDirectory()) walk(full);
+                else if (/\.msi$/i.test(entry.name)) msis.push(full);
+              }
+            };
+            walk('desktop/src-tauri/target/release/bundle');
+            if (msis.length) {
+              console.error('Unexpected MSI output:', msis.join(', '));
+              process.exit(1);
+            }
+          "
+          shopt -s nullglob
+          nsis_files=(desktop/src-tauri/target/release/bundle/nsis/*.exe)
+          if [[ "${#nsis_files[@]}" -ne 1 || "${nsis_files[0]}" != "$expected" ]]; then
+            echo "Expected single NSIS installer $expected, got: ${nsis_files[*]:-none}" >&2
+            exit 1
+          fi
+          abs_installer="$(node -p "require('node:path').resolve(process.argv[1])" "$expected")"
+          temp_dir="$(node -p "const { mkdtempSync } = require('node:fs'); const { tmpdir } = require('node:os'); const { join, resolve } = require('node:path'); mkdtempSync(join(resolve((process.env.RUNNER_TEMP || '').trim() || tmpdir()), 'shipmate-rehearsal-' + (process.env.GITHUB_RUN_ID || 'local') + '-' + (process.env.GITHUB_RUN_ATTEMPT || '1') + '-'))")"
+          report_path="$(node -p "require('node:path').join(process.argv[1], 'windows-candidate.json')" "$temp_dir")"
+          MSYS_NO_PATHCONV=1 pwsh -NoLogo -NoProfile -NonInteractive -File scripts/verify-windows-candidate.ps1 \
+            -FilePath "$abs_installer" \
+            -SourceCommit "$GITHUB_SHA" \
+            -SourceDirty false \
+            -OutputPath "$report_path"
+          stage_dir="$(node -p "require('node:path').join(process.argv[1], 'release-assets')" "$temp_dir")"
+          mkdir -p "$stage_dir"
+          cp "weapp-shipmate-${version}.tgz" "$stage_dir/"
+          cp build/weapp-shipmate.mcpb "$stage_dir/"
+          cp "$expected" "$stage_dir/"
+          (
+            cd "$stage_dir"
+            sha256sum weapp-shipmate-*.tgz weapp-shipmate.mcpb weapp-shipmate-desktop_*_x64-setup.exe > SHA256SUMS.txt
+            sha256sum -c SHA256SUMS.txt
+            cat SHA256SUMS.txt
+          )
+          STAGE_DIR="$stage_dir" REPORT_PATH="$report_path" VERSION="$version" node -e "
+            const assert = require('node:assert/strict');
+            const { readFileSync } = require('node:fs');
+            const { join } = require('node:path');
+            const rawSums = readFileSync(join(process.env.STAGE_DIR, 'SHA256SUMS.txt'), 'utf8');
+            assert.ok(!rawSums.includes('\r'), 'SHA256SUMS.txt must use LF line endings');
+            const sums = rawSums.trim().split('\n');
+            assert.equal(sums.length, 3, 'Expected exactly 3 release asset checksums');
+            const parsed = Object.fromEntries(sums.map((line) => {
+              const match = line.match(/^([0-9a-f]{64}) [ *]([^/\\\\]+)$/);
+              assert.ok(match, 'Malformed checksum line: ' + line);
+              return [match[2], match[1]];
+            }));
+            const expectedInstaller = 'weapp-shipmate-desktop_' + process.env.VERSION + '_x64-setup.exe';
+            assert.deepEqual(Object.keys(parsed).sort(), [
+              'weapp-shipmate-' + process.env.VERSION + '.tgz',
+              'weapp-shipmate.mcpb',
+              expectedInstaller,
+            ].sort());
+            const report = JSON.parse(readFileSync(process.env.REPORT_PATH, 'utf8'));
+            assert.equal(report.ok, true);
+            assert.equal(parsed[expectedInstaller], report.sha256);
+            console.log('Verified installer SHA256:', report.sha256, 'sizeBytes:', report.sizeBytes);
+          "
