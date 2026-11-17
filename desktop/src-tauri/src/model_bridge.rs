@@ -22,6 +22,7 @@ struct Runtime {
     stdin: Arc<Mutex<ChildStdin>>,
     channels: Channels,
     reader_closed: Arc<AtomicBool>,
+    stopping: Arc<AtomicBool>,
 }
 impl Default for ModelBridge {
     fn default() -> Self {
@@ -30,6 +31,7 @@ impl Default for ModelBridge {
 }
 impl Runtime {
     fn stop(&mut self) {
+        self.stopping.store(true, Ordering::Release);
         self.agent_tools.clear(&self.tool_runner);
         let _ = self.child.kill();
         let _ = self.child.wait();
@@ -157,9 +159,15 @@ fn start(app: &tauri::AppHandle) -> Result<Runtime, String> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
-    let mut child = command
-        .spawn()
-        .map_err(|_| "无法启动内置模型服务，请修复或重新安装应用。".to_string())?;
+    let mut child = command.spawn().map_err(|_| {
+        crate::diagnostics::record_reason(
+            "model_bridge",
+            "error",
+            "broker_spawn_failed",
+            "spawn_error",
+        );
+        "无法启动内置模型服务，请修复或重新安装应用。".to_string()
+    })?;
     let (stdin, stdout) = match (child.stdin.take(), child.stdout.take()) {
         (Some(stdin), Some(stdout)) => (stdin, stdout),
         _ => {
@@ -174,6 +182,8 @@ fn start(app: &tauri::AppHandle) -> Result<Runtime, String> {
     let output_channels = channels.clone();
     let reader_closed = Arc::new(AtomicBool::new(false));
     let output_closed = reader_closed.clone();
+    let stopping = Arc::new(AtomicBool::new(false));
+    let output_stopping = stopping.clone();
     let reader = std::thread::Builder::new()
         .name("shipmate-model-output".into())
         .spawn(move || {
@@ -183,18 +193,59 @@ fn start(app: &tauri::AppHandle) -> Result<Runtime, String> {
                 let mut bytes = Vec::new();
                 let mut limited = std::io::Read::take(&mut reader, 2_000_001);
                 match limited.read_until(b'\n', &mut bytes) {
-                    Ok(0) | Err(_) => break,
+                    Ok(0) => {
+                        if !output_stopping.load(Ordering::Acquire) {
+                            crate::diagnostics::record_reason(
+                                "model_bridge",
+                                "warn",
+                                "broker_disconnected",
+                                "unexpected_eof",
+                            );
+                        }
+                        break;
+                    }
+                    Err(_) => {
+                        if !output_stopping.load(Ordering::Acquire) {
+                            crate::diagnostics::record_reason(
+                                "model_bridge",
+                                "warn",
+                                "broker_disconnected",
+                                "stdout_read_error",
+                            );
+                        }
+                        break;
+                    }
                     _ => {}
                 }
                 if bytes.len() > 2_000_000 || bytes.last() != Some(&b'\n') {
+                    crate::diagnostics::record_reason(
+                        "model_bridge",
+                        "warn",
+                        "broker_protocol_violation",
+                        "oversized_or_unterminated_frame",
+                    );
                     break;
                 }
                 let Ok(mut event) = serde_json::from_slice::<Value>(&bytes) else {
+                    crate::diagnostics::record_reason(
+                        "model_bridge",
+                        "warn",
+                        "broker_protocol_violation",
+                        "non_json_stdout_frame",
+                    );
                     break;
                 };
                 if event.get("type").and_then(Value::as_str) == Some("credential") {
                     let response = credentials.respond(event);
                     if write_frame(&output_stdin, &response).is_err() {
+                        if !output_stopping.load(Ordering::Acquire) {
+                            crate::diagnostics::record_reason(
+                                "model_bridge",
+                                "warn",
+                                "broker_disconnected",
+                                "stdin_write_failed",
+                            );
+                        }
                         break;
                     }
                     continue;
@@ -212,14 +263,32 @@ fn start(app: &tauri::AppHandle) -> Result<Runtime, String> {
                 }
                 if event.get("type").and_then(Value::as_str) == Some("project-tool-cancel") {
                     if !output_tools.cancel_frame(&event, &output_runner) {
+                        crate::diagnostics::record_reason(
+                            "model_bridge",
+                            "warn",
+                            "broker_protocol_violation",
+                            "invalid_cancel_frame",
+                        );
                         break;
                     }
                     continue;
                 }
                 if !public_event(&event) {
+                    crate::diagnostics::record_reason(
+                        "model_bridge",
+                        "warn",
+                        "broker_protocol_violation",
+                        "invalid_public_event",
+                    );
                     break;
                 }
                 let Some(id) = event.get("id").and_then(Value::as_str).map(str::to_owned) else {
+                    crate::diagnostics::record_reason(
+                        "model_bridge",
+                        "warn",
+                        "broker_protocol_violation",
+                        "missing_event_id",
+                    );
                     break;
                 };
                 let terminal = matches!(
@@ -255,6 +324,7 @@ fn start(app: &tauri::AppHandle) -> Result<Runtime, String> {
         stdin,
         channels,
         reader_closed,
+        stopping,
     })
 }
 
@@ -308,6 +378,12 @@ pub fn model_request(
     }
     let frame = json!({"type":"request","request":request});
     if write_frame(&runtime.stdin, &frame).is_err() {
+        crate::diagnostics::record_reason(
+            "model_bridge",
+            "warn",
+            "broker_disconnected",
+            "request_stdin_write_failed",
+        );
         runtime.stop();
         *guard = None;
         return Err("模型服务已退出，请重试。".into());

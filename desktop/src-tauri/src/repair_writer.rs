@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
-    path::{Component, Path, PathBuf},
+    path::Path,
 };
 
 pub const MAX_CONFIG: usize = 64 * 1024;
@@ -89,11 +89,12 @@ pub fn directories(path: &Path) -> Result<Vec<File>, String> {
     #[cfg(not(windows))]
     {
         let _ = path;
-        return Err("受限写入暂仅支持 Windows 本地磁盘。".into());
+        Err("受限写入暂仅支持 Windows 本地磁盘。".into())
     }
     #[cfg(windows)]
     {
         use std::os::windows::{ffi::OsStrExt, fs::OpenOptionsExt};
+        use std::path::{Component, PathBuf};
         use windows_sys::Win32::Storage::FileSystem::GetDriveTypeW;
         let display = path.to_str().ok_or("路径编码不支持。")?;
         let plain = display.strip_prefix("\\\\?\\").unwrap_or(display);

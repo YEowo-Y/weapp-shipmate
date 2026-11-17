@@ -27,7 +27,9 @@ fn next_back_preserves_strings_in_reverse_order() {
     assert_eq!(iter.next_back(), None);
 }
 
+// VariantStrIter implements custom Iterator::nth; call .nth(0) directly rather than .next().
 #[test]
+#[allow(clippy::iter_nth_zero)]
 fn nth_skips_relative_to_the_current_front() {
     let variant = strings(&["skip", "中文", "skip", "🚢", ""]);
     let mut iter = variant.array_iter_str().unwrap();
@@ -59,6 +61,7 @@ fn last_returns_the_last_remaining_string() {
 }
 
 #[test]
+#[allow(clippy::iter_nth_zero)]
 fn mixed_direction_iteration_tracks_remaining_length_and_stays_exhausted() {
     let variant = strings(&["front", "", "中文", "🚢", "middle", "back"]);
     let mut iter = variant.array_iter_str().unwrap();
