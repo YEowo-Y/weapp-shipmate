@@ -495,6 +495,21 @@ T10A 已在 [#39](https://github.com/YEowo-Y/weapp-shipmate/pull/39) 合并。MC
 
 实施验收（Windows，2026-11-16）：`npm run build:plugins` 生成两个市场。Codex CLI 0.164.0 与 Claude Code 2.1.300 从仓库外含空格路径安装正式包，发现缓存中的 skill、通过宿主实调三个工具并命中夹具，卸载通过。Claude 三次调用均确认零模型 token。共用运行时和 MCPB 共存回归通过；全量测试 1699/1699、70 项定向回归、lint、69 条引文和 coverage 通过。
 
+T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，十项 PR CI 和合并后 main 的 Node、桌面检查均通过。
+
+### T11 · CLI 成熟度
+
+**T11A 申请范围。** 先交付 `check --fail-on` 和显式启用的 JSON v1，供自动化调用方选择门禁阈值并校验机器输出。以 `main@b635ee8` 为基线，配置文件、baseline 和 SARIF 在后续工单分别补齐具体契约。按 §3、§6，确认本节 CLI 公共接口后实施。
+
+**现状。** 真实入口 `bin/weapp-shipmate.mjs` 调用 `src/cli.mjs`。目前 `check` 命中 blocker 返回 2，正常无 blocker 返回 0，参数或执行错误返回 1；`guide` 和 `explain` 成功返回 0。JSON 是 `command/meta/items/notes` 对象，guide 另含 `selfCheck`。共享 `render` 同时服务 MCP 和桌面产物。实跑 CLI、E2E 和报告定向测试 45/45，通过旧入口传 `--fail-on warning` 会报未知选项并退出 1。
+
+1. **固定旧命令兼容。** 实现前从基线记录三命令的 Markdown、JSON、checklist 输出、聚焦过滤、草稿选项、正常与错误退出码及 stderr。真实子进程测试逐字节比较 stdout/stderr；涉及扫描绝对路径时，基线夹具只替换明确的根路径占位符为本次测试路径，再比较完整字节。保留管道完整写出和 guide 终端问答回归。帮助文字增加新参数说明是本次明确的兼容例外，其他既有调用按原输出与退出码验收。
+2. **增加显式退出阈值。** `check --fail-on blocker|warning|info|none` 支持空格和等号语法。blocker 只计算 blocker，warning 计算 blocker 与 warning，info 计算三种级别，none 关闭发现项门禁。命中阈值返回 2，否则返回 0；参数及运行错误仍返回 1。阈值计算采用展示过滤前的本次报告 items，`--blockers-only` 只影响展示；`--include-drafts` 明确选择的草稿也计入阈值。显式阈值触发退出 2 时在 stderr 输出阈值及命中数量，stdout 保留所选格式的完整报告。缺值、非法值、用于 guide/explain 均报参数错误。同一新参数重复出现时拒绝，避免后一个值悄悄覆盖门禁。
+3. **显式 JSON v1。** 三命令支持 `--json --json-version 1`，也接受 `--json-version=1`。输出为原报告顶层增加整数 `schemaVersion: 1`，保留原有报告字段，结尾为一个 LF。缺值、其他版本、重复指定、缺少 `--json` 或同时带 `--checklist` 均返回参数错误。已有 `guide --interactive --json` 冲突继续生效。新增 CLI 专用输出 schema，限定版本和三种 command，要求 meta 为对象、items 为对象数组、notes 为字符串数组，guide 必须含 selfCheck 对象数组，并允许新增字段。用三份真实成功结果校验，反例覆盖错版本、缺键和错类型。版本包装放在 CLI 输出边界，共享 renderer 继续服务既有调用方。
+4. **交叉验收与说明。** 覆盖空报告、各 severity、不同阈值、草稿与聚焦的组合，以及 JSON v1 和阈值同时启用、非法目录及大报告管道写出。选用小型固定夹具验证退出码，既有规则断言和金快照按原判据运行。README 与帮助说明退出 0 只表示命令成功且未触发所选阈值，扫描限制继续从报告读取。新增 schema 随既有 schemas 包清单分发，从 npm 打包内容和 MCPB/插件暂存入口复验 CLI 版本输出及现有 MCP 调用。运行四项门禁、独立冷读复审与全部 PR CI。
+
+**允许变更的文件。** CLI 适配层、CLI 专用 JSON schema、相关 CLI/E2E/分发回归测试及必要夹具、README、本文与 progress.txt。实现可复用已有报告格式和规则结果。后续配置、baseline、SARIF 的默认行为与格式契约在各自范围稿中确认。
+
 **功能项**（编号与 `docs/25` §8 一致）
 
 | # | 功能 | 完成判据 | 依赖 | 关口 |
@@ -525,4 +540,4 @@ T10A 已在 [#39](https://github.com/YEowo-Y/weapp-shipmate/pull/39) 合并。MC
 
 ## 7. 当前推进入口
 
-T01–T08、T09A–T09C 和 T10A 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T10B 双宿主本地插件按已批准范围实施，状态为 PR 中。通用基线和验证命令见 §2。
+T01–T08、T09A–T09C 和 T10A–T10B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。当前待确认 §6 的 T11A CLI 阈值和 JSON v1 范围。通用基线和验证命令见 §2。
