@@ -99,6 +99,18 @@ node bin/weapp-shipmate.mjs explain "诱导分享" --json --json-version 1
 
 配置只保存示例所示字段；格式、JSON 输出版本、草稿、聚焦和交互选项继续在命令行指定。`explain` 不接受 `--config`，MCP 和桌面也不自动加载它。文件及其祖先目录不得含符号链接或 junction；文件必须是最多 5 MiB 的本地普通文件，并受现有私有文件名禁读策略约束。不接受 URL、UNC 网络路径或 Windows 数据流、末尾点号/空格别名。读取或解析失败时只显示路径、字段和原因，不显示原始内容；配置文件请勿放入凭据。help/version 不读取配置。
 
+要核对发现项的源码来源，可显式启用证据：
+
+```bash
+node bin/weapp-shipmate.mjs check ./my-app --evidence --json --json-version 1
+```
+
+每个发现项增加 `evidence: {status, locations}`；位置含相对路径 `file`、从 1 开始的 `line/column`（列按 UTF-16 code unit 计）、`kind` 和 `signal`。API 静态引用用 `api-reference`，Taro 导入用 `api-import`，其余为 `domain`、`insecure-request`、`config-key`、`secret-key`；这些位置表示当前静态匹配来源，不代表运行时调用已发生。只输出 API 名、净化后的 host 或键名，不附代码片段、完整 URL 或密钥值。配置解析器无法可靠恢复行列时，两者为 `null`，只提供文件级证据。
+
+`located` 表示该项本次关联的已检出信号都有位置；`partial` 表示包含文件级证据、缺失定位、动态域名提示或截断；`unavailable` 表示无可关联来源。定位状态与扫描完整性独立，仍需查看 `meta.scan.scope` 和 notes。`meta.evidence` 声明证据版本及是否截断：全局最多保存 20,000 个位置，每项最多展示 100 个；截断有明确注记，扫描与退出阈值照常计算。
+
+`--evidence` 仅用于 `check`，必须与 `--json --json-version 1` 同用，不能重复或与 `--checklist` 同用；可搭配配置、阈值、草稿和聚焦参数。未指定时输出不变，MCP/桌面不自动启用。证据不提供稳定问题指纹，也不豁免任何发现项；baseline 另行实现。
+
 规则报告的可选 `confidence` 字段保留规则库的 `high` / `medium` / `low`，Markdown 与可勾选清单显示为高/中/低。这是规则维护者对规则准确性的把握，不是命中概率或过审保证，也不改变严重度。流程导航项、合成检查及缺少字段的历史报告不补造评级；低置信规则仍只通过显式包含草案显示。
 
 历史GitHub tag或tarball可以用于复现历史版本，但不应作为当前修复后的候选。构建和验证入口见[首跑说明](docs/14-first-run-and-trial.md)。

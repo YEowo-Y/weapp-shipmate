@@ -541,9 +541,9 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 **调整理由。** T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并。准备 baseline 时核对到：`scanProject` 的 API、域名和配置键是项目级去重集合；`runCheck` 每条普通规则只产出一个聚合项；`scope.filesHash` 只散列排序后的相对文件名，内容改变不会改变它。桌面对比按规则 ID 比集合，可显示规则仍在/未再检出，不能证明没有新增同类问题。因此先实施 T11C1 的显式证据输出，再单列 T11C2 baseline 的匹配、规则版本、扫描范围和退出阈值契约。当前不以 ruleId、文件名散列或去重信号集直接豁免门禁。
 
-##### T11C1 · CLI 显式发现项证据（范围待确认）
+##### T11C1 · CLI 显式发现项证据（已批准）
 
-**目标与关口。** 以 `main@6625025` 为基线，让 CLI 调用方核对发现项来自哪个源码位置，为后续 baseline 和 SARIF 提供依据。按 §3、§6 确认本节后实施。仅新增 CLI 显式启用路径；功能 1 的桌面/MCP 展示和所有信号精确定位仍在后续范围，不在本工单宣称功能 1 全部完成。
+**目标与关口。** 以 `main@6625025` 为基线，让 CLI 调用方核对发现项来自哪个源码位置，为后续 baseline 和 SARIF 提供依据。维护者已按 §3、§6 批准按 [#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47) 实施。仅新增 CLI 显式启用路径；功能 1 的桌面/MCP 展示和所有信号精确定位仍在后续范围，不在本工单宣称功能 1 全部完成。
 
 1. **公共入口。** 仅 `check --evidence --json --json-version 1` 启用证据。`--evidence` 是无值布尔参数，重复、带等号值、用于 guide/explain、缺少 JSON v1 或同时带 checklist 均返回参数错误 1。help/version 延续快速退出。与 `--config`、四档 `--fail-on`、`--include-drafts` 和 `--blockers-only` 可组合；命中规则、门禁计数与退出码保持原有含义。新选项不进入 T11B 配置 schema，不自动启用；没有 `--evidence` 的既有输出与退出码继续逐字节一致，帮助说明除外。
 2. **结果契约。** 仅在显式模式的每个展示 item 增加 `evidence`：`{status, locations}`。status 为 `located|partial|unavailable`；locations 元素为 `{file, line, column, kind, signal}`，file 是相对扫描根目录、以 `/` 分隔的路径；line 与 column 从 1 开始，column 按 JavaScript UTF-16 code unit 计数。kind 为 `api-reference|api-import|domain|insecure-request|config-key|secret-key`。signal 只含现有 API 名、规范化 host 或配置/疑似密钥键名，禁止源代码片段、密钥值、完整 URL、查询串或 URL 认证信息。无法可靠定位但能确认来源文件时，line/column 同时为 null；无法确认文件时不伪造位置。locations 按 file、line、column、kind、signal 确定性排序，完全相同的记录去重，不合并不同位置的同类信号。
@@ -552,7 +552,9 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 5. **容量与报告完整性。** 证据采集全局最多保留 20,000 个去重位置，每个 item 最多展示 100 个。达到限制后原扫描与规则计算继续，报告 notes 明示证据截断，并将受影响项记为 partial；若全局截断无法可靠区分受影响项，则全部项都标 partial。显式模式增加 `meta.evidence: {schemaVersion: 1, truncated: boolean}` 描述证据契约与截断，不替代 `meta.scan.scope`；原有读取错误、配置错误、链接、空扫描和扫描截断注记保留。首版不生成指纹、不保存/读取 baseline、不抑制任何发现项；后续 baseline 必须单独处理 partial/unavailable 及不完整扫描，不能直接把本版位置列表等同于稳定问题身份。
 6. **验收。** 在固定夹具中逐项核对源文件和行列：同一 API 多文件/同文件多行/同行多次、中文与非 BMP 字符、LF/CRLF、条件编译与嵌套分支、HTML/JS 注释、多行字符串、正则字面量、Taro 具名/别名导入、模板组件、JSON/manifest/Taro/mpx 配置、五类交叉核验。增加同一规则的新位置时，原聚合项数量可不变，但新增位置必须可见；既有扫描器已排除的注释、普通 API 文案字符串和非微信分支不得因位置映射重新进入证据。既有 URL、Taro 导入或模板信号可能启发式命中文案字符串，沿原事实报告来源，不把它们称为语义已确认的调用或组件；本单不顺带修订扫描判定。用合成敏感标记证明证据不含值、URL 认证/查询信息或代码片段。验证位置/全局上限、证据缺失与不完整扫描状态、确定性输出、JSON schema 正反例及所有参数冲突。原有扫描器夹具、accuracy、15 组旧 CLI 字节基线和 T11B 配置/问答测试全部通过；实际 npm tarball、MCPB、双插件暂存 CLI 入口复验新输出，MCP 原协议输出保持不变。四项本地门禁、独立冷读复审与全部 PR CI 通过后交付。
 
-**允许变更的文件。** `src/cli.mjs`、`src/scanner.mjs`、`src/check.mjs`、`src/crosscheck.mjs` 中为可选证据传递所需的最小改动、必要的证据模块、CLI 输出 schema、相关扫描/CLI/分发测试与合成夹具、README、本文、progress.txt。保持既有扫描事实、规则断言、治理、安全承诺和桌面/MCP 默认行为；不引入生产依赖。范围基线四项门禁已通过：全量 1734/1734、69 条引文和 coverage 红线通过，证据功能尚未实施。
+**允许变更的文件。** `src/cli.mjs`、`src/scanner.mjs`、`src/check.mjs`、`src/crosscheck.mjs` 中为可选证据传递所需的最小改动、必要的证据模块、CLI 输出 schema、相关扫描/CLI/分发测试与合成夹具、README、本文、progress.txt。保持既有扫描事实、规则断言、治理、安全承诺和桌面/MCP 默认行为；不引入生产依赖。范围基线四项门禁已通过：全量 1734/1734、69 条引文和 coverage 红线通过。
+
+本机实施验收（2026-11-18）：显式 CLI 证据、原始位置映射、发现项关联和 schema 已实现。全部仓库夹具开关证据前后事实相同；300 组混合文本的 1,500 次转换与旧实现一致；每份源码仅读取一次。重复引用、模板/配置来源、五类交叉核验、上限截断、脱敏、15 组旧 CLI 字节基线及真实 npm/MCPB/双插件入口通过。冷读复审发现的 CR/Unicode 换行定位问题已修复并复核通过。冻结源码后四项门禁全绿，全量 1755/1755、69 条引文、coverage TP55/FP0/FN0。
 
 ### T12 · 桌面分发
 
@@ -617,4 +619,6 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 ## 7. 当前推进入口
 
-T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并；CLI 工作线下一项为 T11C1 CLI 显式证据（[#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47)），之后再定 baseline 契约；桌面分发工作线 T12A CI 构建 Windows 安装器与 SHA256 清单已按 [#46](https://github.com/YEowo-Y/weapp-shipmate/pull/46) 批准范围实施，状态为 PR 中。通用基线和验证命令见 §2。
+T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并；T11C1 CLI 显式证据已按 [#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47) 批准范围实施，状态为 PR 中，之后再定 baseline 契约。通用基线和验证命令见 §2。
+
+桌面分发工作线的 T12A 已通过 [#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48) 合并；合并后安装器演练由该工作线继续记录。

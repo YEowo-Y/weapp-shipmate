@@ -23,6 +23,7 @@ const HELP = `weapp-shipmate · 你写代码，我陪你上线
 选项：
   --subject <personal|individual_business|enterprise>   主体类型（也支持：个人 / 个体户 / 个体工商户 / 企业）
   --config <file>       仅 check/guide：显式加载 JSON v1 配置，命令行值优先
+  --evidence            仅 check：与 --json --json-version 1 同用，附来源位置与证据状态
   --json                输出 JSON（默认 Markdown）
   --json-version 1      与 --json 同用，增加 schemaVersion: 1；不能与 --checklist 同用
   --fail-on <level>     仅 check：blocker | warning | info | none；按展示过滤前的发现项判定
@@ -63,7 +64,7 @@ const FAIL_LEVELS = {
   info: ["blocker", "warning", "info"],
   none: [],
 };
-const BOOL_FLAGS = new Set(["json", "checklist", "include-drafts", "blockers-only", "help", "version"]);
+const BOOL_FLAGS = new Set(["evidence", "json", "checklist", "include-drafts", "blockers-only", "help", "version"]);
 
 // FX-16：未知/拼错选项必须报错——静默忽略会让 `--subjcet personal` 这类笔误
 // 产出主体维度错误却看起来正常的报告，比报错更糟。同时支持 --key=value 写法（CLI 常见习惯）。
@@ -101,7 +102,10 @@ export function parseFlags(args) {
       f[fact] = value;
       continue;
     }
-    if (BOOL_FLAGS.has(key) && eq === -1) { f[key] = true; continue; }
+    if (BOOL_FLAGS.has(key) && eq === -1) {
+      if (key === "evidence" && Object.hasOwn(f, key)) (f._duplicates ??= []).push(key);
+      f[key] = true; continue;
+    }
     (f._unknown ??= []).push(a); // 含布尔开关误带 =值 的写法
   }
   return f;
@@ -176,6 +180,10 @@ function executeMain(argv, out, err, context) {
     err.write("--json-version 仅支持 1，必须与 --json 同用，且不能与 --checklist 同用。\n");
     return 1;
   }
+  if (flags.evidence && (cmd !== "check" || !flags.json || flags["json-version"] !== "1" || flags.checklist)) {
+    err.write("--evidence 仅用于 check，必须与 --json --json-version 1 同用，且不能与 --checklist 同用。\n");
+    return 1;
+  }
   const format = flags.json ? "json" : flags.checklist ? "checklist" : "markdown";
   const includeDrafts = !!flags["include-drafts"];
   const blockersOnly = !!flags["blockers-only"];
@@ -230,7 +238,7 @@ function executeMain(argv, out, err, context) {
         return 1;
       }
       const dir = flags._[0] || ".";
-      const result = runCheck(dir, { subjectType: flags.subject, includeDrafts });
+      const result = runCheck(dir, { subjectType: flags.subject, includeDrafts, evidence: !!flags.evidence });
       const levels = FAIL_LEVELS[failOn ?? "blocker"];
       const failures = result.items.filter(item => levels.includes(item.severity)).length;
       writeReport(focus(result));
