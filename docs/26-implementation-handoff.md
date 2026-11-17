@@ -568,9 +568,9 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 - 对该安装器执行现有只读核验脚本 `scripts/verify-windows-candidate.ps1` 与 `SHIPMATE_WINDOWS_CANDIDATE=<exe> node --test tests/windows-candidate.test.mjs`（4/4 通过）：PE 容器头有效，`authenticode.status` 为 `NotSigned`，与 `docs/25` §9 私有期未签名附 SHA256 现状一致。
 - 同机实测 Windows 下 `npm pack` / `npm publish --dry-run --ignore-scripts --tag next --json`（43 个文件，82,861 字节，`verify-package-rehearsal.mjs` 对账通过）、`WEAPP_SHIPMATE_REQUIRE_PACK=1 npm run build:mcpb`（82 个归档条目，核对无反斜杠与 `..` 路径）以及 Git Bash `sha256sum` 生成与 `sha256sum -c` 回验均退出 0。因此 `release.yml` 可在单个 `windows-latest` job（`shell: bash`）内同源构建三件资产，无需新增 `actions/upload-artifact` / `actions/download-artifact`（不触碰 §3 Action SHA 关口，也不增加跨 job 产物中转面）。
 
-#### T12A · CI 构建 Windows 安装器与 SHA256 清单（已批准）
+#### T12A · CI 构建 Windows 安装器与 SHA256 清单（已验收）
 
-维护者已批准按 [#46](https://github.com/YEowo-Y/weapp-shipmate/pull/46) 实施本节。
+维护者已批准按 [#46](https://github.com/YEowo-Y/weapp-shipmate/pull/46) 实施本节，已在 [#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48) 合并并通过合并后云端演练（[#48 验收记录](https://github.com/YEowo-Y/weapp-shipmate/pull/48#issuecomment-6957013149)）。
 
 1. **先补发布工作流门禁测试。** 在 `tests/release.test.mjs` 增加回归断言：`release.yml` 的 `release` job 运行于 `windows-latest`（Node ≥22、锁定 Rust `1.94.1`），在任何打包步骤前完成双层 `npm ci`、`prepare:runtime`、桌面构建、`lint`、`release:check`、`npm test`、`verify:quotes`、`coverage` 及 `cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked`；包含带 `--locked` 的 Tauri NSIS 构建、只读 `verify-windows-candidate.ps1` 核验、唯一 `weapp-shipmate-desktop_<version>_x64-setup.exe` 及零 `.msi` 断言；`checksums` 步骤以无路径前缀的扁平文件名覆盖 `.tgz`、`.mcpb` 与桌面安装器 `.exe`，当场执行 `sha256sum -c SHA256SUMS.txt`、LF 行尾校验及与候选报告 `sha256` 对账；草稿 Release 上传步骤挂齐三件资产与 `SHA256SUMS.txt`，保留 `--draft` 且不含 `--prerelease` / `--latest`。同时断言 `release-rehearsal.yml` 新增的桌面安装器演练 job 仅在 `workflow_dispatch` 运行、仅具读权限、不含 `gh release`、`git push` 或非 dry-run 发布。
    判据：修改 workflow 前，`node --test tests/release.test.mjs` 因新增断言失败。
@@ -580,7 +580,7 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 **允许变更的文件。** `.github/workflows/release.yml`、`.github/workflows/release-rehearsal.yml`、`tests/release.test.mjs`、`docs/14-first-run-and-trial.md`（仅第 53 行当前配置说明）、本文与 `progress.txt`。不新增依赖，不新增 GitHub Action。
 
-本机实施验收（2026-11-18）：`tests/release.test.mjs` 新增两项工作流回归先红（45 通过、2 失败）后绿（47/47 通过）。零上下文复审指出的 `RUNNER_TEMP`/`GITHUB_RUN_ID` 空值兜底（改为 `mkdtempSync`）、`prepare:runtime` 提前至 `npm test` 之前激活便携运行时测试、`SHA256SUMS.txt` LF 断言及 `release.yml` 与候选报告 `sha256` 对账均已补齐；在未设置 `RUNNER_TEMP` 的本机 Git Bash 实跑两份工作流核验与校验和脚本均退出 0。四项本地门禁全绿，状态为 PR 中。
+本机实施验收（2026-11-18）：`tests/release.test.mjs` 新增两项工作流回归先红（45 通过、2 失败）后绿（47/47 通过）。零上下文复审指出的 `RUNNER_TEMP`/`GITHUB_RUN_ID` 空值兜底（改为 `mkdtempSync`）、`prepare:runtime` 提前至 `npm test` 之前激活便携运行时测试、`SHA256SUMS.txt` LF 断言及 `release.yml` 与候选报告 `sha256` 对账均已补齐；在未设置 `RUNNER_TEMP` 的本机 Git Bash 实跑两份工作流核验与校验和脚本均退出 0。合并提交 `6493a23` 的主分支八项 CI 全部通过；手动触发云端 [release-rehearsal #44143313945](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/44143313945)（`windows-latest` [job #134251636657](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/44143313945/job/134251636657)）实跑通过便携运行时、Rust 锁定测试、`npm pack`、`build:mcpb` 与 `tauri build -- --locked`，产出唯一 `weapp-shipmate-desktop_0.2.0-rc.4_x64-setup.exe`（28,304,090 字节，SHA256 `708b4057a8b1a81872524ed887f936db5cb225cd4bbfb9234fa6387e8b664d42`，PE 头有效、`NotSigned`），扁平 `SHA256SUMS.txt` 三项 `sha256sum -c` 回验与报告对账全部通过。
 
 #### T12B · 桌面只读版本更新检查（待裁决后单列范围）
 
@@ -588,6 +588,35 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 1. **私有仓库与只读交互边界**：仓库当前 `private=true` 且候选 Release 为草稿，不带凭据访问公开 GitHub Releases API 返回 HTTP `404`，而桌面端按 `SECURITY.md` 不内置任何令牌。拟采用与 `source_freshness` 相同的架构：启动不联网、后台不轮询，仅在用户手动点击「检查更新」时经随包 Node 请求固定公开 Release 元数据接口，Rust 校验有界 JSON 后只展示当前版本、最新公开版本及由系统浏览器打开的发布页链接，不自动下载安装包、不自动执行更新、不引入新 crate；私仓或尚无公开正式版时如实提示「暂无公开版本信息」。
 2. **安全措辞与排期**：请确认 ① 按上述手动只读边界单列 T12B 实施步骤，并在 `SECURITY.md` 第 7 行同步补记手动点击的版本元数据读取说明（触及 `SECURITY.md` 时合并前须维护者批准），或 ② 待仓库准备公开并发布首个非草稿 Release 前再启动 T12B。
+
+### T13 · Rust 加固
+
+**目标与关口。** 在**不改 SQLite 表结构与 `user_version` 数据模型、不引入任何新 Rust crate**（不触碰 §3 关口）的前提下，分两张原子工单完成桌面原生后端加固：**T13A** 落地 CI `rustfmt`/`clippy` 门禁、SQLite WAL 与退出 checkpoint、本机有界脱敏诊断日志与 panic hook；**T13B** 落地类型化错误 `DesktopError`（保持前端 IPC 错误字符串契约不变）与阻塞型 Tauri 命令异步化。按 §6 确认本节后依次实施。
+
+**探查结果（2026-11-18，独立工作树，Rust `1.94.1`）**
+
+- **静态检查与格式基线**：`cargo +1.94.1 fmt --manifest-path desktop/src-tauri/Cargo.toml -- --check` 当前有 95 行格式差异，`desktop/security/glib-variant-iter` 为 0 行差异；`cargo +1.94.1 clippy --manifest-path desktop/src-tauri/Cargo.toml --all-targets --locked` 全库仅 1 条告警（`src/source_quote.rs:264` `too_many_arguments` 8/7，其余两处同类 Tauri 命令已有 `#[allow(clippy::too_many_arguments)]`）。`glib-backport.yml` 当前未安装 `rustfmt`/`clippy` 组件，也未执行这两道检查。
+- **SQLite 连接与备份现状**：`project_store.rs` 以实例级 `.lock` 文件锁单连接打开 `projects.sqlite3`，当前使用默认回滚日志（未开 WAL）、`busy_timeout(2s)`、`synchronous = FULL`、`foreign_keys = ON`；迁移前备份 `backup()` 已采用支持 WAL 在线热备的 `rusqlite::backup::Backup`。注意现有 `open_database()` 先以 `SQLITE_OPEN_READ_ONLY` 打开做 `quick_check` 与 `user_version` 探查：启用 WAL 后若上次崩溃遗留 `-wal` 且无 `-shm`，只读打开在部分环境下无法恢复 WAL 索引，需改为在已持有实例 `.lock` 锁的前提下以读写标志打开，并在任何写入或迁移前先只读校验 `user_version <= 2` 与 `quick_check == "ok"`。
+- **错误与命令线程模型现状**：`desktop/src-tauri/src/` 共 18 个源文件、193 处 `Result<..., String>`；共注册 46 个 `#[tauri::command]`，其中 8 个为 `async fn`，其余 38 个为同步 `fn`（在 Tauri v2 中直接在 Windows 主界面/消息泵线程同步执行 SQLite 锁、文件读写、备份导入、凭据库访问与 broker 管道通信）。无诊断日志模块，也未设置 `std::panic::set_hook`。
+
+#### T13A · CI `rustfmt`/`clippy`、SQLite WAL、本地脱敏诊断日志与 panic hook（范围待确认）
+
+1. **接入 CI `rustfmt` 与 `clippy` 门禁。** 在 `tests/release.test.mjs` 增加回归断言（先红后绿）：`glib-backport.yml` 的 `linux-regression` 与 `windows-compatibility` 均安装 `1.94.1` 的 `rustfmt` 与 `clippy` 组件，对 `desktop/src-tauri/Cargo.toml` 执行 `cargo +1.94.1 fmt --manifest-path desktop/src-tauri/Cargo.toml --all -- --check` 和 `cargo +1.94.1 clippy --manifest-path desktop/src-tauri/Cargo.toml --locked -- -D warnings`（Windows 腿带 `--all-targets`；Linux 腿同步对 `desktop/security/glib-variant-iter/Cargo.toml` 执行 `fmt --check` 与 `clippy --all-targets --locked -- -D warnings`）。格式化 `desktop/src-tauri` 现有代码并处理 `source_quote_check` 的 Tauri 注入参数告警。
+   判据：工作流门禁测试先红后绿；本机 `cargo +1.94.1 fmt --all -- --check` 与 `cargo +1.94.1 clippy --all-targets --locked -- -D warnings` 均退出码 0。
+2. **启用 SQLite WAL 与干净退出 checkpoint。** 保持现有表结构、`user_version`（2）与 `rusqlite::backup::Backup` 逻辑不变。在 `project_store.rs` 的 `open_database` 中：持有实例 `.lock` 文件锁后打开连接，设 `busy_timeout(5s)` 与 `foreign_keys = ON`，在任何建表、迁移或恢复写入前先校验 `quick_check == "ok"`、`user_version <= 2` 及表结构列探针（超版本或损坏时立即关闭返回错误，不写原文件）；校验通过后设 `PRAGMA journal_mode = WAL`（磁盘文件库断言返回模式为 `wal`）与 `PRAGMA synchronous = FULL`。新增 `ProjectStore::shutdown`，在 `lib.rs` 的 `RunEvent::Exit` 中执行 `PRAGMA wal_checkpoint(TRUNCATE)` 并释放连接。
+   判据：新增 Rust 单元测试覆盖新库与既有 v1/v2 回滚日志库升级启用 WAL、崩溃遗留 `running` 状态恢复、`user_version > 2` 拒绝不篡改、在线迁移备份通过 `integrity_check` 以及 `shutdown` 后 WAL checkpoint 收敛。
+3. **新增本机有界脱敏诊断日志与 panic hook。** 新建 `desktop/src-tauri/src/diagnostics.rs`（仅用标准库与现有 `serde_json`，不加新 crate）：将结构化 JSONL 事件写入 `app_local_data_dir()/diagnostics/desktop-events.jsonl`（拒绝目标目录或日志文件为符号链接/reparse point；单文件上限 512 KiB，超限原子轮转为 `desktop-events.prev.jsonl`，最多保留两份）。仅记录 UTC 毫秒时间戳、级别、子系统标识、固定事件码与脱敏位置/分类摘要；启动时通过 `Once` 安装 `std::panic::set_hook`，只落盘线程名与源码 `file:line:column`（绝不把任意 panic payload 原文、用户文件内容、项目密钥、模型请求体或凭据写入磁盘），随后继续调用默认 hook。在存储打开/恢复异常、迁移备份失败与 broker 非预期断开处接入诊断事件。
+   判据：Rust 单元测试覆盖 512 KiB 轮转、符号链接拒绝、panic hook 位置记录以及含合成秘密标记的 payload 零落盘泄露；`cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked` 与 §2 四项门禁全绿。
+
+**T13A 允许变更的文件。** `.github/workflows/glib-backport.yml`、`tests/release.test.mjs`、`desktop/src-tauri/src/*.rs`（含新增 `diagnostics.rs`）、本文与 `progress.txt`。不改 `Cargo.toml` / `Cargo.lock`，不改 SQLite schema。
+
+#### T13B · 类型化错误 `DesktopError` 与耗时 Tauri 命令异步化（范围待确认）
+
+1. **以类型化 `DesktopError` 替代裸 `String` 错误。** 新建 `desktop/src-tauri/src/error.rs`（零新 crate），定义结构化错误枚举（覆盖窗口来源未授权、输入校验失败、运行时资源定位失败、SQLite 分类错误、文件系统 I/O 错误、内部状态锁不可用、版本/状态冲突、后台任务中止等变体），实现 `Display`、`std::error::Error` 与 `serde::Serialize`（序列化输出与现有中文用户提示逐字兼容，确保前端 `invoke` 调用方和全部原生验收脚本契约不变），将各模块命令链路与存储/工具层的 `Result<..., String>` 收敛为 `Result<..., DesktopError>`，并在服务端异常变体上关联 T13A 的脱敏诊断事件码。
+2. **耗时同步命令改异步执行。** 逐一排查现有 38 个同步 `#[tauri::command]`：保留主线程入口处的同步窗口来源鉴权 `runtime::authorize(&window)`，将涉及 SQLite 互斥锁与磁盘查询/事务、备份导入与归档、项目文件与上下文读取、记忆与维护状态读写、系统通知持久化及 `model_request` 进程启动/管道写入的命令改为 `async fn` 加 `tauri::async_runtime::spawn_blocking`，消除主界面线程阻塞；对 `spawn_blocking` join 失败统一映射为 `DesktopError::TaskAborted` 并记录诊断事件。核对 `run_cancel`、`model_cancel` 等取消路径并发调用不死锁、不退化。
+3. **验证与回归。** 新增 Rust 单元测试覆盖 `DesktopError` 各变体序列化文本、错误分类转换、并发异步命令与取消竞争；跑通 `cargo fmt --check`、`cargo clippy --all-targets --locked -- -D warnings`、`cargo test --locked`、`npm --prefix desktop run build` 与 §2 四项门禁，经零上下文子代理冷读复审与全部 PR CI 通过后交付。
+
+**T13B 允许变更的文件。** `desktop/src-tauri/src/*.rs`（含新增 `error.rs`）、必要的桌面桥接回归测试、本文与 `progress.txt`。不改 `Cargo.toml` / `Cargo.lock`，不改前端公开 IPC 参数与返回结构。
 
 **功能项**（编号与 `docs/25` §8 一致）
 
@@ -621,4 +650,4 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并；T11C1 CLI 显式证据已按 [#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47) 批准范围实施，状态为 PR 中，之后再定 baseline 契约。通用基线和验证命令见 §2。
 
-桌面分发工作线的 T12A 已通过 [#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48) 合并；合并后安装器演练由该工作线继续记录。
+桌面与工程底座工作线的 T12A 已通过 [#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48) 合并并完成云端 `windows-latest` 安装器演练验收（[run #44143313945](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/44143313945)）；下一项为 T13 Rust 加固（T13A / T13B 范围待确认）。
