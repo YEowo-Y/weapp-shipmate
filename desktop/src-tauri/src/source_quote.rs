@@ -31,7 +31,12 @@ impl QuoteResult {
         matches!(self.r#match, Match::Exact | Match::WhitespaceNormalized)
     }
 
-    fn validate(&self, catalog: &SourceCatalog, source: &Source, hash: &str) -> Result<(), String> {
+    fn validate(
+        &self,
+        catalog: &SourceCatalog,
+        source: &Source,
+        hash: &str,
+    ) -> crate::error::DesktopResult<()> {
         validate_result(&self.source, catalog, source, now())?;
         if self.quote_hash != hash || (self.r#match != Match::Unverified) != evidence(&self.source)
         {
@@ -77,7 +82,7 @@ fn resolve_query<'a>(catalog: &'a SourceCatalog, query: &QuoteQuery) -> Option<&
         .find(|s| s.url == query.url && s.references.iter().any(|r| r.id == query.rule_id))
 }
 
-fn scope(version: &str) -> Result<String, String> {
+fn scope(version: &str) -> crate::error::DesktopResult<String> {
     if version.is_empty() || version.encode_utf16().count() > 16384 {
         return Err(INVALID_RESULT.into());
     }
@@ -176,7 +181,7 @@ fn read(
     source: &Source,
     key: &str,
     hash: &str,
-) -> Result<QuoteRow, String> {
+) -> crate::error::DesktopResult<QuoteRow> {
     let raw: Option<String> = connection.query_row(
         "SELECT CASE WHEN typeof(value)='text' AND length(CAST(value AS BLOB)) <= 4096 THEN value ELSE '' END FROM settings WHERE key=?",
         [key], |row| row.get(0)).optional().map_err(db_error)?;
@@ -203,61 +208,70 @@ fn decode_record(
     catalog: &SourceCatalog,
     source: &Source,
     hash: &str,
-) -> Result<QuoteRecord, String> {
-    let record: QuoteRecord = serde_json::from_str(raw).map_err(|_| INVALID_RECORD)?;
+) -> crate::error::DesktopResult<QuoteRecord> {
+    let record: QuoteRecord = serde_json::from_str(raw)
+        .map_err(|_| crate::error::DesktopError::database(INVALID_RECORD))?;
     record
         .latest
         .validate(catalog, source, hash)
-        .map_err(|_| INVALID_RECORD)?;
+        .map_err(|_| crate::error::DesktopError::database(INVALID_RECORD))?;
     let at = record.latest.source.checked_at;
     if record.last_verified_at.is_some_and(|v| v == 0 || v > at)
         || (record.latest.verified() && record.last_verified_at != Some(at))
     {
-        return Err(INVALID_RECORD.into());
+        return Err(crate::error::DesktopError::database(INVALID_RECORD));
     }
     Ok(record)
 }
 
 #[tauri::command]
-pub fn source_quote_snapshot(
+pub async fn source_quote_snapshot(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     queries: Vec<QuoteQuery>,
     rules_version: String,
-) -> Result<QuoteSnapshot, String> {
+) -> crate::error::DesktopResult<QuoteSnapshot> {
     crate::runtime::authorize(&window)?;
     let scope = scope(&rules_version)?;
     if queries.len() > 512 {
         return Err(INVALID_RESULT.into());
     }
-    let catalog = load_catalog(&app)?;
-    state.access(&app, |conn| {
-        let mut rows = Vec::with_capacity(queries.len());
-        for q in queries {
-            let mut row = QuoteRow {
-                availability: "unsupported",
-                record: None,
-            };
-            if let Some(source) = resolve_query(&catalog, &q) {
-                if source
-                    .baseline
-                    .as_ref()
-                    .is_some_and(|b| b.method == Method::Manual)
-                {
-                    row.availability = "manual";
-                } else {
-                    let (key, hash) = identity(&catalog, source, &q, &scope);
-                    row = read(conn, &catalog, source, &key, &hash)?;
+    let store = state.inner().clone();
+    crate::error::run_blocking(
+        "source_quote",
+        "读取引文核验状态意外退出，请重试。",
+        move || {
+            let catalog = load_catalog(&app)?;
+            store.access(&app, |conn| {
+                let mut rows = Vec::with_capacity(queries.len());
+                for q in queries {
+                    let mut row = QuoteRow {
+                        availability: "unsupported",
+                        record: None,
+                    };
+                    if let Some(source) = resolve_query(&catalog, &q) {
+                        if source
+                            .baseline
+                            .as_ref()
+                            .is_some_and(|b| b.method == Method::Manual)
+                        {
+                            row.availability = "manual";
+                        } else {
+                            let (key, hash) = identity(&catalog, source, &q, &scope);
+                            row = read(conn, &catalog, source, &key, &hash)?;
+                        }
+                    }
+                    rows.push(row);
                 }
-            }
-            rows.push(row);
-        }
-        Ok(QuoteSnapshot {
-            catalog_version: catalog.catalog_version,
-            rows,
-        })
-    })
+                Ok(QuoteSnapshot {
+                    catalog_version: catalog.catalog_version,
+                    rows,
+                })
+            })
+        },
+    )
+    .await
 }
 
 #[tauri::command]
@@ -271,55 +285,91 @@ pub async fn source_quote_check(
     rules_version: String,
     catalog_version: String,
     run_id: String,
-) -> Result<QuoteRecord, String> {
+) -> crate::error::DesktopResult<QuoteRecord> {
     crate::runtime::authorize(&window)?;
+    let scope = scope(&rules_version)?;
     let reservation = runner.reserve_guard(&run_id)?;
-    let catalog = load_catalog(&app)?;
-    if catalog.catalog_version != catalog_version {
-        return Err("内置来源目录已更新，请重新打开报告。".into());
-    }
-    let source = resolve_query(&catalog, &query)
-        .ok_or("未找到对应的官方来源或有效引文。")?
-        .clone();
-    if source
-        .baseline
-        .as_ref()
-        .is_some_and(|b| b.method == Method::Manual)
-    {
-        return Err("此来源需要人工核对。".into());
-    }
-    let (key, hash) = identity(&catalog, &source, &query, &scope(&rules_version)?);
-    let mut command = crate::runtime::node_command(&app, "desktop/server/source-check.mjs", false)?;
-    command.arg(&source.id).arg("--quote").arg(&query.quote);
     let store = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
+    crate::error::run_blocking("source_quote", "引文核验意外退出，请重试。", move || {
+        let catalog = load_catalog(&app)?;
+        if catalog.catalog_version != catalog_version {
+            return Err(crate::error::DesktopError::conflict(
+                "内置来源目录已更新，请重新打开报告。",
+            ));
+        }
+        let source = resolve_query(&catalog, &query)
+            .ok_or("未找到对应的官方来源或有效引文。")?
+            .clone();
+        if source
+            .baseline
+            .as_ref()
+            .is_some_and(|b| b.method == Method::Manual)
+        {
+            return Err("此来源需要人工核对。".into());
+        }
+        let (key, hash) = identity(&catalog, &source, &query, &scope);
+        let mut command =
+            crate::runtime::node_command(&app, "desktop/server/source-check.mjs", false)?;
+        command.arg(&source.id).arg("--quote").arg(&query.quote);
         store.access(&app, |conn| {
             let row = read(conn, &catalog, &source, &key, &hash)?;
-            if row.availability == "invalid-record" { return Err(INVALID_RECORD.into()) }
+            if row.availability == "invalid-record" {
+                return Err(crate::error::DesktopError::database(INVALID_RECORD));
+            }
             Ok(())
         })?;
         let started_at = now();
-        let output = reservation.run_retained(command).map_err(|e| e.to_string())?;
-        if output.len() > RECORD_LIMIT { return Err(INVALID_RESULT.into()) }
+        let output = reservation
+            .run_retained(command)
+            .map_err(crate::error::DesktopError::from)?;
+        if output.len() > RECORD_LIMIT {
+            return Err(INVALID_RESULT.into());
+        }
         let latest: QuoteResult = serde_json::from_str(&output).map_err(|_| INVALID_RESULT)?;
         latest.validate(&catalog, &source, &hash)?;
         let at = latest.source.checked_at;
-        if at < started_at.saturating_sub(CLOCK_TOLERANCE) { return Err(INVALID_RESULT.into()) }
-        reservation.commit(|| {
-            if load_catalog(&app)?.catalog_version != catalog_version { return Err(INVALID_RESULT.into()) }
-            store.access(&app, |conn| {
-                let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate).map_err(db_error)?;
-                let row = read(&tx, &catalog, &source, &key, &hash)?;
-                if row.availability == "invalid-record" { return Err(INVALID_RECORD.into()) }
-                let old = row.record;
-                if old.as_ref().is_some_and(|r| r.latest.source.checked_at > at) { return Err(INVALID_RESULT.into()) }
-                let last_verified_at = if latest.verified() { Some(at) } else { old.and_then(|r| r.last_verified_at) };
-                let record = QuoteRecord { latest, last_verified_at };
-                tx.execute("INSERT INTO settings(key,value) VALUES (?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                    params![key, encode(&record)?]).map_err(db_error)?;
-                tx.commit().map_err(db_error)?;
-                Ok(record)
+        if at < started_at.saturating_sub(CLOCK_TOLERANCE) {
+            return Err(INVALID_RESULT.into());
+        }
+        reservation
+            .commit(|| {
+                if load_catalog(&app)?.catalog_version != catalog_version {
+                    return Err(crate::error::DesktopError::conflict(INVALID_RESULT));
+                }
+                store.access(&app, |conn| {
+                    let tx = conn
+                        .transaction_with_behavior(TransactionBehavior::Immediate)
+                        .map_err(db_error)?;
+                    let row = read(&tx, &catalog, &source, &key, &hash)?;
+                    if row.availability == "invalid-record" {
+                        return Err(crate::error::DesktopError::database(INVALID_RECORD));
+                    }
+                    let old = row.record;
+                    if old
+                        .as_ref()
+                        .is_some_and(|r| r.latest.source.checked_at > at)
+                    {
+                        return Err(INVALID_RESULT.into());
+                    }
+                    let last_verified_at = if latest.verified() {
+                        Some(at)
+                    } else {
+                        old.and_then(|r| r.last_verified_at)
+                    };
+                    let record = QuoteRecord {
+                        latest,
+                        last_verified_at,
+                    };
+                    tx.execute(
+                        "INSERT INTO settings(key,value) VALUES (?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                        params![key, encode(&record)?],
+                    )
+                    .map_err(db_error)?;
+                    tx.commit().map_err(db_error)?;
+                    Ok(record)
+                })
             })
-        }).map_err(|e| e.to_string())
-    }).await.map_err(|_| "引文核验意外退出，请重试。".to_string())?
+            .map_err(crate::error::DesktopError::from)
+    })
+    .await
 }

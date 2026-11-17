@@ -56,14 +56,17 @@ impl Settings {
         }
     }
 }
-fn write_settings(c: &Connection, value: &Settings) -> Result<(), String> {
+fn write_settings(c: &Connection, value: &Settings) -> crate::error::DesktopResult<()> {
     c.execute(
         "INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
         params![format!("project_maintenance:{}", value.project_id), encode(value)?],
     ).map_err(db_error)?;
     Ok(())
 }
-pub(crate) fn read_settings(c: &Connection, project_id: &str) -> Result<Settings, String> {
+pub(crate) fn read_settings(
+    c: &Connection,
+    project_id: &str,
+) -> crate::error::DesktopResult<Settings> {
     id(project_id)?;
     let raw: Option<Option<String>> = c.query_row(
         "SELECT CASE WHEN length(CAST(value AS BLOB))<=262144 THEN value ELSE NULL END FROM settings WHERE key=?",
@@ -72,7 +75,11 @@ pub(crate) fn read_settings(c: &Connection, project_id: &str) -> Result<Settings
     let value: Settings = match raw {
         None => Settings::new(project_id),
         Some(Some(raw)) => decode(raw)?,
-        Some(None) => return Err("项目维护设置损坏或超过上限，请保留数据库并检查备份。".into()),
+        Some(None) => {
+            return Err(crate::error::DesktopError::database(
+                "项目维护设置损坏或超过上限，请保留数据库并检查备份。",
+            ))
+        }
     };
     if value.schema_version != 1
         || value.project_id != project_id
@@ -84,14 +91,16 @@ pub(crate) fn read_settings(c: &Connection, project_id: &str) -> Result<Settings
             .iter()
             .any(|s| s.is_empty() || s.len() > 256 || s.chars().any(char::is_control))
     {
-        return Err("项目维护设置的版本或所属项目无效。".into());
+        return Err(crate::error::DesktopError::database(
+            "项目维护设置的版本或所属项目无效。",
+        ));
     }
     let mut ids = HashSet::new();
     for notice in &value.notices {
         id(&notice.id)?;
         id(&notice.artifact_id)?;
         if !ids.insert(&notice.id) || notice.new_count == 0 || notice.new_count > 512 {
-            return Err("项目通知记录无效。".into());
+            return Err(crate::error::DesktopError::database("项目通知记录无效。"));
         }
     }
     if let Some(baseline) = &value.baseline_artifact_id {
@@ -99,7 +108,7 @@ pub(crate) fn read_settings(c: &Connection, project_id: &str) -> Result<Settings
     }
     Ok(value)
 }
-fn initialize_baseline(c: &Connection, value: &mut Settings) -> Result<(), String> {
+fn initialize_baseline(c: &Connection, value: &mut Settings) -> crate::error::DesktopResult<()> {
     if value.baseline_artifact_id.is_none() {
         let data: Option<String> = c.query_row(
             "SELECT a.data FROM artifacts a JOIN runs r ON r.id=a.run_id WHERE a.project_id=? AND json_extract(a.data,'$.kind')='check' AND r.state='succeeded' ORDER BY a.rowid DESC LIMIT 1",
@@ -119,14 +128,16 @@ pub(crate) fn save_settings(
     expected_revision: u64,
     watch: bool,
     notify: bool,
-) -> Result<Settings, String> {
+) -> crate::error::DesktopResult<Settings> {
     let tx = c
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(db_error)?;
     validate_agent_project(&tx, project_id)?;
     let mut value = read_settings(&tx, project_id)?;
     if value.revision != expected_revision {
-        return Err("项目维护设置已改变，请刷新后重试。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "项目维护设置已改变，请刷新后重试。",
+        ));
     }
     value.revision = value
         .revision
@@ -144,7 +155,7 @@ pub(crate) fn mark_read(
     c: &mut Connection,
     project_id: &str,
     notice_ids: &[String],
-) -> Result<Settings, String> {
+) -> crate::error::DesktopResult<Settings> {
     if notice_ids.is_empty() || notice_ids.len() > 50 {
         return Err("请选择 1–50 条通知。".into());
     }
@@ -165,7 +176,9 @@ pub(crate) fn mark_read(
             .notices
             .iter_mut()
             .find(|n| &n.id == notice_id)
-            .ok_or("通知已不在当前项目列表，请刷新后重试。")?;
+            .ok_or_else(|| {
+                crate::error::DesktopError::conflict("通知已不在当前项目列表，请刷新后重试。")
+            })?;
         notice.read = true;
     }
     write_settings(&tx, &value)?;
@@ -176,7 +189,7 @@ pub(crate) fn record_report(
     c: &mut Connection,
     project_id: &str,
     artifact_id: &str,
-) -> Result<Settings, String> {
+) -> crate::error::DesktopResult<Settings> {
     let tx = c
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(db_error)?;
@@ -402,10 +415,18 @@ impl ProjectMaintenance {
         &self,
         app: &tauri::AppHandle,
         force: bool,
-    ) -> Result<Option<MaintenanceSnapshot>, String> {
-        let mut runtime = self.0.lock().map_err(|_| "项目维护状态不可用。")?;
+    ) -> crate::error::DesktopResult<Option<MaintenanceSnapshot>> {
+        let mut runtime = self.0.lock().map_err(|_| {
+            crate::error::DesktopError::state_unavailable(
+                "project_maintenance",
+                "项目维护状态不可用。",
+            )
+        })?;
         if runtime.closed {
-            return Err("应用正在退出。".into());
+            return Err(crate::error::DesktopError::state_unavailable(
+                "project_maintenance",
+                "应用正在退出。",
+            ));
         }
         let loaded = app.state::<ProjectStore>().access(app, |c| {
             let selected: Option<String> = c
@@ -422,7 +443,7 @@ impl ProjectMaintenance {
                     let p = project(c, &project_id)?;
                     let mut settings = read_settings(c, &project_id)?;
                     initialize_baseline(c, &mut settings)?;
-                    Ok::<_, String>((p, settings))
+                    Ok::<_, crate::error::DesktopError>((p, settings))
                 })
                 .transpose()
         });
@@ -475,7 +496,7 @@ impl ProjectMaintenance {
                 Ok(watcher) => active.watcher = Some(watcher),
                 Err(error) => {
                     active.state = "error".into();
-                    active.message = error;
+                    active.message = error.into_message();
                 }
             }
         }
@@ -489,7 +510,7 @@ impl ProjectMaintenance {
         app: &tauri::AppHandle,
         p: &Project,
         generation: u64,
-    ) -> Result<WatchProcess, String> {
+    ) -> crate::error::DesktopResult<WatchProcess> {
         let directory = crate::tool_runner::directory(&p.directory)?;
         let mut command =
             crate::runtime::node_command(app, "desktop/server/project-watch.mjs", false)?;
@@ -499,12 +520,14 @@ impl ProjectMaintenance {
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|_| "无法启动内置文件监听，请修复应用后重试。")?;
+            .map_err(|_| {
+                crate::error::DesktopError::io("无法启动内置文件监听，请修复应用后重试。")
+            })?;
         let stdin = child.stdin.take();
         let Some(stdout) = child.stdout.take() else {
             let _ = child.kill();
             let _ = child.wait();
-            return Err("文件监听输出通道不可用。".into());
+            return Err(crate::error::DesktopError::io("文件监听输出通道不可用。"));
         };
         let manager = self.clone();
         let application = app.clone();
@@ -634,10 +657,12 @@ impl ProjectMaintenance {
         app: &tauri::AppHandle,
         binding: &RunBinding,
     ) -> Result<(), ToolFailure> {
-        let runtime = self
-            .0
-            .lock()
-            .map_err(|_| ToolFailure::from("项目维护状态不可用。"))?;
+        let runtime = self.0.lock().map_err(|_| {
+            ToolFailure::from(crate::error::DesktopError::state_unavailable(
+                "project_maintenance",
+                "项目维护状态不可用。",
+            ))
+        })?;
         let active = runtime
             .current
             .as_ref()
@@ -654,7 +679,9 @@ impl ProjectMaintenance {
                     || p.context_revision != binding.context_revision
                     || !read_settings(c, &binding.project_id)?.watch_enabled
                 {
-                    return Err("项目维护上下文已改变。".into());
+                    return Err(crate::error::DesktopError::conflict(
+                        "项目维护上下文已改变。",
+                    ));
                 }
                 crate::tool_runner::directory(&p.directory)?;
                 Ok(())
@@ -665,13 +692,15 @@ impl ProjectMaintenance {
         &self,
         app: &tauri::AppHandle,
         binding: &RunBinding,
-        operation: impl FnOnce(&mut Connection) -> Result<T, String>,
+        operation: impl FnOnce(&mut Connection) -> crate::error::DesktopResult<T>,
     ) -> Result<T, ToolFailure> {
         // Preserve runtime generation and project identity through the artifact transaction.
-        let runtime = self
-            .0
-            .lock()
-            .map_err(|_| ToolFailure::from("项目维护状态不可用。"))?;
+        let runtime = self.0.lock().map_err(|_| {
+            ToolFailure::from(crate::error::DesktopError::state_unavailable(
+                "project_maintenance",
+                "项目维护状态不可用。",
+            ))
+        })?;
         if runtime.closed || runtime.current.as_ref().is_none_or(|a| !a.allows(binding)) {
             return Err(ToolFailure::Canceled);
         }
@@ -683,7 +712,9 @@ impl ProjectMaintenance {
                     || p.context_revision != binding.context_revision
                     || !read_settings(c, &binding.project_id)?.watch_enabled
                 {
-                    return Err("项目维护上下文已改变。".into());
+                    return Err(crate::error::DesktopError::conflict(
+                        "项目维护上下文已改变。",
+                    ));
                 }
                 operation(c)
             })
@@ -695,10 +726,12 @@ impl ProjectMaintenance {
         binding: &RunBinding,
         run_id: &str,
     ) -> Result<(), ToolFailure> {
-        let mut runtime = self
-            .0
-            .lock()
-            .map_err(|_| ToolFailure::from("项目维护状态不可用。"))?;
+        let mut runtime = self.0.lock().map_err(|_| {
+            ToolFailure::from(crate::error::DesktopError::state_unavailable(
+                "project_maintenance",
+                "项目维护状态不可用。",
+            ))
+        })?;
         if runtime.closed {
             return Err(ToolFailure::Canceled);
         }
@@ -840,7 +873,13 @@ impl ProjectMaintenance {
                         .new_notice(app, &active.project.id, &notice);
                 }
             }
-            Err(_) => {
+            Err(err) => {
+                crate::diagnostics::record_reason(
+                    "project_maintenance",
+                    "warn",
+                    "notice_persist_failed",
+                    err.kind(),
+                );
                 active.notification_error = true;
                 active.message = "预检已保存，但通知记录保存失败；请检查本地存储并刷新。".into();
                 emit(app, active);
@@ -860,12 +899,12 @@ impl ProjectMaintenance {
         &self,
         app: &tauri::AppHandle,
         project_id: &str,
-    ) -> Result<MaintenanceSnapshot, String> {
+    ) -> crate::error::DesktopResult<MaintenanceSnapshot> {
         app.state::<ProjectStore>()
             .access(app, |c| validate_agent_project(c, project_id))?;
         self.sync(app, false)?
             .filter(|s| s.project_id == project_id)
-            .ok_or_else(|| "当前项目已改变，请刷新。".into())
+            .ok_or_else(|| crate::error::DesktopError::conflict("当前项目已改变，请刷新。"))
     }
 }
 #[derive(Deserialize)]
@@ -882,26 +921,38 @@ pub(crate) fn sync_after_project_change(app: &tauri::AppHandle) {
 }
 
 #[tauri::command]
-pub fn project_maintenance_sync(
+pub async fn project_maintenance_sync(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectMaintenance>,
-) -> Result<Option<MaintenanceSnapshot>, String> {
+) -> crate::error::DesktopResult<Option<MaintenanceSnapshot>> {
     crate::runtime::authorize(&window)?;
-    state.sync(&app, false)
+    let state = state.inner().clone();
+    crate::error::run_blocking(
+        "project_maintenance",
+        "同步项目维护状态意外退出，请重试。",
+        move || state.sync(&app, false),
+    )
+    .await
 }
 #[tauri::command]
-pub fn project_maintenance_snapshot(
+pub async fn project_maintenance_snapshot(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectMaintenance>,
     project_id: String,
-) -> Result<MaintenanceSnapshot, String> {
+) -> crate::error::DesktopResult<MaintenanceSnapshot> {
     crate::runtime::authorize(&window)?;
-    state.require(&app, &project_id)
+    let state = state.inner().clone();
+    crate::error::run_blocking(
+        "project_maintenance",
+        "读取项目维护状态意外退出，请重试。",
+        move || state.require(&app, &project_id),
+    )
+    .await
 }
 #[tauri::command]
-pub fn project_maintenance_save(
+pub async fn project_maintenance_save(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectMaintenance>,
@@ -909,73 +960,110 @@ pub fn project_maintenance_save(
     expected_revision: u64,
     watch_enabled: bool,
     notifications_enabled: bool,
-) -> Result<MaintenanceSnapshot, String> {
+) -> crate::error::DesktopResult<MaintenanceSnapshot> {
     crate::runtime::authorize(&window)?;
-    app.state::<ProjectStore>().access(&app, |c| {
-        save_settings(
-            c,
-            &project_id,
-            expected_revision,
-            watch_enabled,
-            notifications_enabled,
-        )
-    })?;
-    let snapshot = state.require(&app, &project_id)?;
-    let _ = app.emit("project-maintenance", &snapshot);
-    Ok(snapshot)
+    let state = state.inner().clone();
+    crate::error::run_blocking(
+        "project_maintenance",
+        "保存项目维护设置意外退出，请重试。",
+        move || {
+            app.state::<ProjectStore>().access(&app, |c| {
+                save_settings(
+                    c,
+                    &project_id,
+                    expected_revision,
+                    watch_enabled,
+                    notifications_enabled,
+                )
+            })?;
+            let snapshot = state.require(&app, &project_id)?;
+            let _ = app.emit("project-maintenance", &snapshot);
+            Ok(snapshot)
+        },
+    )
+    .await
 }
 #[tauri::command]
-pub fn project_maintenance_retry(
+pub async fn project_maintenance_retry(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectMaintenance>,
     project_id: String,
-) -> Result<MaintenanceSnapshot, String> {
+) -> crate::error::DesktopResult<MaintenanceSnapshot> {
     crate::runtime::authorize(&window)?;
-    state.require(&app, &project_id)?;
-    state
-        .sync(&app, true)?
-        .ok_or_else(|| "请先选择项目。".into())
+    let state = state.inner().clone();
+    crate::error::run_blocking(
+        "project_maintenance",
+        "重试文件监听意外退出，请重试。",
+        move || {
+            state.require(&app, &project_id)?;
+            state
+                .sync(&app, true)?
+                .ok_or_else(|| crate::error::DesktopError::validation("请先选择项目。"))
+        },
+    )
+    .await
 }
 #[tauri::command]
-pub fn project_maintenance_read(
+pub async fn project_maintenance_read(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectMaintenance>,
     project_id: String,
     notice_ids: Vec<String>,
-) -> Result<MaintenanceSnapshot, String> {
+) -> crate::error::DesktopResult<MaintenanceSnapshot> {
     crate::runtime::authorize(&window)?;
-    app.state::<ProjectStore>()
-        .access(&app, |c| mark_read(c, &project_id, &notice_ids))?;
-    let snapshot = state.require(&app, &project_id)?;
-    let _ = app.emit("project-maintenance", &snapshot);
-    Ok(snapshot)
+    let state = state.inner().clone();
+    crate::error::run_blocking(
+        "project_maintenance",
+        "更新通知已读状态意外退出，请重试。",
+        move || {
+            app.state::<ProjectStore>()
+                .access(&app, |c| mark_read(c, &project_id, &notice_ids))?;
+            let snapshot = state.require(&app, &project_id)?;
+            let _ = app.emit("project-maintenance", &snapshot);
+            Ok(snapshot)
+        },
+    )
+    .await
 }
 #[tauri::command]
-pub fn project_maintenance_stop(
+pub async fn project_maintenance_stop(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectMaintenance>,
     project_id: String,
-) -> Result<MaintenanceSnapshot, String> {
+) -> crate::error::DesktopResult<MaintenanceSnapshot> {
     crate::runtime::authorize(&window)?;
-    state.require(&app, &project_id)?;
-    let mut runtime = state.0.lock().map_err(|_| "项目维护状态不可用。")?;
-    let active = runtime
-        .current
-        .as_mut()
-        .filter(|a| a.project.id == project_id)
-        .ok_or("当前项目已改变。")?;
-    active.halt(&app.state::<ToolRunner>());
-    if active.watcher.is_some()
-        && matches!(active.state.as_str(), "checking" | "pending" | "watching")
-    {
-        active.state = "watching".into();
-        active.message = "已停止本次自动预检，继续监听后续变化。".into();
-    }
-    emit(&app, active);
-    Ok(active.snapshot())
+    let state = state.inner().clone();
+    crate::error::run_blocking(
+        "project_maintenance",
+        "停止自动预检意外退出，请重试。",
+        move || {
+            state.require(&app, &project_id)?;
+            let mut runtime = state.0.lock().map_err(|_| {
+                crate::error::DesktopError::state_unavailable(
+                    "project_maintenance",
+                    "项目维护状态不可用。",
+                )
+            })?;
+            let active = runtime
+                .current
+                .as_mut()
+                .filter(|a| a.project.id == project_id)
+                .ok_or_else(|| crate::error::DesktopError::conflict("当前项目已改变。"))?;
+            active.halt(&app.state::<ToolRunner>());
+            if active.watcher.is_some()
+                && matches!(active.state.as_str(), "checking" | "pending" | "watching")
+            {
+                active.state = "watching".into();
+                active.message = "已停止本次自动预检，继续监听后续变化。".into();
+            }
+            emit(&app, active);
+            Ok(active.snapshot())
+        },
+    )
+    .await
 }
 
 #[cfg(test)]

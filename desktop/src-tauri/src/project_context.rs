@@ -66,7 +66,7 @@ fn sensitive(value: &str) -> bool {
     let name = value.to_lowercase();
     PRIVATE_FILES.no_read.matches(&name) || PRIVATE_FILES.no_send.matches(&name)
 }
-pub(crate) fn validate_text(text: String, limit: usize) -> Result<String, String> {
+pub(crate) fn validate_text(text: String, limit: usize) -> crate::error::DesktopResult<String> {
     if text.len() > limit || text.trim().is_empty() {
         return Err("资料为空或超出大小上限。".into());
     }
@@ -109,21 +109,23 @@ fn linked(metadata: &std::fs::Metadata) -> bool {
 // Hold traversed Windows directories without DELETE sharing, preventing
 // junction substitution between validation and the bounded file read.
 #[cfg(windows)]
-fn hold_directory(path: &Path) -> Result<std::fs::File, String> {
+fn hold_directory(path: &Path) -> crate::error::DesktopResult<std::fs::File> {
     use std::os::windows::fs::OpenOptionsExt;
     let file = std::fs::OpenOptions::new()
         .read(true)
         .share_mode(3)
         .custom_flags(0x02200000)
         .open(path)
-        .map_err(|_| "目录正在变更或不可读取。")?;
-    let metadata = file.metadata().map_err(|_| "目录信息不可读取。")?;
+        .map_err(|_| crate::error::DesktopError::io("目录正在变更或不可读取。"))?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| crate::error::DesktopError::io("目录信息不可读取。"))?;
     if !metadata.is_dir() || linked(&metadata) {
         return Err("不支持链接目录。".into());
     }
     Ok(file)
 }
-fn read_file(root: &Path, supplied: &str) -> Result<ContextSnapshot, String> {
+fn read_file(root: &Path, supplied: &str) -> crate::error::DesktopResult<ContextSnapshot> {
     if supplied.len() > 32768
         || supplied.contains('\0')
         || supplied.starts_with("\\\\")
@@ -131,11 +133,14 @@ fn read_file(root: &Path, supplied: &str) -> Result<ContextSnapshot, String> {
     {
         return Err("不支持此文件路径。".into());
     }
-    let root_meta = std::fs::symlink_metadata(root).map_err(|_| "项目目录不可用。")?;
+    let root_meta = std::fs::symlink_metadata(root)
+        .map_err(|_| crate::error::DesktopError::io("项目目录不可用。"))?;
     if linked(&root_meta) {
         return Err("不支持链接项目目录。".into());
     }
-    let canonical_root = root.canonicalize().map_err(|_| "项目目录不可用。")?;
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|_| crate::error::DesktopError::io("项目目录不可用。"))?;
     let root_display = root.to_string_lossy();
     let plain_root = Path::new(
         root_display
@@ -147,7 +152,7 @@ fn read_file(root: &Path, supplied: &str) -> Result<ContextSnapshot, String> {
         path.strip_prefix(root)
             .or_else(|_| path.strip_prefix(plain_root))
             .or_else(|_| path.strip_prefix(&canonical_root))
-            .map_err(|_| "只能选择当前项目内的文件。")?
+            .map_err(|_| crate::error::DesktopError::validation("只能选择当前项目内的文件。"))?
     } else {
         path
     };
@@ -180,13 +185,16 @@ fn read_file(root: &Path, supplied: &str) -> Result<ContextSnapshot, String> {
         if target.is_dir() {
             directory_handles.push(hold_directory(&target)?);
         }
-        if linked(&std::fs::symlink_metadata(&target).map_err(|_| "无法读取所选文件。")?) {
+        if linked(
+            &std::fs::symlink_metadata(&target)
+                .map_err(|_| crate::error::DesktopError::io("无法读取所选文件。"))?,
+        ) {
             return Err("不支持符号链接或目录联接。".into());
         }
     }
     if !target
         .canonicalize()
-        .map_err(|_| "无法读取所选文件。")?
+        .map_err(|_| crate::error::DesktopError::io("无法读取所选文件。"))?
         .starts_with(&canonical_root)
     {
         return Err("文件位于项目目录之外。".into());
@@ -198,17 +206,22 @@ fn read_file(root: &Path, supplied: &str) -> Result<ContextSnapshot, String> {
         use std::os::windows::fs::OpenOptionsExt;
         options.custom_flags(0x00200000).share_mode(1);
     }
-    let file = options.open(&target).map_err(|_| "无法读取所选文件。")?;
-    let metadata = file.metadata().map_err(|_| "无法读取文件信息。")?;
+    let file = options
+        .open(&target)
+        .map_err(|_| crate::error::DesktopError::io("无法读取所选文件。"))?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| crate::error::DesktopError::io("无法读取文件信息。"))?;
     if !metadata.is_file() || linked(&metadata) || metadata.len() > 16384 {
         return Err("仅支持不超过 16 KiB 的普通文本文件。".into());
     }
     let mut bytes = Vec::new();
     file.take(16385)
         .read_to_end(&mut bytes)
-        .map_err(|_| "文件读取失败。")?;
+        .map_err(|_| crate::error::DesktopError::io("文件读取失败。"))?;
     let text = validate_text(
-        String::from_utf8(bytes).map_err(|_| "仅支持 UTF-8 文本文件。")?,
+        String::from_utf8(bytes)
+            .map_err(|_| crate::error::DesktopError::validation("仅支持 UTF-8 文本文件。"))?,
         16384,
     )?;
     let title = relative.to_string_lossy().into_owned();
@@ -223,37 +236,53 @@ fn read_file(root: &Path, supplied: &str) -> Result<ContextSnapshot, String> {
     })
 }
 #[tauri::command]
-pub fn project_context_file(
+pub async fn project_context_file(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     project_id: String,
     path: String,
-) -> Result<ContextSnapshot, String> {
+) -> crate::error::DesktopResult<ContextSnapshot> {
     crate::runtime::authorize(&window)?;
-    let project = state.context_project(&app, &project_id)?;
-    read_file(Path::new(&project.directory), &path)
+    let store = state.inner().clone();
+    crate::error::run_blocking(
+        "project_context",
+        "读取项目文件意外退出，请重试。",
+        move || {
+            let project = store.context_project(&app, &project_id)?;
+            read_file(Path::new(&project.directory), &path)
+        },
+    )
+    .await
 }
 #[tauri::command]
-pub fn project_context_report(
+pub async fn project_context_report(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, ProjectStore>,
     project_id: String,
     artifact_id: String,
-) -> Result<ContextSnapshot, String> {
+) -> crate::error::DesktopResult<ContextSnapshot> {
     crate::runtime::authorize(&window)?;
-    let artifact = state.context_report(&app, &project_id, &artifact_id)?;
-    let text = validate_text(artifact.markdown, 24576)?;
-    Ok(ContextSnapshot {
-        id: format!("report:{}", artifact.id),
-        kind: "report".into(),
-        title: artifact.title,
-        bytes: text.len(),
-        text,
-        created_at: Some(artifact.created_at),
-        context_revision: artifact.context_revision,
-    })
+    let store = state.inner().clone();
+    crate::error::run_blocking(
+        "project_context",
+        "读取项目报告意外退出，请重试。",
+        move || {
+            let artifact = store.context_report(&app, &project_id, &artifact_id)?;
+            let text = validate_text(artifact.markdown, 24576)?;
+            Ok(ContextSnapshot {
+                id: format!("report:{}", artifact.id),
+                kind: "report".into(),
+                title: artifact.title,
+                bytes: text.len(),
+                text,
+                created_at: Some(artifact.created_at),
+                context_revision: artifact.context_revision,
+            })
+        },
+    )
+    .await
 }
 #[cfg(test)]
 mod tests {

@@ -11,7 +11,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt, fs,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 use tauri::Manager;
 
@@ -75,10 +75,10 @@ struct Plan {
     related: Option<String>,
     versions: (String, String),
 }
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct ProjectRepairs {
-    plans: Mutex<BTreeMap<String, Plan>>,
-    gate: Mutex<()>,
+    plans: Arc<Mutex<BTreeMap<String, Plan>>>,
+    gate: Arc<Mutex<()>>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -130,7 +130,7 @@ pub(crate) fn trusted_source(
     artifact: &Artifact,
     run: &Run,
     versions: &(String, String),
-) -> Result<(), String> {
+) -> crate::error::DesktopResult<()> {
     if artifact.provenance.is_some()
         || run.provenance.is_some()
         || artifact.kind != "check"
@@ -148,7 +148,9 @@ pub(crate) fn trusted_source(
         || artifact.rules_version != versions.1
         || run.rules_version != versions.1
     {
-        return Err("仅当前项目、当前版本的本机成功预检可用于修复；导入历史或过期报告不能授权写入，请重新预检。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "仅当前项目、当前版本的本机成功预检可用于修复；导入历史或过期报告不能授权写入，请重新预检。",
+        ));
     }
     Ok(())
 }
@@ -204,7 +206,7 @@ impl<'de> Deserialize<'de> for Unique {
         deserializer.deserialize_any(V)
     }
 }
-fn patch(before: &str, apis: &[String]) -> Result<String, String> {
+fn patch(before: &str, apis: &[String]) -> crate::error::DesktopResult<String> {
     if before.len() > MAX_CONFIG
         || apis.is_empty()
         || apis.len() > 8
@@ -239,28 +241,39 @@ fn patch(before: &str, apis: &[String]) -> Result<String, String> {
     Ok(after)
 }
 
-fn root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+fn root(app: &tauri::AppHandle) -> crate::error::DesktopResult<PathBuf> {
     let directory = app
         .path()
         .app_data_dir()
-        .map_err(|_| "无法定位修复备份目录。")?
+        .map_err(|_| {
+            crate::error::DesktopError::runtime_unavailable(
+                "project_repair",
+                "missing_app_data_dir",
+                "无法定位修复备份目录。",
+            )
+        })?
         .join("project-repairs-v1");
-    fs::create_dir_all(&directory).map_err(|_| "无法创建修复备份目录。")?;
+    fs::create_dir_all(&directory)
+        .map_err(|_| crate::error::DesktopError::io("无法创建修复备份目录。"))?;
     let _held = writer::directories(&directory)?;
     Ok(directory)
 }
-fn read(path: &Path, limit: usize) -> Result<Vec<u8>, String> {
+fn read(path: &Path, limit: usize) -> crate::error::DesktopResult<Vec<u8>> {
     Target::open(path, false)?.bytes(limit)
 }
-fn journals(directory: &Path) -> Result<Vec<Journal>, String> {
+fn journals(directory: &Path) -> crate::error::DesktopResult<Vec<Journal>> {
     let _held = writer::directories(directory)?;
     let mut journals = Vec::new();
     let mut count = 0;
-    for entry in fs::read_dir(directory).map_err(|_| "修复记录不可读取。")? {
-        let entry = entry.map_err(|_| "修复记录不可读取。")?;
+    for entry in
+        fs::read_dir(directory).map_err(|_| crate::error::DesktopError::io("修复记录不可读取。"))?
+    {
+        let entry = entry.map_err(|_| crate::error::DesktopError::io("修复记录不可读取。"))?;
         count += 1;
         if count > MAX_OPERATIONS {
-            return Err("修复记录已达上限，请保留备份并手动处理。".into());
+            return Err(crate::error::DesktopError::conflict(
+                "修复记录已达上限，请保留备份并手动处理。",
+            ));
         }
         let name = entry
             .file_name()
@@ -268,7 +281,9 @@ fn journals(directory: &Path) -> Result<Vec<Journal>, String> {
             .ok_or("修复记录路径无效。")?
             .to_owned();
         if name.len() != 32 || !name.bytes().all(|c| c.is_ascii_hexdigit()) {
-            return Err("修复记录目录含未知内容，请保留并检查。".into());
+            return Err(crate::error::DesktopError::database(
+                "修复记录目录含未知内容，请保留并检查。",
+            ));
         }
         let _folder = writer::directories(&entry.path())?;
         let path = entry.path().join("committing.json");
@@ -276,32 +291,37 @@ fn journals(directory: &Path) -> Result<Vec<Journal>, String> {
         if !path.exists() {
             continue;
         }
-        let journal: Journal = serde_json::from_slice(&read(&path, 256 * 1024)?)
-            .map_err(|_| "修复日志损坏，禁止重放；请保留备份。")?;
+        let journal: Journal = serde_json::from_slice(&read(&path, 256 * 1024)?).map_err(|_| {
+            crate::error::DesktopError::database("修复日志损坏，禁止重放；请保留备份。")
+        })?;
         if journal.version != 1
             || journal.operation_id != name
             || !["apply", "undo", "recovery"].contains(&journal.kind.as_str())
         {
-            return Err("修复日志版本或编号无效。".into());
+            return Err(crate::error::DesktopError::database(
+                "修复日志版本或编号无效。",
+            ));
         }
         journals.push(journal);
     }
     journals.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     Ok(journals)
 }
-fn bytes_for(directory: &Path, journal: &Journal) -> Result<(String, String), String> {
+fn bytes_for(directory: &Path, journal: &Journal) -> crate::error::DesktopResult<(String, String)> {
     let folder = directory.join(&journal.operation_id);
     let before = read(&folder.join("original.bin"), MAX_CONFIG)?;
     let after = read(&folder.join("approved.bin"), MAX_CONFIG)?;
     if writer::hash(&before) != journal.before_hash || writer::hash(&after) != journal.after_hash {
-        return Err("修复备份校验失败，禁止写入或撤销。".into());
+        return Err(crate::error::DesktopError::database(
+            "修复备份校验失败，禁止写入或撤销。",
+        ));
     }
     Ok((
         String::from_utf8(before).map_err(|_| "备份编码无效。")?,
         String::from_utf8(after).map_err(|_| "备份编码无效。")?,
     ))
 }
-fn result(directory: &Path, journal: &Journal) -> Result<RepairResult, String> {
+fn result(directory: &Path, journal: &Journal) -> crate::error::DesktopResult<RepairResult> {
     let folder = directory.join(&journal.operation_id);
     let (before, after) = bytes_for(directory, journal)?;
     let completed = folder.join("result.json");
@@ -380,7 +400,10 @@ fn result(directory: &Path, journal: &Journal) -> Result<RepairResult, String> {
         recheck_artifact_id: recheck.map(|v| v.artifact_id),
     })
 }
-fn compensation_completed(directory: &Path, original: &Journal) -> Result<bool, String> {
+fn compensation_completed(
+    directory: &Path,
+    original: &Journal,
+) -> crate::error::DesktopResult<bool> {
     for child in journals(directory)? {
         if child.related.as_deref() != Some(original.operation_id.as_str())
             || child.project.id != original.project.id
@@ -416,7 +439,10 @@ fn compensation_completed(directory: &Path, original: &Journal) -> Result<bool, 
     }
     Ok(false)
 }
-fn require_active(connection: &rusqlite::Connection, project_id: &str) -> Result<(), String> {
+fn require_active(
+    connection: &rusqlite::Connection,
+    project_id: &str,
+) -> crate::error::DesktopResult<()> {
     use rusqlite::OptionalExtension;
     let active: Option<String> = connection
         .query_row(
@@ -428,34 +454,38 @@ fn require_active(connection: &rusqlite::Connection, project_id: &str) -> Result
         .map_err(crate::project_store::db_error)?
         .flatten();
     if active.as_deref() != Some(project_id) {
-        return Err("当前项目已切换，修复审批作废；请返回目标项目后重新准备。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "当前项目已切换，修复审批作废；请返回目标项目后重新准备。",
+        ));
     }
     Ok(())
 }
 pub(crate) fn ensure_no_pending_recovery(
     app: &tauri::AppHandle,
     project_id: &str,
-) -> Result<(), String> {
+) -> crate::error::DesktopResult<()> {
     let directory = root(app)?;
     ensure_no_pending_at(&directory, project_id)
 }
-fn ensure_no_pending_at(directory: &Path, project_id: &str) -> Result<(), String> {
+fn ensure_no_pending_at(directory: &Path, project_id: &str) -> crate::error::DesktopResult<()> {
     for journal in journals(directory)? {
         if journal.project.id == project_id
             && result(directory, &journal)?.write_state == "recovery_required"
         {
-            return Err("项目存在尚未解决的修复中断，请先恢复并核对文件，再归档项目。".into());
+            return Err(crate::error::DesktopError::conflict(
+                "项目存在尚未解决的修复中断，请先恢复并核对文件，再归档项目。",
+            ));
         }
     }
     Ok(())
 }
-fn find(directory: &Path, operation_id: &str) -> Result<Journal, String> {
+fn find(directory: &Path, operation_id: &str) -> crate::error::DesktopResult<Journal> {
     journals(directory)?
         .into_iter()
         .find(|j| j.operation_id == operation_id)
-        .ok_or("找不到本机修复记录；导入历史不能用于撤销或恢复。".into())
+        .ok_or_else(|| "找不到本机修复记录；导入历史不能用于撤销或恢复。".into())
 }
-fn validate_scan(scan: &Scan) -> Result<(), String> {
+fn validate_scan(scan: &Scan) -> crate::error::DesktopResult<()> {
     if scan.schema_version != 1
         || scan.files.is_empty()
         || scan.files.len() > 512
@@ -492,40 +522,52 @@ fn scan(
     app: &tauri::AppHandle,
     project: &Project,
     reservation: &crate::tool_runner::Reservation,
-) -> Result<Scan, String> {
+) -> crate::error::DesktopResult<Scan> {
     let _root = writer::directories(Path::new(&project.directory))?;
     let mut command = crate::runtime::node_command(app, "src/repair-evidence.mjs", false)?;
     command.arg(&project.directory);
     let text = reservation
         .run_retained(command)
-        .map_err(|e| e.to_string())?;
+        .map_err(crate::error::DesktopError::from)?;
     let scan: Scan = serde_json::from_str(&text).map_err(|_| "修复扫描返回格式无效。")?;
     validate_scan(&scan)?;
     Ok(scan)
 }
-fn pin_sources(project: &Project, scan: &Scan, target: &mut Target) -> Result<Vec<Target>, String> {
+fn pin_sources(
+    project: &Project,
+    scan: &Scan,
+    target: &mut Target,
+) -> crate::error::DesktopResult<Vec<Target>> {
     let mut held = Vec::new();
     for entry in &scan.files {
         if entry.file == "app.json" {
             if writer::hash(&target.bytes(MAX_CONFIG)?) != entry.sha256 {
-                return Err("配置已改变，请重新准备差异。".into());
+                return Err(crate::error::DesktopError::conflict(
+                    "配置已改变，请重新准备差异。",
+                ));
             }
         } else {
             let mut file = Target::open(&Path::new(&project.directory).join(&entry.file), false)?;
             if writer::hash(&file.bytes(1024 * 1024)?) != entry.sha256 {
-                return Err("源码已改变，请重新预检和审批。".into());
+                return Err(crate::error::DesktopError::conflict(
+                    "源码已改变，请重新预检和审批。",
+                ));
             }
             held.push(file);
         }
     }
     Ok(held)
 }
-fn insert(state: &ProjectRepairs, plan: Plan) -> Result<RepairPlan, String> {
+fn insert(state: &ProjectRepairs, plan: Plan) -> crate::error::DesktopResult<RepairPlan> {
     let view = plan.view.clone();
-    let mut plans = state.plans.lock().map_err(|_| "修复计划状态不可用。")?;
+    let mut plans = state.plans.lock().map_err(|_| {
+        crate::error::DesktopError::state_unavailable("project_repair", "修复计划状态不可用。")
+    })?;
     plans.retain(|_, p| p.view.expires_at > now());
     if plans.len() >= 8 {
-        return Err("待确认修复计划过多，请等待旧计划过期后重试。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "待确认修复计划过多，请等待旧计划过期后重试。",
+        ));
     }
     plans.insert(view.plan_id.clone(), plan);
     Ok(view)
@@ -539,13 +581,28 @@ pub async fn project_repair_prepare(
     state: tauri::State<'_, ProjectRepairs>,
     project_id: String,
     artifact_id: String,
-) -> Result<RepairPlan, String> {
+) -> crate::error::DesktopResult<RepairPlan> {
     crate::runtime::authorize(&window)?;
-    store.access(&app, |connection| require_active(connection, &project_id))?;
-    store.repair_source(&app, &project_id, &artifact_id)?;
+    let store = store.inner().clone();
+    let state = state.inner().clone();
+    let check_app = app.clone();
+    let check_store = store.clone();
+    let check_project_id = project_id.clone();
+    crate::error::run_blocking(
+        "project_repair",
+        "修复准备意外中断，未修改文件。",
+        move || {
+            check_store.access(&check_app, |connection| {
+                require_active(connection, &check_project_id)
+            })?;
+            check_store.repair_source(&check_app, &check_project_id, &artifact_id)?;
+            Ok(())
+        },
+    )
+    .await?;
     let fresh = crate::project_store::run_internal(
         app.clone(),
-        store.inner().clone(),
+        store.clone(),
         Some(project_id.clone()),
         "check".into(),
         format!("repair-{}", writer::random_id()?),
@@ -554,47 +611,51 @@ pub async fn project_repair_prepare(
         None,
     )
     .await
-    .map_err(|e| e.to_string())?;
-    let (project, _, _) = store.repair_source(&app, &project_id, &fresh.id)?;
+    .map_err(crate::error::DesktopError::from)?;
     let runner = app
         .state::<crate::tool_runner::ToolRunner>()
         .inner()
         .clone();
     let reservation = runner.reserve_guard(&format!("repair-{}", writer::random_id()?))?;
-    let application = app.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let evidence = scan(&application, &project, &reservation)?;
-        let mut target = Target::open(&Path::new(&project.directory).join("app.json"), false)?;
-        let _sources = pin_sources(&project, &evidence, &mut target)?;
-        let before =
-            String::from_utf8(target.bytes(MAX_CONFIG)?).map_err(|_| "app.json 必须是 UTF-8。")?;
-        let after = patch(&before, &evidence.missing_apis)?;
-        let versions = crate::project_store::versions(&application)?;
-        let plan = Plan {
-            view: RepairPlan {
-                plan_id: writer::random_id()?,
-                expires_at: now() + 300_000,
-                project_id: project.id.clone(),
-                file: "app.json".into(),
-                before,
-                after,
-                missing_apis: evidence.missing_apis.clone(),
-                evidence: evidence.evidence.clone(),
-                warnings: vec![NOTICE.into()],
-                kind: "apply".into(),
-            },
-            project,
-            identity: target.identity.clone(),
-            root_identity: target.parent_identity.clone(),
-            scan: Some(evidence),
-            artifact_id: Some(fresh.id),
-            related: None,
-            versions,
-        };
-        reservation.commit(|| Ok(plan)).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|_| "修复准备意外中断，未修改文件。")??;
+    let result = crate::error::run_blocking(
+        "project_repair",
+        "修复准备意外中断，未修改文件。",
+        move || {
+            let (project, _, _) = store.repair_source(&app, &project_id, &fresh.id)?;
+            let evidence = scan(&app, &project, &reservation)?;
+            let mut target = Target::open(&Path::new(&project.directory).join("app.json"), false)?;
+            let _sources = pin_sources(&project, &evidence, &mut target)?;
+            let before = String::from_utf8(target.bytes(MAX_CONFIG)?)
+                .map_err(|_| "app.json 必须是 UTF-8。")?;
+            let after = patch(&before, &evidence.missing_apis)?;
+            let versions = crate::project_store::versions(&app)?;
+            let plan = Plan {
+                view: RepairPlan {
+                    plan_id: writer::random_id()?,
+                    expires_at: now() + 300_000,
+                    project_id: project.id.clone(),
+                    file: "app.json".into(),
+                    before,
+                    after,
+                    missing_apis: evidence.missing_apis.clone(),
+                    evidence: evidence.evidence.clone(),
+                    warnings: vec![NOTICE.into()],
+                    kind: "apply".into(),
+                },
+                project,
+                identity: target.identity.clone(),
+                root_identity: target.parent_identity.clone(),
+                scan: Some(evidence),
+                artifact_id: Some(fresh.id),
+                related: None,
+                versions,
+            };
+            reservation
+                .commit(|| Ok(plan))
+                .map_err(crate::error::DesktopError::from)
+        },
+    )
+    .await?;
     insert(&state, result)
 }
 
@@ -604,8 +665,10 @@ fn history_plan(
     state: &ProjectRepairs,
     operation_id: &str,
     recovery: bool,
-) -> Result<RepairPlan, String> {
-    let _gate = state.gate.lock().map_err(|_| "修复状态不可用。")?;
+) -> crate::error::DesktopResult<RepairPlan> {
+    let _gate = state.gate.lock().map_err(|_| {
+        crate::error::DesktopError::state_unavailable("project_repair", "修复状态不可用。")
+    })?;
     let directory = root(app)?;
     let journal = find(&directory, operation_id)?;
     let current = result(&directory, &journal)?;
@@ -614,22 +677,25 @@ fn history_plan(
     } else {
         !current.undo_available
     } {
-        return Err(if recovery {
+        return Err(crate::error::DesktopError::conflict(if recovery {
             "此操作不需要自动恢复，或当前文件无法安全读取，请检查备份。"
         } else {
             "当前文件已改变或此操作不能撤销；不会覆盖你的后续修改。"
-        }
-        .into());
+        }));
     }
     let project = store.context_project(app, &journal.project.id)?;
     store.access(app, |connection| require_active(connection, &project.id))?;
     if project.directory != journal.project.directory {
-        return Err("项目目录已变更，不能在新目录执行旧修复的撤销或恢复。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "项目目录已变更，不能在新目录执行旧修复的撤销或恢复。",
+        ));
     }
     let (original, _) = bytes_for(&directory, &journal)?;
     let mut target = Target::open(&Path::new(&project.directory).join("app.json"), false)?;
     if target.identity != journal.identity || target.parent_identity != journal.root_identity {
-        return Err("文件已被替换，旧修复不能授权覆盖。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "文件已被替换，旧修复不能授权覆盖。",
+        ));
     }
     let before = String::from_utf8(target.bytes(MAX_CONFIG)?)
         .map_err(|_| "当前文件不是 UTF-8，请通过备份手动恢复。")?;
@@ -641,33 +707,49 @@ fn validate_compensation_bytes(
     journal: &Journal,
     before: &str,
     recovery: bool,
-) -> Result<(), String> {
+) -> crate::error::DesktopResult<()> {
     if !recovery && writer::hash(before.as_bytes()) != journal.after_hash {
-        return Err("当前文件已改变，撤销不会覆盖你的后续修改；请手动核对。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "当前文件已改变，撤销不会覆盖你的后续修改；请手动核对。",
+        ));
     }
     Ok(())
 }
 #[tauri::command]
-pub fn project_repair_undo_prepare(
+pub async fn project_repair_undo_prepare(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     store: tauri::State<'_, ProjectStore>,
     state: tauri::State<'_, ProjectRepairs>,
     operation_id: String,
-) -> Result<RepairPlan, String> {
+) -> crate::error::DesktopResult<RepairPlan> {
     crate::runtime::authorize(&window)?;
-    history_plan(&app, &store, &state, &operation_id, false)
+    let store = store.inner().clone();
+    let state = state.inner().clone();
+    crate::error::run_blocking(
+        "project_repair",
+        "准备撤销修复意外退出，请重试。",
+        move || history_plan(&app, &store, &state, &operation_id, false),
+    )
+    .await
 }
 #[tauri::command]
-pub fn project_repair_recovery_prepare(
+pub async fn project_repair_recovery_prepare(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     store: tauri::State<'_, ProjectStore>,
     state: tauri::State<'_, ProjectRepairs>,
     operation_id: String,
-) -> Result<RepairPlan, String> {
+) -> crate::error::DesktopResult<RepairPlan> {
     crate::runtime::authorize(&window)?;
-    history_plan(&app, &store, &state, &operation_id, true)
+    let store = store.inner().clone();
+    let state = state.inner().clone();
+    crate::error::run_blocking(
+        "project_repair",
+        "准备恢复修复意外退出，请重试。",
+        move || history_plan(&app, &store, &state, &operation_id, true),
+    )
+    .await
 }
 
 fn persist_write(
@@ -675,7 +757,7 @@ fn persist_write(
     plan: &Plan,
     request_id: &str,
     target: &mut Target,
-) -> Result<RepairResult, String> {
+) -> crate::error::DesktopResult<RepairResult> {
     persist_write_using(directory, plan, request_id, target, |target, bytes| {
         target.write(bytes)
     })
@@ -685,10 +767,10 @@ fn persist_write_using(
     plan: &Plan,
     request_id: &str,
     target: &mut Target,
-    write: impl FnOnce(&mut Target, &[u8]) -> Result<(), String>,
-) -> Result<RepairResult, String> {
+    write: impl FnOnce(&mut Target, &[u8]) -> crate::error::DesktopResult<()>,
+) -> crate::error::DesktopResult<RepairResult> {
     let count = fs::read_dir(directory)
-        .map_err(|_| "无法读取修复记录。")?
+        .map_err(|_| crate::error::DesktopError::io("无法读取修复记录。"))?
         .count();
     let existing = journals(directory)?;
     let applies = existing.iter().filter(|j| j.kind == "apply").count();
@@ -697,16 +779,18 @@ fn persist_write_using(
         || plan.view.kind == "apply" && (applies >= MAX_APPLIES || count >= MAX_APPLIES)
         || plan.view.kind != "apply" && compensations >= MAX_COMPENSATIONS
     {
-        return Err(if plan.view.kind == "apply" {
-            "新修复已达上限；撤销与恢复保留独立配额，现有备份仍可使用。"
-        } else {
-            "补偿操作已达独立安全上限，请保留原始备份并手动恢复，不会覆盖源文件。"
-        }
-        .into());
+        return Err(crate::error::DesktopError::conflict(
+            if plan.view.kind == "apply" {
+                "新修复已达上限；撤销与恢复保留独立配额，现有备份仍可使用。"
+            } else {
+                "补偿操作已达独立安全上限，请保留原始备份并手动恢复，不会覆盖源文件。"
+            },
+        ));
     }
     let operation_id = writer::random_id()?;
     let folder = directory.join(&operation_id);
-    fs::create_dir(&folder).map_err(|_| "无法创建修复备份目录，未修改文件。")?;
+    fs::create_dir(&folder)
+        .map_err(|_| crate::error::DesktopError::io("无法创建修复备份目录，未修改文件。"))?;
     let _directory = writer::directories(&folder)?;
     let _before = writer::create_record(&folder.join("original.bin"), plan.view.before.as_bytes())?;
     let _after = writer::create_record(&folder.join("approved.bin"), plan.view.after.as_bytes())?;
@@ -785,7 +869,7 @@ async fn execute(
     request_id: String,
     apply: bool,
     business_confirmed: bool,
-) -> Result<RepairResult, String> {
+) -> crate::error::DesktopResult<RepairResult> {
     crate::project_store::id(&request_id)?;
     if apply && !business_confirmed {
         return Err("请明确确认静态发现的位置功能确为业务所需，再批准具体差异。".into());
@@ -795,83 +879,107 @@ async fn execute(
         .inner()
         .clone();
     let reservation = runner.reserve_guard(&format!("repair-{}", writer::random_id()?))?;
-    tauri::async_runtime::spawn_blocking(move || {
-        let state = app.state::<ProjectRepairs>();
-        let _gate = state.gate.lock().map_err(|_| "修复状态不可用。")?;
-        let directory = root(&app)?;
-        let _root = writer::directories(&directory)?;
-        for journal in journals(&directory)? {
-            if journal.request_id == request_id {
-                if journal.plan_id != plan_id || (journal.kind == "apply") != apply {
-                    return Err("请求编号已用于其他操作，请勿重复提交。".into());
-                }
-                return result(&directory, &journal);
-            }
-        }
-        let plan = state
-            .plans
-            .lock()
-            .map_err(|_| "修复计划不可用。")?
-            .remove(&plan_id)
-            .ok_or("修复计划已过期或已处理，请重新查看差异。")?;
-        if plan.view.expires_at <= now() || (plan.view.kind == "apply") != apply {
-            return Err("修复计划已过期或操作不匹配，请重新准备。".into());
-        }
-        let project = store.context_project(&app, &plan.project.id)?;
-        if project.revision != plan.project.revision
-            || project.context_revision != plan.project.context_revision
-            || project.directory != plan.project.directory
-            || crate::project_store::versions(&app)? != plan.versions
-        {
-            return Err("项目或规则版本已改变，审批作废；请重新预检。".into());
-        }
-        let fresh = if let Some(expected) = &plan.scan {
-            store.repair_source(
-                &app,
-                &project.id,
-                plan.artifact_id.as_deref().ok_or("修复报告缺失。")?,
-            )?;
-            let fresh = scan(&app, &project, &reservation)?;
-            if fresh.fingerprint != expected.fingerprint
-                || fresh.missing_apis != expected.missing_apis
-            {
-                return Err("源码已改变，原差异审批作废；请重新预检。".into());
-            }
-            Some(fresh)
-        } else {
-            None
-        };
-        let mut target = Target::open(&Path::new(&project.directory).join("app.json"), true)?;
-        if target.identity != plan.identity
-            || target.parent_identity != plan.root_identity
-            || target.bytes(MAX_CONFIG)? != plan.view.before.as_bytes()
-        {
-            return Err("配置内容或身份已变化，未覆盖；请重新准备差异。".into());
-        }
-        let _sources = if let Some(fresh) = fresh {
-            pin_sources(&project, &fresh, &mut target)?
-        } else {
-            Vec::new()
-        };
-        // Short disk commit is linearized with stop/shutdown; a stop cannot relabel an applied write as canceled.
-        reservation
-            .commit(|| {
-                store.access(&app, |connection| {
-                    let latest = crate::project_store::project(connection, &project.id)?;
-                    require_active(connection, &project.id)?;
-                    if latest.revision != project.revision
-                        || latest.context_revision != project.context_revision
-                        || latest.directory != project.directory
-                    {
-                        return Err("项目在提交前已改变，未写入；请重新准备。".into());
+    crate::error::run_blocking(
+        "project_repair",
+        "修复任务中断；请打开修复历史确认文件及备份，勿重复覆盖。",
+        move || {
+            let state = app.state::<ProjectRepairs>();
+            let _gate = state.gate.lock().map_err(|_| {
+                crate::error::DesktopError::state_unavailable("project_repair", "修复状态不可用。")
+            })?;
+            let directory = root(&app)?;
+            let _root = writer::directories(&directory)?;
+            for journal in journals(&directory)? {
+                if journal.request_id == request_id {
+                    if journal.plan_id != plan_id || (journal.kind == "apply") != apply {
+                        return Err(crate::error::DesktopError::conflict(
+                            "请求编号已用于其他操作，请勿重复提交。",
+                        ));
                     }
-                    persist_write(&directory, &plan, &request_id, &mut target)
+                    return result(&directory, &journal);
+                }
+            }
+            let plan = state
+                .plans
+                .lock()
+                .map_err(|_| {
+                    crate::error::DesktopError::state_unavailable(
+                        "project_repair",
+                        "修复计划不可用。",
+                    )
+                })?
+                .remove(&plan_id)
+                .ok_or_else(|| {
+                    crate::error::DesktopError::conflict("修复计划已过期或已处理，请重新查看差异。")
+                })?;
+            if plan.view.expires_at <= now() || (plan.view.kind == "apply") != apply {
+                return Err(crate::error::DesktopError::conflict(
+                    "修复计划已过期或操作不匹配，请重新准备。",
+                ));
+            }
+            let project = store.context_project(&app, &plan.project.id)?;
+            if project.revision != plan.project.revision
+                || project.context_revision != plan.project.context_revision
+                || project.directory != plan.project.directory
+                || crate::project_store::versions(&app)? != plan.versions
+            {
+                return Err(crate::error::DesktopError::conflict(
+                    "项目或规则版本已改变，审批作废；请重新预检。",
+                ));
+            }
+            let fresh = if let Some(expected) = &plan.scan {
+                store.repair_source(
+                    &app,
+                    &project.id,
+                    plan.artifact_id.as_deref().ok_or("修复报告缺失。")?,
+                )?;
+                let fresh = scan(&app, &project, &reservation)?;
+                if fresh.fingerprint != expected.fingerprint
+                    || fresh.missing_apis != expected.missing_apis
+                {
+                    return Err(crate::error::DesktopError::conflict(
+                        "源码已改变，原差异审批作废；请重新预检。",
+                    ));
+                }
+                Some(fresh)
+            } else {
+                None
+            };
+            let mut target = Target::open(&Path::new(&project.directory).join("app.json"), true)?;
+            if target.identity != plan.identity
+                || target.parent_identity != plan.root_identity
+                || target.bytes(MAX_CONFIG)? != plan.view.before.as_bytes()
+            {
+                return Err(crate::error::DesktopError::conflict(
+                    "配置内容或身份已变化，未覆盖；请重新准备差异。",
+                ));
+            }
+            let _sources = if let Some(fresh) = fresh {
+                pin_sources(&project, &fresh, &mut target)?
+            } else {
+                Vec::new()
+            };
+            // Short disk commit is linearized with stop/shutdown; a stop cannot relabel an applied write as canceled.
+            reservation
+                .commit(|| {
+                    store.access(&app, |connection| {
+                        let latest = crate::project_store::project(connection, &project.id)?;
+                        require_active(connection, &project.id)?;
+                        if latest.revision != project.revision
+                            || latest.context_revision != project.context_revision
+                            || latest.directory != project.directory
+                        {
+                            return Err(crate::error::DesktopError::conflict(
+                                "项目在提交前已改变，未写入；请重新准备。",
+                            ));
+                        }
+                        persist_write(&directory, &plan, &request_id, &mut target)
+                    })
                 })
-            })
-            .map_err(|e| e.to_string())
-    })
+                .map_err(crate::error::DesktopError::from)
+        },
+    )
     .await
-    .map_err(|_| "修复任务中断；请打开修复历史确认文件及备份，勿重复覆盖。")?
 }
 #[tauri::command]
 pub async fn project_repair_apply(
@@ -881,7 +989,7 @@ pub async fn project_repair_apply(
     plan_id: String,
     request_id: String,
     business_confirmed: bool,
-) -> Result<RepairResult, String> {
+) -> crate::error::DesktopResult<RepairResult> {
     crate::runtime::authorize(&window)?;
     execute(
         app,
@@ -900,75 +1008,104 @@ pub async fn project_repair_undo(
     store: tauri::State<'_, ProjectStore>,
     plan_id: String,
     request_id: String,
-) -> Result<RepairResult, String> {
+) -> crate::error::DesktopResult<RepairResult> {
     crate::runtime::authorize(&window)?;
     execute(app, store.inner().clone(), plan_id, request_id, false, true).await
 }
 #[tauri::command]
-pub fn project_repair_snapshot(
+pub async fn project_repair_snapshot(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     store: tauri::State<'_, ProjectStore>,
     state: tauri::State<'_, ProjectRepairs>,
     project_id: String,
-) -> Result<RepairSnapshot, String> {
+) -> crate::error::DesktopResult<RepairSnapshot> {
     crate::runtime::authorize(&window)?;
-    store.context_project(&app, &project_id)?;
-    let _gate = state.gate.lock().map_err(|_| "修复状态不可用。")?;
-    let directory = root(&app)?;
-    let mut operations = Vec::new();
-    for journal in journals(&directory)? {
-        if journal.project.id == project_id {
-            operations.push(result(&directory, &journal)?);
-        }
-    }
-    Ok(RepairSnapshot { operations })
+    let store = store.inner().clone();
+    let state = state.inner().clone();
+    crate::error::run_blocking(
+        "project_repair",
+        "读取修复记录意外退出，请重试。",
+        move || {
+            store.context_project(&app, &project_id)?;
+            let _gate = state.gate.lock().map_err(|_| {
+                crate::error::DesktopError::state_unavailable("project_repair", "修复状态不可用。")
+            })?;
+            let directory = root(&app)?;
+            let mut operations = Vec::new();
+            for journal in journals(&directory)? {
+                if journal.project.id == project_id {
+                    operations.push(result(&directory, &journal)?);
+                }
+            }
+            Ok(RepairSnapshot { operations })
+        },
+    )
+    .await
 }
 #[tauri::command]
-pub fn project_repair_record_recheck(
+pub async fn project_repair_record_recheck(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     store: tauri::State<'_, ProjectStore>,
     state: tauri::State<'_, ProjectRepairs>,
     operation_id: String,
     artifact_id: String,
-) -> Result<RepairResult, String> {
+) -> crate::error::DesktopResult<RepairResult> {
     crate::runtime::authorize(&window)?;
-    let _gate = state.gate.lock().map_err(|_| "修复状态不可用。")?;
-    let directory = root(&app)?;
-    let journal = find(&directory, &operation_id)?;
-    let current = result(&directory, &journal)?;
-    if !["applied", "undone"].contains(&current.write_state.as_str()) {
-        return Err("写入未完成，不能关联完成复检。".into());
-    }
-    let (project, artifact, run) = store.repair_source(&app, &journal.project.id, &artifact_id)?;
-    if project.directory != journal.project.directory
-        || run.started_at < journal.created_at
-        || run.finished_at.is_none()
-    {
-        return Err("只能关联本次写入之后在原项目完成的本机预检。".into());
-    }
-    let mut target = Target::open(&Path::new(&project.directory).join("app.json"), false)?;
-    if target.identity != journal.identity
-        || target.parent_identity != journal.root_identity
-        || writer::hash(&target.bytes(MAX_CONFIG)?) != journal.after_hash
-    {
-        return Err("配置已在复检前后改变，不能将此报告关联为本次写入的复检。".into());
-    }
-    let folder = directory.join(&operation_id);
-    let _held = writer::directories(&folder)?;
-    let path = folder.join("recheck.json");
-    if !path.exists() {
-        let _receipt = writer::publish_record(
-            &path,
-            &serde_json::to_vec(&Receipt {
-                artifact_id: artifact.id,
-                checked_at: now(),
-            })
-            .map_err(|_| "复检记录编码失败。")?,
-        )?;
-    }
-    result(&directory, &journal)
+    let store = store.inner().clone();
+    let state = state.inner().clone();
+    crate::error::run_blocking(
+        "project_repair",
+        "关联修复复检意外退出，请重试。",
+        move || {
+            let _gate = state.gate.lock().map_err(|_| {
+                crate::error::DesktopError::state_unavailable("project_repair", "修复状态不可用。")
+            })?;
+            let directory = root(&app)?;
+            let journal = find(&directory, &operation_id)?;
+            let current = result(&directory, &journal)?;
+            if !["applied", "undone"].contains(&current.write_state.as_str()) {
+                return Err(crate::error::DesktopError::conflict(
+                    "写入未完成，不能关联完成复检。",
+                ));
+            }
+            let (project, artifact, run) =
+                store.repair_source(&app, &journal.project.id, &artifact_id)?;
+            if project.directory != journal.project.directory
+                || run.started_at < journal.created_at
+                || run.finished_at.is_none()
+            {
+                return Err(crate::error::DesktopError::conflict(
+                    "只能关联本次写入之后在原项目完成的本机预检。",
+                ));
+            }
+            let mut target = Target::open(&Path::new(&project.directory).join("app.json"), false)?;
+            if target.identity != journal.identity
+                || target.parent_identity != journal.root_identity
+                || writer::hash(&target.bytes(MAX_CONFIG)?) != journal.after_hash
+            {
+                return Err(crate::error::DesktopError::conflict(
+                    "配置已在复检前后改变，不能将此报告关联为本次写入的复检。",
+                ));
+            }
+            let folder = directory.join(&operation_id);
+            let _held = writer::directories(&folder)?;
+            let path = folder.join("recheck.json");
+            if !path.exists() {
+                let _receipt = writer::publish_record(
+                    &path,
+                    &serde_json::to_vec(&Receipt {
+                        artifact_id: artifact.id,
+                        checked_at: now(),
+                    })
+                    .map_err(|_| crate::error::DesktopError::database("复检记录编码失败。"))?,
+                )?;
+            }
+            result(&directory, &journal)
+        },
+    )
+    .await
 }
 
 #[cfg(test)]

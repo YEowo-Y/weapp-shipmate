@@ -599,7 +599,7 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 - **SQLite 连接与备份现状**：`project_store.rs` 以实例级 `.lock` 文件锁单连接打开 `projects.sqlite3`，当前使用默认回滚日志（未开 WAL）、`busy_timeout(2s)`、`synchronous = FULL`、`foreign_keys = ON`；迁移前备份 `backup()` 已采用支持 WAL 在线热备的 `rusqlite::backup::Backup`。注意现有 `open_database()` 先以 `SQLITE_OPEN_READ_ONLY` 打开做 `quick_check` 与 `user_version` 探查：启用 WAL 后若上次崩溃遗留 `-wal` 且无 `-shm`，只读打开在部分环境下无法恢复 WAL 索引，需改为在已持有实例 `.lock` 锁的前提下以读写标志打开，并在任何写入或迁移前先只读校验 `user_version <= 2` 与 `quick_check == "ok"`。
 - **错误与命令线程模型现状**：`desktop/src-tauri/src/` 共 18 个源文件、193 处 `Result<..., String>`；共注册 46 个 `#[tauri::command]`，其中 8 个为 `async fn`，其余 38 个为同步 `fn`（在 Tauri v2 中直接在 Windows 主界面/消息泵线程同步执行 SQLite 锁、文件读写、备份导入、凭据库访问与 broker 管道通信）。无诊断日志模块，也未设置 `std::panic::set_hook`。
 
-#### T13A · CI `rustfmt`/`clippy`、SQLite WAL、本地脱敏诊断日志与 panic hook（已按 #50 批准范围实现，PR 中）
+#### T13A · CI `rustfmt`/`clippy`、SQLite WAL、本地脱敏诊断日志与 panic hook（已验收）
 
 1. **接入 CI `rustfmt` 与 `clippy` 门禁。** 在 `tests/release.test.mjs` 增加回归断言（先红后绿）：`glib-backport.yml` 的 `linux-regression` 与 `windows-compatibility` 均安装 `1.94.1` 的 `rustfmt` 与 `clippy` 组件，对 `desktop/src-tauri/Cargo.toml` 执行 `cargo +1.94.1 fmt --manifest-path desktop/src-tauri/Cargo.toml --all -- --check` 和 `cargo +1.94.1 clippy --manifest-path desktop/src-tauri/Cargo.toml --locked -- -D warnings`（Windows 腿带 `--all-targets`；Linux 腿同步对 `desktop/security/glib-variant-iter/Cargo.toml` 执行 `fmt --check` 与 `clippy --all-targets --locked -- -D warnings`）。格式化 `desktop/src-tauri` 现有代码并处理 `source_quote_check` 的 Tauri 注入参数告警。
    判据：工作流门禁测试先红后绿；本机 `cargo +1.94.1 fmt --all -- --check` 与 `cargo +1.94.1 clippy --all-targets --locked -- -D warnings` 均退出码 0。
@@ -610,15 +610,17 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 **T13A 允许变更的文件。** `.github/workflows/glib-backport.yml`、`tests/release.test.mjs`、`desktop/src-tauri/src/*.rs`（含新增 `diagnostics.rs`）、`desktop/security/glib-variant-iter/tests/variant_str_iter.rs`（保留 `VariantStrIter::nth(0)` 回归断言的 clippy 豁免）、本文与 `progress.txt`。不改 `Cargo.toml` / `Cargo.lock`，不改 SQLite schema。
 
-本机实施验收（2026-11-18）：`tests/release.test.mjs` 新增 `glib-backport` 双端锁定 `1.94.1` `rustfmt` 与 `clippy -D warnings` 门禁测试先红后绿（48/48 通过）。`project_store.rs` 在持有实例 `.lock` 锁前提下通过 SQLite 文件头与 `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` 只读探查确保 `user_version > 2` 或损坏库拒绝时原文件与 `-wal`/`-shm` 字节零篡改，校验通过后启用 `WAL` 与 `synchronous = FULL`，并以 `StoreState::{Uninitialized, Open, Closed}` 配合 `RunEvent::Exit` 执行 `wal_checkpoint(TRUNCATE)` 且杜绝退出后延迟重开。新增 `diagnostics.rs` 实现本机 512 KiB 原子轮转 JSONL 脱敏事件日志、逐级父目录与 Windows 目录句柄 reparse-point 校验、线程局部防重入与锁中毒恢复 panic hook（仅记录线程分类与本包相对源码行列，绝不落盘 panic payload 或用户/凭据内容）。零上下文复审发现的七项边界问题已全部修复并补齐单测；本机 `cargo +1.94.1 fmt --all -- --check`、`cargo +1.94.1 clippy --all-targets --locked -- -D warnings`、`cargo +1.94.1 test --locked`（120 通过、0 失败、2 既有忽略）与四项仓库门禁全部退出 0。
+本机实施验收（2026-11-18）：`tests/release.test.mjs` 新增 `glib-backport` 双端锁定 `1.94.1` `rustfmt` 与 `clippy -D warnings` 门禁测试先红后绿（48/48 通过）。`project_store.rs` 在持有实例 `.lock` 锁前提下通过 SQLite 文件头与 `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` 只读探查确保 `user_version > 2` 或损坏库拒绝时原文件与 `-wal`/`-shm` 字节零篡改，校验通过后启用 `WAL` 与 `synchronous = FULL`，并以 `StoreState::{Uninitialized, Open, Closed}` 配合 `RunEvent::Exit` 执行 `wal_checkpoint(TRUNCATE)` 且杜绝退出后延迟重开。新增 `diagnostics.rs` 实现本机 512 KiB 原子轮转 JSONL 脱敏事件日志、逐级父目录与 Windows 目录句柄 reparse-point 校验、线程局部防重入与锁中毒恢复 panic hook（仅记录线程分类与本包相对源码行列，绝不落盘 panic payload 或用户/凭据内容）。零上下文复审发现的七项边界问题与 Linux 非 Windows 条件编译告警已全部修复并补齐单测；PR [#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51) 十项 CI 全绿并合入 `main@1e3c3e1`。
 
-#### T13B · 类型化错误 `DesktopError` 与耗时 Tauri 命令异步化（范围待确认）
+#### T13B · 类型化错误 `DesktopError` 与耗时 Tauri 命令异步化（已按 #50 批准范围实现，PR 中）
 
 1. **以类型化 `DesktopError` 替代裸 `String` 错误。** 新建 `desktop/src-tauri/src/error.rs`（零新 crate），定义结构化错误枚举（覆盖窗口来源未授权、输入校验失败、运行时资源定位失败、SQLite 分类错误、文件系统 I/O 错误、内部状态锁不可用、版本/状态冲突、后台任务中止等变体），实现 `Display`、`std::error::Error` 与 `serde::Serialize`（序列化输出与现有中文用户提示逐字兼容，确保前端 `invoke` 调用方和全部原生验收脚本契约不变），将各模块命令链路与存储/工具层的 `Result<..., String>` 收敛为 `Result<..., DesktopError>`，并在服务端异常变体上关联 T13A 的脱敏诊断事件码。
 2. **耗时同步命令改异步执行。** 逐一排查现有 38 个同步 `#[tauri::command]`：保留主线程入口处的同步窗口来源鉴权 `runtime::authorize(&window)`，将涉及 SQLite 互斥锁与磁盘查询/事务、备份导入与归档、项目文件与上下文读取、记忆与维护状态读写、系统通知持久化及 `model_request` 进程启动/管道写入的命令改为 `async fn` 加 `tauri::async_runtime::spawn_blocking`，消除主界面线程阻塞；对 `spawn_blocking` join 失败统一映射为 `DesktopError::TaskAborted` 并记录诊断事件。核对 `run_cancel`、`model_cancel` 等取消路径并发调用不死锁、不退化。
 3. **验证与回归。** 新增 Rust 单元测试覆盖 `DesktopError` 各变体序列化文本、错误分类转换、并发异步命令与取消竞争；跑通 `cargo fmt --check`、`cargo clippy --all-targets --locked -- -D warnings`、`cargo test --locked`、`npm --prefix desktop run build` 与 §2 四项门禁，经零上下文子代理冷读复审与全部 PR CI 通过后交付。
 
 **T13B 允许变更的文件。** `desktop/src-tauri/src/*.rs`（含新增 `error.rs`）、必要的桌面桥接回归测试、本文与 `progress.txt`。不改 `Cargo.toml` / `Cargo.lock`，不改前端公开 IPC 参数与返回结构。
+
+本机实施验收（2026-11-18）：新增 `desktop/src-tauri/src/error.rs` 定义 8 变体结构化错误枚举 `DesktopError`（`Unauthorized`、`Validation`、`RuntimeUnavailable`、`Database`、`Io`、`StateUnavailable`、`Conflict`、`TaskAborted`），保持 IPC 序列化与中文提示逐字一致并联动脱敏诊断事件码；全模块 193 处 `Result<..., String>` 已全部收敛为 `DesktopResult<...>`（残留 0 处）。46 个 `#[tauri::command]` 全部统一为 `async fn`（入口同步执行 `runtime::authorize(&window)` 后经 `run_blocking` / `spawn_blocking` 将 SQLite、文件系统、凭据库、工具进程与 broker 管道操作移出界面线程），`ModelBridge` 改为 `Arc<ModelBridgeInner>` 单次 Drop 语义避免异步克隆误关子进程。零上下文冷读复审指出的 `ToolRunner` 复用 `run_id` ABA 竞争（已通过单调令牌 `next_token: AtomicU64` 修复并经先红后绿单测验证）、`run_internal_guarded` 前置/后置阻塞收敛、`run_cancel` 异步化及维护状态分类一致性已全部修复并二次复核通过。本机 `cargo +1.94.1 fmt --all -- --check`、`cargo +1.94.1 clippy --all-targets --locked -- -D warnings`、`cargo +1.94.1 test --locked`（125 通过、0 失败、2 既有忽略）、`npm --prefix desktop run build`（启动包 `735.10 kB` / gzip `241.25 kB`）与仓库四项门禁全部退出 0。
 
 **功能项**（编号与 `docs/25` §8 一致）
 
@@ -652,4 +654,4 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并；T11C1 CLI 显式证据已按 [#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47) 批准范围实施，状态为 PR 中，之后再定 baseline 契约。通用基线和验证命令见 §2。
 
-桌面与工程底座工作线的 T12A 已通过 [#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48) 合并并完成云端 `windows-latest` 安装器演练验收（[run #44143313945](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/44143313945)）；T13 范围已通过 [#50](https://github.com/YEowo-Y/weapp-shipmate/pull/50) 合并，T13A 已按批准范围实现，状态为 PR 中，之后实施 T13B。
+桌面与工程底座工作线的 T12A 已通过 [#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48) 合并并完成云端 `windows-latest` 安装器演练验收（[run #44143313945](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/44143313945)）；T13 范围已通过 [#50](https://github.com/YEowo-Y/weapp-shipmate/pull/50) 合并，T13A 已通过 [#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51) 合入 `main@1e3c3e1`，T13B 已按批准范围实现，状态为 PR 中，之后推进 T14（前端收敛第一步）。

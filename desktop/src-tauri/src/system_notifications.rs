@@ -2,7 +2,7 @@
 use crate::project_store::{db_error, decode, encode, id, now, ProjectStore};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
@@ -69,8 +69,8 @@ pub struct Snapshot {
     installation_required: bool,
     last_attempt: Option<Attempt>,
 }
-#[derive(Default)]
-pub struct SystemNotifications(Mutex<()>);
+#[derive(Clone, Default)]
+pub struct SystemNotifications(Arc<Mutex<()>>);
 
 trait Backend {
     fn permission(&self) -> Permission;
@@ -107,12 +107,16 @@ impl Backend for Plugin<'_> {
             .map_err(|_| ())
     }
 }
-fn read(c: &Connection) -> Result<Settings, String> {
+fn read(c: &Connection) -> crate::error::DesktopResult<Settings> {
     let raw: Option<Option<String>> = c.query_row("SELECT CASE WHEN length(CAST(value AS BLOB))<=65536 THEN value ELSE NULL END FROM settings WHERE key=?", [KEY], |r| r.get(0)).optional().map_err(db_error)?;
     let value: Settings = match raw {
         None => Settings::default(),
         Some(Some(raw)) => decode(raw)?,
-        Some(None) => return Err("系统通知设置超过上限，请检查本地备份。".into()),
+        Some(None) => {
+            return Err(crate::error::DesktopError::database(
+                "系统通知设置超过上限，请检查本地备份。",
+            ))
+        }
     };
     if value.schema_version != 1
         || value.revision > MAX_REVISION
@@ -123,7 +127,9 @@ fn read(c: &Connection) -> Result<Settings, String> {
             .iter()
             .any(|key| key.is_empty() || key.len() > 300 || key.chars().any(char::is_control))
     {
-        return Err("系统通知设置格式无效，请检查本地备份。".into());
+        return Err(crate::error::DesktopError::database(
+            "系统通知设置格式无效，请检查本地备份。",
+        ));
     }
     if let Some(attempt) = &value.last_attempt {
         if !["test", "notice"].contains(&attempt.kind.as_str())
@@ -136,7 +142,9 @@ fn read(c: &Connection) -> Result<Settings, String> {
             .contains(&attempt.outcome)
             || (attempt.kind == "notice") != attempt.notice_id.is_some()
         {
-            return Err("系统通知尝试记录无效。".into());
+            return Err(crate::error::DesktopError::database(
+                "系统通知尝试记录无效。",
+            ));
         }
         if let Some(notice_id) = &attempt.notice_id {
             id(notice_id)?;
@@ -144,7 +152,7 @@ fn read(c: &Connection) -> Result<Settings, String> {
     }
     Ok(value)
 }
-fn write(c: &Connection, value: &Settings) -> Result<(), String> {
+fn write(c: &Connection, value: &Settings) -> crate::error::DesktopResult<()> {
     c.execute("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", params![KEY, encode(value)?]).map_err(db_error)?;
     Ok(())
 }
@@ -180,13 +188,15 @@ fn save(
     backend: &impl Backend,
     expected: u64,
     enabled: bool,
-) -> Result<Snapshot, String> {
+) -> crate::error::DesktopResult<Snapshot> {
     let tx = c
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(db_error)?;
     let mut value = read(&tx)?;
     if value.revision != expected {
-        return Err("系统通知设置已改变，请刷新后重试。".into());
+        return Err(crate::error::DesktopError::conflict(
+            "系统通知设置已改变，请刷新后重试。",
+        ));
     }
     let revision = value
         .revision
@@ -223,7 +233,7 @@ fn dispatch(
     c: &mut Connection,
     backend: &impl Backend,
     notice: Option<(&str, &str, usize)>,
-) -> Result<Snapshot, String> {
+) -> crate::error::DesktopResult<Snapshot> {
     let tx = c
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(db_error)?;
@@ -319,45 +329,93 @@ impl SystemNotifications {
                 Some((project_id, &notice.id, notice.new_count)),
             )
         });
-        if result.is_err() {
+        if let Err(err) = result {
+            crate::diagnostics::record_reason(
+                "system_notifications",
+                "warn",
+                "notification_persist_failed",
+                err.kind(),
+            );
             eprintln!("System notification attempt could not be persisted; report remains saved.");
         }
     }
 }
 #[tauri::command]
-pub fn system_notifications_snapshot(
+pub async fn system_notifications_snapshot(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, SystemNotifications>,
     store: tauri::State<'_, ProjectStore>,
-) -> Result<Snapshot, String> {
+) -> crate::error::DesktopResult<Snapshot> {
     crate::runtime::authorize(&window)?;
-    let _gate = state.0.lock().map_err(|_| "系统通知状态不可用。")?;
-    store.access(&app, |c| Ok(snapshot(&read(c)?, Plugin(&app).permission())))
+    let state = state.inner().clone();
+    let store = store.inner().clone();
+    crate::error::run_blocking(
+        "system_notifications",
+        "读取系统通知设置意外退出，请重试。",
+        move || {
+            let _gate = state.0.lock().map_err(|_| {
+                crate::error::DesktopError::state_unavailable(
+                    "system_notifications",
+                    "系统通知状态不可用。",
+                )
+            })?;
+            store.access(&app, |c| Ok(snapshot(&read(c)?, Plugin(&app).permission())))
+        },
+    )
+    .await
 }
 #[tauri::command]
-pub fn system_notifications_save(
+pub async fn system_notifications_save(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, SystemNotifications>,
     store: tauri::State<'_, ProjectStore>,
     expected_revision: u64,
     enabled: bool,
-) -> Result<Snapshot, String> {
+) -> crate::error::DesktopResult<Snapshot> {
     crate::runtime::authorize(&window)?;
-    let _gate = state.0.lock().map_err(|_| "系统通知状态不可用。")?;
-    store.access(&app, |c| save(c, &Plugin(&app), expected_revision, enabled))
+    let state = state.inner().clone();
+    let store = store.inner().clone();
+    crate::error::run_blocking(
+        "system_notifications",
+        "保存系统通知设置意外退出，请重试。",
+        move || {
+            let _gate = state.0.lock().map_err(|_| {
+                crate::error::DesktopError::state_unavailable(
+                    "system_notifications",
+                    "系统通知状态不可用。",
+                )
+            })?;
+            store.access(&app, |c| save(c, &Plugin(&app), expected_revision, enabled))
+        },
+    )
+    .await
 }
 #[tauri::command]
-pub fn system_notifications_test(
+pub async fn system_notifications_test(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, SystemNotifications>,
     store: tauri::State<'_, ProjectStore>,
-) -> Result<Snapshot, String> {
+) -> crate::error::DesktopResult<Snapshot> {
     crate::runtime::authorize(&window)?;
-    let _gate = state.0.lock().map_err(|_| "系统通知状态不可用。")?;
-    store.access(&app, |c| dispatch(c, &Plugin(&app), None))
+    let state = state.inner().clone();
+    let store = store.inner().clone();
+    crate::error::run_blocking(
+        "system_notifications",
+        "测试系统通知意外退出，请重试。",
+        move || {
+            let _gate = state.0.lock().map_err(|_| {
+                crate::error::DesktopError::state_unavailable(
+                    "system_notifications",
+                    "系统通知状态不可用。",
+                )
+            })?;
+            store.access(&app, |c| dispatch(c, &Plugin(&app), None))
+        },
+    )
+    .await
 }
 
 #[cfg(test)]

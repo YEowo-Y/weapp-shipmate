@@ -35,9 +35,9 @@ struct Message {
     role: String,
     content: String,
 }
-pub(crate) fn permission(body: Option<&str>) -> Result<Permission, String> {
+pub(crate) fn permission(body: Option<&str>) -> crate::error::DesktopResult<Permission> {
     let body: Body = serde_json::from_str(body.ok_or("缺少项目工具授权。")?)
-        .map_err(|_| "项目工具请求无效。")?;
+        .map_err(|_| crate::error::DesktopError::validation("项目工具请求无效。"))?;
     if body.model.trim().is_empty()
         || body.model.len() > 256
         || body.messages.is_empty()
@@ -51,7 +51,9 @@ pub(crate) fn permission(body: Option<&str>) -> Result<Permission, String> {
         || !valid_id(&body.agent.project_id)
         || !valid_id(&body.agent.session_id)
     {
-        return Err("项目工具请求或授权无效。".into());
+        return Err(crate::error::DesktopError::validation(
+            "项目工具请求或授权无效。",
+        ));
     }
     // Required boolean, separate from local read permission; enforced by the model adapter.
     let _share_results = body.agent.share_results;
@@ -131,9 +133,11 @@ impl AgentTools {
         app: &tauri::AppHandle,
         request_id: &str,
         permission: Permission,
-    ) -> Result<(), String> {
+    ) -> crate::error::DesktopResult<()> {
         project_store::active_agent_project(app, &permission.project_id)?;
-        let mut registry = self.0.lock().map_err(|_| "项目工具授权不可用。")?;
+        let mut registry = self.0.lock().map_err(|_| {
+            crate::error::DesktopError::state_unavailable("agent_tools", "项目工具授权不可用。")
+        })?;
         if registry.used.len() >= 10000
             || registry.used.contains(request_id)
             || registry
@@ -141,7 +145,9 @@ impl AgentTools {
                 .values()
                 .any(|g| g.session_id == permission.session_id)
         {
-            return Err("此会话已有任务或请求编号已使用，请停止后新建请求。".into());
+            return Err(crate::error::DesktopError::conflict(
+                "此会话已有任务或请求编号已使用，请停止后新建请求。",
+            ));
         }
         registry.used.insert(request_id.to_owned());
         registry.grants.insert(
@@ -292,15 +298,15 @@ fn claim(grant: &mut Grant, tool_call_id: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
-fn bounded(value: &Value, limit: usize) -> Result<&str, String> {
+fn bounded(value: &Value, limit: usize) -> crate::error::DesktopResult<&str> {
     value
         .as_str()
         .filter(|v| {
             !v.is_empty() && v.encode_utf16().count() <= limit && !v.chars().any(char::is_control)
         })
-        .ok_or_else(|| "工具摘要字段无效。".into())
+        .ok_or_else(|| crate::error::DesktopError::validation("工具摘要字段无效。"))
 }
-fn project(artifact: &project_store::Artifact) -> Result<Value, String> {
+fn project(artifact: &project_store::Artifact) -> crate::error::DesktopResult<Value> {
     let data = artifact.data.as_ref().ok_or("缺少结构化结果。")?;
     if data["schemaVersion"] != 1
         || data["kind"] != artifact.kind
