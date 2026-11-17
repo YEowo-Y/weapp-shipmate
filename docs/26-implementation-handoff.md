@@ -612,7 +612,7 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 本机实施验收（2026-11-18）：`tests/release.test.mjs` 新增 `glib-backport` 双端锁定 `1.94.1` `rustfmt` 与 `clippy -D warnings` 门禁测试先红后绿（48/48 通过）。`project_store.rs` 在持有实例 `.lock` 锁前提下通过 SQLite 文件头与 `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` 只读探查确保 `user_version > 2` 或损坏库拒绝时原文件与 `-wal`/`-shm` 字节零篡改，校验通过后启用 `WAL` 与 `synchronous = FULL`，并以 `StoreState::{Uninitialized, Open, Closed}` 配合 `RunEvent::Exit` 执行 `wal_checkpoint(TRUNCATE)` 且杜绝退出后延迟重开。新增 `diagnostics.rs` 实现本机 512 KiB 原子轮转 JSONL 脱敏事件日志、逐级父目录与 Windows 目录句柄 reparse-point 校验、线程局部防重入与锁中毒恢复 panic hook（仅记录线程分类与本包相对源码行列，绝不落盘 panic payload 或用户/凭据内容）。零上下文复审发现的七项边界问题与 Linux 非 Windows 条件编译告警已全部修复并补齐单测；PR [#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51) 十项 CI 全绿并合入 `main@1e3c3e1`。
 
-#### T13B · 类型化错误 `DesktopError` 与耗时 Tauri 命令异步化（已按 #50 批准范围实现，PR 中）
+#### T13B · 类型化错误 `DesktopError` 与耗时 Tauri 命令异步化（已验收）
 
 1. **以类型化 `DesktopError` 替代裸 `String` 错误。** 新建 `desktop/src-tauri/src/error.rs`（零新 crate），定义结构化错误枚举（覆盖窗口来源未授权、输入校验失败、运行时资源定位失败、SQLite 分类错误、文件系统 I/O 错误、内部状态锁不可用、版本/状态冲突、后台任务中止等变体），实现 `Display`、`std::error::Error` 与 `serde::Serialize`（序列化输出与现有中文用户提示逐字兼容，确保前端 `invoke` 调用方和全部原生验收脚本契约不变），将各模块命令链路与存储/工具层的 `Result<..., String>` 收敛为 `Result<..., DesktopError>`，并在服务端异常变体上关联 T13A 的脱敏诊断事件码。
 2. **耗时同步命令改异步执行。** 逐一排查现有 38 个同步 `#[tauri::command]`：保留主线程入口处的同步窗口来源鉴权 `runtime::authorize(&window)`，将涉及 SQLite 互斥锁与磁盘查询/事务、备份导入与归档、项目文件与上下文读取、记忆与维护状态读写、系统通知持久化及 `model_request` 进程启动/管道写入的命令改为 `async fn` 加 `tauri::async_runtime::spawn_blocking`，消除主界面线程阻塞；对 `spawn_blocking` join 失败统一映射为 `DesktopError::TaskAborted` 并记录诊断事件。核对 `run_cancel`、`model_cancel` 等取消路径并发调用不死锁、不退化。
@@ -620,7 +620,39 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 **T13B 允许变更的文件。** `desktop/src-tauri/src/*.rs`（含新增 `error.rs`）、必要的桌面桥接回归测试、本文与 `progress.txt`。不改 `Cargo.toml` / `Cargo.lock`，不改前端公开 IPC 参数与返回结构。
 
-本机实施验收（2026-11-18）：新增 `desktop/src-tauri/src/error.rs` 定义 8 变体结构化错误枚举 `DesktopError`（`Unauthorized`、`Validation`、`RuntimeUnavailable`、`Database`、`Io`、`StateUnavailable`、`Conflict`、`TaskAborted`），保持 IPC 序列化与中文提示逐字一致并联动脱敏诊断事件码；全模块 193 处 `Result<..., String>` 已全部收敛为 `DesktopResult<...>`（残留 0 处）。46 个 `#[tauri::command]` 全部统一为 `async fn`（入口同步执行 `runtime::authorize(&window)` 后经 `run_blocking` / `spawn_blocking` 将 SQLite、文件系统、凭据库、工具进程与 broker 管道操作移出界面线程），`ModelBridge` 改为 `Arc<ModelBridgeInner>` 单次 Drop 语义避免异步克隆误关子进程。零上下文冷读复审指出的 `ToolRunner` 复用 `run_id` ABA 竞争（已通过单调令牌 `next_token: AtomicU64` 修复并经先红后绿单测验证）、`run_internal_guarded` 前置/后置阻塞收敛、`run_cancel` 异步化及维护状态分类一致性已全部修复并二次复核通过。本机 `cargo +1.94.1 fmt --all -- --check`、`cargo +1.94.1 clippy --all-targets --locked -- -D warnings`、`cargo +1.94.1 test --locked`（125 通过、0 失败、2 既有忽略）、`npm --prefix desktop run build`（启动包 `735.10 kB` / gzip `241.25 kB`）与仓库四项门禁全部退出 0。
+本机实施验收（2026-11-18）：新增 `desktop/src-tauri/src/error.rs` 定义 8 变体结构化错误枚举 `DesktopError`（`Unauthorized`、`Validation`、`RuntimeUnavailable`、`Database`、`Io`、`StateUnavailable`、`Conflict`、`TaskAborted`），保持 IPC 序列化与中文提示逐字一致并联动脱敏诊断事件码；全模块 193 处 `Result<..., String>` 已全部收敛为 `DesktopResult<...>`（残留 0 处）。46 个 `#[tauri::command]` 全部统一为 `async fn`（入口同步执行 `runtime::authorize(&window)` 后经 `run_blocking` / `spawn_blocking` 将 SQLite、文件系统、凭据库、工具进程与 broker 管道操作移出界面线程），`ModelBridge` 改为 `Arc<ModelBridgeInner>` 单次 Drop 语义避免异步克隆误关子进程。零上下文冷读复审指出的 `ToolRunner` 复用 `run_id` ABA 竞争（已通过单调令牌 `next_token: AtomicU64` 修复并经先红后绿单测验证）、`run_internal_guarded` 前置/后置阻塞收敛、`run_cancel` 异步化及维护状态分类一致性已全部修复并二次复核通过。本机 `cargo +1.94.1 fmt --all -- --check`、`cargo +1.94.1 clippy --all-targets --locked -- -D warnings`、`cargo +1.94.1 test --locked`（125 通过、0 失败、2 既有忽略）、`npm --prefix desktop run build`（启动包 `735.10 kB` / gzip `241.25 kB`）与仓库四项门禁全部退出 0；PR [#52](https://github.com/YEowo-Y/weapp-shipmate/pull/52) 十项 CI 全绿并合入 `main@78bf814`（期间因私有仓库 Actions 额度用尽，已完成全部 51 个 Git 引用/历史对象、52 个 Issue/PR 评论及全部 Release 资产的零敏感信息安全核查后切换为 `public` 仓库）。
+
+### T14 · 前端收敛第一步
+
+**目标与关口。** 完成第二阶段工程底座最后一项（功能 0「新外壳」的前置依赖）：将 `desktop/**` 纳入 ESLint 与 TypeScript 类型检查门禁，把正式桌面运行链引用的模块与样式从 `desktop/design-previews/` 迁入 `desktop/src/`，消除 `desktop/src`、`desktop/server`、`desktop/scripts` 与 `desktop/index.html` 对 `design-previews` 的全部运行期依赖，并保持启动包严格处于 `750 kB` / gzip `250 kB` 预算内。本工单**不涉及新增生产依赖**（仅在根 `devDependencies` 引入与既有 `eslint@10.15.0` 和 `desktop` 锁定版 `typescript@~5.6.2` 匹配的 `typescript-eslint` 以解析 `.ts`/`.tsx`），不改 CLI/MCP/IPC 公共契约，无 §3 关口。
+
+**探查结果（2026-11-18，独立工作树 `main@78bf814`）**
+
+- **`design-previews` 依赖闭包**：`desktop/src` 现有 33 个 `.ts`、6 个 `.tsx`、20 个 `.css` 文件，其中 20 个源文件含 **51 条**指向 `../design-previews/...` 的 import（直接命中 19 个模块，传递闭包共 **36 个无类型 `.js` 模块、6158 行**外加 `floating-ui`、`markdown-it`、`web-awesome` 三组本地 vendor 产物）；此外 `desktop/index.html` 含 **9 条** `/design-previews/...` 样式表 `<link>`，`desktop/server/*.mjs` 含 **7 条**指向 `agent-contract.js` / `explain-contract.js` / `guide-contract.js` 的 import，`desktop/scripts/prepare-runtime.mjs` 显式打包这 3 份契约文件，`desktop/scripts/build-ui-kit.mjs` 输出到 `design-previews/components/vendor/web-awesome`。
+- **多端运行期兼容约束**：`ci.yml` 在 Node 20 / 22 / 24 矩阵上直接以 `node --test` 运行 `tests/*.test.mjs`（其中 74 个测试文件直接 import `../desktop/design-previews/*.js`，Node 20 原生不支持直接加载 `.ts`），且 `desktop/design-previews/*.html` 独立静态预览页亦直接加载同目录模块。因此将 36 个运行期模块与对应样式、本地 vendor 产物迁入 `desktop/src/shared/` 作为唯一真实源码，同时在 `desktop/design-previews/` 原路径保留单行 `export *` / `@import` 薄转发垫片（零业务逻辑复制），即可彻底切断正式桌面链对 `design-previews` 的依赖，又不破坏 Node 20–24 测试套件与历史静态预览页。
+- **ESLint 与类型检查基线**：根 `eslint.config.mjs` 第 11 行当前整体忽略 `"desktop/**"`；对 `desktop/{scripts,server,design-previews}` 试跑 `eslint:recommended` 检出 25 个文件因默认参数依赖注入（如 `document = globalThis.document`）触发内置全局重声明。类型侧 `desktop/src/shared.d.ts` 当前用 15 段 `declare module '*...'` 通配环境声明遮蔽真实实现，且 `tsc` 仅在 `glib-backport` 运行而未进入 `ci.yml` 六腿矩阵；开启 `allowJs: true, checkJs: true` 后排除压缩 vendor 捆绑包，真实模块结构性类型诊断集中于 DOM 空值收窄与跨模块参数标注，可逐模块补齐 JSDoc/类型声明并淘汰通配遮蔽声明。
+- **启动包预算现状**：`npm --prefix desktop run build` 产出启动入口 `735.10 kB`、gzip `241.25 kB`（预算上限 `750 kB` / `250 kB`，`settings-renderer` 保持异步分包）。
+
+**实施步骤与判据**
+
+1. **先补前端收敛与工作流门禁回归测试（先红后绿）。** 新建 `tests/desktop-frontend-convergence.test.mjs`，并在 `tests/release.test.mjs` 补工作流断言：
+   - `desktop/src/**`、`desktop/server/**`、`desktop/scripts/**` 与 `desktop/index.html` 中不得存在任何指向 `design-previews` 的可执行 `import`/`export`/`<link>`/`<script>` 引用（注释中的历史文档说明除外）；
+   - `eslint.config.mjs` 不再整体忽略 `desktop/**`，且对正式桌面目录配置禁止导入 `*design-previews*` 的规则；
+   - `desktop/src/shared.d.ts` 不再保留覆盖已迁入模块的通配 `declare module '*...'` 遮蔽声明；
+   - `.github/workflows/ci.yml`、`.github/workflows/release-rehearsal.yml` 与 `.github/workflows/release.yml` 均显式执行桌面类型检查 `npm --prefix desktop run typecheck`。
+   判据：实施迁移前，`node --test tests/desktop-frontend-convergence.test.mjs tests/release.test.mjs` 因上述新增断言变红。
+2. **迁入共享运行期模块与样式，切断 `design-previews` 依赖。** 将正式桌面闭包内的 36 个 `.js` 模块、9 份样式表及本地受审 vendor 资源（含 `web-awesome` 的 `manifest.json` 与 `THIRD-PARTY-NOTICES.txt`）迁入 `desktop/src/shared/`：
+   - 更新 `desktop/src/**` 全部 51 处 import、`desktop/index.html` 全部 9 处样式引用、`desktop/server/*.mjs` 全部 7 处契约引用、`desktop/scripts/build-ui-kit.mjs` 输出目录，以及 `desktop/scripts/prepare-runtime.mjs` 与 `tests/desktop-runtime-package.test.mjs`、`tests/ui-kit-assets.test.mjs`、`tests/helpers/ui-action.mjs` 的契约/资源路径；
+   - 在 `desktop/design-previews/` 对应原路径留下单行 `export *` / `@import` 转发垫片以保持历史预览页与既有单测兼容。
+   判据：`npm --prefix desktop run prepare:runtime` 与 `node --test tests/desktop-runtime-package.test.mjs tests/ui-kit-assets.test.mjs` 全部通过；正式桌面目录零 `design-previews` 运行引用。
+3. **接入 `desktop/**` 全量 ESLint 与严格类型检查并进 CI。**
+   - 在根 `devDependencies` 增加 `typescript-eslint`（`8.73.0`，兼容 `eslint@10.15.0` 与 Node ≥20）及匹配的 `typescript`（`~5.6.2`），核对 `npm audit` 为 0 告警且 `npm pack --dry-run` / `npm publish --dry-run` 生产包文件清单不变；更新 `eslint.config.mjs` 覆盖 `desktop/**/*.{js,mjs,ts,tsx}`（仅忽略 `node_modules`、`dist`、`src-tauri` 构建/运行产物与第三方压缩 `vendor` 文件），开启 `*design-previews*` 禁引规则并修复检出的静态质量问题；
+   - 在 `desktop/package.json` 新增 `"typecheck"` 脚本，启用 `allowJs: true`、`checkJs: true` 覆盖 `desktop/src/**`（含全部 36 个迁入模块，仅为压缩 vendor 包保留精确 `.d.ts` 边界声明）、`desktop/vite.config.ts`、`desktop/server/**/*.mjs` 与 `desktop/scripts/**/*.{js,mjs}`，补齐类型标注并移除 `desktop/src/shared.d.ts` 中的通配遮蔽声明；
+   - 在 `ci.yml`、`release-rehearsal.yml` 与 `release.yml` 接入 `npm --prefix desktop run typecheck`。
+   判据：`npm run lint`、`npm --prefix desktop run typecheck` 与 `npm --prefix desktop run build` 均退出码 0；第 1 步新增门禁测试全部变绿。
+4. **包体积预算、前端审查与全量门禁验收。** 实跑核对 `desktop/dist/.vite/bundle-budget.json`：启动包原始字节 `<= 750,000`、gzip `<= 250,000`、`errors` 为空且 `settings-renderer` 保持延迟加载；使用前端审查助手与零上下文子代理冷读复审迁移边界、类型真实性与可访问性/安全回归；跑通 §2 四项仓库门禁与全部 PR CI。
+
+**允许变更的文件。** `eslint.config.mjs`、根 `package.json` 与 `package-lock.json`（仅 `devDependencies`）、`desktop/package.json`（仅新增 `typecheck` 脚本，不改 `dependencies`）、`desktop/tsconfig*.json`、`desktop/index.html`、`desktop/src/**`、`desktop/server/*.mjs`、`desktop/scripts/{build-ui-kit.mjs,prepare-runtime.mjs}`、`desktop/design-previews/**`（被迁出文件的单行转发垫片与必要的静态错误修复）、`.github/workflows/{ci.yml,release-rehearsal.yml,release.yml}`、相关测试文件、本文与 `progress.txt`。
 
 **功能项**（编号与 `docs/25` §8 一致）
 
@@ -654,4 +686,4 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并；T11C1 CLI 显式证据已按 [#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47) 批准范围实施，状态为 PR 中，之后再定 baseline 契约。通用基线和验证命令见 §2。
 
-桌面与工程底座工作线的 T12A 已通过 [#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48) 合并并完成云端 `windows-latest` 安装器演练验收（[run #44143313945](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/44143313945)）；T13 范围已通过 [#50](https://github.com/YEowo-Y/weapp-shipmate/pull/50) 合并，T13A 已通过 [#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51) 合入 `main@1e3c3e1`，T13B 已按批准范围实现，状态为 PR 中，之后推进 T14（前端收敛第一步）。
+桌面与工程底座工作线的 T12A（[#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48)）与 T13A（[#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51)）、T13B（[#52](https://github.com/YEowo-Y/weapp-shipmate/pull/52)，`main@78bf814`）均已完成合并与云端 CI 验收；期间因私有仓库 Actions 额度耗尽，经全仓库历史、评论与发布资产安全脱敏核查后已切换为公开仓库。当前提交 T14（前端收敛第一步）范围稿，范围 PR 通过后立即实施 T14，随后进入功能 0（新外壳）等公测功能项。
