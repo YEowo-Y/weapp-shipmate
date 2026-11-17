@@ -4,6 +4,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, basename, extname, relative, resolve } from "node:path";
 import { createHash } from "node:crypto";
+import { mapText, removeMapped, createEvidenceCollector } from "./scanner-evidence.mjs";
 
 // 目录忽略
 const IGNORE_DIRS = new Set([
@@ -234,35 +235,36 @@ function scanRegexLiteral(text, i) {
  * WXML/HTML 注释由 scanProject 对模板类文件先行剥离——
  * 对模板级信号（组件标签/属性）而言，注释掉的组件不剥会直接产生误报，不是"少剥一处"。
  */
-export function stripComments(text, regexAware = false) {
+export function stripComments(text, regexAware = false, emit) {
   let out = "";
-  let str = null; // 当前字符串定界符（' " 或 反引号），null 表示不在字符串内
+  const append = (start, end) => { out += text.slice(start, end); emit?.(start, end); };
+  let str = null;
   for (let i = 0, n = text.length; i < n; ) {
     const c = text[i];
     if (str) {
-      out += c;
-      if (c === "\\") { if (i + 1 < n) out += text[i + 1]; i += 2; continue; } // 转义：原样保留下一字符
+      append(i, i + 1);
+      if (c === "\\") { if (i + 1 < n) append(i + 1, i + 2); i += 2; continue; }
       if (c === str) str = null;
       i += 1;
       continue;
     }
-    if (c === "/" && text[i + 1] === "/") { // 行注释：跳到行尾（保留换行）
+    if (c === "/" && text[i + 1] === "/") {
       i += 2;
       while (i < n && text[i] !== "\n") i += 1;
       continue;
     }
-    if (c === "/" && text[i + 1] === "*") { // 块注释：跳到 */（保留其中换行以维持行结构）
+    if (c === "/" && text[i + 1] === "*") {
       i += 2;
-      while (i < n && !(text[i] === "*" && text[i + 1] === "/")) { if (text[i] === "\n") out += "\n"; i += 1; }
+      while (i < n && !(text[i] === "*" && text[i + 1] === "/")) { if (text[i] === "\n") append(i, i + 1); i += 1; }
       i += 2;
       continue;
     }
-    if (regexAware && c === "/" && inRegexPosition(out)) { // R3：正则字面量原样保留、整体跳过
+    if (regexAware && c === "/" && inRegexPosition(out)) {
       const end = scanRegexLiteral(text, i);
-      if (end > 0) { out += text.slice(i, end); i = end; continue; }
+      if (end > 0) { append(i, end); i = end; continue; }
     }
-    if (c === '"' || c === "'" || c === "`") str = c; // 进入字符串
-    out += c;
+    if (c === '"' || c === "'" || c === "\x60") str = c;
+    append(i, i + 1);
     i += 1;
   }
   return out;
@@ -273,23 +275,24 @@ export function stripComments(text, regexAware = false) {
  *  文案/日志引用 API 名这一常见场景不误报）。
  *  regexAware=true（仅 JS_EXT 文件）时整个正则字面量置为中性 token `0`（R3）——
  *  正则文本里的 API 名不是真实调用，且 `0` 保持后续 `/` 的除号语义与字面量后一致。 */
-export function blankStrings(text, regexAware = false) {
+export function blankStrings(text, regexAware = false, emit) {
   let out = "";
-  let str = null; // 当前字符串定界符，null 表示不在字符串内
+  const append = i => { out += text[i]; emit?.(i, i + 1); };
+  let str = null;
   for (let i = 0, n = text.length; i < n; ) {
     const c = text[i];
     if (str) {
-      if (c === "\\") { i += 2; continue; } // 转义：连转义字符一起置空
-      if (c === str) { out += c; str = null; }
+      if (c === "\\") { i += 2; continue; }
+      if (c === str) { append(i); str = null; }
       i += 1;
       continue;
     }
-    if (regexAware && c === "/" && inRegexPosition(out)) { // R3
+    if (regexAware && c === "/" && inRegexPosition(out)) {
       const end = scanRegexLiteral(text, i);
-      if (end > 0) { out += "0"; i = end; continue; }
+      if (end > 0) { out += "0"; emit?.(i, i + 1); i = end; continue; }
     }
-    if (c === '"' || c === "'" || c === "`") str = c;
-    out += c;
+    if (c === '"' || c === "'" || c === "\x60") str = c;
+    append(i);
     i += 1;
   }
   return out;
@@ -320,21 +323,29 @@ const COND_LINE_RE = /^\s*(?:\/\/|<!--|\/\*|#)\s*#(ifdef|ifndef|endif)\b([^\n]*?
 
 /** 剔除 uni-app 中不参与微信小程序编译的条件分支（H5 / APP / 其它小程序端）。
  *  必须在 stripComments 之前对原文执行——条件编译标记本身是注释，会被 stripComments 抹掉。 */
-export function stripUniConditional(text) {
-  if (!/#if(?:n)?def\b/.test(text)) return text; // 无条件编译标记，快路径原样返回
+export function stripUniConditional(text, emit) {
+  if (!/#if(?:n)?def\b/.test(text)) { emit?.(0, text.length); return text; }
   const out = [];
-  const keepStack = []; // 每层是否保留；嵌套时全部为真才输出
+  const keepStack = [];
   const kept = () => keepStack.every(Boolean);
+  let offset = 0, previousEnd = 0;
   for (const line of text.split("\n")) {
+    const start = offset;
+    offset += line.length + 1;
     const m = line.match(COND_LINE_RE);
     if (m) {
       if (m[1] === "endif") { keepStack.pop(); continue; }
       const expr = m[2].replace(/-->|\*\//g, "").trim();
       const strip = m[1] === "ifdef" ? ifdefStrips(expr) : ifndefStrips(expr);
       keepStack.push(!strip);
-      continue; // 标记行本身不输出
+      continue;
     }
-    if (kept()) out.push(line);
+    if (kept()) {
+      if (out.length) emit?.(previousEnd, previousEnd + 1);
+      out.push(line);
+      emit?.(start, start + line.length);
+      previousEnd = start + line.length;
+    }
   }
   return out.join("\n");
 }
@@ -369,23 +380,40 @@ const isConfigCarrier = (base) =>
  * 提取 API 调用、域名、明文/动态请求、模板级隐私信号、密钥键名，累加进 facts。
  * 返回剥离后的 code，供配置载体解析复用（JSONC 注释已剥）。
  */
-function extractFacts(file, text, rel, facts) {
+function extractFacts(file, text, rel, facts, record) {
   // 先剔除 uni-app 非微信端的条件编译分支，模板类文件再剥 HTML 注释，之后剥 JS 注释，最后在结果上提取事实。
   const regexAware = JS_EXT.has(extname(file)); // R3：正则字面量感知仅对纯 JS 文件启用（模板见 JS_EXT 注释）
-  let code = stripUniConditional(text);
-  if (TEMPLATE_EXT.has(extname(file))) code = code.replace(HTML_COMMENT_RE, "");
-  code = stripComments(code, regexAware);
+  let code, sourceMap;
+  if (record) {
+    let mapped = mapText(text, null, stripUniConditional);
+    if (TEMPLATE_EXT.has(extname(file))) mapped = removeMapped(mapped.text, mapped.map, HTML_COMMENT_RE);
+    mapped = mapText(mapped.text, mapped.map, (value, emit) => stripComments(value, regexAware, emit));
+    code = mapped.text;
+    sourceMap = mapped.map;
+  } else {
+    code = stripUniConditional(text);
+    if (TEMPLATE_EXT.has(extname(file))) code = code.replace(HTML_COMMENT_RE, "");
+    code = stripComments(code, regexAware);
+  }
   // API 提取与动态请求判定（除①外）用字符串置空副本：日志/文案里引用的 "wx.getLocation"、
   // "wx.request(cfg)" 不是真实调用；其余提取（URL/密钥/模板属性/配置解析）都依赖字符串内容，
   // 必须继续用原文本。
-  const blanked = blankStrings(code, regexAware);
-  for (const m of blanked.matchAll(API_RE)) facts.apis.add(`${m[1]}.${m[2]}`);
+  const mappedBlank = record ? mapText(code, sourceMap, (value, emit) => blankStrings(value, regexAware, emit)) : null;
+  const blanked = mappedBlank ? mappedBlank.text : blankStrings(code, regexAware);
+  for (const m of blanked.matchAll(API_RE)) {
+    const signal = `${m[1]}.${m[2]}`;
+    facts.apis.add(signal);
+    record?.("api-reference", signal, mappedBlank.map, m.index);
+  }
   // R4：Taro 具名导入 → wx.* 等价事实（在字符串未置空的 code 上匹配，模块名是字符串字面量）。
   if (regexAware) {
     for (const m of code.matchAll(TARO_IMPORT_RE)) {
       for (const entry of m[1].split(",")) {
         const name = entry.split(/\s+as\s+/)[0].trim();
-        if (/^[a-zA-Z][a-zA-Z0-9]*$/.test(name)) facts.apis.add(`wx.${name}`);
+        if (/^[a-zA-Z][a-zA-Z0-9]*$/.test(name)) {
+          facts.apis.add(`wx.${name}`);
+          record?.("api-import", `wx.${name}`, sourceMap, m.index);
+        }
       }
     }
   }
@@ -393,11 +421,15 @@ function extractFacts(file, text, rel, facts) {
     const host = normalizeHost(m[3]); // 去端口/userinfo，防止绕过精确匹配的安全核验
     if (!isPlausibleHost(host)) continue; // 跳过 `${host}` 等模板占位/非法 host 噪声
     facts.domains.add(host);
+    record?.("domain", host, sourceMap, m.index + 1);
   }
   // 明文请求：仅取请求 API 调用里 url: 的 http/ws（不含媒体 src、navigator/href、mock 数据的 url 字段）
   for (const m of code.matchAll(INSECURE_REQUEST_RE)) {
     const host = normalizeHost(m[2]);
-    if (isPlausibleHost(host)) facts.insecureHosts.add(host);
+    if (isPlausibleHost(host)) {
+      facts.insecureHosts.add(host);
+      record?.("insecure-request", host, sourceMap, m.index);
+    }
   }
   if (
     !facts.dynamicRequest &&
@@ -405,13 +437,20 @@ function extractFacts(file, text, rel, facts) {
       REQUEST_DYNAMIC_ON_CODE.some((re) => re.test(code)))
   )
     facts.dynamicRequest = true;
-  if (PHONE_BTN_RE.test(code)) facts.configKeys.add("button.open-type=getPhoneNumber");
-  if (AVATAR_BTN_RE.test(code)) facts.configKeys.add("button.open-type=chooseAvatar");
-  if (CAMERA_TAG_RE.test(code)) facts.configKeys.add("component.camera");
-  if (LIVE_PUSHER_TAG_RE.test(code)) facts.configKeys.add("component.live-pusher");
-  if (WEB_VIEW_TAG_RE.test(code)) facts.configKeys.add("component.web-view");
-  // 只取键名（m[1]）与相对路径，永不读取/记录密钥值本身。
-  for (const m of code.matchAll(SECRET_RE)) facts.secretHints.add(`${rel}::${m[1].toLowerCase()}`);
+  for (const [pattern, signal] of [
+    [PHONE_BTN_RE, "button.open-type=getPhoneNumber"], [AVATAR_BTN_RE, "button.open-type=chooseAvatar"],
+    [CAMERA_TAG_RE, "component.camera"], [LIVE_PUSHER_TAG_RE, "component.live-pusher"],
+    [WEB_VIEW_TAG_RE, "component.web-view"],
+  ]) {
+    if (pattern.test(code)) facts.configKeys.add(signal);
+    if (record) for (const m of code.matchAll(new RegExp(pattern.source, "g")))
+      record("config-key", signal, sourceMap, m.index);
+  }
+  // Record only the key and its position, never the matched value.
+  for (const m of code.matchAll(SECRET_RE)) {
+    facts.secretHints.add(`${rel}::${m[1].toLowerCase()}`);
+    record?.("secret-key", m[1].toLowerCase(), sourceMap, m.index);
+  }
   return code;
 }
 
@@ -469,7 +508,8 @@ function parseAppConfig(base, code, rel, facts) {
  * @param {{maxEntries?:number}} opts 仅供内部/测试注入更小的遍历预算；默认使用 MAX_WALK_ENTRIES
  * @returns {{ filesScanned:number, apis:string[], domains:string[], dynamicRequest:boolean, configKeys:string[] }}
  */
-export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES } = {}) {
+export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES, evidence = false } = {}) {
+  const collector = evidence ? createEvidenceCollector() : null;
   const facts = {
     apis: new Set(),
     domains: new Set(),
@@ -509,8 +549,14 @@ export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES } = {}) {
     filesScanned++;
     scannedFiles.push(relative(dir, file).replace(/\\/g, "/"));
     const rel = relSafe(file);
-    const code = extractFacts(file, text, rel, facts);
-    parseAppConfig(basename(file), code, rel, facts);
+    const record = collector?.forFile(rel, text);
+    const code = extractFacts(file, text, rel, facts, record);
+    // The parser confirms each key; JSON source offsets are unavailable, so report file-only evidence.
+    const configFacts = record ? { ...facts, configKeys: { add(key) {
+      facts.configKeys.add(key);
+      record("config-key", key);
+    } } } : facts;
+    parseAppConfig(basename(file), code, rel, configFacts);
   }
 
   return {
@@ -536,6 +582,7 @@ export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES } = {}) {
       return { file, key };
     }),
     insecureHosts: [...facts.insecureHosts].sort(),
+    ...(collector ? { evidence: collector.result() } : {}),
   };
 }
 
