@@ -83,6 +83,22 @@ node bin/weapp-shipmate.mjs guide --subject personal --json --json-version 1
 node bin/weapp-shipmate.mjs explain "诱导分享" --json --json-version 1
 ```
 
+`check` 和 `guide` 可通过 `--config ./shipmate.json`（或 `--config=./shipmate.json`）复用项目事实与阈值。文件为 UTF-8 JSON，格式由 [CLI 配置 v1 schema](schemas/cli-config-v1.schema.json) 定义：
+
+```json
+{
+  "schemaVersion": 1,
+  "check": { "subject": "enterprise", "failOn": "warning" },
+  "guide": { "subject": "enterprise", "business": "预约服务", "payment": false, "sensitive": false, "domain": true }
+}
+```
+
+优先级为内置默认值 < 当前命令配置 < 显式 CLI 值。例如 `guide --config ./shipmate.json --sensitive` 会覆盖文件中的 `false`。主体只接受 `personal`、`individual_business`、`enterprise`；省略事实表示未知，布尔值区分是与否。命令行可覆盖为另一个已知值，恢复未知需从配置中移除该字段。`schemaVersion` 必须是整数 1，其他顶层分区可省略或为空；未知字段、非法值以及未使用分区中的错误都会使命令退出 1。
+
+配置和扫描目录都相对当前工作目录解析，配置位置不改变扫描根目录。不带 `--config` 时不会自动查找配置。`guide --config ...` 默认非交互，添加 `--interactive` 才问答，已有事实不重问；一次执行只读取配置一次，复现命令依赖该文件当时的内容。配置阈值采用与 `--fail-on` 相同的退出码和 stderr 提示。
+
+配置只保存示例所示字段；格式、JSON 输出版本、草稿、聚焦和交互选项继续在命令行指定。`explain` 不接受 `--config`，MCP 和桌面也不自动加载它。文件及其祖先目录不得含符号链接或 junction；文件必须是最多 5 MiB 的本地普通文件，并受现有私有文件名禁读策略约束。不接受 URL、UNC 网络路径或 Windows 数据流、末尾点号/空格别名。读取或解析失败时只显示路径、字段和原因，不显示原始内容；配置文件请勿放入凭据。help/version 不读取配置。
+
 规则报告的可选 `confidence` 字段保留规则库的 `high` / `medium` / `low`，Markdown 与可勾选清单显示为高/中/低。这是规则维护者对规则准确性的把握，不是命中概率或过审保证，也不改变严重度。流程导航项、合成检查及缺少字段的历史报告不补造评级；低置信规则仍只通过显式包含草案显示。
 
 历史GitHub tag或tarball可以用于复现历史版本，但不应作为当前修复后的候选。构建和验证入口见[首跑说明](docs/14-first-run-and-trial.md)。
