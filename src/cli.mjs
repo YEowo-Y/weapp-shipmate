@@ -8,6 +8,7 @@ import { runGuide } from "./guide.mjs";
 import { runExplain } from "./explain.mjs";
 import { interviewGuide } from "./guide-interview.mjs";
 import { render } from "./report.mjs";
+import { readCliConfig } from "./cli-config.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8")).version;
@@ -21,6 +22,7 @@ const HELP = `weapp-shipmate · 你写代码，我陪你上线
 
 选项：
   --subject <personal|individual_business|enterprise>   主体类型（也支持：个人 / 个体户 / 个体工商户 / 企业）
+  --config <file>       仅 check/guide：显式加载 JSON v1 配置，命令行值优先
   --json                输出 JSON（默认 Markdown）
   --json-version 1      与 --json 同用，增加 schemaVersion: 1；不能与 --checklist 同用
   --fail-on <level>     仅 check：blocker | warning | info | none；按展示过滤前的发现项判定
@@ -54,7 +56,7 @@ guide 额外输入（未提供 = 未知；正向开关 = 是，--no- 开关 = �
 const SUBJECT_ALIASES = new Map([["个人", "personal"], ["个体户", "individual_business"], ["个体工商户", "individual_business"], ["企业", "enterprise"]]);
 const TOGGLE_FLAGS = new Set(["payment", "sensitive", "domain", "interactive"]);
 
-const VALUE_FLAGS = new Set(["subject", "business", "fail-on", "json-version"]);
+const VALUE_FLAGS = new Set(["subject", "business", "fail-on", "json-version", "config"]);
 const FAIL_LEVELS = {
   blocker: ["blocker"],
   warning: ["blocker", "warning"],
@@ -84,11 +86,12 @@ export function parseFlags(args) {
     const eq = a.indexOf("=");
     const key = eq === -1 ? a.slice(2) : a.slice(2, eq);
     if (VALUE_FLAGS.has(key)) {
-      if (["fail-on", "json-version"].includes(key) && Object.hasOwn(f, key))
+      if (["fail-on", "json-version", "config"].includes(key) && Object.hasOwn(f, key))
         (f._duplicates ??= []).push(key);
       if (eq !== -1) f[key] = a.slice(eq + 1);
       else if (args[i + 1] !== undefined && !args[i + 1].startsWith("--")) f[key] = args[++i];
       else f[key] = undefined; // 缺值：留给 main 报「缺少取值」，不吞下一个 flag
+      if (f[key] === undefined || !f[key].trim()) (f._missing ??= []).push(key);
       continue;
     }
     const fact = key.startsWith("no-") ? key.slice(3) : key;
@@ -104,15 +107,37 @@ export function parseFlags(args) {
   return f;
 }
 
+function configuredFlags(flags, command, context) {
+  if (!Object.hasOwn(flags, "config")) return flags;
+  if (!["check", "guide"].includes(command))
+    throw new Error("--config 仅用于 check / guide。");
+  if (flags._duplicates?.includes("config"))
+    throw new Error("--config 不能重复指定。");
+  if (flags._missing?.length)
+    throw new Error(`选项缺少取值：${[...new Set(flags._missing)].map(key => "--" + key).join("、")}`);
+  context.config ??= readCliConfig(flags.config);
+  const defaults = { ...context.config[command] };
+  if (Object.hasOwn(defaults, "failOn")) {
+    defaults["fail-on"] = defaults.failOn;
+    delete defaults.failOn;
+  }
+  return { ...defaults, ...flags };
+}
+
 /** @returns {number} 进程退出码 */
 export function main(argv = process.argv, out = process.stdout, err = process.stderr) {
+  return executeMain(argv, out, err, {});
+}
+
+// One context per invocation: interactive validation and replay share the same configuration.
+function executeMain(argv, out, err, context) {
   const args = argv.slice(2);
   const cmd = args[0];
 
   if (!cmd || cmd === "--help" || cmd === "-h") { out.write(HELP + "\n"); return 0; }
   if (cmd === "--version" || cmd === "-v") { out.write(VERSION + "\n"); return 0; }
 
-  const flags = parseFlags(args.slice(1));
+  let flags = parseFlags(args.slice(1));
   if (flags._unknown?.length) {
     err.write(`无法识别的选项：${flags._unknown.join("、")}\n用 \`weapp-shipmate --help\` 查看可用选项。\n`);
     return 1;
@@ -124,6 +149,8 @@ export function main(argv = process.argv, out = process.stdout, err = process.st
   if (SUBJECT_ALIASES.has(flags.subject)) flags.subject = SUBJECT_ALIASES.get(flags.subject);
   if (flags.help) { out.write(HELP + "\n"); return 0; }
   if (flags.version) { out.write(VERSION + "\n"); return 0; }
+  try { flags = configuredFlags(flags, cmd, context); }
+  catch (error) { err.write(`${error.message}\n`); return 1; }
   // FX-06：非法主体必须报错退出。静默接受会让主体专属规则全部跳过（check.mjs 按 subject 过滤），
   // 产出"已合规"假象——与 mcp.mjs 的 inputSchema enum 行为对齐。缺值与非法值分开报，不泄漏 undefined。
   if ("subject" in flags && !SUBJECT_ENUM.includes(flags.subject)) {
@@ -261,15 +288,17 @@ export async function runCLI(argv = process.argv, out = process.stdout, err = pr
   input = process.stdin, interview = interviewGuide,
 } = {}) {
   const args = argv.slice(2);
-  const flags = parseFlags(args.slice(1));
+  let flags = parseFlags(args.slice(1));
+  const context = {};
   const tty = !!input.isTTY && !!out.isTTY;
   const interactive = flags.interactive === true || (args.length === 1 && tty);
   if (args[0] !== "guide" || flags.help || flags.version || !interactive)
     return main(argv, out, err);
 
   // 先走同一参数校验路径；暂不输出报告，避免问答中断时留下部分结果。
-  const status = main(argv, { write() {} }, err);
+  const status = executeMain(argv, { write() {} }, err, context);
   if (status !== 0) return status;
+  flags = configuredFlags(flags, args[0], context);
   if (!tty || flags.json) {
     err.write("交互问答需要输入和输出均为终端，且不能与 --json 同用；请改用参数或 --no-interactive。\n");
     return 1;
@@ -291,12 +320,13 @@ export async function runCLI(argv = process.argv, out = process.stdout, err = pr
     if (key === "subject") replay.push("--subject", answered[key]);
     else replay.push(answered[key] ? `--${key}` : `--no-${key}`);
   }
-  const code = main([...argv.slice(0, 2), ...replay], out, err);
+  const code = executeMain([...argv.slice(0, 2), ...replay], out, err, context);
   if (code === 0) {
     // Windows 默认 PowerShell；POSIX 使用单引号转义，保留业务描述等原始参数。
     const quote = value => /^[\w./:=-]+$/.test(value) ? value
       : process.platform === "win32" ? `'${value.replaceAll("'", "''")}'`
         : `'${value.replaceAll("'", "'\"'\"'")}'`;
+    if (Object.hasOwn(flags, "config")) out.write("\n此命令依赖配置文件当时的内容。\n");
     out.write(`\n可复现命令（${process.platform === "win32" ? "PowerShell" : "Shell"}）：\nweapp-shipmate ${replay.map(quote).join(" ")}\n`);
   }
   return code;

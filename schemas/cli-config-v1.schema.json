@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "weapp-shipmate CLI configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subject": { "$ref": "#/definitions/subject" },
+        "failOn": { "enum": ["blocker", "warning", "info", "none"] }
+      }
+    },
+    "guide": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "subject": { "$ref": "#/definitions/subject" },
+        "business": { "type": "string", "pattern": "\\S" },
+        "payment": { "type": "boolean" },
+        "sensitive": { "type": "boolean" },
+        "domain": { "type": "boolean" }
+      }
+    }
+  },
+  "definitions": {
+    "subject": { "enum": ["personal", "individual_business", "enterprise"] }
+  }
+}

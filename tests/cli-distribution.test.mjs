@@ -45,6 +45,21 @@ test("npm tarball and staged MCPB/plugins ship the versioned CLI schema and comp
         assert.equal(result.command, args[0]);
         assert.ok(validate(result), JSON.stringify(validate.errors));
       }
+      const config = { schemaVersion: 1, check: { subject: "enterprise", failOn: "none" }, guide: { subject: "personal", sensitive: false } };
+      const configPath = join(temp, "shipmate.json");
+      writeFileSync(configPath, JSON.stringify(config));
+      const configSchema = readFileSync(join(runtime, "schemas", "cli-config-v1.schema.json"), "utf8");
+      assert.equal(configSchema, readFileSync(join(root, "schemas", "cli-config-v1.schema.json"), "utf8"));
+      assert.ok(new Ajv().compile(JSON.parse(configSchema))(config));
+      for (const [command, positional, explicit] of [
+        ["check", [fixture], ["--subject", "enterprise", "--fail-on", "none"]],
+        ["guide", [], ["--subject", "personal", "--no-sensitive"]],
+      ]) {
+        const entry = join(runtime, "bin", "weapp-shipmate.mjs");
+        const configured = run(process.execPath, [entry, command, ...positional, "--config", configPath, "--json"], temp);
+        const direct = run(process.execPath, [entry, command, ...positional, ...explicit, "--json"], temp);
+        assert.equal(configured, direct);
+      }
       const requests = [
         { id: 1, method: "initialize", params: {} },
         { id: 2, method: "tools/call", params: { name: "weapp_shipmate_guide", arguments: { format: "json" } } },

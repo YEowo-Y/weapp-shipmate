@@ -512,9 +512,9 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 **允许变更的文件。** CLI 适配层、CLI 专用 JSON schema、相关 CLI/E2E/分发回归测试及必要夹具、README、本文与 progress.txt。实现可复用已有报告格式和规则结果。后续配置、baseline、SARIF 的默认行为与格式契约在各自范围稿中确认。
 
-#### T11B · 显式 CLI 配置文件（范围待确认）
+#### T11B · 显式 CLI 配置文件（已批准）
 
-**目标与关口。** T11A 已通过 [#43](https://github.com/YEowo-Y/weapp-shipmate/pull/43) 合并。以 `main@24bb4dd` 为基线，让项目可复用主体、业务事实和退出阈值。按 §3、§6 确认本节后实施；本范围 PR 仅更新交接与进度。
+**目标与关口。** T11A 已通过 [#43](https://github.com/YEowo-Y/weapp-shipmate/pull/43) 合并。以 `main@24bb4dd` 为基线，让项目可复用主体、业务事实和退出阈值。维护者已按 §3、§6 批准按 [#44](https://github.com/YEowo-Y/weapp-shipmate/pull/44) 实施本节。
 
 **首版格式。** 只读 UTF-8 JSON，顶层必须有整数 `schemaVersion: 1`，可选 `check`、`guide` 对象；对象可为空，未知字段、错误类型和不支持的版本均拒绝。主体仅接受规范值 `personal|individual_business|enterprise`；CLI 原有中文别名继续可用。`business` 是非空、非纯空白字符串，三个事实字段只接受布尔值，省略表示未知。示例：
 
@@ -533,7 +533,9 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 5. **限制首版范围。** 配置不包含扫描目录、explain 查询、展示格式、JSON 输出版本、草稿、聚焦或交互开关；这些仍按既有调用方式选择。MCP 工具和桌面不自动加载 CLI 配置，既有公共输出保持不变；baseline 和 SARIF 另列工单。不新增生产依赖，不修改规则断言、私有文件策略、治理或安全承诺。
 6. **验收。** 保留 15 组旧 CLI stdout/stderr/退出码的完整字节基线；新增配置成功与拒绝矩阵，覆盖两种语法、所有字段和阈值、分区隔离、CLI 正反覆盖、缺值、未知字段、错误类型、路径基准、文件读取失败、非普通文件、文件和祖先链接、超过 5 MiB、敏感文件阻断及诊断不泄露合成标记。问答测试覆盖配置预填、CLI 优先、单次读取、取消、非 TTY/JSON 冲突和复现命令。验证相同事实的配置调用与直接 CLI 调用报告等价；从实际 npm tarball、MCPB 和两端插件暂存入口复验配置及原 MCP 冒烟。CLI 配置 schema 随 schemas 分发，运行时不依赖额外 JSON schema 资源。四项本地门禁、独立冷读复审和全部 PR CI 通过后交付。
 
-**允许变更的文件。** `src/cli.mjs`、CLI 配置读取模块、CLI 配置 schema、相关 CLI/问答/分发测试与必要夹具、README、本文和 progress.txt。读取模块使用既有私有文件清单，不改扫描器行为。范围基线四项门禁通过：全量 1722/1722、69 条引文与 coverage 红线通过；配置能力尚未实现。
+**允许变更的文件。** `src/cli.mjs`、CLI 配置读取模块、CLI 配置 schema、相关 CLI/问答/分发测试与必要夹具、README、本文和 progress.txt。读取模块使用既有私有文件清单，不改扫描器行为。范围基线四项门禁通过：全量 1722/1722、69 条引文与 coverage 红线通过。
+
+本机实施验收（2026-11-18）：新增配置读取、schema、CLI 合并与问答复用，15 组旧命令字节基线保持通过。实际 npm tarball、MCPB 和两端插件暂存入口的配置与直接参数报告一致，原 MCP 冒烟通过。独立复审发现的 NTFS 数据流别名和 UNC 读取边界已修复；屏障测试确认普通/扩展/混合分隔符 UNC 及网络工作目录的相对路径在文件系统访问前拒绝。Windows 本地文件链接、祖先 junction、5 MiB 边界、诊断脱敏和 schema 对照均实际通过。最终全量 1734/1734、lint、69 条引文和 coverage（TP55/FP0/FN0）通过，复审结论为通过。
 
 ### T12 · 桌面分发
 
@@ -594,4 +596,4 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 ## 7. 当前推进入口
 
-T01–T08、T09A–T09C、T10A–T10B 和 T11A 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11A 已通过 [#43](https://github.com/YEowo-Y/weapp-shipmate/pull/43) 合并；下一项为 T11B 显式 CLI 配置文件，范围待确认。通用基线和验证命令见 §2。
+T01–T08、T09A–T09C、T10A–T10B 和 T11A 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11A 已通过 [#43](https://github.com/YEowo-Y/weapp-shipmate/pull/43) 合并；T11B 显式 CLI 配置文件已按 [#44](https://github.com/YEowo-Y/weapp-shipmate/pull/44) 批准范围实施，状态为 PR 中。通用基线和验证命令见 §2。
