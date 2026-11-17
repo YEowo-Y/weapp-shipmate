@@ -13,7 +13,10 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -23,15 +26,21 @@ jobs:
           # 构建腿用在维 LTS（Node 20 已于 2026-04-30 EOL，不再接收安全更新）；
           # 兼容性由 ci.yml 的 20/22/24 矩阵负责，此处只决定"发布产物由谁构建"。
           node-version: "22"
+      - run: rustup toolchain install 1.94.1 --profile minimal
       - run: npm ci
       # Broker 测试从 desktop 的依赖目录加载 AI SDK。
       - run: npm ci --prefix desktop
+      # 先生成锁定版 Node runtime 与桌面前端产物：既让 npm test 激活便携 runtime 验收（不跳过），
+      # 也满足后续直接调用 Cargo 测试时 tauri::generate_context! 的编译期依赖。
+      - run: npm --prefix desktop run prepare:runtime
+      - run: npm --prefix desktop run build
       # 门禁与 CI 同口径：任何一道红都不允许出资产。
       - run: npm run lint
       - run: npm run release:check
       - run: npm test
       - run: npm run verify:quotes
       - run: npm run coverage
+      - run: cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked
       # tgz：与 npm registry 发布物同源（registry 发布解锁后两渠道一致性由此保证）。
       - run: npm pack
       # .mcpb：真实 pack（联网拉取锁定版本的打包器），产物 build/weapp-shipmate.mcpb。
@@ -40,16 +49,89 @@ jobs:
         run: npm run build:mcpb
         env:
           WEAPP_SHIPMATE_REQUIRE_PACK: "1"
+      # Windows x64 NSIS 安装器：同源检出构建（beforeBuildCommand 自动准备锁定版 Node runtime 并构建前端）。
+      - name: build windows nsis installer
+        run: npm --prefix desktop run tauri -- build -- --locked
+        env:
+          RUSTUP_TOOLCHAIN: "1.94.1"
+      - name: verify windows installer candidate
+        run: |
+          set -euo pipefail
+          version="$(node -p "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).version")"
+          expected="desktop/src-tauri/target/release/bundle/nsis/weapp-shipmate-desktop_${version}_x64-setup.exe"
+          node -e "
+            const { existsSync, readdirSync } = require('node:fs');
+            const { join } = require('node:path');
+            const msis = [];
+            const walk = (dir) => {
+              if (!existsSync(dir)) return;
+              for (const entry of readdirSync(dir, { withFileTypes: true })) {
+                const full = join(dir, entry.name);
+                if (entry.isDirectory()) walk(full);
+                else if (/\.msi$/i.test(entry.name)) msis.push(full);
+              }
+            };
+            walk('desktop/src-tauri/target/release/bundle');
+            if (msis.length) {
+              console.error('Unexpected MSI output:', msis.join(', '));
+              process.exit(1);
+            }
+          "
+          shopt -s nullglob
+          nsis_files=(desktop/src-tauri/target/release/bundle/nsis/*.exe)
+          if [[ "${#nsis_files[@]}" -ne 1 || "${nsis_files[0]}" != "$expected" ]]; then
+            echo "Expected single NSIS installer $expected, got: ${nsis_files[*]:-none}" >&2
+            exit 1
+          fi
+          abs_installer="$(node -p "require('node:path').resolve(process.argv[1])" "$expected")"
+          temp_dir="$(node -p "const { mkdtempSync } = require('node:fs'); const { tmpdir } = require('node:os'); const { join, resolve } = require('node:path'); mkdtempSync(join(resolve((process.env.RUNNER_TEMP || '').trim() || tmpdir()), 'shipmate-release-' + (process.env.GITHUB_RUN_ID || 'local') + '-' + (process.env.GITHUB_RUN_ATTEMPT || '1') + '-'))")"
+          report_path="$(node -p "require('node:path').join(process.argv[1], 'windows-candidate.json')" "$temp_dir")"
+          MSYS_NO_PATHCONV=1 pwsh -NoLogo -NoProfile -NonInteractive -File scripts/verify-windows-candidate.ps1 \
+            -FilePath "$abs_installer" \
+            -SourceCommit "$GITHUB_SHA" \
+            -SourceDirty false \
+            -OutputPath "$report_path"
+          echo "CANDIDATE_REPORT_PATH=${report_path}" >> "$GITHUB_ENV"
       # 校验和必须以下载者视角的扁平资产名生成——gh 上传资产按 basename 拍平，清单里的
-      # build/ 前缀会让 `sha256sum -c SHA256SUMS.txt` 对 .mcpb 恒报 No such file（2026-07-16 审计 A3：
-      # rc.1 演练验证了流水线跑通，但没有一步是"下载资产后实测校验"）。先把 .mcpb 复制到工作目录再计算。
+      # build/ 或 target/ 前缀会让 `sha256sum -c SHA256SUMS.txt` 恒报 No such file（2026-07-16 审计 A3）。
+      # 先把 .mcpb 与 NSIS 安装器复制到工作目录，生成后当场执行 `sha256sum -c` 与候选哈希对账。
       - name: checksums
-        run: cp build/weapp-shipmate.mcpb . && sha256sum weapp-shipmate-*.tgz weapp-shipmate.mcpb > SHA256SUMS.txt && cat SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          cp build/weapp-shipmate.mcpb .
+          cp desktop/src-tauri/target/release/bundle/nsis/weapp-shipmate-desktop_*_x64-setup.exe .
+          sha256sum weapp-shipmate-*.tgz weapp-shipmate.mcpb weapp-shipmate-desktop_*_x64-setup.exe > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          node -e "
+            const assert = require('node:assert/strict');
+            const { readFileSync } = require('node:fs');
+            const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
+            const rawSums = readFileSync('SHA256SUMS.txt', 'utf8');
+            assert.ok(!rawSums.includes('\r'), 'SHA256SUMS.txt must use LF line endings');
+            const sums = rawSums.trim().split('\n');
+            assert.equal(sums.length, 3, 'Expected exactly 3 release asset checksums');
+            const parsed = Object.fromEntries(sums.map((line) => {
+              const match = line.match(/^([0-9a-f]{64}) [ *]([^/\\\\]+)$/);
+              assert.ok(match, 'Malformed checksum line: ' + line);
+              return [match[2], match[1]];
+            }));
+            const expectedInstaller = 'weapp-shipmate-desktop_' + version + '_x64-setup.exe';
+            assert.deepEqual(Object.keys(parsed).sort(), [
+              'weapp-shipmate-' + version + '.tgz',
+              'weapp-shipmate.mcpb',
+              expectedInstaller,
+            ].sort());
+            assert.ok(process.env.CANDIDATE_REPORT_PATH, 'Missing CANDIDATE_REPORT_PATH');
+            const report = JSON.parse(readFileSync(process.env.CANDIDATE_REPORT_PATH, 'utf8'));
+            assert.equal(report.ok, true);
+            assert.equal(parsed[expectedInstaller], report.sha256);
+          "
       # 用 runner 自带 gh CLI 而非第三方 action——与仓库"最小供应链面"取向一致。
-      # 上传的 .mcpb 用与校验和清单同名的工作目录副本，保证"清单条目 = 资产名"。
+      # 上传资产均用工作目录扁平副本，保证"清单条目 = 资产名"。
       - name: create draft release with assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >
           gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" --generate-notes
-          weapp-shipmate-*.tgz weapp-shipmate.mcpb SHA256SUMS.txt
+          weapp-shipmate-*.tgz weapp-shipmate.mcpb weapp-shipmate-desktop_*_x64-setup.exe SHA256SUMS.txt
