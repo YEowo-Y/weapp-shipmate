@@ -60,6 +60,12 @@ test("npm tarball and staged MCPB/plugins ship the versioned CLI schema and comp
         const direct = run(process.execPath, [entry, command, ...positional, ...explicit, "--json"], temp);
         assert.equal(configured, direct);
       }
+      const evidenceText = run(process.execPath, [join(runtime, "bin", "weapp-shipmate.mjs"),
+        "check", fixture, "--evidence", "--json", "--json-version", "1", "--fail-on", "none"], temp);
+      const evidenceReport = JSON.parse(evidenceText);
+      assert.ok(validate(evidenceReport), JSON.stringify(validate.errors));
+      assert.ok(evidenceReport.items.some(item => item.evidence.locations.length));
+      assert.deepEqual(evidenceReport.meta.evidence, { schemaVersion: 1, truncated: false });
       const requests = [
         { id: 1, method: "initialize", params: {} },
         { id: 2, method: "tools/call", params: { name: "weapp_shipmate_guide", arguments: { format: "json" } } },
