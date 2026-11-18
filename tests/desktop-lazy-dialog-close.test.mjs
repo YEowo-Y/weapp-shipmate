@@ -81,3 +81,75 @@ for (const fixture of fixtures) {
     assert.equal(document.activeElement, latestOpener);
   });
 }
+
+test('a rejected lazy import announces its dialog without replacing the tool status or moving focus', async t => {
+  const dom = new JSDOM(HTML, { url: 'http://tauri.localhost/' });
+  const { document } = dom.window;
+  installDesktopDom(dom.window);
+  t.after(() => dom.window.close());
+  const status = document.getElementById('status');
+  status.textContent = '正在运行预检…';
+  status.className = 'status busy';
+  const sidebar = document.getElementById('desktop-sidebar');
+  sidebar.setAttribute('role', 'dialog');
+  sidebar.setAttribute('aria-modal', 'true');
+  const surfaces = [
+    ['mountSourceFreshness', '../source-freshness', 'desktop-sources-open', '规则来源'],
+    ['mountExplainDialog', '../explain-dialog', 'desktop-explain-open', '拒因反查'],
+    ['mountRepairHandoff', '../repair-handoff', 'desktop-handoff-open', '修复交接'],
+    ['mountSubmissionMaterials', '../submission-materials-dialog', 'desktop-materials-open', '提审材料包'],
+  ];
+  const controllers = loadDesktopModule('src/shell/lazy-dialogs.ts', Object.fromEntries(
+    surfaces.map(([, specifier]) => [specifier, () => { throw new Error('private diagnostic'); }]),
+  ));
+  for (const [mount, , openerId, name] of surfaces) {
+    const opener = document.getElementById(openerId);
+    opener.focus();
+    controllers[mount]({}).open(opener);
+    await setImmediate();
+    const notice = document.querySelector('#desktop-dialog-load-notice');
+    assert.equal(notice?.getAttribute('role'), 'alert');
+    assert.equal(notice?.getAttribute('popover'), 'manual');
+    assert.equal(notice?.textContent, `${name}未能加载，请重试。若仍失败，请重新打开应用。`);
+    assert.equal(notice?.parentElement, sidebar);
+    assert.equal(status.textContent, '正在运行预检…');
+    assert.equal(status.className, 'status busy');
+    assert.equal(document.activeElement, opener);
+  }
+  // Maintenance closes its own dialog then passes a launcher outside the active drawer.
+  document.activeElement.blur();
+  controllers.mountSourceFreshness({}).open(document.getElementById('desktop-more'));
+  await setImmediate();
+  assert.equal(document.querySelector('#desktop-dialog-load-notice')?.parentElement, sidebar);
+});
+
+test('canceling an open while its import is pending suppresses a stale error and permits a retry', async t => {
+  const dom = new JSDOM(HTML, { url: 'http://tauri.localhost/' });
+  const { document } = dom.window;
+  installDesktopDom(dom.window);
+  t.after(() => dom.window.close());
+  const opener = document.getElementById('desktop-sources-open');
+  let rejectImport = true;
+  let opened = false;
+  const { mountSourceFreshness } = loadDesktopModule('src/shell/lazy-dialogs.ts', {
+    '../source-freshness': () => {
+      if (rejectImport) throw new Error('import failed');
+      return { mountSourceFreshness: () => ({ open() { opened = true; } }) };
+    },
+  });
+  const controller = mountSourceFreshness({});
+  controller.open(opener);
+  controller.close();
+  await setImmediate();
+  assert.equal(document.querySelector('#desktop-dialog-load-notice'), null);
+
+  controller.open(opener);
+  await setImmediate();
+  assert.match(document.querySelector('#desktop-dialog-load-notice')?.textContent ?? '', /^规则来源未能加载/);
+
+  rejectImport = false;
+  controller.open(opener);
+  await setImmediate();
+  assert.equal(opened, true);
+  assert.equal(document.querySelector('#desktop-dialog-load-notice'), null);
+});

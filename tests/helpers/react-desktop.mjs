@@ -8,7 +8,7 @@ export const requireDesktop = createRequire(resolve(desktop, 'package.json'));
 const ts = requireDesktop('typescript');
 
 /** Load the real desktop TS/TSX modules in node:test; CSS is verified by native E2E. */
-export function loadDesktopModule(relativePath) {
+export function loadDesktopModule(relativePath, requireOverrides = {}) {
   const cache = new Map();
   function load(filename) {
     if (extname(filename) === '.css') return {};
@@ -20,6 +20,7 @@ export function loadDesktopModule(relativePath) {
       compilerOptions: { allowJs: true, target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
     }).outputText;
     const localRequire = specifier => {
+      if (Object.hasOwn(requireOverrides, specifier)) return requireOverrides[specifier]();
       if (!specifier.startsWith('.') && !specifier.startsWith('@/')) return requireDesktop(specifier);
       const path = specifier.startsWith('@/') ? resolve(desktop, 'src', specifier.slice(2)) : resolve(dirname(filename), specifier);
       const candidate = [path, `${path}.ts`, `${path}.tsx`, `${path}.js`, `${path}.mjs`, resolve(path, 'index.ts'), resolve(path, 'index.tsx')].find(existsSync);
