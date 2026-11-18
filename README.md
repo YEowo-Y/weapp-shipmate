@@ -6,9 +6,9 @@
 
 ## 先从桌面候选开始
 
-本轮先交付**Windows 桌面候选和试用材料**。NSIS安装包已完成本机安装、运行与卸载验收，尚无公开下载地址；当前没有可信签名证书，不能将候选称为已签名正式版。产物、SHA256和实际验收记录见[首跑与试用说明](docs/14-first-run-and-trial.md)。
+当前源码版本是 `0.2.0-rc.4`。Windows NSIS 安装包处于候选阶段，公开下载和可信签名待交付。本机安装、运行与卸载的验收记录按所测候选版本保存。[首跑与试用说明](docs/14-first-run-and-trial.md)
 
-2026-10-25核查：GitHub仓库仍为私有，rc.3 Release仍是草稿，npm确切包名未发布。已有tgz/mcpb资产不等于普通用户可获取的桌面安装器。获得候选后，先核对版本和SHA256，再按首跑说明安装；系统告警、WebView2网络要求和安装失败都应记录，不能省略为“下载即用”。
+公开版 `v0.1.0` 提供 CLI `.tgz` 和 MCPB 扩展。npm registry 暂无 `weapp-shipmate` 包。取得 Windows 候选后，先核对版本和 SHA256，再按首跑说明安装并记录安装结果、系统告警和 WebView2 网络要求。[GitHub Release](https://github.com/YEowo-Y/weapp-shipmate/releases/tag/v0.1.0)
 
 你可以从这三件事开始：
 
@@ -28,7 +28,7 @@
 | 想让AI解释报告 | OpenAI、Anthropic、Google的只读工具路径使用相同权限边界 | 模型质量需另验；只读不等于有权任意读取或分享 |
 | 想修改问题 | 可导出修复交接；原生`app.json`完全缺少`requiredPrivateInfos`时，受限修复候选已通过本轮原生验收 | 须明确确认真实业务需要并预览原文；不能任意修改代码，原生验收不等于已签名分发 |
 
-当前有**66条默认数据规则和5条跨项核验规则**，以及24条拒因记录；跨项核验规则不是draft。默认输出非草案规则；核验日期用于追溯，不表示当天重新核对过官方政策。处理动作区分代码修改、后台配置、材料准备和人工确认：例如AppSecret暴露或不安全HTTP调用中的本机代码问题应归为代码项，域名后台配置也可能同时需要处理。
+当前有 **64 条默认数据规则和 5 条跨项核验规则**，另有 24 条拒因记录。默认输出非草稿规则，核验日期用于追溯最后一次官方来源核验。处理动作区分代码修改、后台配置、材料准备和人工确认。例如 AppSecret 暴露或不安全 HTTP 调用属于代码项，域名还可能需要后台配置。
 
 `--payment` / `--business`目前提供说明与核对线索，不参与规则筛选或排序，也不自动判定支付资格、官方类目；明确“不支付”也不会删除全部条件自查。无待办项不等于检查完整。完整能力和历史证据见[能力台账](docs/12-current-capabilities.md)。
 
@@ -43,9 +43,9 @@
 ## 开发者入口
 
 <details>
-<summary>CLI：从有权限的源码副本运行</summary>
+<summary>CLI 源码运行方式</summary>
 
-需要Node.js≥20和本机依赖环境；获取私有GitHub仓库还需要相应权限。以下在已有源码副本内执行，不代表npm包已经公开发布：
+从公开仓库获取源码，在源码目录内使用 Node.js 20 或更高版本运行以下命令。
 
 ```bash
 npm ci
@@ -178,7 +178,7 @@ claude plugin marketplace remove weapp-shipmate-local --scope user
 
 MCP服务端按客户端指定的目录、以进程现有权限读取支持的源码/配置，只向可信客户端开放。内核不上传源码；宿主可按自己的授权机制分享结果。船友不运营接收代码、报告或密钥的服务器。你现在就可以给聊天添加受限文件，它的内容会随消息发给你选的模型服务商；这与允许工具读取项目、分享摘要和开启 agent 是分开的。在此之外，桌面工具规划了两种源码出站操作：按项目开启默认关闭的 agent 模式，将它读取的文件内容发给你自选的模型服务商；或由你逐次点击预览、上传体验版，经本机已登录的开发者工具把代码包只传给微信。上传还须打开默认关闭的开关。预览和上传都不提审、不发布。
 
-MCPB是安装到兼容宿主（例如Claude Desktop）的扩展，**不是独立桌面程序**。Claude Desktop带有Node运行时，但仍须满足包的兼容要求。当前rc.3草稿中的旧包未签名且早于10月修复，不能描述为最新签名交付件。
+MCPB 是供兼容宿主安装的扩展。以 Claude Desktop 为例，宿主提供的 Node 运行时仍须满足包的兼容要求。
 
 维护者可运行`npm run build:mcpb`；当前脚本在pack失败时可能保留暂存目录并给出手动命令，进程退出成功不证明`.mcpb`已生成。必须检查实际文件、版本、SHA256和签名，再做宿主安装验证。详见[首跑说明](docs/14-first-run-and-trial.md)。
 
@@ -205,8 +205,8 @@ MCPB是安装到兼容宿主（例如Claude Desktop）的扩展，**不是独立
 
 weapp-shipmate helps WeChat Mini Program developers inspect local projects, understand review feedback, and decide what to prepare next. It provides a desktop interface plus CLI and MCP tools. Deterministic checks run locally; optional model connections require explicit choices about project reading and context sharing.
 
-The Windows NSIS candidate has passed local install, native smoke and uninstall checks on a development machine. There is no public installer URL or trusted signing certificate yet. The repository is private, the rc.3 release is a draft, and the npm package is unavailable as checked on 2026-10-25. MCPB requires a compatible host; it is not a standalone desktop app. The narrowly scoped app.json repair candidate passed this batch's native acceptance; it uses non-atomic locked writes with local plaintext backups and is not a general code editor. Native acceptance does not establish signed distribution, real-account model quality, or real-user trial completion.
+The source version is `0.2.0-rc.4`. Local install, native smoke and uninstall records identify the Windows NSIS candidate tested. The public `v0.1.0` release contains a CLI tarball and an MCPB extension for compatible hosts. The Windows installer awaits public distribution and trusted signing. The narrowly scoped `app.json` repair candidate passed this batch's native acceptance and uses non-atomic locked writes with local plaintext backups. Real-account model quality and user trials are pending. [GitHub Release](https://github.com/YEowo-Y/weapp-shipmate/releases/tag/v0.1.0)
 
 ## License
 
-MIT，见[LICENSE](LICENSE)。维护者承诺纯公益、无商业化计划；MIT许可允许合法复用，当前仓库访问权限另行管理。[治理边界](GOVERNANCE.md)包括不接代办、不卖课、不接广告、不做合规担保。
+MIT 许可允许合法复用。维护者承诺纯公益、无商业化计划，治理边界包括不接代办、不卖课、不接广告、不做合规担保。[LICENSE](LICENSE) · [治理边界](GOVERNANCE.md)
