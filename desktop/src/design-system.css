@@ -119,6 +119,11 @@
 .desktop-app[data-theme] {
   --font-ui: var(--ds-font-sans);
   --font-mono: var(--ds-font-mono);
+  --bg: var(--ds-canvas);
+  --surface: var(--ds-raised);
+  --surface-2: var(--ds-sunken);
+  --border: var(--ds-hairline);
+  --border-2: var(--ds-hairline-strong);
   --text: var(--ds-ink-1);
   --text-2: var(--ds-ink-2);
   --text-3: var(--ds-ink-3);
@@ -134,6 +139,9 @@
   --shadow: var(--ds-shadow-popover);
   --shadow-dialog: var(--ds-shadow-dialog);
   --backdrop-dialog: var(--ds-backdrop);
+  --ease: var(--ds-ease-standard);
   --conversation-reading-width: var(--ds-measure);
   --wa-color-focus: var(--ds-accent);
 }
+
+.desktop-app[data-theme="dark"] { --surface-3: #2a2a28; }

@@ -1,1 +1,17 @@
 @import '../src/shared/app.css';
+
+/* Preview defaults for aliases owned by design-system.css in the desktop app. */
+:root {
+  --font-ui: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  --ease: cubic-bezier(.2, .6, .2, 1);
+}
+
+body[data-theme="light"] {
+  --bg: #fcfcfb;
+  --text: #262624;
+}
+
+body[data-theme="dark"] {
+  --bg: #1b1b1b;
+  --text: #ededed;
+}
