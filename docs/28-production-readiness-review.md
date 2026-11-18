@@ -79,15 +79,6 @@ precision：1.000 （recall 1.000 · TP55/FP0/FN0）
 - **修复建议**：删除 `app.css:16-37` 整块配色（`--font-ui`/`--font-mono`/`--ease` 可留给 `design-system.css` 继承），同批收敛 `styles.css:1-12` 与 `product-polish.css:8-26` 的重复映射。
 - **复验**：打开提审材料包对话框，与主窗口主按钮对比主色，两处应同为 `#292928`。
 
-#### P0-2 懒加载对话框在加载期间无法被关闭
-
-- **位置**：`desktop/src/shell/lazy-dialogs.ts:41-43`（`mountSourceFreshness.close`）、`:115-117`（`mountRepairHandoff.close`）、`:155-157`（`mountSubmissionMaterials.close`）
-- **证据**：`open()` 在实例未就绪时走 `void ensure().then(ctrl => ctrl?.open(...))`，而 `close()` 只执行 `instance?.close()`。模块仍在下载时调用 `close()`，关闭意图被静默丢弃，`ensure()` 完成后仍会 `open`。
-- **触发条件**：冷启动或慢盘下，点击打开后立刻按 Escape / 点关闭。
-- **影响**：用户已经取消，对话框仍然弹出并可能抢占焦点。
-- **修复建议**：仿照同文件 `mountExplainDialog` 的 `pendingReset`（第 55、75 行），增加 `pendingClose`；`ensure()` 完成后若 `pendingClose` 为真则不 `open` 并立即 `close()`。
-- **复验**：新增单测——`import()` 返回可控延迟 Promise，先 `open()` 再立刻 `close()`，断言最终的 `open` 未被调用。
-
 ### 3.2 P1
 
 #### P1-1 发布链路：`0.2.0-rc.4` 从未打 tag，公开版本停在 7 月
@@ -141,6 +132,9 @@ precision：1.000 （recall 1.000 · TP55/FP0/FN0）
 | P2-6 | `model_bridge.rs:393` 依赖「上一行刚赋值」的隐式推理 | `desktop/src-tauri/src/model_bridge.rs:393` | 改 `ok_or_else(...)`，与该文件其余 `.map_err(...)` 一致 |
 | P2-7 | 仓库内 4 个 >500 kB 的证据截图 | `desktop/design-previews/research/assets/product-alignment/`、`docs/previews/` | 不删历史；后续新图用 WebP |
 | P2-8 | 未合并分支 `codex/plan-checkpoint-source-review` 已被取代 | 本地分支（头 `4a3223c`） | 维护者裁决归档或删除（**对外动作，不代执行**） |
+| P2-9 | 规则来源与提审材料包的控制器在加载期间丢弃关闭请求 | `desktop/src/shell/lazy-dialogs.ts` 的 `mountSourceFreshness`、`mountSubmissionMaterials` | 关闭时撤销加载期间已排队的全部打开请求 |
+
+P2-9 在同一控制器上先调用 `open()`、再在动态导入完成前调用 `close()` 即可复现。旧实现的 `close()` 只尝试关闭已挂载实例，因此加载完成后仍会打开对话框。当前桌面入口由挂载后的对话框处理 Escape 和关闭按钮。按现有调用点，这项属于控制器加固。复验应覆盖两种对话框、关闭多个待执行请求，以及关闭后重新打开时的焦点归还。
 
 ### 3.4 设计系统的度量缺口（P2-5 的分母）
 
@@ -179,9 +173,9 @@ precision：1.000 （recall 1.000 · TP55/FP0/FN0）
 
 判据：`docs/12`、`CHANGELOG.md`、`README.md` 中不再出现无分母的 precision 表述；CI 产出覆盖率摘要。
 
-### 阶段 2：可见缺陷（3–5 天）
+### 阶段 2：可见缺陷与交互加固（3–5 天）
 
-4. **修懒加载关闭竞态**（P0-2）并补先红后绿的测试。
+4. **加固懒加载控制器的关闭语义**（P2-9）并补先红后绿的测试。
 5. **收敛主色令牌**（P0-1），删除 `app.css` 的平行调色板。
 6. 修 `#status` 覆盖（P2-1）、`model_bridge.rs:393`（P2-6）、断点单一来源（P2-4）。
 
