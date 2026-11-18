@@ -28,6 +28,22 @@
 #rjActionStatus:empty { display: none; }
 #rjActionStatus[data-state="error"] { color: var(--block); }
 .rj-result__h:focus-visible { outline: 2px solid var(--text-2); outline-offset: 4px; }
+.rj-follow-up { margin-block-end: var(--ds-space-6, 24px); }
+.rj-follow-up h3 { margin: 0 0 var(--ds-space-2, 8px); font-size: var(--ds-text-ui-strong, 14px); }
+.rj-follow-up__actions { display: flex; flex-wrap: wrap; gap: var(--ds-space-2, 8px); }
+.rj-follow-up button {
+  min-block-size: var(--ds-control-touch, 44px);
+  padding: var(--ds-space-2, 8px) var(--ds-space-3, 12px);
+  border: 1px solid var(--ds-hairline-strong, var(--border-2));
+  border-radius: var(--ds-radius-md, var(--r-sm));
+  background: var(--ds-raised, var(--surface));
+  color: var(--ds-ink-1, var(--text));
+  font: inherit;
+  font-size: var(--ds-text-ui, 13px);
+  cursor: pointer;
+}
+.rj-follow-up button:hover { background: var(--ds-accent-soft, var(--surface-3)); }
+.rj-follow-up button:focus-visible { outline: 2px solid var(--ds-focus, var(--text-2)); outline-offset: 2px; }
 .rj-triage { margin-bottom: 24px; padding: 16px; border-radius: var(--r); background: var(--surface-2); }
 .rj-triage h3 { margin: 0 0 12px; font-size: 13px; font-weight: 500; color: var(--text-2); }
 .rj-triage__filters { display: flex; flex-wrap: wrap; gap: 6px; }
