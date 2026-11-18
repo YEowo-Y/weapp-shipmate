@@ -15,6 +15,7 @@ export function mountSourceFreshness(options: Parameters<typeof MountSourceFresh
   let instance: ReturnType<typeof MountSourceFreshnessFn> | undefined;
   let loading: Promise<ReturnType<typeof MountSourceFreshnessFn> | undefined> | undefined;
   let disposed = false;
+  let closeGeneration = 0;
 
   async function ensure() {
     if (disposed) return undefined;
@@ -36,9 +37,13 @@ export function mountSourceFreshness(options: Parameters<typeof MountSourceFresh
         instance.open(opener);
         return;
       }
-      void ensure().then(ctrl => ctrl?.open(opener)).catch(reportDialogLoadFailure);
+      const generation = closeGeneration;
+      void ensure().then(ctrl => {
+        if (!disposed && generation === closeGeneration) ctrl?.open(opener);
+      }).catch(reportDialogLoadFailure);
     },
     close() {
+      closeGeneration++;
       instance?.close();
     },
     destroy() {
@@ -126,6 +131,7 @@ export function mountSubmissionMaterials(options: Parameters<typeof MountSubmiss
   let instance: ReturnType<typeof MountSubmissionMaterialsFn> | undefined;
   let loading: Promise<ReturnType<typeof MountSubmissionMaterialsFn> | undefined> | undefined;
   let disposed = false;
+  let closeGeneration = 0;
 
   async function ensure() {
     if (disposed) return undefined;
@@ -150,9 +156,13 @@ export function mountSubmissionMaterials(options: Parameters<typeof MountSubmiss
         instance.open(anchor);
         return;
       }
-      void ensure().then(ctrl => ctrl?.open(anchor)).catch(reportDialogLoadFailure);
+      const generation = closeGeneration;
+      void ensure().then(ctrl => {
+        if (!disposed && generation === closeGeneration) ctrl?.open(anchor);
+      }).catch(reportDialogLoadFailure);
     },
     close() {
+      closeGeneration++;
       instance?.close();
     },
     refresh() {
