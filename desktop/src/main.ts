@@ -25,6 +25,7 @@ import { mountShellLayout } from './shell/shell-layout';
 import { mountRightPanel } from './shell/right-panel';
 import "./repair-handoff.css";
 import "./source-freshness.css";
+import "./submission-materials.css";
 // Product polish and v2 shell styles must evaluate after every feature stylesheet imported above.
 import "./product-polish.css";
 import "./shell/shell.css";
