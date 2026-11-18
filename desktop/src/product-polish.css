@@ -6,15 +6,6 @@
 
 /* 0. Base: one canvas, one ink scale, crisp text. */
 .desktop-app[data-theme] {
-  --bg: var(--ds-canvas);
-  --surface: var(--ds-raised);
-  --surface-2: var(--ds-sunken);
-  --border: var(--ds-hairline);
-  --border-2: var(--ds-hairline-strong);
-  --text: var(--ds-ink-1);
-  --text-2: var(--ds-ink-2);
-  --text-3: var(--ds-ink-3);
-  --ease: var(--ds-ease-standard);
   font-family: var(--ds-font-sans);
   font-size: var(--ds-text-ui-strong);
   line-height: var(--ds-leading-ui);
@@ -24,7 +15,6 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
-.desktop-app[data-theme="dark"] { --surface-3: #2a2a28; }
 .desktop-app ::selection { background: var(--ds-selection); }
 .desktop-app :is(time, .tabular, [data-count]) { font-variant-numeric: tabular-nums; }
 
