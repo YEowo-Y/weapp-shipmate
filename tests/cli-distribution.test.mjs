@@ -29,9 +29,9 @@ test("npm tarball and staged MCPB/plugins ship the versioned CLI schema and comp
     const packed = JSON.parse(run(process.execPath, [npm, "pack", "--ignore-scripts", "--json", "--pack-destination", temp], root));
     assert.ok(packed[0].files.some(file => file.path === "schemas/cli-report-v1.schema.json"));
     // Extract by bare filename with the cwd already at the destination. GNU tar
-    // reads `D:/...` as a remote host named `D`, so an absolute Windows path in
-    // either the archive or `-C` fails with "Cannot connect to D: resolve failed".
-    // Both arguments stay relative to the cwd the helper sets.
+    // reads an absolute Windows archive path as a remote host named `D`
+    // ("Cannot connect to D: resolve failed"). An absolute `-C` target is fine;
+    // `-C` is dropped only because the helper already sets the cwd.
     run("tar", ["-xf", packed[0].filename], temp);
     const unpacked = join(temp, "package");
     // npm consumers install production dependencies separately from the tarball.
