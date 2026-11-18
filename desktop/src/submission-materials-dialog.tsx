@@ -12,7 +12,6 @@ import {
 } from './shared/submission-materials.js';
 import { LucideSvg } from './shell/lucide-svg';
 import { isSafeHttpsUrl, type WorkflowBasisSnapshot } from './shell/right-panel-types';
-import './submission-materials.css';
 
 type InvokeFn = <T = unknown>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 type MaterialArtifact = Omit<Artifact, 'markdown'>;
