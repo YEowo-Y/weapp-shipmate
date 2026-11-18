@@ -823,8 +823,22 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 **本机实施验收（2026-11-18，按 [#61](https://github.com/YEowo-Y/weapp-shipmate/pull/61) 范围）。** 结果按规则操作类型提供项目预检和提审材料包入口，未命中时可保留输入并返回编辑。导航检查项目身份、写锁及工作区退出条件。独立复审后在现有懒加载控制器增加 `prepareOpen()`，初始化失败时保留拒因结果，加载完成后再次核对项目。定向测试 117 项通过，全量测试 1785 项通过、2 项因缺少便携运行时和候选 EXE 跳过、0 失败。`lint`、69 条引文、`coverage`（precision / recall 均为 1.000）和桌面构建通过，启动包 724,539 B（gzip 236,915 B），拒因反查与材料包保留按需加载，预算无错误。Chromium 使用模拟 IPC，在 1440 px 与 760 px 验证官方原文、预检和材料包跳转、焦点恢复、取消延迟跳转以及未命中编辑。两次工具运行均是显式发起的拒因查询。
 
+**Windows 实机复验（2026-11-19）。** 使用与 `main@8f56fbe` 相同产品源码构建的 Tauri 调试包、WebView2 157.0.4341.60 和两个隔离项目。1240 px 与 780 px 下均通过定位预检按钮、打开当前项目材料包及未命中后保留原文重新编辑。两处导航关闭后，宽窗回到「拒因反查」，窄窗回到「展开侧栏」。切换项目会清空旧结果和导航入口，保留输入并提示重新查询。试验项目仅产生六条主动发起的拒因成果，项目文件清单和内容哈希均一致。
+
+### 功能 8 · 交接给 Codex / Claude Code（范围待确认）
+
+**目标与关口。** 用户在桌面「修复交接」里查看一份给外部编码助手的任务摘要，确认后复制，并在自己打开的 Codex 或 Claude Code 项目中粘贴。按 §6 先确认本节范围。建议首版采用同一份纯文本，通过预览和剪贴板交付。沿用本机报告、已打包的规则来源目录和现有剪贴板能力。
+
+**现有基础。** 「修复交接」已能从预检、拒因和上线指南生成内部交接，且支持 Markdown 与 JSON 导出、只读打开外部 JSON。现有复制按钮复制完整的交接 Markdown。新入口应复用弹窗与主动复制的交互，摘要从经过筛选的结构化数据单独生成。
+
+1. **用固定字段生成摘要。** 仅接受当前项目的本机报告，以匹配到的规则 ID 查询现有 `source_freshness_snapshot` 返回的本机打包目录。只输出报告种类、去重后的非草稿规则 ID、目录内的标题、官方链接、仓库核验日期及固定的人工复核步骤。未在目录匹配的条目只计数，注明日期来自仓库记录。首版最多列 20 条，UTF-8 总量不超过 8 KiB，有截断时标出。禁止使用报告或交接包的任意自由文本填充摘要，包括原始审核通知、源码及扫描证据、项目路径和名称、会话文本、日志或凭据。用合成标记覆盖这些字段，并断言无标记进入最终文本。空结果、外部文件、来源目录读取失败各有明确状态，不生成可复制摘要。
+2. **在现有弹窗预览及复制。** 提供「生成给 Codex / Claude Code 的交接」入口。使用可选中的只读全文，文案说明用户复制后到自己打开的工具中粘贴。必须逐字复制本次预览内容。切换项目、切换报告或关闭时清空预览，异步结果到达时复核当前报告归属，过期结果不能复制。明确显示剪贴板成功或失败；失败时可在同一预览手动选中。沿用弹窗 Esc 与回焦行为，生成和复制均由点击触发。保留现有 Markdown / JSON 和导入流程。
+3. **验收。** 覆盖三种本机报告、未匹配与草稿、污染的报告字段、外部来源、项目切换和复制失败。断言预览与实际剪贴板一致，验证生成阶段仅读取本机打包的规则来源目录，复制阶段由用户触发剪贴板写入。Windows WebView2 在宽窄窗口从报告进入，键盘验证预览、复制、关闭回焦及旧导出入口。执行四项仓库门禁、桌面类型检查和构建，确认修复交接仍为延迟加载块且启动包预算通过。
+
+**允许变更的文件。** `desktop/src/repair-handoff.ts`、交接摘要的共享模块和弹窗样式，`desktop/src/{main.ts,shell/lazy-dialogs.ts}` 中的接线、相关桌面与共享模块测试、`docs/12-current-capabilities.md`、本文与 `progress.txt`。首版由用户手动粘贴，范围限本机文本交付。无需新增依赖、Rust 命令、公开 CLI/MCP 字段或数据模型。
+
 ## 7. 当前推进入口
 
-T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并；T11C1 CLI 显式证据已按 [#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47) 批准范围实施，状态为 PR 中，之后再定 baseline 契约。通用基线和验证命令见 §2。
+T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并；T11C1 CLI 显式证据已按 [#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47) 批准范围实施并合入 [#49](https://github.com/YEowo-Y/weapp-shipmate/pull/49)，baseline 契约待定。通用基线和验证命令见 §2。
 
-桌面与工程底座工作线的 T12A（[#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48)）、T13A（[#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51)）、T13B（[#52](https://github.com/YEowo-Y/weapp-shipmate/pull/52)）、T14（[#54](https://github.com/YEowo-Y/weapp-shipmate/pull/54)）、**功能 0 · 新外壳**（[#55](https://github.com/YEowo-Y/weapp-shipmate/pull/55)、[#56](https://github.com/YEowo-Y/weapp-shipmate/pull/56)）、**功能 2 · 上线进度进右侧面板**（[#57](https://github.com/YEowo-Y/weapp-shipmate/pull/57)、[#58](https://github.com/YEowo-Y/weapp-shipmate/pull/58)）和 **功能 3 · 提审材料包**（[#59](https://github.com/YEowo-Y/weapp-shipmate/pull/59)、[#60](https://github.com/YEowo-Y/weapp-shipmate/pull/60)）已合并并通过云端验收。**功能 4 · 被拒处理闭环**的范围 [#61](https://github.com/YEowo-Y/weapp-shipmate/pull/61) 已合并，实施 PR 中。随后依次推进 **功能 8 · 交接给 Codex / Claude Code** 与 **功能 7（公测前只读连接检测部分）**。
+桌面与工程底座工作线的 T12A（[#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48)）、T13A（[#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51)）、T13B（[#52](https://github.com/YEowo-Y/weapp-shipmate/pull/52)）、T14（[#54](https://github.com/YEowo-Y/weapp-shipmate/pull/54)）、**功能 0 · 新外壳**（[#55](https://github.com/YEowo-Y/weapp-shipmate/pull/55)、[#56](https://github.com/YEowo-Y/weapp-shipmate/pull/56)）、**功能 2 · 上线进度进右侧面板**（[#57](https://github.com/YEowo-Y/weapp-shipmate/pull/57)、[#58](https://github.com/YEowo-Y/weapp-shipmate/pull/58)）和 **功能 3 · 提审材料包**（[#59](https://github.com/YEowo-Y/weapp-shipmate/pull/59)、[#60](https://github.com/YEowo-Y/weapp-shipmate/pull/60)）已合并并通过云端验收。**功能 4 · 被拒处理闭环**已按 [#61](https://github.com/YEowo-Y/weapp-shipmate/pull/61) 范围实施，并随 [#62](https://github.com/YEowo-Y/weapp-shipmate/pull/62) 合入。下一步确认 **功能 8 · 交接给 Codex / Claude Code** 的上述范围，之后推进 **功能 7（公测前只读连接检测部分）**。
