@@ -41,6 +41,23 @@
   backdrop-filter: blur(2px);
 }
 
+#desktop-dialog-load-notice {
+  position: fixed;
+  pointer-events: none;
+  inset: var(--ds-space-4) var(--ds-space-4) auto;
+  inline-size: max-content;
+  max-inline-size: calc(100vw - 2 * var(--ds-space-4));
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border: 1px solid var(--ds-danger);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-danger-soft);
+  color: var(--ds-danger);
+  font-size: var(--ds-text-ui);
+  box-shadow: var(--ds-shadow-popover);
+}
+
 /* 2. Left sidebar: fixed top, 3-group scrollable middle (20px group gap, 0 row gap), fixed hairline footer */
 .desktop-app .desktop-sidebar {
   display: flex;
