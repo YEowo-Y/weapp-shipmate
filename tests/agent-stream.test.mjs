@@ -3,6 +3,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { streamAgentResponse, validateAgentRequest } from '../desktop/server/agent-stream.mjs';
+import { pinProviderEndpoints } from './helpers/provider-env.mjs';
+
+// Must run before the first client factory call in this file. Without it,
+// OPENAI_BASE_URL rewrites the canonical URL this file asserts on.
+pinProviderEndpoints();
 
 const body = { model: 'test-model', messages: [{ role: 'user', content: '检查当前项目' }], agent: { projectId: 'p1', sessionId: 's1', allowRead: true, shareResults: false } };
 const output = { schemaVersion: 1, kind: 'check', runId: 'run-1', artifactId: 'artifact-1', title: '检查结果', summary: 'SECRET_LOCAL_SUMMARY', itemCount: 0, items: [], truncated: false, scopeComplete: true, projectRevision: 1, contextRevision: 1 };
