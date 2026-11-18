@@ -216,7 +216,9 @@ test('F00 responsive drawers, modal triggers, tools-panel focus & header menu: 1
   const sidebarQuery = createMediaQuery(false);
   const toolsQuery = createMediaQuery(false);
   const hoverQuery = createMediaQuery(true);
+  const shellWidthQueries = [];
   window.matchMedia = query => {
+    if (query.startsWith('(max-width:')) shellWidthQueries.push(query);
     if (query.includes('1180px')) return panelQuery;
     if (query.includes('820px')) return sidebarQuery;
     if (query.includes('860px')) return toolsQuery;
@@ -243,6 +245,10 @@ test('F00 responsive drawers, modal triggers, tools-panel focus & header menu: 1
   const shell = mountShellLayout({
     onMenuAction: value => menuSelections.push(value),
   });
+  const shellCss = readRepoFile('desktop/src/shell/shell.css');
+  const cssWidthQueries = [...shellCss.matchAll(/@media\s+(\(max-width:\s*\d+px\))\s*\{\s*\.desktop-app \.desktop-layout,/g)]
+    .map(([, query]) => query);
+  assert.deepEqual(shellWidthQueries, cssWidthQueries, 'drawer styles and accessibility state use the same media conditions');
   const tools = mountToolsPanel({
     beforeOpen: () => {
       shell.closeSidebarDrawer();

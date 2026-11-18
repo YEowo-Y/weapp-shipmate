@@ -3,15 +3,32 @@ import type { mountRepairHandoff as MountRepairHandoffFn } from '../repair-hando
 import type { mountSourceFreshness as MountSourceFreshnessFn } from '../source-freshness';
 import type { mountSubmissionMaterials as MountSubmissionMaterialsFn } from '../submission-materials-dialog';
 
-function reportDialogLoadFailure() {
-  const status = document.getElementById('status');
-  if (status) {
-    status.textContent = '对话框组件未能加载，请重试。';
-    status.className = 'status error';
-  }
+const dialogLoadNoticeId = 'desktop-dialog-load-notice';
+
+function clearDialogLoadFailure(name: string) {
+  const notice = document.getElementById(dialogLoadNoticeId);
+  if (notice?.dataset.dialog === name) notice.remove();
+}
+
+function reportDialogLoadFailure(name: string, opener: HTMLElement | null) {
+  document.getElementById(dialogLoadNoticeId)?.remove();
+  const notice = document.createElement('p');
+  notice.id = dialogLoadNoticeId;
+  notice.dataset.dialog = name;
+  notice.setAttribute('role', 'alert');
+  notice.setAttribute('popover', 'manual');
+  const modal = 'dialog[open], [role="dialog"][aria-modal="true"]';
+  const openerSurface = opener?.isConnected ? opener.closest(modal) : null;
+  const surface = document.activeElement?.closest(modal) ?? openerSurface
+    ?? document.querySelector('.desktop-layout [aria-modal="true"]') ?? document.body;
+  surface.append(notice);
+  notice.showPopover?.();
+  notice.textContent = `${name}未能加载，请重试。若仍失败，请重新打开应用。`;
+  window.setTimeout(() => notice.remove(), 10_000);
 }
 
 export function mountSourceFreshness(options: Parameters<typeof MountSourceFreshnessFn>[0]) {
+  const name = '规则来源';
   let instance: ReturnType<typeof MountSourceFreshnessFn> | undefined;
   let loading: Promise<ReturnType<typeof MountSourceFreshnessFn> | undefined> | undefined;
   let disposed = false;
@@ -33,6 +50,7 @@ export function mountSourceFreshness(options: Parameters<typeof MountSourceFresh
   return {
     open(opener: HTMLElement | null = null) {
       if (disposed) return;
+      clearDialogLoadFailure(name);
       if (instance) {
         instance.open(opener);
         return;
@@ -40,7 +58,9 @@ export function mountSourceFreshness(options: Parameters<typeof MountSourceFresh
       const generation = closeGeneration;
       void ensure().then(ctrl => {
         if (!disposed && generation === closeGeneration) ctrl?.open(opener);
-      }).catch(reportDialogLoadFailure);
+      }).catch(() => {
+        if (!disposed && generation === closeGeneration) reportDialogLoadFailure(name, opener);
+      });
     },
     close() {
       closeGeneration++;
@@ -55,6 +75,7 @@ export function mountSourceFreshness(options: Parameters<typeof MountSourceFresh
 }
 
 export function mountExplainDialog(options: Parameters<typeof MountExplainDialogFn>[0]) {
+  const name = '拒因反查';
   let instance: ReturnType<typeof MountExplainDialogFn> | undefined;
   let loading: Promise<ReturnType<typeof MountExplainDialogFn> | undefined> | undefined;
   let pendingReset = false;
@@ -80,16 +101,18 @@ export function mountExplainDialog(options: Parameters<typeof MountExplainDialog
       else pendingReset = true;
     },
     open(trigger: HTMLElement) {
+      clearDialogLoadFailure(name);
       if (instance) {
         instance.open(trigger);
         return;
       }
-      void ensure().then(ctrl => ctrl?.open(trigger)).catch(reportDialogLoadFailure);
+      void ensure().then(ctrl => ctrl?.open(trigger)).catch(() => reportDialogLoadFailure(name, trigger));
     },
   };
 }
 
 export function mountRepairHandoff(options: Parameters<typeof MountRepairHandoffFn>[0]) {
+  const name = '修复交接';
   let instance: ReturnType<typeof MountRepairHandoffFn> | undefined;
   let loading: Promise<ReturnType<typeof MountRepairHandoffFn> | undefined> | undefined;
   let disposed = false;
@@ -110,11 +133,14 @@ export function mountRepairHandoff(options: Parameters<typeof MountRepairHandoff
   return {
     open(anchor: HTMLElement, fromReport = false) {
       if (disposed) return;
+      clearDialogLoadFailure(name);
       if (instance) {
         instance.open(anchor, fromReport);
         return;
       }
-      void ensure().then(ctrl => ctrl?.open(anchor, fromReport)).catch(reportDialogLoadFailure);
+      void ensure().then(ctrl => ctrl?.open(anchor, fromReport)).catch(() => {
+        if (!disposed) reportDialogLoadFailure(name, anchor);
+      });
     },
     refresh() {
       instance?.refresh();
@@ -128,6 +154,7 @@ export function mountRepairHandoff(options: Parameters<typeof MountRepairHandoff
 }
 
 export function mountSubmissionMaterials(options: Parameters<typeof MountSubmissionMaterialsFn>[0]) {
+  const name = '提审材料包';
   let instance: ReturnType<typeof MountSubmissionMaterialsFn> | undefined;
   let loading: Promise<ReturnType<typeof MountSubmissionMaterialsFn> | undefined> | undefined;
   let disposed = false;
@@ -148,10 +175,12 @@ export function mountSubmissionMaterials(options: Parameters<typeof MountSubmiss
 
   return {
     async prepareOpen() {
+      clearDialogLoadFailure(name);
       return (await ensure())?.open;
     },
     open(anchor: HTMLElement | null = null) {
       if (disposed) return;
+      clearDialogLoadFailure(name);
       if (instance) {
         instance.open(anchor);
         return;
@@ -159,7 +188,9 @@ export function mountSubmissionMaterials(options: Parameters<typeof MountSubmiss
       const generation = closeGeneration;
       void ensure().then(ctrl => {
         if (!disposed && generation === closeGeneration) ctrl?.open(anchor);
-      }).catch(reportDialogLoadFailure);
+      }).catch(() => {
+        if (!disposed && generation === closeGeneration) reportDialogLoadFailure(name, anchor);
+      });
     },
     close() {
       closeGeneration++;

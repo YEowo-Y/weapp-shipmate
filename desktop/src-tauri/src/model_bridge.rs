@@ -387,10 +387,10 @@ pub async fn model_request(
                     runtime.stop();
                 }
             }
-            if guard.is_none() {
-                *guard = Some(start(&app)?);
-            }
-            let runtime = guard.as_mut().unwrap();
+            let runtime = match &mut *guard {
+                Some(runtime) => runtime,
+                slot @ None => slot.insert(start(&app)?),
+            };
             {
                 let mut pending = runtime.channels.lock().map_err(|_| {
                     crate::error::DesktopError::state_unavailable(
