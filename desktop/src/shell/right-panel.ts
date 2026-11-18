@@ -22,6 +22,9 @@ export function mountRightPanel(
       setArtifact(_artifact: Artifact | null) {},
       syncProject(_project: Project | null, _lastCheckSummary?: string | null) {},
       setDrawerMode(_isDrawer: boolean) {},
+      setBusy(_isBusy: boolean) {},
+      canClose() { return true; },
+      focusFact(_projectId: string, _field: 'collectsSensitive' | 'hasServerDomain') { return false; },
       destroy() {},
     };
   }
@@ -33,6 +36,7 @@ export function mountRightPanel(
   let queuedArtifact: Artifact | null | undefined;
   let queuedProject: { project: Project | null; summary?: string | null } | undefined;
   let queuedDrawer: boolean | undefined;
+  let queuedBusy: boolean | undefined;
 
   function showFallback(failed: boolean) {
     if (disposed || controller) return;
@@ -69,6 +73,7 @@ export function mountRightPanel(
         host!.replaceChildren();
         controller = mod.createRightPanelController(host!, options);
         if (queuedDrawer !== undefined) controller.setDrawerMode(queuedDrawer);
+        if (queuedBusy !== undefined) controller.setBusy(queuedBusy);
         if (queuedProject !== undefined) controller.syncProject(queuedProject.project, queuedProject.summary);
         if (queuedArtifact !== undefined) controller.setArtifact(queuedArtifact);
         if (queuedPartial !== undefined) controller.update(queuedPartial);
@@ -103,6 +108,16 @@ export function mountRightPanel(
     setDrawerMode(isDrawer: boolean) {
       if (controller) controller.setDrawerMode(isDrawer);
       else queuedDrawer = isDrawer;
+    },
+    setBusy(isBusy: boolean) {
+      if (controller) controller.setBusy(isBusy);
+      else queuedBusy = isBusy;
+    },
+    canClose(): boolean {
+      return controller ? controller.canClose() : true;
+    },
+    focusFact(projectId: string, field: 'collectsSensitive' | 'hasServerDomain'): boolean {
+      return controller ? controller.focusFact(projectId, field) : false;
     },
     destroy() {
       disposed = true;

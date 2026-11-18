@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { LucideSvg } from './lucide-svg';
 import { InfoHint, PanelEmpty, PanelError, PanelSkeleton } from './right-panel-states';
-import type { EvidencePanelState, ReleasePanelState, RightPanelCallbacks, RightPanelSnapshot } from './right-panel-types';
-
-const SUBJECT_LABELS: Record<string, string> = {
-  personal: '个人',
-  individual_business: '个体工商户',
-  enterprise: '企业',
-};
+import {
+  isSafeHttpsUrl,
+  SUBJECT_LABELS,
+  type EvidencePanelState,
+  type ReleasePanelState,
+  type RightPanelCallbacks,
+  type RightPanelSnapshot,
+} from './right-panel-types';
+import { InteractiveWorkflowBody, type ProjectWorkflowDraft } from './right-panel-workflow';
 
 const SEVERITY_META = {
   blocker: { label: '阻断', tone: 'shell-pill--bad' },
@@ -20,12 +22,16 @@ const CONFIDENCE_LABELS = { high: '高', medium: '中', low: '低' } as const;
 export function ReleaseTabBody({
   project,
   artifact,
+  isBusy,
   state,
+  draftsStore,
   callbacks,
 }: {
   project: RightPanelSnapshot['project'];
   artifact?: RightPanelSnapshot['artifact'];
+  isBusy?: boolean;
   state: ReleasePanelState;
+  draftsStore?: Map<string, ProjectWorkflowDraft>;
   callbacks: RightPanelCallbacks;
 }) {
   if (state.status === 'loading') return <PanelSkeleton label="正在读取上线阶段" />;
@@ -42,6 +48,22 @@ export function ReleaseTabBody({
         actionIcon="plus"
         actionId="manage-project"
         onAction={callbacks.onManageProject}
+      />
+    );
+  }
+
+  if (state.workflowBasis && state.workflowModel) {
+    return (
+      <InteractiveWorkflowBody
+        key={state.workflowBasis.project.id}
+        project={project}
+        artifact={artifact}
+        isBusy={isBusy}
+        state={state}
+        workflowBasis={state.workflowBasis}
+        workflowModel={state.workflowModel}
+        draftsStore={draftsStore}
+        callbacks={callbacks}
       />
     );
   }
@@ -124,15 +146,6 @@ export function ReleaseTabBody({
       </section>
     </div>
   );
-}
-
-function isSafeHttpsUrl(value: string | null | undefined): value is string {
-  if (!value) return false;
-  try {
-    return new URL(value).protocol === 'https:';
-  } catch {
-    return false;
-  }
 }
 
 export function EvidenceTabBody({
