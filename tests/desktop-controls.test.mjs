@@ -16,6 +16,7 @@ function harness({ open = async () => null, invoke = async () => 'report', write
   const nodes = new Map(), scheduled = [];
   const previewDocument = createPreviewDocument();
   const document = { activeElement: null, querySelector: selector => nodes.get(selector), querySelectorAll: () => [],
+    addEventListener() {}, removeEventListener() {},
     createElement(tag) {
       const element = previewDocument.createElement(tag); element.listeners = {};
       element.addEventListener = (name, listener) => { element.listeners[name] = listener; };
@@ -33,11 +34,34 @@ function harness({ open = async () => null, invoke = async () => 'report', write
     }));
   }
   const media = { matches: false, listener: null, addEventListener(_event, listener) { this.listener = listener; }, removeEventListener() {} };
+  const panelMedia = { matches: false, addEventListener() {}, removeEventListener() {} };
   const navControl = {};
-  if (navigation) nodes.set('#desktop-navigation', { open: false, contains: node => node === navControl, addEventListener() {} });
+  const makeShellEl = (extra = {}) => Object.assign({
+    dataset: {}, attributes: {}, hidden: false,
+    contains: () => false, querySelector: () => null, querySelectorAll: () => [],
+    setAttribute(k, v) { this.attributes[k] = v; }, removeAttribute(k) { delete this.attributes[k]; },
+    addEventListener() {}, removeEventListener() {}, focus() { document.activeElement = this; },
+  }, extra);
+  const layoutEl = makeShellEl({ dataset: { sidebar: 'open', panel: 'open' } });
+  const sidebarEl = makeShellEl({ contains: node => node === navControl });
+  const mainEl = makeShellEl();
+  const rightPanelEl = makeShellEl();
+  if (navigation) {
+    nodes.set('.desktop-layout', layoutEl);
+    nodes.set('#desktop-sidebar', sidebarEl);
+    nodes.set('#desktop-main', mainEl);
+    nodes.set('#desktop-right-panel', rightPanelEl);
+    const navView = {};
+    Object.defineProperty(navView, 'open', { get: () => layoutEl.dataset.sidebar === 'open' });
+    nodes.set('#desktop-navigation', navView);
+  }
+  document.getElementById = id => nodes.get(`#${id}`) ?? null;
+  const shellSource = readFileSync(new URL('../desktop/src/shell/shell-layout.ts', import.meta.url), 'utf8')
+    .replace(/^import .*;\r?\n/gm, '').replace(/^export /gm, '');
+  const shellScript = ts.transpileModule(shellSource, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
   const source = readFileSync(new URL('../desktop/src/main.ts', import.meta.url), 'utf8')
     .replace(/^import .*;\r?\n/gm, '');
-  const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+  const script = `${shellScript}\n${ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText}`;
   let project = null, sessionOptions, projectOptions, maintenanceOptions, healthOptions, notificationOptions, preferencesOptions, readerOptions, repairOptions;
   const integration = { selects: 0, refreshes: 0, healthClosed: 0, maintenanceRestores: 0, sourceOpens: 0, readerOpens: [], readerRechecks: [], readerCloses: 0, resultsOpens: [], repairOpens: [], repairSyncs: 0, projectOpens: 0, preferenceOpens: [], preferenceSections: [], preferenceCloses: 0, settingsCalls: [], shortcuts: null };
   const panel = name => ({ element: document.createElement('section'), open() { integration.settingsCalls.push(`${name}Open`); }, close() { integration.settingsCalls.push(`${name}Close`); }, canClose: () => true });
@@ -66,7 +90,7 @@ function harness({ open = async () => null, invoke = async () => 'report', write
     return { id: args.runId, runId: args.runId, projectId: args.projectId, kind: args.kind, title: args.kind === 'check' ? '代码预检' : '流程导航', markdown: result, createdAt: Date.now(), projectRevision: project?.revision ?? null, toolVersion: 'test', rulesVersion: '{}', inputSummary: '本地测试' };
   };
   if (!explain.reset) explain.reset = () => {};
-  vm.runInNewContext(script, { mountWorkspacePages: () => ({ close: workspaceClose, open: () => true, destroy() {} }), bindApplicationShortcuts: options => { integration.shortcuts = options; return () => {}; }, crypto: { randomUUID: () => 'test-run-' + (++harness.runSequence) }, document, open, getVersion: async () => 'desktop-test', corePackage: { version: 'core-test' }, openUrl() {}, mountSystemNotifications: options => { notificationOptions = options; return { element: null, open() {}, close() {}, destroy() {} }; }, mountScrollFades: () => () => {}, invoke: nativeInvoke, renderMessageText, mountProjects: options => { projectOptions = options; return projects; }, createProjectExplain: () => ({ query() {} }), mountProjectMaintenance: options => { maintenanceOptions = options; return maintenance; }, mountPreferences: options => { preferencesOptions = options; return { open(anchor, section) { integration.preferenceOpens.push(anchor); integration.preferenceSections.push(section); }, close() { integration.preferenceCloses++; }, destroy() {} }; }, mountSourceFreshness: () => ({ open() { integration.sourceOpens++; }, close() {}, destroy() {} }), mountProjectHealth: options => { healthOptions = options; return ({ open() {}, close() { integration.healthClosed++; }, restoreMaintenance() { integration.maintenanceRestores++; }, refresh() {}, destroy() {} }); }, mountReportReader: options => { readerOptions = options; return { open(anchor) { integration.readerOpens.push({ anchor, artifact: options.getArtifact() }); }, showRecheck(artifact) { integration.readerRechecks.push(artifact); }, close() { integration.readerCloses++; }, destroy() {} }; }, mountProjectRepair: options => { repairOptions = options; return { openForArtifact(artifact, anchor) { integration.repairOpens.push({ artifact, anchor }); }, openHistory() {}, sync() { integration.repairSyncs++; }, destroy() {} }; }, mountRepairHandoff: () => ({ open() {}, refresh() {}, destroy() {} }), mountWorkflow: () => ({ refresh() {}, setBusy() {}, destroy() {}, open() {} }), mountExplainDialog: () => explain, mountToolsPanel: () => tools, mountDesktopSessions: async options => { sessionOptions = options; return sessions; }, navigator: { clipboard: { writeText } }, window: { setTimeout: callback => { scheduled.push(callback); return scheduled.length; }, __TAURI_INTERNALS__: bridgeAvailable ? { invoke } : undefined, matchMedia: () => media, addEventListener: (event, ready) => { if (event === "DOMContentLoaded") ready(); } } });
+  vm.runInNewContext(script, { attachFloatingSurface: () => () => {}, mountRightPanel: () => ({ update() {}, selectTab() {}, setArtifact() {}, syncProject() {}, setDrawerMode() {}, destroy() {} }), mountWorkspacePages: () => ({ close: workspaceClose, open: () => true, destroy() {} }), bindApplicationShortcuts: options => { integration.shortcuts = options; return () => {}; }, crypto: { randomUUID: () => 'test-run-' + (++harness.runSequence) }, document, open, getVersion: async () => 'desktop-test', corePackage: { version: 'core-test' }, openUrl() {}, mountSystemNotifications: options => { notificationOptions = options; return { element: null, open() {}, close() {}, destroy() {} }; }, mountScrollFades: () => () => {}, invoke: nativeInvoke, renderMessageText, mountProjects: options => { projectOptions = options; return projects; }, createProjectExplain: () => ({ query() {} }), mountProjectMaintenance: options => { maintenanceOptions = options; return maintenance; }, mountPreferences: options => { preferencesOptions = options; return { open(anchor, section) { integration.preferenceOpens.push(anchor); integration.preferenceSections.push(section); }, close() { integration.preferenceCloses++; }, destroy() {} }; }, mountSourceFreshness: () => ({ open() { integration.sourceOpens++; }, close() {}, destroy() {} }), mountProjectHealth: options => { healthOptions = options; return ({ open() {}, close() { integration.healthClosed++; }, restoreMaintenance() { integration.maintenanceRestores++; }, refresh() {}, destroy() {} }); }, mountReportReader: options => { readerOptions = options; return { open(anchor) { integration.readerOpens.push({ anchor, artifact: options.getArtifact() }); }, showRecheck(artifact) { integration.readerRechecks.push(artifact); }, close() { integration.readerCloses++; }, destroy() {} }; }, mountProjectRepair: options => { repairOptions = options; return { openForArtifact(artifact, anchor) { integration.repairOpens.push({ artifact, anchor }); }, openHistory() {}, sync() { integration.repairSyncs++; }, destroy() {} }; }, mountRepairHandoff: () => ({ open() {}, refresh() {}, destroy() {} }), mountWorkflow: () => ({ refresh() {}, setBusy() {}, destroy() {}, open() {} }), mountExplainDialog: () => explain, mountToolsPanel: () => tools, mountDesktopSessions: async options => { sessionOptions = options; return sessions; }, navigator: { clipboard: { writeText } }, window: { setTimeout: callback => { scheduled.push(callback); return scheduled.length; }, __TAURI_INTERNALS__: bridgeAvailable ? { invoke } : undefined, matchMedia: query => query.includes('820px') ? media : panelMedia, addEventListener: (event, ready) => { if (event === "DOMContentLoaded") ready(); }, removeEventListener() {} } });
   return { flushTimers() { for (const callback of scheduled.splice(0)) callback(); }, selectProject(value) { project = value; projectOptions.onChange(value); }, integration, panels: { projects: projects.settings, backup: projects.backupSettings, maintenance }, repairOptions: () => repairOptions, readerOptions: () => readerOptions, sessionOptions: () => sessionOptions, notificationOptions: () => notificationOptions, healthOptions: () => healthOptions, maintenanceOptions: () => maintenanceOptions, preferencesOptions: () => preferencesOptions, node: id => nodes.get(`#${id}`), click: id => nodes.get(`#${id}`).listeners.click(), document, navControl, projectOptions: () => projectOptions, setModal(value, sidebar = true) { const selector = sidebar ? ".session-workspace-dialog[data-kind]:modal, #desktop-model-dialog:modal" : "dialog:modal"; if (value) nodes.set(selector, value); else nodes.delete(selector); }, resizeNavigation(narrow) { media.matches = narrow; media.listener(); } };
 }
 
@@ -677,11 +701,11 @@ desktopTest('home preflight respects a blocked panel transition before starting 
 test('desktop exposes one persistent settings entry while retaining business destinations', () => {
   const html = readFileSync(new URL('../desktop/index.html', import.meta.url), 'utf8');
   assert.equal((html.match(/id="desktop-preferences-open"/g) || []).length, 1);
-  assert.match(html, /<nav class="desktop-primary-navigation" aria-label="主要功能">/);
+  assert.match(html, /<nav class="desktop-nav-group" aria-labelledby="sidebar-group-ship">/);
   for (const id of ['desktop-model-settings', 'desktop-data-settings', 'home-models', 'home-preferences']) assert.ok(!html.includes(`id="${id}"`), `${id} must not duplicate settings`);
-  for (const value of ['models', 'data', 'preferences']) assert.ok(!html.includes(`<wa-dropdown-item value="${value}"`));
-  assert.match(html, /<div class="desktop-sidebar-footer">\s*<button id="desktop-preferences-open"/);
-  for (const id of ['desktop-home-open', 'desktop-workflow-open', 'desktop-maintenance-open', 'desktop-memory-open', 'desktop-sources-open', 'home-report']) assert.ok(html.includes(`id="${id}"`));
+  for (const value of ['models', 'data', 'preferences']) assert.ok(!html.includes(`data-menu-value="${value}"`));
+  assert.match(html, /<div class="desktop-sidebar-footer">[\s\S]*?<button id="desktop-preferences-open"/);
+  for (const id of ['desktop-home-open', 'desktop-workflow-open', 'desktop-maintenance-open', 'desktop-memory-open', 'desktop-sources-open', 'home-report', 'desktop-panel-toggle', 'desktop-right-panel']) assert.ok(html.includes(`id="${id}"`));
 });
 
 desktopTest('left rail opens existing destinations and the reminder shortcut remains after reading notices', async () => {

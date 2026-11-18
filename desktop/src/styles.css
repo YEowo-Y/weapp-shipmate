@@ -10,19 +10,8 @@
 }
 .desktop-app[data-theme="dark"] { --surface-2:var(--cds-surface-3); --surface-3:#2c2c2a; }
 .desktop-app { --font-ui: "Microsoft YaHei UI", "Segoe UI", "PingFang SC", system-ui, sans-serif; display:flex; flex-direction:column; height:100dvh; min-height:0; overflow:hidden; background:var(--bg); font-size:14px; line-height:1.55; }
-/* Navigation stays separate from the bounded reading surface. */
-.desktop-layout { display:grid; grid-template-columns:228px minmax(0,1fr); flex:1; min-height:0; }
-.desktop-layout[data-tools-open="true"] { grid-template-columns:228px minmax(0,1fr) 320px; }
-.desktop-sidebar { display:flex; flex-direction:column; min-height:0; min-width:0; background:var(--cds-surface-0); border-right:1px solid var(--border); padding:22px 12px 12px; }
-.desktop-navigation { flex:1; min-height:0; }
-.desktop-navigation::details-content { height:100%; min-height:0; }
-.desktop-navigation > summary { display:none; }
-.desktop-navigation > .desktop-navigation-body { display:flex; flex-direction:column; height:100%; min-height:0; }
+/* Navigation stays separate from the bounded reading surface; v2 layout lives in shell/shell.css. */
 #sessionHost { flex:1; min-width:0; min-height:0; overflow:auto; }
-.desktop-primary-navigation { display:grid; gap:2px; margin:4px 0 16px; }
-.desktop-primary-navigation .desktop-action { justify-content:flex-start; }
-.desktop-sidebar-footer { flex:none; padding-top:8px; margin-top:8px; }
-.desktop-sidebar-footer .desktop-action { width:100%; justify-content:flex-start; }
 .desktop-header { flex:0 0 auto; min-height:60px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 24px; }
 .desktop-header { border-bottom:1px solid var(--border); }
 .desktop-header h1 { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; font-weight:500; color:var(--text-2); margin:0; }
@@ -125,33 +114,7 @@
 .report-markdown a { color:var(--text); text-underline-offset:3px; }
 .report-markdown:focus-visible { outline:2px solid var(--text-2); outline-offset:-2px; border-radius:4px; }
 .desktop-tools .report { max-height:none; overflow:visible; }
-@media (max-width: 860px) {
-  .desktop-layout, .desktop-layout[data-tools-open="true"] { grid-template-columns:200px minmax(0,1fr); }
-  .desktop-tools { position:fixed; inset:0 0 0 auto; width:min(360px,100vw); height:100dvh; max-height:100dvh; box-shadow:-12px 0 48px #0002; }
-  .desktop-header { padding-inline:16px; }
-}
-/* Scroll the middle of short desktop sidebars as one region. */
-@media (min-width: 641px) and (max-height: 600px) {
-  .desktop-navigation > .desktop-navigation-body { display:block; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
-  #sessionHost, #sessionHost .session-workspace__recent { overflow:visible; }
-  #sessionHost .session-workspace--sidebar { height:auto; }
-  #sessionHost .session-workspace__recent { flex:none; }
-}
 @media (max-width: 640px) {
-  .desktop-layout, .desktop-layout[data-tools-open="true"] { display:flex; flex-direction:column; }
-  .desktop-sidebar { flex:0 0 auto; padding:10px 14px; border-right:0; border-bottom:1px solid var(--border); flex-direction:row; align-items:center; justify-content:space-between; overflow:visible; }
-  .desktop-sidebar-footer { padding:0; margin:0; }
-  .desktop-sidebar-footer .desktop-action { min-height:36px; }
-  .desktop-primary-navigation { margin-bottom:8px; }
-  .desktop-navigation { flex:0 1 auto; }
-  .desktop-navigation::details-content { height:auto; }
-  .desktop-navigation > summary { display:flex; align-items:center; gap:8px; padding:6px; cursor:pointer; font-size:12px; list-style:none; }
-  .desktop-navigation > .desktop-navigation-body { display:none; }
-  .desktop-navigation[open] > .desktop-navigation-body { display:flex; position:absolute; inset:54px 12px auto; max-height:70dvh; height:auto; z-index:30; padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--surface); box-shadow:var(--shadow); }
-  #sessionHost { max-height:48dvh; }
-  .desktop-conversation { flex:1; }
-  .desktop-header { min-height:48px; padding:6px 14px; }
-  .desktop-action { font-size:12px; padding-inline:8px; }
   .desktop-conversation .conversation-scroll { padding-block:16px; }
   #desktopComposer { padding-inline:16px; }
   .desktop-storage-note { font-size:10px; margin-bottom:10px; }

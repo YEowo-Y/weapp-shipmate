@@ -44,9 +44,9 @@
   --ds-icon-sm: 14px; --ds-icon-md: 16px; --ds-icon-lg: 18px;
 
   /* Layout */
-  --ds-sidebar-width: 248px;
+  --ds-sidebar-width: 264px;
   --ds-header-height: 52px;
-  --ds-panel-width: 340px;
+  --ds-panel-width: 404px;
   --ds-scroll-fade-size: 28px; /* open-claude-ui --cds-scroll-fade-size */
 
   /* Motion (70ms tap, 140ms state, 240ms surface) */

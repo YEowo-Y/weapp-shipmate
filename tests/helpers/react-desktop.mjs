@@ -16,13 +16,13 @@ export function loadDesktopModule(relativePath) {
     const module = { exports: {} };
     cache.set(filename, module);
     const source = ts.transpileModule(readFileSync(filename, 'utf8'), {
-      fileName: filename,
-      compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
+      fileName: filename.endsWith('.mjs') ? filename.slice(0, -4) + '.js' : filename,
+      compilerOptions: { allowJs: true, target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
     }).outputText;
     const localRequire = specifier => {
       if (!specifier.startsWith('.') && !specifier.startsWith('@/')) return requireDesktop(specifier);
       const path = specifier.startsWith('@/') ? resolve(desktop, 'src', specifier.slice(2)) : resolve(dirname(filename), specifier);
-      const candidate = [path, `${path}.ts`, `${path}.tsx`, `${path}.js`, resolve(path, 'index.ts'), resolve(path, 'index.tsx')].find(existsSync);
+      const candidate = [path, `${path}.ts`, `${path}.tsx`, `${path}.js`, `${path}.mjs`, resolve(path, 'index.ts'), resolve(path, 'index.tsx')].find(existsSync);
       if (!candidate) throw new Error(`Cannot resolve ${specifier} from ${filename}`);
       return load(candidate);
     };
@@ -38,7 +38,7 @@ export function installDesktopDom(window) {
   // jsdom 26 lacks PointerEvent; Base UI dispatches a pointer click to its native input.
   // MouseEvent implements these click/modifier semantics; WebView2 covers real pointer input.
   window.PointerEvent ??= window.MouseEvent;
-  for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'HTMLInputElement', 'HTMLButtonElement', 'HTMLDialogElement', 'Element', 'Node', 'DocumentFragment', 'MutationObserver', 'Event', 'MouseEvent', 'KeyboardEvent']) {
+  for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'HTMLInputElement', 'HTMLButtonElement', 'HTMLDialogElement', 'Element', 'Node', 'DocumentFragment', 'MutationObserver', 'Event', 'MouseEvent', 'KeyboardEvent', 'requestAnimationFrame', 'cancelAnimationFrame']) {
     Object.defineProperty(globalThis, key, { configurable: true, value: key === 'window' ? window : window[key] });
   }
   Object.defineProperty(globalThis, 'getComputedStyle', { configurable: true, value: window.getComputedStyle.bind(window) });

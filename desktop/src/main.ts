@@ -8,24 +8,26 @@ import { mountDesktopSessions } from "./sessions";
 import { mountToolsPanel } from "./tools-panel";
 import { mountWorkspacePages } from './workspace-pages';
 import { bindApplicationShortcuts } from './application-shortcuts';
-import { mountExplainDialog } from "./explain-dialog";
 import { createProjectExplain } from "./project-explain";
 import { mountWorkflow } from "./workflow";
-import { mountRepairHandoff } from "./repair-handoff";
 import { mountReportReader } from "./report-reader";
 import { mountReportQuoteChecks } from "./report-quote-checks";
 import { mountProjectRepair } from "./project-repair";
 import { mountProjectHealth } from "./project-health";
 import { mountProjectMaintenance } from "./maintenance";
 import { mountPreferences } from "./preferences";
-import { mountSourceFreshness } from "./source-freshness";
 import { mountSystemNotifications } from "./system-notifications";
 import { createIcon } from './shared/components/icons.js';
 import { renderMessageText } from './shared/components/message-markdown.js';
-import { bindActionMenu } from './shared/components/ui-kit.js';
 import { mountScrollFades } from './shared/components/scroll-fade.js';
-// Product polish must evaluate after every feature stylesheet imported above.
+import { mountExplainDialog, mountRepairHandoff, mountSourceFreshness } from './shell/lazy-dialogs';
+import { mountShellLayout } from './shell/shell-layout';
+import { mountRightPanel } from './shell/right-panel';
+import "./repair-handoff.css";
+import "./source-freshness.css";
+// Product polish and v2 shell styles must evaluate after every feature stylesheet imported above.
 import "./product-polish.css";
+import "./shell/shell.css";
 
 let sessions: Awaited<ReturnType<typeof mountDesktopSessions>> = null;
 let projects: ReturnType<typeof mountProjects> | null = null;
@@ -38,6 +40,7 @@ let health: ReturnType<typeof mountProjectHealth> | null = null;
 let maintenance: ReturnType<typeof mountProjectMaintenance> | null = null;
 let preferences: ReturnType<typeof mountPreferences> | null = null;
 let sources: ReturnType<typeof mountSourceFreshness> | null = null;
+let rightPanel: ReturnType<typeof mountRightPanel> | null = null;
 let displayedProjectId: string | null = null;
 let explainProjectId: string | null | undefined;
 let dir = "";
@@ -152,6 +155,7 @@ async function copyReport() {
 function resetReport() {
   lastSuccessful = null;
   reader?.close();
+  rightPanel?.setArtifact(null);
   resetCopy();
   $("#report-title").textContent = "执行报告";
   $("#report-note").textContent = "尚未生成报告。";
@@ -180,6 +184,11 @@ function applyProject(project: Project | null) {
   $("#dir").textContent = dir || "尚未选择项目文件夹";
   const homeName = $("#home-project-name"), homeSummary = $("#home-project-summary");
   if (homeName) homeName.textContent = project?.name || "未选择项目";
+  const crumb = $("#session-project-crumb"), crumbName = $("#session-project-crumb-name");
+  if (crumb && crumbName) {
+    crumb.hidden = !project;
+    crumbName.textContent = project?.name || "";
+  }
   if (homeSummary) {
     const subjects: Record<string, string> = { personal: "个人", individual_business: "个体工商户", enterprise: "企业" };
     homeSummary.textContent = project
@@ -194,6 +203,7 @@ function applyProject(project: Project | null) {
   if (sessions?.isTemporary()) $("#status").textContent += " 当前对话为临时模式，不会关联或自动保存；项目成果仍由本机独立保存。";
   setBusy(busy);
   void workflow?.refresh();
+  rightPanel?.syncProject(project, null);
 }
 
 function showArtifact(artifact: Artifact) {
@@ -201,6 +211,7 @@ function showArtifact(artifact: Artifact) {
   if (typeof artifact.markdown !== "string" || !artifact.markdown.trim()) throw new Error("执行未返回有效报告，请重试。");
   const type = artifact.kind === "check" ? "代码预检" : artifact.kind === "explain" ? "拒因反查" : "流程导航";
   lastSuccessful = { text: artifact.markdown, type, projectId: artifact.projectId, artifact };
+  rightPanel?.setArtifact(artifact);
   resetCopy();
   $("#report-title").textContent = type;
   $("#report-note").textContent = `保存于 ${new Date(artifact.createdAt).toLocaleString('zh-CN', { hour12: false })} · 工具 ${artifact.toolVersion} · 项目版本 ${artifact.projectRevision ?? "未归属"}。这是历史执行快照，未重新检查当前文件。`;
@@ -283,6 +294,10 @@ async function run(cmd: "run_check" | "run_guide"): Promise<Artifact | null> {
     setBusy(false);
     await projects.refresh();
     await workflow?.refresh();
+    rightPanel?.syncProject(
+      projects.getActive(),
+      lastSuccessful ? new Date(lastSuccessful.artifact.createdAt).toLocaleString('zh-CN', { hour12: false }) : null,
+    );
     // Do not take focus from a user who moved elsewhere while waiting.
     if (completed && (document.activeElement === trigger || document.activeElement === document.body)) {
       report.focus({ preventScroll: true });
@@ -296,6 +311,16 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   // Fade only scroll edges that hide content (open-claude-ui ScrollFadeContainer).
   mountScrollFades(document.body);
+  const shell = mountShellLayout({
+    onMenuAction(value, trigger) {
+      if (value === "rename" && workspace.close()) sessions?.renameSession(trigger);
+      if (value === "find" && workspace.close()) sessions?.openFind(trigger);
+      if (value === "report") showReport(trigger);
+    },
+    onPanelDrawerModeChange(isDrawer) {
+      rightPanel?.setDrawerMode(isDrawer);
+    },
+  });
   const workspace = mountWorkspacePages({ host: $('#desktop-workspace'), returnFocus: () => $('#desktop-more'), onChange(page) {
     $('.desktop-conversation').dataset.workspaceOpen = String(!!page);
     for (const [id, pageId] of [['desktop-home-open', null], ['desktop-workflow-open', 'desktop-workflow'], ['desktop-results-open', 'desktop-project-results']]) {
@@ -303,9 +328,48 @@ window.addEventListener("DOMContentLoaded", () => {
       if (page && page.id === pageId) control?.setAttribute('aria-current', 'page');
       else control?.removeAttribute('aria-current');
     }
-    if (page) { tools.close(); if (navigation && compactNavigation?.matches) navigation.open = false; }
+    if (page) { tools.close(); shell.closeSidebarDrawer(); shell.closePanelDrawer(); }
   } });
-  const tools = mountToolsPanel({ beforeOpen: () => workspace.close() });
+  const tools = mountToolsPanel({ beforeOpen: () => {
+    if (!workspace.close()) return false;
+    shell.closeSidebarDrawer();
+    shell.closePanelDrawer();
+    return true;
+  } });
+  rightPanel = mountRightPanel({
+    invoke,
+    onManageProject: () => {
+      shell.closePanelDrawer();
+      if (!document.activeElement || document.activeElement === document.body || $("#desktop-right-panel")?.contains(document.activeElement)) {
+        $("#desktop-panel-toggle")?.focus({ preventScroll: true });
+      }
+      projects?.openManager();
+    },
+    onOpenWorkflow: () => workflow?.open($("#desktop-workflow-open") ?? $("#desktop-panel-toggle")),
+    onRunCheck: () => {
+      const trigger = $("#desktop-panel-toggle") ?? $("#start-check");
+      const project = projects?.getActive();
+      if (!project?.directory || project.directoryAvailable === false) { tools.open(trigger, $("#pick-btn")); return; }
+      if (tools.open(trigger)) void run("run_check");
+    },
+    onOpenReport: () => showReport($("#desktop-panel-toggle") ?? $("#desktop-more")),
+    onOpenRepair: () => {
+      if (lastSuccessful) {
+        shell.closePanelDrawer();
+        repair?.openForArtifact(lastSuccessful.artifact, $("#desktop-panel-toggle") ?? $("#desktop-more"));
+      }
+    },
+    onOpenRepairHistory: () => {
+      shell.closePanelDrawer();
+      repair?.openHistory($("#desktop-panel-toggle") ?? $("#desktop-repair-history"));
+    },
+    onOpenSource: url => {
+      try { if (new URL(url).protocol !== "https:") return; } catch { return; }
+      void Promise.resolve(openUrl(url)).catch(() => setStatus("无法打开系统浏览器，请手动复制链接核对。", "error"));
+    },
+    onOpenTools: () => tools.open($("#desktop-panel-toggle") ?? $("#desktop-more")),
+    onCloseDrawer: () => shell.closePanel(),
+  });
   handoff = mountRepairHandoff({ getArtifact: () => lastSuccessful?.artifact ?? null, getProject: () => projects?.getActive() ?? null, getRulesVersion: () => projects?.getRulesVersion() ?? null, isBusy: () => busy });
   repair = mountProjectRepair({
     getProjectId: () => projects?.getActiveId() ?? null,
@@ -324,6 +388,12 @@ window.addEventListener("DOMContentLoaded", () => {
       reader?.showRecheck(artifact);
       return artifact;
     },
+  });
+  document.getElementById("desktop-repair")?.addEventListener("close", () => {
+    rightPanel?.syncProject(
+      projects?.getActive() ?? null,
+      lastSuccessful ? new Date(lastSuccessful.artifact.createdAt).toLocaleString("zh-CN", { hour12: false }) : null,
+    );
   });
   reader = mountReportReader({
     mountQuoteChecks: (version, rows, onChange) => mountReportQuoteChecks(invoke, version, rows, onChange),
@@ -350,7 +420,9 @@ window.addEventListener("DOMContentLoaded", () => {
   const explain = mountExplainDialog({ query: nativeExplain.query, saveResult: text => {
     if (busy || explainProjectId === undefined || explainProjectId !== (projects?.getActiveId() ?? null)
       || explainProjectId !== (sessions?.getCurrentSession()?.projectId ?? null)) return { ok: false, reason: 'scope' };
-    return sessions?.appendReport({ text, type: '拒因反查', deduplicate: true }) ?? { ok: false, reason: 'unavailable' };
+    const saved: { ok: boolean; reason?: string; duplicate?: boolean } = sessions?.appendReport({ text, type: '拒因反查', deduplicate: true }) ?? { ok: false, reason: 'unavailable' };
+    if (saved.ok && !saved.duplicate) { shell.closeSidebarDrawer(); shell.closePanelDrawer(); }
+    return saved;
   } });
   explainPanel = explain;
   $("#start-explain").addEventListener("click", () => explain.open($("#start-explain")));
@@ -367,10 +439,11 @@ window.addEventListener("DOMContentLoaded", () => {
   $("#start-guide").addEventListener("click", () => tools.open($("#start-guide"), $("#subject")));
   const showHome = () => {
     if (!workspace.close()) return;
+    shell.closeSidebarDrawer();
+    shell.closePanelDrawer();
     $("#session-empty").hidden = false;
     $("#session-empty").scrollIntoView({ block: "start" });
     $("#start-check").focus();
-    if (compactNavigation?.matches && navigation) navigation.open = false;
   };
   const showReport = (trigger: HTMLElement) => {
     if (busy || !lastSuccessful) return;
@@ -379,47 +452,20 @@ window.addEventListener("DOMContentLoaded", () => {
   $("#read-report")?.addEventListener("click", () => showReport($("#read-report")));
   $("#home-report")?.addEventListener("click", () => showReport($("#home-report")));
   $("#desktop-home-open")?.addEventListener("click", showHome);
+  $("#desktop-search-open")?.addEventListener("click", () => { if (workspace.close()) sessions?.openHistory($("#desktop-search-open")); });
+  $("#desktop-new-session")?.addEventListener("click", () => { if (workspace.close()) { shell.closeSidebarDrawer(); shell.closePanelDrawer(); sessions?.createSession(); } });
+  $("#desktop-explain-open")?.addEventListener("click", () => explain.open($("#desktop-explain-open")));
   $("#desktop-memory-open")?.addEventListener("click", () => sessions?.openMemory($("#desktop-memory-open")));
+  $("#desktop-handoff-open")?.addEventListener("click", () => handoff?.open($("#desktop-handoff-open")));
+  $("#desktop-repair-history")?.addEventListener("click", () => repair?.openHistory($("#desktop-repair-history")));
+  $("#desktop-health-open")?.addEventListener("click", () => health?.open($("#desktop-health-open")));
+  $("#desktop-archived-open")?.addEventListener("click", () => { if (workspace.close()) sessions?.openHistory($("#desktop-archived-open"), "archived"); });
   $("#desktop-sources-open")?.addEventListener("click", () => sources?.open($("#desktop-sources-open")));
+  $("#desktop-rules-status-open")?.addEventListener("click", () => sources?.open($("#desktop-rules-status-open")));
+  $("#desktop-help-open")?.addEventListener("click", () => {
+    void Promise.resolve(openUrl("https://github.com/YEowo-Y/weapp-shipmate")).catch(() => setStatus("无法打开系统浏览器，请访问项目仓库查看文档与反馈。", "error"));
+  });
   $("#home-project-manage")?.addEventListener("click", () => projects?.openManager());
-  const actionMenu = $("#desktop-actions");
-  if (actionMenu) bindActionMenu(actionMenu, value => {
-    if (value === "home") showHome();
-    if (value === "rename" && workspace.close()) sessions?.renameSession($("#desktop-more"));
-    if (value === "find" && workspace.close()) sessions?.openFind($("#desktop-more"));
-    if (value === "history" && workspace.close()) sessions?.openHistory($("#desktop-more"));
-    if (value === "archived" && workspace.close()) sessions?.openHistory($("#desktop-more"), "archived");
-    if (value === "report") showReport($("#desktop-more"));
-    if (value === "handoff") handoff?.open($("#desktop-more"));
-    if (value === "repairs") repair?.openHistory($("#desktop-more"));
-    if (value === "health") health?.open($("#desktop-more"));
-    if (value === "sources") sources?.open($("#desktop-more"));
-    if (value === "memory") sessions?.openMemory($("#desktop-more"));
-    if (value === "explain") explain.open($("#desktop-more"));
-  });
-  const navigation = $<HTMLDetailsElement>("#desktop-navigation");
-  const compactNavigation = navigation ? window.matchMedia('(max-width: 640px)') : null;
-  if (navigation && compactNavigation) {
-    const syncNavigation = () => {
-      // Keep the active control visible when a desktop sidebar becomes a drawer.
-      navigation.open = !compactNavigation.matches || navigation.contains(document.activeElement)
-        || (navigation.open && Boolean(document.querySelector(".session-workspace-dialog[data-kind]:modal, #desktop-model-dialog:modal")));
-    };
-    syncNavigation();
-    compactNavigation.addEventListener('change', syncNavigation);
-    window.addEventListener('pagehide', () => compactNavigation.removeEventListener('change', syncNavigation), { once: true });
-  }
-  navigation?.addEventListener("keydown", (event: KeyboardEvent) => {
-    if (event.key === "Escape" && navigation.open && compactNavigation?.matches) {
-      navigation.open = false;
-      navigation.querySelector<HTMLElement>("summary")?.focus();
-      event.preventDefault();
-    }
-  });
-  $("#sessionHost")?.addEventListener("click", (event: MouseEvent) => {
-    const target = event.target as HTMLElement;
-    if (target.closest('[data-action="new"]') && navigation && compactNavigation?.matches) navigation.open = false;
-  });
   resetReport();
   updateStopControl();
   const sessionsReady = mountDesktopSessions({
@@ -539,19 +585,25 @@ window.addEventListener("DOMContentLoaded", () => {
     onRepository: () => openUrl('https://github.com/YEowo-Y/weapp-shipmate'),
   });
   const disposeShortcuts = bindApplicationShortcuts({
-    newSession: () => { if (workspace.close()) sessions?.createSession(); },
-    search: () => { if (workspace.close()) sessions?.openHistory($('#desktop-more')); },
+    newSession: () => { if (workspace.close()) { shell.closeSidebarDrawer(); shell.closePanelDrawer(); sessions?.createSession(); } },
+    search: () => { if (workspace.close()) sessions?.openHistory($('#desktop-search-open') ?? $('#desktop-more')); },
     find: () => {
       if (!sessions || !$('#desktopMessages')?.getClientRects().length) return false;
       sessions.openFind(document.activeElement as HTMLElement | null ?? $('#desktop-more'));
       return true;
     },
     settings: () => preferences?.open($('#desktop-preferences-open')),
+    togglePanel: () => shell.togglePanel(),
+    toggleSidebar: () => shell.toggleSidebar(),
   });
   $('#sessionHost')?.addEventListener('click', event => {
-    if ((event.target as HTMLElement).closest('[data-action="new"], [data-action="recent-session"], [data-action="history"], [data-action="session-actions"]') && !workspace.close()) { event.preventDefault(); event.stopImmediatePropagation(); }
+    const target = event.target as HTMLElement;
+    if (target.closest('[data-action="new"], [data-action="recent-session"], [data-action="history"], [data-action="session-actions"]')) {
+      if (!workspace.close()) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+      if (target.closest('[data-action="new"], [data-action="recent-session"]')) { shell.closeSidebarDrawer(); shell.closePanelDrawer(); }
+    }
   }, true);
-  window.addEventListener('pagehide', () => { disposeShortcuts(); workspace.destroy(); }, { once: true });
+  window.addEventListener('pagehide', () => { disposeShortcuts(); workspace.destroy(); rightPanel?.destroy(); shell.destroy(); }, { once: true });
   $("#desktop-preferences-open")?.addEventListener('click', () => preferences?.open($("#desktop-preferences-open")));
   $("#desktop-maintenance-open")?.addEventListener('click', () => health?.open($("#desktop-maintenance-open")));
   window.addEventListener('pagehide', () => { health?.destroy(); maintenance?.destroy(); preferences?.destroy(); sources?.destroy(); }, { once: true });

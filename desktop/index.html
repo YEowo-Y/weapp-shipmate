@@ -20,58 +20,73 @@
   </head>
 
   <body data-theme="light" class="desktop-app">
-    <div class="desktop-layout">
-      <aside class="desktop-sidebar" aria-label="会话导航">
-        <nav class="desktop-primary-navigation" aria-label="主要功能">
-          <button id="desktop-home-open" class="desktop-action" type="button" aria-label="工作台" title="工作台"><span data-icon="house"></span></button>
-          <button id="desktop-workflow-open" class="desktop-action" type="button" aria-label="上线进度" title="上线进度" aria-controls="desktop-workspace"><span data-icon="list-checks"></span></button>
-          <button id="desktop-results-open" class="desktop-action" type="button" aria-label="运行与报告" title="运行与报告" aria-controls="desktop-workspace"><span data-icon="file-text"></span></button>
-          <button id="desktop-memory-open" class="desktop-action" type="button" aria-label="项目记忆" title="项目记忆" aria-haspopup="dialog"><span data-icon="message-square"></span></button>
-          <button id="desktop-sources-open" class="desktop-action" type="button" aria-label="规则来源" title="规则来源" aria-haspopup="dialog"><span data-icon="book-open"></span></button>
-          <wa-dropdown id="desktop-actions" placement="right-start">
-            <button slot="trigger" class="desktop-action" id="desktop-more" type="button" aria-label="更多功能" title="更多功能"><span data-icon="ellipsis"></span></button>
-            <div class="desktop-menu-heading">会话管理</div>
-            <wa-dropdown-item value="rename"><span slot="icon" data-icon="pencil"></span>重命名会话</wa-dropdown-item>
-            <wa-dropdown-item value="find"><span slot="icon" data-icon="search"></span>在当前会话中查找</wa-dropdown-item>
-            <wa-dropdown-item value="history"><span slot="icon" data-icon="search"></span>搜索会话历史</wa-dropdown-item>
-            <wa-dropdown-item value="archived"><span slot="icon" data-icon="folder"></span>已归档会话</wa-dropdown-item>
-            <div class="desktop-menu-heading desktop-menu-heading--separated">项目与成果</div>
-            <wa-dropdown-item value="home"><span slot="icon" data-icon="house"></span>工作台</wa-dropdown-item>
-            <wa-dropdown-item value="explain"><span slot="icon" data-icon="circle-question-mark"></span>拒因反查</wa-dropdown-item>
-            <wa-dropdown-item value="report" id="desktop-menu-report" disabled><span slot="icon" data-icon="book-open"></span>查看当前报告</wa-dropdown-item>
-            <wa-dropdown-item value="handoff"><span slot="icon" data-icon="share-2"></span>修复交接</wa-dropdown-item>
-            <wa-dropdown-item value="repairs" id="desktop-repair-history" disabled><span slot="icon" data-icon="rotate-ccw"></span>本机修复记录</wa-dropdown-item>
-            <wa-dropdown-item value="health"><span slot="icon" data-icon="activity"></span>项目维护与重检</wa-dropdown-item>
-            <wa-dropdown-item value="memory"><span slot="icon" data-icon="file-text"></span>项目记忆</wa-dropdown-item>
-            <wa-dropdown-item value="sources"><span slot="icon" data-icon="book-open"></span>规则来源</wa-dropdown-item>
-          </wa-dropdown>
-          <div class="desktop-sidebar-footer">
-            <button id="desktop-preferences-open" class="desktop-action" type="button" aria-label="设置" title="设置" aria-haspopup="dialog" aria-controls="desktop-preferences"><span data-icon="sliders-horizontal"></span></button>
+    <div class="desktop-layout" data-sidebar="open" data-panel="open">
+      <aside id="desktop-sidebar" class="desktop-sidebar" aria-label="会话导航">
+        <div class="desktop-sidebar-top">
+          <div class="desktop-brand-bar">
+            <img src="/brand/shipmate.svg" alt="" width="20" height="20" class="desktop-brand-mark" />
+            <strong class="desktop-brand-name">上线船友</strong>
+            <button id="desktop-search-open" class="desktop-icon-action" type="button" aria-label="搜索会话" title="搜索会话 (Ctrl+K)"><span data-icon="search"></span></button>
+            <button id="desktop-maintenance-open" class="desktop-icon-action" type="button" aria-label="项目提醒" title="项目提醒" aria-haspopup="dialog" aria-controls="desktop-health"><span data-icon="bell"></span><span id="desktop-maintenance-count" class="visually-hidden">0 条提醒</span></button>
+            <button id="desktop-sidebar-toggle" class="desktop-icon-action" type="button" aria-label="收起侧栏" title="收起侧栏 (Ctrl+B)" aria-controls="desktop-sidebar" aria-expanded="true"><span data-icon="panel-left"></span></button>
           </div>
-        </nav>
-        <details class="desktop-navigation" id="desktop-navigation">
-          <summary><span data-icon="clock"></span>会话与历史</summary>
-          <div class="desktop-navigation-body">
-            <section id="desktop-project-navigation" class="desktop-project-switcher" aria-label="项目工作区">
-              <div class="project-folder-heading"><h2>项目</h2><button id="desktop-project-manage" class="desktop-action" type="button" aria-label="添加或管理项目" title="添加或管理项目" aria-haspopup="dialog"><span data-icon="plus"></span></button></div>
+          <button id="desktop-new-session" class="desktop-nav-row desktop-nav-row--strong" type="button"><span data-icon="pencil"></span><span class="desktop-nav-label">新建会话</span><kbd aria-hidden="true">Ctrl N</kbd></button>
+        </div>
+
+        <div id="desktop-navigation" class="desktop-sidebar-scroll scroll" data-scroll-fade="y">
+          <nav class="desktop-nav-group" aria-labelledby="sidebar-group-ship">
+            <div class="desktop-nav-group-header"><span id="sidebar-group-ship">上线</span></div>
+            <button id="desktop-home-open" class="desktop-nav-row" type="button"><span data-icon="house"></span><span class="desktop-nav-label">工作台</span></button>
+            <button id="desktop-workflow-open" class="desktop-nav-row" type="button" aria-controls="desktop-workspace"><span data-icon="list-checks"></span><span class="desktop-nav-label">上线进度</span><small id="desktop-workflow-progress" class="desktop-nav-meta tabular"></small></button>
+            <button id="desktop-results-open" class="desktop-nav-row" type="button" aria-controls="desktop-workspace"><span data-icon="file-text"></span><span class="desktop-nav-label">运行与报告</span></button>
+            <button id="desktop-explain-open" class="desktop-nav-row" type="button" aria-haspopup="dialog" aria-controls="desktop-explain"><span data-icon="circle-question-mark"></span><span class="desktop-nav-label">拒因反查</span></button>
+            <button id="desktop-sources-open" class="desktop-nav-row" type="button" aria-haspopup="dialog"><span data-icon="book-open"></span><span class="desktop-nav-label">规则来源</span></button>
+          </nav>
+
+          <div class="desktop-nav-group">
+            <section id="desktop-project-navigation" class="desktop-project-switcher" aria-labelledby="sidebar-group-projects">
+              <div class="desktop-nav-group-header project-folder-heading"><h2 id="sidebar-group-projects">项目</h2><button id="desktop-project-manage" class="desktop-icon-action desktop-icon-action--compact" type="button" aria-label="添加或管理项目" title="添加或管理项目" aria-haspopup="dialog"><span data-icon="plus"></span></button></div>
               <select id="desktop-project-select" aria-label="当前项目" hidden disabled><option value="">正在读取项目…</option></select>
               <div id="desktop-project-folders"></div>
               <p id="desktop-project-status" role="status" aria-live="polite"></p>
             </section>
-            <nav id="sessionHost" aria-label="本地会话">
-              <div id="desktop-sidebar-heading" class="desktop-sidebar-heading">
-                <span class="desktop-sidebar-title">Shipmate</span>
-                <button id="desktop-maintenance-open" class="desktop-action" type="button" aria-label="项目提醒" title="项目提醒" aria-haspopup="dialog" aria-controls="desktop-health"><span data-icon="bell"></span><span id="desktop-maintenance-count" class="visually-hidden">0 条提醒</span></button>
-              </div>
-            </nav>
+            <nav id="sessionHost" aria-label="本地会话"></nav>
           </div>
-        </details>
+
+          <nav class="desktop-nav-group" aria-labelledby="sidebar-group-materials">
+            <div class="desktop-nav-group-header"><span id="sidebar-group-materials">项目资料</span></div>
+            <button id="desktop-memory-open" class="desktop-nav-row" type="button" aria-haspopup="dialog"><span data-icon="notebook-text"></span><span class="desktop-nav-label">项目记忆</span></button>
+            <button id="desktop-handoff-open" class="desktop-nav-row" type="button" aria-haspopup="dialog" aria-controls="desktop-handoff"><span data-icon="share-2"></span><span class="desktop-nav-label">修复交接</span></button>
+            <button id="desktop-repair-history" class="desktop-nav-row" type="button" aria-haspopup="dialog" aria-controls="desktop-repair" disabled><span data-icon="rotate-ccw"></span><span class="desktop-nav-label">本机修复记录</span></button>
+            <button id="desktop-health-open" class="desktop-nav-row" type="button" aria-haspopup="dialog" aria-controls="desktop-health"><span data-icon="activity"></span><span class="desktop-nav-label">项目维护与重检</span></button>
+            <button id="desktop-archived-open" class="desktop-nav-row" type="button" aria-haspopup="dialog"><span data-icon="archive"></span><span class="desktop-nav-label">已归档会话</span></button>
+          </nav>
+        </div>
+
+        <div class="desktop-sidebar-footer">
+          <button id="desktop-rules-status-open" class="desktop-nav-row" type="button" aria-haspopup="dialog"><span data-icon="refresh-cw"></span><span class="desktop-nav-label" id="desktop-rules-status-label">规则库核验状态</span><span id="desktop-rules-status-dot" class="desktop-status-dot" aria-hidden="true" hidden></span></button>
+          <button id="desktop-preferences-open" class="desktop-nav-row" type="button" aria-label="设置" title="设置 (Ctrl+,)" aria-haspopup="dialog" aria-controls="desktop-preferences"><span data-icon="sliders-horizontal"></span><span class="desktop-nav-label">设置</span></button>
+          <button id="desktop-help-open" class="desktop-nav-row" type="button"><span data-icon="circle-question-mark"></span><span class="desktop-nav-label">帮助与反馈</span></button>
+        </div>
       </aside>
-      <main class="conversation-shell desktop-conversation" aria-labelledby="session-title">
+
+      <main id="desktop-main" class="conversation-shell desktop-conversation" aria-labelledby="session-title">
         <header class="desktop-header">
+          <button id="desktop-sidebar-expand" class="desktop-icon-action" type="button" aria-label="展开侧栏" title="展开侧栏 (Ctrl+B)" aria-controls="desktop-sidebar" aria-expanded="false" hidden><span data-icon="panel-left"></span></button>
+          <span id="session-project-crumb" class="desktop-header-crumb" hidden><span id="session-project-crumb-name"></span><span data-icon="chevron-right" aria-hidden="true"></span></span>
           <h1 id="session-title">新会话</h1>
           <div class="workbench-header-actions">
-            <button id="desktop-tools-toggle" class="desktop-action" type="button" aria-controls="desktop-tools" aria-expanded="false"><span data-icon="list-checks"></span><span>项目工具</span></button>
+            <button id="desktop-more" class="desktop-icon-action" type="button" aria-label="更多操作" title="更多操作" aria-haspopup="menu" aria-expanded="false" commandfor="desktop-actions" command="toggle-popover"><span data-icon="ellipsis"></span></button>
+            <div id="desktop-actions" class="desktop-popover-menu" popover="auto">
+              <div focusgroup="menu nomemory" aria-labelledby="desktop-more" class="desktop-popover-menu__group">
+                <button type="button" data-menu-value="rename"><span data-icon="pencil"></span><span>重命名会话</span></button>
+                <button type="button" data-menu-value="find"><span data-icon="search"></span><span>在当前会话中查找</span><kbd class="hint" aria-hidden="true">Ctrl F</kbd></button>
+                <hr />
+                <button type="button" id="desktop-menu-report" data-menu-value="report" disabled><span data-icon="book-open"></span><span>查看当前报告</span></button>
+                <button type="button" id="desktop-tools-toggle" data-menu-value="tools" aria-controls="desktop-tools" aria-expanded="false"><span data-icon="terminal"></span><span>本机预检控制台</span></button>
+              </div>
+            </div>
+            <button id="desktop-panel-toggle" class="desktop-icon-action" type="button" aria-label="侧边面板" title="侧边面板 (Ctrl+J)" aria-controls="desktop-right-panel" aria-expanded="true" aria-pressed="true"><span data-icon="panel-right"></span></button>
           </div>
         </header>
         <section id="desktop-workspace" class="desktop-workspace" aria-label="项目工作区" hidden></section>
@@ -103,8 +118,33 @@
         <button id="desktopJump" class="jump-latest" type="button" hidden>回到最新</button>
         <p id="desktopConversationStatus" class="turn-status" role="status" aria-live="polite"></p>
         <div id="desktopComposer"></div>
-        <p class="desktop-storage-note">会话保存在此设备 · 项目报告由你决定是否分享</p>
+        <p class="desktop-storage-note">会话保存在此设备 · 上线船友不会替你提审或发布</p>
       </main>
+
+      <div id="desktop-shell-backdrop" class="desktop-shell-backdrop" hidden aria-hidden="true"></div>
+
+      <aside id="desktop-right-panel" class="desktop-right-panel" aria-label="侧边面板" aria-busy="true">
+        <div class="shell-panel-bar">
+          <div class="ui-tabs__list" role="tablist" aria-label="右侧面板视图">
+            <button type="button" role="tab" id="shell-init-tab-release" class="ui-tabs__trigger" aria-selected="true"><span data-icon="list-checks"></span><span>上线</span></button>
+            <button type="button" role="tab" id="shell-init-tab-evidence" class="ui-tabs__trigger" aria-selected="false" tabindex="-1"><span data-icon="book-open"></span><span>依据</span></button>
+            <button type="button" role="tab" id="shell-init-tab-changes" class="ui-tabs__trigger" aria-selected="false" tabindex="-1"><span data-icon="file-diff"></span><span>改动</span></button>
+            <button type="button" role="tab" id="shell-init-tab-devtools" class="ui-tabs__trigger" aria-selected="false" tabindex="-1"><span data-icon="smartphone"></span><span>开发者工具</span></button>
+          </div>
+        </div>
+        <div role="tabpanel" aria-labelledby="shell-init-tab-release" class="ui-tabs__panel">
+          <div class="shell-pane">
+            <div class="shell-state-card" role="status" aria-busy="true" aria-label="正在加载侧边面板">
+              <div class="shell-skel shell-skel--w72"></div>
+              <div class="shell-skel shell-skel--w92"></div>
+              <div class="shell-skel shell-skel--w54"></div>
+            </div>
+          </div>
+        </div>
+        <div role="tabpanel" aria-labelledby="shell-init-tab-evidence" class="ui-tabs__panel" hidden></div>
+        <div role="tabpanel" aria-labelledby="shell-init-tab-changes" class="ui-tabs__panel" hidden></div>
+        <div role="tabpanel" aria-labelledby="shell-init-tab-devtools" class="ui-tabs__panel" hidden></div>
+      </aside>
       <dialog id="desktop-tools" class="container desktop-tools" aria-labelledby="desktop-tools-title">
       <header class="desktop-tools-header">
         <div><h2 id="desktop-tools-title">项目工具</h2><p class="tagline">检查代码，整理上线步骤。</p></div>
