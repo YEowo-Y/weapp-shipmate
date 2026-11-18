@@ -2,7 +2,9 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { deriveWorkflow } from '../../../src/workflow.mjs';
+import { createArtifactDownloader } from '../shared/artifact-download.js';
 import { createHandoff } from '../shared/repair-handoff.js';
+import { createWorkflowArtifact } from '../shared/workflow-artifact.js';
 import type { Artifact, Project } from '../projects';
 import type { WorkflowResult } from '../shared';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
@@ -10,27 +12,26 @@ import { TooltipProvider } from '../components/ui/tooltip';
 import { LucideSvg } from './lucide-svg';
 import { ChangesTabBody, DevtoolsTabBody } from './right-panel-changes-devtools';
 import { EvidenceTabBody, ReleaseTabBody } from './right-panel-release-evidence';
-import type {
-  EvidencePanelState,
-  EvidenceRuleItem,
-  RightPanelCallbacks,
-  RightPanelSnapshot,
-  RightPanelTabId,
-  StageSummaryItem,
+import type { ProjectWorkflowDraft } from './right-panel-workflow';
+import {
+  STAGE_LABELS,
+  type EvidencePanelState,
+  type EvidenceRuleItem,
+  type RightPanelCallbacks,
+  type RightPanelSnapshot,
+  type RightPanelTabId,
+  type StageSummaryItem,
+  type WorkflowBasisSnapshot,
 } from './right-panel-types';
 
 type InvokeFn = <T = unknown>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 
-export type RightPanelHostOptions = Partial<Omit<RightPanelCallbacks, 'onTabChange'>> & {
+export type RightPanelHostOptions = Partial<
+  Omit<RightPanelCallbacks, 'onTabChange' | 'onSaveFacts' | 'onConfirmStage' | 'onExportWorkflow'>
+> & {
   invoke?: InvokeFn;
-};
-
-const STAGE_LABELS: Record<string, string> = {
-  confirmed: '人工已确认',
-  not_applicable: '人工不适用',
-  pending: '待确认',
-  unknown: '事实待补充',
-  stale: '待重检',
+  onProjectMutated?(): Promise<void> | void;
+  onDownloadArtifact?(artifact: { text: string; filename: string; mimeType: string }): boolean;
 };
 
 type RepairHistoryRecord = {
@@ -90,9 +91,11 @@ export function deriveEvidenceState(artifact: Artifact | null): EvidencePanelSta
 
 function RightPanelView({
   snapshot,
+  draftsStore,
   callbacks,
 }: {
   snapshot: RightPanelSnapshot;
+  draftsStore: Map<string, ProjectWorkflowDraft>;
   callbacks: RightPanelCallbacks;
 }) {
   const changeCount = snapshot.changesState.status === 'ready' ? snapshot.changesState.operations.length : 0;
@@ -141,7 +144,14 @@ function RightPanelView({
 
         <TabsContent value="release">
           <div className="shell-pane scroll" data-scroll-fade="y">
-            <ReleaseTabBody project={snapshot.project} artifact={snapshot.artifact} state={snapshot.releaseState} callbacks={callbacks} />
+            <ReleaseTabBody
+              project={snapshot.project}
+              artifact={snapshot.artifact}
+              isBusy={snapshot.isBusy}
+              state={snapshot.releaseState}
+              draftsStore={draftsStore}
+              callbacks={callbacks}
+            />
           </div>
         </TabsContent>
         <TabsContent value="evidence">
@@ -166,12 +176,28 @@ function RightPanelView({
 
 export function createRightPanelController(container: HTMLElement, options: RightPanelHostOptions = {}) {
   const root = createRoot(container);
+  const workflowDrafts = new Map<string, ProjectWorkflowDraft>();
+  const downloader = options.onDownloadArtifact
+    ? null
+    : createArtifactDownloader({ documentRef: container.ownerDocument });
   let disposed = false;
   let syncEpoch = 0;
+  let inFlightWrites = 0;
+  let lastCheckMemo: string | null | undefined = null;
+
+  async function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+    inFlightWrites++;
+    try {
+      return await fn();
+    } finally {
+      inFlightWrites = Math.max(0, inFlightWrites - 1);
+    }
+  }
 
   const snapshot: RightPanelSnapshot = {
     activeTab: 'release',
     isDrawer: false,
+    isBusy: false,
     project: null,
     rulesVersion: null,
     artifact: null,
@@ -180,6 +206,12 @@ export function createRightPanelController(container: HTMLElement, options: Righ
     changesState: { status: 'empty' },
     devtoolsState: { status: 'empty' },
   };
+
+  function hasNativeBridge() {
+    if (!options.invoke) return false;
+    const win = container.ownerDocument.defaultView as (Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }) | null;
+    return typeof win?.__TAURI_INTERNALS__?.invoke === 'function';
+  }
 
   const callbacks: RightPanelCallbacks = {
     onTabChange(tab) {
@@ -195,23 +227,79 @@ export function createRightPanelController(container: HTMLElement, options: Righ
     onOpenSource: url => options.onOpenSource?.(url),
     onOpenTools: () => options.onOpenTools?.(),
     onCloseDrawer: () => options.onCloseDrawer?.(),
+    onSaveSubject: options.onSaveSubject
+      ? (projectId, value) =>
+          withWriteLock(async () => {
+            const ok = await options.onSaveSubject!(projectId, value);
+            if (ok) {
+              const draft = workflowDrafts.get(projectId);
+              if (draft) delete draft.subject;
+              if (!disposed && snapshot.project?.id === projectId) {
+                await loadProjectData(snapshot.project, lastCheckMemo);
+              }
+            }
+            return ok;
+          })
+      : undefined,
+    onSaveFacts: options.invoke
+      ? (projectId, expectedRevision, facts) =>
+          withWriteLock(async () => {
+            if (!hasNativeBridge()) throw new Error('此操作需要在桌面应用中运行。');
+            await options.invoke!('project_facts_save', { projectId, expectedRevision, facts });
+            const draft = workflowDrafts.get(projectId);
+            if (draft) {
+              draft.facts = {};
+              delete draft.factsBasis;
+            }
+            await options.onProjectMutated?.();
+            if (!disposed && snapshot.project?.id === projectId) {
+              await loadProjectData(snapshot.project, lastCheckMemo);
+            }
+          })
+      : undefined,
+    onConfirmStage: options.invoke
+      ? payload =>
+          withWriteLock(async () => {
+            if (!hasNativeBridge()) throw new Error('此操作需要在桌面应用中运行。');
+            await options.invoke!('project_stage_confirm', payload);
+            const draft = workflowDrafts.get(payload.projectId);
+            if (draft) {
+              draft.notes.delete(payload.stageId);
+              draft.noteBases.delete(payload.stageId);
+              draft.invalidNotes.delete(payload.stageId);
+            }
+            await options.onProjectMutated?.();
+            if (!disposed && snapshot.project?.id === payload.projectId) {
+              await loadProjectData(snapshot.project, lastCheckMemo);
+            }
+          })
+      : undefined,
+    onGenerateGuide: options.onGenerateGuide
+      ? projectId =>
+          withWriteLock(async () => {
+            await options.onGenerateGuide!(projectId);
+            if (!disposed && snapshot.project?.id === projectId) {
+              await loadProjectData(snapshot.project, lastCheckMemo);
+            }
+          })
+      : undefined,
+    onExportWorkflow: basis => {
+      const exported = createWorkflowArtifact(basis as never);
+      if (options.onDownloadArtifact) return options.onDownloadArtifact(exported);
+      return Boolean(downloader?.download(exported));
+    },
   };
 
   function render() {
     if (disposed) return;
     flushSync(() => {
-      root.render(createElement(RightPanelView, { snapshot: { ...snapshot }, callbacks }));
+      root.render(createElement(RightPanelView, { snapshot: { ...snapshot }, draftsStore: workflowDrafts, callbacks }));
     });
-  }
-
-  function hasNativeBridge() {
-    if (!options.invoke) return false;
-    const win = container.ownerDocument.defaultView as (Window & { __TAURI_INTERNALS__?: { invoke?: unknown } }) | null;
-    return typeof win?.__TAURI_INTERNALS__?.invoke === 'function';
   }
 
   async function loadProjectData(project: Project, lastCheckSummary?: string | null) {
     const token = ++syncEpoch;
+    lastCheckMemo = lastCheckSummary;
     if (!hasNativeBridge()) {
       snapshot.releaseState = {
         status: 'ready',
@@ -226,16 +314,28 @@ export function createRightPanelController(container: HTMLElement, options: Righ
       return;
     }
 
-    snapshot.releaseState = { status: 'loading' };
-    snapshot.changesState = { status: 'loading' };
-    render();
+    const badge = container.ownerDocument.getElementById('desktop-workflow-progress');
+    const isSameProjectReady =
+      snapshot.releaseState.status === 'ready' &&
+      snapshot.releaseState.workflowBasis?.project.id === project.id;
+    if (!isSameProjectReady) {
+      if (badge) badge.textContent = '';
+      snapshot.releaseState = { status: 'loading' };
+      snapshot.changesState = { status: 'loading' };
+      render();
+    }
 
     await Promise.all([
       (async () => {
         try {
-          const wfBasis = await options.invoke!<unknown>('project_workflow', { projectId: project.id });
+          const wfBasis = await options.invoke!<WorkflowBasisSnapshot>('project_workflow', { projectId: project.id });
           if (disposed || token !== syncEpoch) return;
+          if (wfBasis?.project?.id !== project.id) {
+            throw new Error('返回的项目与当前选择不符，请重新加载。');
+          }
           const model = deriveWorkflow(wfBasis as never) as WorkflowResult;
+          snapshot.project = wfBasis.project;
+          snapshot.rulesVersion = wfBasis.rulesVersion;
           const completedCount = model.stages.filter(s => s.status === 'confirmed' || s.status === 'not_applicable').length;
           const stages: StageSummaryItem[] = model.stages.map(s => ({
             id: s.id,
@@ -250,11 +350,13 @@ export function createRightPanelController(container: HTMLElement, options: Righ
             nextAction: model.nextAction ? { ...model.nextAction } : null,
             stages,
             lastCheckSummary: lastCheckSummary ?? null,
+            workflowBasis: wfBasis,
+            workflowModel: model,
           };
-          const badge = container.ownerDocument.getElementById('desktop-workflow-progress');
           if (badge) badge.textContent = `${completedCount}/${model.stages.length}`;
         } catch (err) {
           if (disposed || token !== syncEpoch) return;
+          if (badge) badge.textContent = '';
           snapshot.releaseState = {
             status: 'error',
             message: String(err instanceof Error ? err.message : err),
@@ -330,10 +432,47 @@ export function createRightPanelController(container: HTMLElement, options: Righ
       snapshot.isDrawer = isDrawer;
       render();
     },
+    setBusy(value: boolean) {
+      if (disposed || snapshot.isBusy === value) return;
+      snapshot.isBusy = value;
+      render();
+    },
+    canClose(): boolean {
+      return inFlightWrites === 0;
+    },
+    focusFact(projectId: string, field: 'collectsSensitive' | 'hasServerDomain'): boolean {
+      if (disposed || snapshot.isBusy || inFlightWrites > 0 || snapshot.project?.id !== projectId) return false;
+      if (snapshot.releaseState.status !== 'ready' || snapshot.releaseState.workflowBasis?.project.id !== projectId) {
+        return false;
+      }
+      let draft = workflowDrafts.get(projectId);
+      if (!draft) {
+        draft = {
+          facts: {},
+          notes: new Map(),
+          noteBases: new Map(),
+          invalidNotes: new Set(),
+          expanded: new Set(),
+        };
+        workflowDrafts.set(projectId, draft);
+      }
+      draft.factsOpen = true;
+      snapshot.activeTab = 'release';
+      render();
+      const factsDetails = container.querySelector<HTMLDetailsElement>('#panel-workflow-facts');
+      if (factsDetails) factsDetails.open = true;
+      const target = container.querySelector<HTMLElement>(`#panel-workflow-${field}`);
+      if (!target || target.hasAttribute('disabled')) return false;
+      target.focus({ preventScroll: true });
+      target.scrollIntoView?.({ block: 'nearest' });
+      return container.ownerDocument.activeElement === target;
+    },
     destroy() {
       if (disposed) return;
       disposed = true;
       syncEpoch++;
+      downloader?.dispose();
+      workflowDrafts.clear();
       root.unmount();
     },
   };

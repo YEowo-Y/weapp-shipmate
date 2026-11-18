@@ -62,6 +62,7 @@ function setBusy(value: boolean) {
   busy = value;
   projects?.setBusy(value);
   workflow?.setBusy(value);
+  rightPanel?.setBusy?.(value);
   health?.refresh();
   for (const id of ["pick-btn", "guide-btn", "subject"]) {
     $<HTMLButtonElement | HTMLSelectElement>(`#${id}`).disabled = value;
@@ -345,7 +346,32 @@ window.addEventListener("DOMContentLoaded", () => {
       }
       projects?.openManager();
     },
-    onOpenWorkflow: () => workflow?.open($("#desktop-workflow-open") ?? $("#desktop-panel-toggle")),
+    onOpenWorkflow: () => {
+      shell.closePanelDrawer();
+      if (workflow?.element.open) {
+        document.getElementById("workflow-close")?.focus({ preventScroll: true });
+        void workflow.refresh();
+        return;
+      }
+      if (!workflow?.open($("#desktop-panel-toggle") ?? $("#desktop-workflow-open"))) {
+        $("#desktop-panel-toggle")?.focus({ preventScroll: true });
+      }
+    },
+    onSaveSubject: (projectId, value) =>
+      projects?.getActiveId() === projectId
+        ? (projects?.saveSubject(value) ?? Promise.resolve(false))
+        : Promise.resolve(false),
+    onProjectMutated: async () => {
+      await projects?.refresh();
+      await workflow?.refresh();
+    },
+    onGenerateGuide: async projectId => {
+      if (busy || projects?.getActiveId() !== projectId) throw new Error('当前项目已改变或正在运行，请返回原项目后重试。');
+      const artifact = await run('run_guide');
+      if (!artifact || artifact.kind !== 'guide' || artifact.projectId !== projectId) {
+        throw new Error('上线清单未生成成功，已保存事实仍保留，请重试。');
+      }
+    },
     onRunCheck: () => {
       const trigger = $("#desktop-panel-toggle") ?? $("#start-check");
       const project = projects?.getActive();
@@ -397,7 +423,21 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   reader = mountReportReader({
     mountQuoteChecks: (version, rows, onChange) => mountReportQuoteChecks(invoke, version, rows, onChange),
-    onEditFact: (projectId, field, anchor) => workflow?.openFacts(projectId, field, anchor) ?? false,
+    onEditFact: (projectId, field, anchor) => {
+      const layout = document.querySelector<HTMLElement>('.desktop-layout');
+      if (
+        layout?.dataset.panel === 'open' &&
+        layout?.dataset.panelMode === 'inline' &&
+        !busy &&
+        projects?.getActiveId() === projectId &&
+        rightPanel?.focusFact?.(projectId, field)
+      ) {
+        if (workspace.close()) return true;
+        anchor.focus({ preventScroll: true });
+        return false;
+      }
+      return workflow?.openFacts(projectId, field, anchor) ?? false;
+    },
     openPage: (page, trigger) => workspace.open(page, trigger === $('#read-report') ? tools.getReturnFocus() : trigger),
     getArtifact: () => lastSuccessful?.artifact ?? null,
     getProject: () => projects?.getActive() ?? null,
@@ -488,7 +528,7 @@ window.addEventListener("DOMContentLoaded", () => {
     onOpenResults: showResults,
     openResultsPage: (page, trigger) => workspace.open(page, trigger, { canLeave: () => projects?.results.canClose() ?? true }),
     onOpenData: () => preferences?.open(null, 'data'),
-    canChangeProject: () => (maintenance?.canClose() ?? true) && (workflow?.canClose() ?? true),
+    canChangeProject: () => (maintenance?.canClose() ?? true) && (workflow?.canClose() ?? true) && (rightPanel?.canClose?.() ?? true),
     isBusy: () => busy,
     onPending: setBusy,
     onRegistry: ids => sessionsReady.then(value => { value?.setKnownProjects(ids); }),
@@ -610,7 +650,13 @@ window.addEventListener("DOMContentLoaded", () => {
   workflow = mountWorkflow({
     openPage: (page, trigger) => workspace.open(page, trigger, { canLeave: () => workflow?.canClose() ?? true }),
     getProject: () => projects?.getActive() ?? null, isBusy: () => busy,
-    onProjectChanged: async () => { await projects?.refresh(); },
+    onProjectChanged: async () => {
+      await projects?.refresh();
+      rightPanel?.syncProject(
+        projects?.getActive() ?? null,
+        lastSuccessful ? new Date(lastSuccessful.artifact.createdAt).toLocaleString("zh-CN", { hour12: false }) : null,
+      );
+    },
     onGenerateGuide: async projectId => {
       if (busy || projects?.getActiveId() !== projectId) throw new Error('当前项目已改变或正在运行，请返回原项目后重试。');
       const artifact = await run('run_guide');
