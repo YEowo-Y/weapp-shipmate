@@ -90,7 +90,7 @@ function harness({ open = async () => null, invoke = async () => 'report', write
     return { id: args.runId, runId: args.runId, projectId: args.projectId, kind: args.kind, title: args.kind === 'check' ? '代码预检' : '流程导航', markdown: result, createdAt: Date.now(), projectRevision: project?.revision ?? null, toolVersion: 'test', rulesVersion: '{}', inputSummary: '本地测试' };
   };
   if (!explain.reset) explain.reset = () => {};
-  vm.runInNewContext(script, { attachFloatingSurface: () => () => {}, mountRightPanel: options => { integration.rightPanel = options; return { update() {}, selectTab() {}, setArtifact() {}, syncProject() {}, setDrawerMode() {}, destroy() {} }; }, mountWorkspacePages: () => ({ close: workspaceClose, open: () => true, destroy() {} }), bindApplicationShortcuts: options => { integration.shortcuts = options; return () => {}; }, crypto: { randomUUID: () => 'test-run-' + (++harness.runSequence) }, document, open, getVersion: async () => 'desktop-test', corePackage: { version: 'core-test' }, openUrl() {}, mountSystemNotifications: options => { notificationOptions = options; return { element: null, open() {}, close() {}, destroy() {} }; }, mountScrollFades: () => () => {}, invoke: nativeInvoke, renderMessageText, mountProjects: options => { projectOptions = options; return projects; }, createProjectExplain: () => ({ query() {} }), mountProjectMaintenance: options => { maintenanceOptions = options; return maintenance; }, mountPreferences: options => { preferencesOptions = options; return { open(anchor, section) { integration.preferenceOpens.push(anchor); integration.preferenceSections.push(section); }, close() { integration.preferenceCloses++; }, destroy() {} }; }, mountSourceFreshness: () => ({ open() { integration.sourceOpens++; }, close() {}, destroy() {} }), mountProjectHealth: options => { healthOptions = options; return ({ open() {}, close() { integration.healthClosed++; }, restoreMaintenance() { integration.maintenanceRestores++; }, refresh() {}, destroy() {} }); }, mountReportReader: options => { readerOptions = options; return { open(anchor) { integration.readerOpens.push({ anchor, artifact: options.getArtifact() }); }, showRecheck(artifact) { integration.readerRechecks.push(artifact); }, close() { integration.readerCloses++; }, destroy() {} }; }, mountProjectRepair: options => { repairOptions = options; return { openForArtifact(artifact, anchor) { integration.repairOpens.push({ artifact, anchor }); }, openHistory() {}, sync() { integration.repairSyncs++; }, destroy() {} }; }, mountRepairHandoff: () => ({ open() {}, refresh() {}, destroy() {} }), mountSubmissionMaterials: options => { integration.materials = options; return { open() {}, close() {}, refresh() { integration.materialsRefreshes = (integration.materialsRefreshes ?? 0) + 1; }, destroy() {} }; }, mountWorkflow: () => ({ refresh() {}, setBusy() {}, destroy() {}, open() {} }), mountExplainDialog: () => explain, mountToolsPanel: () => tools, mountDesktopSessions: async options => { sessionOptions = options; return sessions; }, navigator: { clipboard: { writeText } }, window: { setTimeout: callback => { scheduled.push(callback); return scheduled.length; }, __TAURI_INTERNALS__: bridgeAvailable ? { invoke } : undefined, matchMedia: query => query.includes('820px') ? media : panelMedia, addEventListener: (event, ready) => { if (event === "DOMContentLoaded") ready(); }, removeEventListener() {} } });
+  vm.runInNewContext(script, { attachFloatingSurface: () => () => {}, mountRightPanel: options => { integration.rightPanel = options; return { update() {}, selectTab() {}, setArtifact() {}, syncProject() {}, setDrawerMode() {}, destroy() {} }; }, mountWorkspacePages: () => ({ close: workspaceClose, open: () => true, destroy() {} }), bindApplicationShortcuts: options => { integration.shortcuts = options; return () => {}; }, crypto: { randomUUID: () => 'test-run-' + (++harness.runSequence) }, document, open, getVersion: async () => 'desktop-test', corePackage: { version: 'core-test' }, openUrl() {}, mountSystemNotifications: options => { notificationOptions = options; return { element: null, open() {}, close() {}, destroy() {} }; }, mountScrollFades: () => () => {}, invoke: nativeInvoke, renderMessageText, mountProjects: options => { projectOptions = options; return projects; }, createProjectExplain: options => { integration.nativeExplain = options; return { query() {} }; }, mountProjectMaintenance: options => { maintenanceOptions = options; return maintenance; }, mountPreferences: options => { preferencesOptions = options; return { open(anchor, section) { integration.preferenceOpens.push(anchor); integration.preferenceSections.push(section); }, close() { integration.preferenceCloses++; }, destroy() {} }; }, mountSourceFreshness: () => ({ open() { integration.sourceOpens++; }, close() {}, destroy() {} }), mountProjectHealth: options => { healthOptions = options; return ({ open() {}, close() { integration.healthClosed++; }, restoreMaintenance() { integration.maintenanceRestores++; }, refresh() {}, destroy() {} }); }, mountReportReader: options => { readerOptions = options; return { open(anchor) { integration.readerOpens.push({ anchor, artifact: options.getArtifact() }); }, showRecheck(artifact) { integration.readerRechecks.push(artifact); }, close() { integration.readerCloses++; }, destroy() {} }; }, mountProjectRepair: options => { repairOptions = options; return { openForArtifact(artifact, anchor) { integration.repairOpens.push({ artifact, anchor }); }, openHistory() {}, sync() { integration.repairSyncs++; }, destroy() {} }; }, mountRepairHandoff: () => ({ open() {}, refresh() {}, destroy() {} }), mountSubmissionMaterials: options => { integration.materials = options; return { open() {}, close() {}, prepareOpen() { return integration.prepareMaterials?.(); }, refresh() { integration.materialsRefreshes = (integration.materialsRefreshes ?? 0) + 1; }, destroy() {} }; }, mountWorkflow: () => ({ refresh() {}, setBusy() {}, destroy() {}, open() {} }), mountExplainDialog: options => { integration.explainDialog = options; return explain; }, mountToolsPanel: () => tools, mountDesktopSessions: async options => { sessionOptions = options; return sessions; }, navigator: { clipboard: { writeText } }, window: { setTimeout: callback => { scheduled.push(callback); return scheduled.length; }, __TAURI_INTERNALS__: bridgeAvailable ? { invoke } : undefined, matchMedia: query => query.includes('820px') ? media : panelMedia, addEventListener: (event, ready) => { if (event === "DOMContentLoaded") ready(); }, removeEventListener() {} } });
   return { flushTimers() { for (const callback of scheduled.splice(0)) callback(); }, selectProject(value) { project = value; projectOptions.onChange(value); }, integration, panels: { projects: projects.settings, backup: projects.backupSettings, maintenance }, repairOptions: () => repairOptions, readerOptions: () => readerOptions, sessionOptions: () => sessionOptions, notificationOptions: () => notificationOptions, healthOptions: () => healthOptions, maintenanceOptions: () => maintenanceOptions, preferencesOptions: () => preferencesOptions, node: id => nodes.get(`#${id}`), click: id => nodes.get(`#${id}`).listeners.click(), document, navControl, projectOptions: () => projectOptions, setModal(value, sidebar = true) { const selector = sidebar ? ".session-workspace-dialog[data-kind]:modal, #desktop-model-dialog:modal" : "dialog:modal"; if (value) nodes.set(selector, value); else nodes.delete(selector); }, resizeNavigation(narrow) { media.matches = narrow; media.listener(); } };
 }
 
@@ -569,6 +569,74 @@ desktopTest('submission materials select the latest local project check and refr
   const refreshes = app.integration.materialsRefreshes ?? 0;
   await app.integration.rightPanel.onProjectMutated();
   assert.equal(app.integration.materialsRefreshes, refreshes + 1);
+});
+
+desktopTest('rejection follow-up opens the preflight controls without running tools and respects project and workspace state', async () => {
+  const opened = [], requests = [];
+  let canLeave = true;
+  const app = harness({
+    invoke: async name => { requests.push(name); return null; },
+    tools: { open(anchor, target) { opened.push({ anchor, target }); return true; } },
+    workspaceClose: () => canLeave,
+    navigation: true,
+  });
+  const trigger = { isConnected: true, closest: () => null, getClientRects: () => [{}] };
+  const prepare = (isCurrent = () => true) => app.integration.explainDialog.prepareFollowUp('preflight', trigger, isCurrent);
+  const acceptedQuery = projectId => app.integration.nativeExplain.onArtifact({
+    projectId, kind: 'explain', markdown: '拒因报告', createdAt: 1, toolVersion: 'test', rulesVersion: '{}',
+  });
+
+  assert.match(await prepare(), /查询结果已变化/);
+  acceptedQuery(null);
+  const chooseDirectory = await prepare();
+  assert.equal(chooseDirectory(), true);
+  assert.equal(opened[0].target, app.node('pick-btn'));
+
+  const project = { id: 'project-a', directory: 'D:/synthetic/miniprogram', directoryAvailable: true, subject: 'personal' };
+  app.selectProject(project);
+  assert.match(await prepare(), /查询结果已变化/);
+  acceptedQuery(project.id);
+  app.integration.nativeExplain.setBusy(true);
+  assert.match(await prepare(), /等待当前项目操作/);
+  app.integration.nativeExplain.setBusy(false);
+  canLeave = false;
+  assert.match(await prepare(), /工作区暂不能关闭/);
+  canLeave = true;
+  assert.match(await prepare(() => false), /查询结果已变化/);
+  assert.equal(opened.length, 1);
+
+  const check = await prepare();
+  assert.equal(check(), true);
+  assert.deepEqual(opened[1], { anchor: trigger, target: app.node('check-btn') });
+  assert.ok(!requests.includes('project_run'));
+  assert.ok(!requests.includes('project_save'));
+});
+
+desktopTest('rejection follow-up waits for materials initialization and rejects a project switch during loading', async () => {
+  const app = harness();
+  const project = { id: 'project-a', directory: 'D:/synthetic/f04', subject: 'enterprise' };
+  app.selectProject(project);
+  app.integration.nativeExplain.onArtifact({ projectId: project.id, kind: 'explain', markdown: '拒因报告', createdAt: 1, toolVersion: 'test', rulesVersion: '{}' });
+  const trigger = { isConnected: true, closest: () => null, getClientRects: () => [{}] };
+  const prepare = () => app.integration.explainDialog.prepareFollowUp('materials', trigger, () => true);
+
+  app.integration.prepareMaterials = async () => { throw new Error('materials initialization failed'); };
+  assert.match(await prepare(), /未能加载提审材料包/);
+
+  const opened = [];
+  app.integration.prepareMaterials = async () => anchor => { opened.push(anchor); };
+  const destination = await prepare();
+  assert.equal(opened.length, 0);
+  destination();
+  assert.deepEqual(opened, [trigger]);
+
+  const loading = deferred();
+  app.integration.prepareMaterials = () => loading.promise;
+  const obsolete = prepare();
+  app.selectProject({ ...project, id: 'project-b' });
+  loading.resolve(anchor => { opened.push(anchor); });
+  assert.match(await obsolete, /当前项目或查询结果已变化/);
+  assert.equal(opened.length, 1);
 });
 
 desktopTest('stop failure retains busy state and can retry cancellation without accepting a stale result', async () => {
