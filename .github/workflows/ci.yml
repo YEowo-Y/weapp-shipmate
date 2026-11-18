@@ -54,3 +54,27 @@ jobs:
         run: npm run build:mcpb
         env:
           WEAPP_SHIPMATE_NO_PACK: "1"
+      - name: Report Node.js code coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '22'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          report="$RUNNER_TEMP/node-code-coverage.tap"
+          printf '## Node.js code coverage\n\n' >> "$GITHUB_STEP_SUMMARY"
+          if ! npm test -- --experimental-test-coverage --test-reporter=tap --test-concurrency=4 \
+            '--test-coverage-include=bin/**/*.mjs' \
+            '--test-coverage-include=src/**/*.mjs' \
+            '--test-coverage-include=desktop/server/**/*.mjs' | tee "$report"; then
+            printf 'The instrumented test run failed. See the step log.\n' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          table=$(sed -n '/^# start of coverage report$/,/^# end of coverage report$/p' "$report")
+          if [[ "$table" != *$'\n# end of coverage report' ]]; then
+            printf 'The test runner produced no complete coverage report. See the step log.\n' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          {
+            printf 'V8 report for Node.js modules in `bin/`, `src/`, and `desktop/server/`. No coverage threshold.\n\n'
+            printf '```text\n%s\n```\n' "$table"
+          } >> "$GITHUB_STEP_SUMMARY"
