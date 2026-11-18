@@ -213,6 +213,75 @@ function triageOutput(query = '隐私') {
 }
 const classNode = (n, name) => n.rjResultItems.descendants.find(node => node.className === name);
 const filterNode = (n, name) => n.rjResultItems.descendants.find(node => node.dataset.rjFilter === name);
+const followUps = n => n.rjResultItems.descendants.filter(node => node.dataset.rjFollowUp);
+
+test('validated rejection results expose one action per destination even when rules are filtered', async () => {
+  const calls = [];
+  const h = explainHarness(undefined, { onFollowUp: action => {
+    calls.push(action);
+    return '当前工作区有未保存的更改，请处理后重试。';
+  } });
+  const n = h.nodes;
+  n.rjInput.value = '地理位置接口没有在隐私保护指引中声明位置信息。若小程序中存在账号体系，需提供测试号。';
+  await n.rjForm.fire('submit');
+  assert.deepEqual(followUps(n).map(node => node.dataset.rjFollowUp), ['preflight', 'materials']);
+  assert.ok(followUps(n).every(node => node.tag === 'button' && node.type === 'button'));
+  await filterNode(n, 'source').fire('click');
+  assert.deepEqual(followUps(n).map(node => node.dataset.rjFollowUp), ['preflight', 'materials']);
+  const preflight = followUps(n)[0];
+  preflight.focus();
+  await preflight.fire('click');
+  assert.deepEqual(calls, ['preflight']);
+  assert.match(n.rjActionStatus.textContent, /工作区有未保存/);
+  assert.equal(n.rjResult.hidden, false);
+  assert.equal(h.root.activeElement, preflight);
+  await followUps(n)[1].fire('click');
+  assert.deepEqual(calls, ['preflight', 'materials']);
+
+  const preview = explainHarness().nodes;
+  preview.rjInput.value = n.rjInput.value;
+  await preview.rjForm.fire('submit');
+  assert.deepEqual(followUps(preview), []);
+});
+
+test('unknown notice offers keyword editing and leaves the notice intact without searching automatically', async () => {
+  let queries = 0;
+  const input = 'SYNTHETIC_UNKNOWN_NOTICE_F04';
+  const h = explainHarness(async ({ query }) => { queries++; return runExplain(query); });
+  const n = h.nodes;
+  n.rjInput.value = input;
+  await n.rjForm.fire('submit');
+  assert.match(n.rjResultHeading.textContent, /未找到/);
+  assert.deepEqual(followUps(n).map(node => node.dataset.rjFollowUp), ['edit']);
+  await followUps(n)[0].fire('click');
+  assert.equal(n.rjInput.value, input);
+  assert.equal(n.rjQuery.open, true);
+  assert.equal(h.root.activeElement, n.rjInput);
+  assert.equal(queries, 1);
+});
+
+test('closed or replaced results cannot complete a pending follow-up or report stale action feedback', async () => {
+  let finish, canProceed, called = 0;
+  const h = explainHarness(undefined, { onFollowUp: (_action, current) => {
+    called++;
+    canProceed = current;
+    return new Promise(resolve => { finish = resolve; });
+  } });
+  const n = h.nodes;
+  n.rjInput.value = '若小程序中存在账号体系，需提供测试号。';
+  await n.rjForm.fire('submit');
+  const materials = followUps(n).find(node => node.dataset.rjFollowUp === 'materials');
+  const working = materials.fire('click');
+  assert.equal(canProceed(), true);
+  h.suspend();
+  assert.equal(canProceed(), false);
+  finish('这条提示来自旧结果');
+  await working;
+  assert.equal(n.rjActionStatus.textContent, '');
+  h.reset();
+  await materials.fire('click');
+  assert.equal(called, 1);
+});
 const rules = n => n.rjResultItems.descendants.filter(node => node.className === 'rj-rule');
 
 test('triage counts overlapping matching items and filters existing groups without stealing focus or disclosure state', async () => {
