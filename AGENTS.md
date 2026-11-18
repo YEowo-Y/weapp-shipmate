@@ -18,7 +18,8 @@
 | 凭记忆或二手资料写 `source_quote` | `GOVERNANCE.md` 来源核验准则 | 从 `corpus/source-snapshots/` 的快照里逐字复制；核验不到就 `draft: true` |
 | 手工编辑自动抓取的快照 | 门禁会校验 sha256 | `npm run snapshot:sources` 重新抓取 |
 | 为了让测试变绿去改标注、阈值或判定 | 掩盖真实回归 | 修代码或规则；判断不了就停下报告 |
-| 直接 push `main`、squash、rebase、amend、force-push、删分支、复用 tag | `main` 没有分支保护，只能靠约定 | 见 `docs/26` §2 |
+| 直接 push `main`、squash、rebase、amend、force-push、复用 tag | `main` 没有分支保护，只能靠约定 | 见 `docs/26` §2 |
+| 删除尚未并入 `main` 的分支 | 分支是工单与 PR 的索引，提前删就断了追溯 | 只删已合并的，按 `docs/26` §2「分支清理」的条件 |
 
 ## 容易踩的坑
 

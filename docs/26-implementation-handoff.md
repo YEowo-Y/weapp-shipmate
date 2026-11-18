@@ -27,7 +27,8 @@
 6. 跑该工单「验证」一栏的命令，再跑一遍第 3 步的四条。
 7. 推送并开 PR：`gh pr create --base <工作分支>`。PR 描述写明：做了什么、每条判据的实际输出、没做什么。
    理由：`pull_request` 会触发 `validate-rules`（六条腿）和 `glib-backport`（两个 job）；桌面 `tsc` 构建和 Rust 只在后者里跑（`cargo test` 只在它的 Windows job），本地不装 Rust 时这是唯一的验证。
-8. CI 全绿后合并：`gh pr merge --merge`，不删分支。普通 PR 的全部 CI 检查通过后即可合并。涉及 §3 或工单标明须批准的动作，仍须维护者明确批准。该约定经维护者在 [#27](https://github.com/YEowo-Y/weapp-shipmate/pull/27#issuecomment-6876165887) 确认。
+8. CI 全绿后合并：`gh pr merge --merge`，合并当时不删分支。普通 PR 的全部 CI 检查通过后即可合并。涉及 §3 或工单标明须批准的动作，仍须维护者明确批准。该约定经维护者在 [#27](https://github.com/YEowo-Y/weapp-shipmate/pull/27#issuecomment-6876165887) 确认。
+   分支在合并后保留，直到有人按下节「分支清理」的条件集中删除——保留带来的是可追溯性，不是永久留存。
 9. 在根目录 `progress.txt` 追加一行：`YYYY-MM-DD HH:mm（北京时间）| 工作概要`。
 
 **Git 约定**（`main` 没有分支保护，私有仓库免费版开不了，所以只能靠约定；出处 `STRENGTHENING_PLAN.md` 第 15、25、46 行）：
@@ -36,9 +37,22 @@
 |---|---|
 | 直接 push `main` | 开 PR，merge commit 合并 |
 | squash、rebase、amend、force-push | 追加新提交修正 |
-| 删除分支 | 合并后保留 |
+| 合并时删除分支 | 合并时保留，之后按「分支清理」一节集中删除 |
+| 删除未合并的分支 | 只删已并入 `main` 的分支，删前逐条确认 `git merge-base --is-ancestor` |
 | 本地 `main` 上提交或 merge | 只 `git pull --ff-only` |
 | 移动或复用 tag（`v0.1.0`、`v0.2.0-rc.1`–`rc.3` 已存在） | 需要新 tag 时先升版本号，由维护者决定 |
+
+**分支清理**：合并后的分支不会自动消失，本仓库也不开 GitHub 的自动删除（`delete_branch_on_merge` 保持 `false`，让合并在发生时保留可追溯的上下文）。清理是独立动作，按下面的条件进行。
+
+| 条件 | 判据 |
+|---|---|
+| 只删已合并的 | `git merge-base --is-ancestor <分支> origin/main` 退出码 0；未合并的分支一律不删 |
+| 删前留档 | 在 PR 或 issue 里列出分支名、对应 PR 号与领先 `main` 的提交数，供事后核对 |
+| 不动 `main` 与 tag | `main`、`v0.1.0`、`v0.2.0-rc.1`–`rc.3` 不在清理范围；tag 只能新建，不复用 |
+| 不删有未提交改动的工作树 | `git worktree remove` 前先 `git status --short` 必须为空 |
+| 一次清理一个批次 | 同一批在同一个 PR/issue 记录里完成，不零散删 |
+
+理由：分支名本身就是工单与 PR 的索引（`codex/t01`→`f04`、`agy/t12a`→`f14`），留存价值在合并时最高；全部提交已进入 `main` 之后，分支引用只是重复。远端引用堆积会让 `git branch -r` 失去可读性，也让「哪些分支还有未合并工作」这个真正要紧的问题难以回答。
 
 **Actions 用量**：仓库私有，分钟数计费，Windows runner 按两倍计。每次向 PR 推送都会跑完整的六腿矩阵加两个 job（实测墙钟：`validate-rules` 约 1–2.5 分钟，`glib-backport` 约 7–8 分钟；计费分钟数没有取到）。所以本地验证通过后再推，一张工单攒成一次推送，不要每个提交推一次。发现用量异常就告诉维护者。
 
