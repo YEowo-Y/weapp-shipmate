@@ -596,6 +596,19 @@ export function InteractiveWorkflowBody({
         <div className="shell-sec-h">
           <span id="panel-stages-heading">阶段（共 {workflowModel.stages.length} 步）</span>
           <span className="shell-spacer" />
+          {callbacks.onOpenMaterials ? (
+            <button
+              type="button"
+              id="panel-workflow-materials"
+              aria-haspopup="dialog"
+              aria-controls="desktop-materials"
+              className="shell-link-btn"
+              onClick={callbacks.onOpenMaterials}
+            >
+              <LucideSvg name="package" size="sm" />
+              <span>提审材料包</span>
+            </button>
+          ) : null}
           <button
             type="button"
             id="panel-workflow-open-full"
