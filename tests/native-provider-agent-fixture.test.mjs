@@ -5,6 +5,10 @@ import { once } from 'node:events';
 import { createProviderAgentFixture } from '../scripts/native-provider-agent-acceptance.mjs';
 import { agentProviderFixtures } from './fixtures/provider-agent-streams.mjs';
 import { streamAgentResponse } from '../desktop/server/agent-stream.mjs';
+import { pinProviderEndpoints } from './helpers/provider-env.mjs';
+
+// Must run before the first client factory call in this file.
+pinProviderEndpoints();
 
 for (const [providerId, protocol] of Object.entries(agentProviderFixtures)) {
   test(`${providerId}: native acceptance fixture exercises pinned SDK, private result and stop`, async t => {

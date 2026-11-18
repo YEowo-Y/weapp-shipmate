@@ -7,6 +7,10 @@ import { readAgentStream, streamChat } from '../desktop/design-previews/chat-tra
 import { createDesktopModelFetch } from '../desktop/design-previews/desktop-model-fetch.js';
 import { createDesktopBridge } from '../desktop/server/desktop-bridge.mjs';
 import { agentProviderFixtures } from './fixtures/provider-agent-streams.mjs';
+import { pinProviderEndpoints } from './helpers/provider-env.mjs';
+
+// Must run before the first client factory call in this file.
+pinProviderEndpoints();
 
 const input = { kind: 'check', query: '' };
 const output = { schemaVersion: 1, kind: 'check', runId: 'run-1', artifactId: 'artifact-1', title: '预检', summary: 'LOCAL_ONLY_SUMMARY', itemCount: 0, items: [], truncated: false, scopeComplete: true, projectRevision: 1, contextRevision: 1 };
