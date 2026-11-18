@@ -790,8 +790,22 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 **本机实施验收（2026-11-18，按 [#59](https://github.com/YEowo-Y/weapp-shipmate/pull/59) 范围）。** 项目资料侧栏和「上线」面板均可打开材料包，支持逐项勾选、复制草稿及 Markdown/JSON 导出。材料包按当前项目选取最近一次本机预检，规则原文来自本机规则目录。外部导入报告仅显示来源与版本提醒。定向测试 67 项通过，全量 `npm test` 1781 项通过、1 项因缺少候选 EXE 跳过、0 失败，`lint`、69 条引文核验、`coverage`（precision / recall 均为 1.000）及桌面类型检查和构建通过。启动包 723,309 B（gzip 236,587 B），材料包、右侧面板、设置均按需加载，包预算无错误。Chromium 使用模拟桌面 IPC 在 1440 px 和 760 px 验证入口、键盘勾选、复制反馈、下载和焦点恢复。
 
+### 功能 4 · 被拒处理闭环
+
+**目标与关口。** 以 `main@1e6e89d` 为基线，用户贴入审核通知后，在现有「拒因反查」里查看相关规则、逐字引文、核验日期和处理要求，并可按结果前往现有项目工具。按 §6 确认本节范围后实施。采用现有本地查询和跳转能力，实施无 §3 关口。
+
+**已验证的基线。** 现有桌面入口通过 `project_run` 查询本地拒因索引。地理位置隐私示例返回直接相关的 `privacy.getLocation` 和三个可能相关项，测试号示例直接匹配 `review.test-account`，两组命中均带原文、链接和核验日期。未知合成文本返回零项并明确提示未匹配。拒因引擎、桌面查询、共享界面、导出和集成测试共 42 项通过。当前结果页的处理要求是文本，前往预检或材料包要离开结果再找入口。
+
+干净工作树的 `lint`、`npm test`（1780 通过、2 跳过、0 失败）、69 条引文核验、`coverage`（precision / recall 均为 1.000）和桌面构建通过。启动包 723,309 B（gzip 236,587 B），`explain-dialog` 为延迟加载块，预算无错误。
+
+1. **验证命中和未命中的下一步。** 扩展现有拒因界面测试。使用直接命中、可能相关、无来源、未知通知四类样本，断言原有规则、逐字引文和未实时核验说明保留。按验证过的 `action_categories` 从全部结果推导入口。同一入口只出现一次，筛选结果和撤销筛选时保持可用。未知通知只提供编辑入口，聚焦输入、保留通知，由用户重新提交查询。判据为 `tests/local-explain-ui.test.mjs` 的新交互用例在实施前失败。
+2. **接到桌面的现有工具。** `code` 类结果提供「前往项目预检」，焦点进入项目工具的预检按钮，目录不可用时进入目录选择。`materials` 类结果提供「打开提审材料包」，复用 F03 的当前项目入口。`console` 和 `manual_check` 保留现有的人工核对要求和官方来源。预检须由用户在目标页面再次点击。跳转受项目范围、运行状态和工作区退出检查约束，受阻时保留拒因结果并提示原因。正常返回时可继续查看同项目结果，切换项目时失效。静态浏览器预览只显示自身能执行的操作。判据为桌面接线测试覆盖成功、受阻和项目变更，并证明跳转未发起扫描、写入项目或调用微信后台。
+3. **验收。** 跑拒因引擎、桌面查询、界面、导出及集成测试，验证已有 CLI/MCP 输出与规则匹配不变。执行 §2 四项门禁及 `npm --prefix desktop run build`，核对 `explain-dialog` 的懒加载标记和启动包预算。用模拟 IPC 的浏览器验证宽屏、窄屏下从粘贴通知到核对依据、转到预检或材料包、未命中返回输入的完整路径，以及焦点归还。范围获确认后，实施 PR 通过 CI 方可合入。
+
+**允许变更的文件。** `desktop/index.html`、`desktop/src/{main.ts,explain-dialog.ts}`、`desktop/src/shared/{explain.js,explain.css}`、相关拒因或桌面测试、本文与 `progress.txt`。沿用现有规则、拒因索引、依赖、数据模型及 CLI/MCP 契约。
+
 ## 7. 当前推进入口
 
 T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并；T11C1 CLI 显式证据已按 [#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47) 批准范围实施，状态为 PR 中，之后再定 baseline 契约。通用基线和验证命令见 §2。
 
-桌面与工程底座工作线的 T12A（[#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48)）、T13A（[#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51)）、T13B（[#52](https://github.com/YEowo-Y/weapp-shipmate/pull/52)）、T14（[#54](https://github.com/YEowo-Y/weapp-shipmate/pull/54)）、**功能 0 · 新外壳**（[#55](https://github.com/YEowo-Y/weapp-shipmate/pull/55)、[#56](https://github.com/YEowo-Y/weapp-shipmate/pull/56)）以及 **功能 2 · 上线进度进右侧面板**（[#57](https://github.com/YEowo-Y/weapp-shipmate/pull/57)、[#58](https://github.com/YEowo-Y/weapp-shipmate/pull/58)）已全部完成合并与云端 CI 验收。**功能 3 · 提审材料包**的范围 [#59](https://github.com/YEowo-Y/weapp-shipmate/pull/59) 已合并，实施 PR 中。随后依次推进 **功能 4 · 被拒处理闭环**、**功能 8 · 交接给 Codex / Claude Code** 与 **功能 7（公测前只读连接检测部分）**。
+桌面与工程底座工作线的 T12A（[#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48)）、T13A（[#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51)）、T13B（[#52](https://github.com/YEowo-Y/weapp-shipmate/pull/52)）、T14（[#54](https://github.com/YEowo-Y/weapp-shipmate/pull/54)）、**功能 0 · 新外壳**（[#55](https://github.com/YEowo-Y/weapp-shipmate/pull/55)、[#56](https://github.com/YEowo-Y/weapp-shipmate/pull/56)）、**功能 2 · 上线进度进右侧面板**（[#57](https://github.com/YEowo-Y/weapp-shipmate/pull/57)、[#58](https://github.com/YEowo-Y/weapp-shipmate/pull/58)）和 **功能 3 · 提审材料包**（[#59](https://github.com/YEowo-Y/weapp-shipmate/pull/59)、[#60](https://github.com/YEowo-Y/weapp-shipmate/pull/60)）已合并并通过云端验收。**功能 4 · 被拒处理闭环**范围 PR 中。随后依次推进 **功能 8 · 交接给 Codex / Claude Code** 与 **功能 7（公测前只读连接检测部分）**。
