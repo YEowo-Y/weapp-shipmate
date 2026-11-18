@@ -61,7 +61,7 @@
 .rj-triage__empty button { min-height: 36px; padding: 6px 10px; border: 1px solid var(--border-2); border-radius: var(--r-sm); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
 .rj-triage button:focus-visible { outline: 2px solid var(--text-2); outline-offset: 3px; }
 .rj-group + .rj-group { margin-top: 28px; }
-.rj-group__title { margin: 0 0 12px; font-size: var(--ds-text-input, 15px); line-height: 1.7; color: var(--text-2); font-weight: 500; }
+.rj-group__title { margin: 0 0 12px; font-size: 15px; line-height: 1.7; color: var(--text-2); font-weight: 500; }
 .rj-rule { padding: 20px 0; border-top: 1px solid var(--border); font-size: var(--ds-text-ui-strong, 14px); line-height: 1.8; overflow-wrap: anywhere; }
 .rj-rule__head { display: flex; align-items: baseline; gap: 12px; justify-content: space-between; }
 .rj-rule__head h4 { margin: 0; font-size: 16px; font-weight: 600; }
