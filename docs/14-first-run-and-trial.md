@@ -44,7 +44,7 @@ rc.3 MCPB于2026-10-25只读实物核验：212142 bytes，SHA256 `9d0084bb19faf1
 | --- | --- | --- |
 | Windows桌面 | 支持的OS/架构；WebView2存在或安装器能处理 | 获取→安装→首开→首次结果→重开→卸载 |
 | MCPB扩展 | 实现MCPB支持的兼容宿主 | 宿主安装→工具发现→实际调用 |
-| CLI | 满足Node版本；GitHub源码安装另需Git与私仓权限 | 安装→版本→真实命令输出 |
+| CLI | 满足 Node 版本。通过 GitHub 源码安装时还须有 Git | 安装→版本→真实命令输出 |
 
 Claude Desktop自带Node，可免用户单独安装，但仍须满足包和宿主版本要求；MCPB不是独立GUI。[MCPB官方说明](https://github.com/modelcontextprotocol/mcpb/blob/70fe3b34cd6dff1b3bba046638edc72a6467a4fb/README.md#L11-L32)
 

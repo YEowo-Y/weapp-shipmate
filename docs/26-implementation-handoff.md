@@ -31,7 +31,7 @@
    分支在合并后保留，直到有人按下节「分支清理」的条件集中删除——保留带来的是可追溯性，不是永久留存。
 9. 在根目录 `progress.txt` 追加一行：`YYYY-MM-DD HH:mm（北京时间）| 工作概要`。
 
-**Git 约定**（`main` 没有分支保护，私有仓库免费版开不了，所以只能靠约定；出处 `STRENGTHENING_PLAN.md` 第 15、25、46 行）：
+**Git 约定**
 
 | 不做 | 改做 |
 |---|---|
@@ -54,7 +54,7 @@
 
 理由：分支名本身就是工单与 PR 的索引（`codex/t01`→`f04`、`agy/t12a`→`f14`），留存价值在合并时最高；全部提交已进入 `main` 之后，分支引用只是重复。远端引用堆积会让 `git branch -r` 失去可读性，也让「哪些分支还有未合并工作」这个真正要紧的问题难以回答。
 
-**Actions 用量**：仓库私有，分钟数计费，Windows runner 按两倍计。每次向 PR 推送都会跑完整的六腿矩阵加两个 job（实测墙钟：`validate-rules` 约 1–2.5 分钟，`glib-backport` 约 7–8 分钟；计费分钟数没有取到）。所以本地验证通过后再推，一张工单攒成一次推送，不要每个提交推一次。发现用量异常就告诉维护者。
+**Actions 用量**。向 PR 推送会触发六组 `validate-rules` 验证和两个 `glib-backport` 作业。历史实测墙钟分别约 1–2.5 分钟和 7–8 分钟。本地验证通过后集中推送，发现用量异常时告知维护者。
 
 **本机环境**：Windows、PowerShell。输出中文前先执行 `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`。Node 用 `.nvmrc` 指定的 22（24 也可）。跑 Rust 测试要 `rustup toolchain install 1.94.1 --profile minimal`，命令是 `cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked`。
 
@@ -600,8 +600,8 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 桌面端当前无 `tauri-plugin-updater` 或任何版本查询代码，Webview CSP `connect-src` 仅允许本机 `self` 与 `ipc:`。后续实施前需维护者按 §3、§6 裁决两点：
 
-1. **私有仓库与只读交互边界**：仓库当前 `private=true` 且候选 Release 为草稿，不带凭据访问公开 GitHub Releases API 返回 HTTP `404`，而桌面端按 `SECURITY.md` 不内置任何令牌。拟采用与 `source_freshness` 相同的架构：启动不联网、后台不轮询，仅在用户手动点击「检查更新」时经随包 Node 请求固定公开 Release 元数据接口，Rust 校验有界 JSON 后只展示当前版本、最新公开版本及由系统浏览器打开的发布页链接，不自动下载安装包、不自动执行更新、不引入新 crate；私仓或尚无公开正式版时如实提示「暂无公开版本信息」。
-2. **安全措辞与排期**：请确认 ① 按上述手动只读边界单列 T12B 实施步骤，并在 `SECURITY.md` 第 7 行同步补记手动点击的版本元数据读取说明（触及 `SECURITY.md` 时合并前须维护者批准），或 ② 待仓库准备公开并发布首个非草稿 Release 前再启动 T12B。
+1. **公开版本数据与只读交互边界**。初次探查时仓库仍是私有，不带凭据请求公开 Releases API 返回 HTTP `404`。仓库现已公开，公开版 `v0.1.0` 提供 CLI tarball 和 MCPB。桌面端按 `SECURITY.md` 不内置令牌。拟沿用 `source_freshness` 的手动触发方式，仅在用户点击「检查更新」时通过随包 Node 请求固定的公开 Release 元数据接口，并复用现有 Rust 依赖校验有界 JSON。界面展示当前版本、最新公开版本及发布页链接。用户可用系统浏览器查看发布页，在 Windows 安装包公开后自行获取和安装。查询成功且无公开版本时显示「暂无公开版本信息」。请求或响应校验失败时显示查询失败。
+2. **安全措辞与排期**。请维护者确认是否按上述手动只读边界单列 T12B 实施步骤。涉及 `SECURITY.md` 的版本元数据读取说明须在合并前获批。
 
 ### T13 · Rust 加固
 
@@ -659,9 +659,12 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
    - 更新 `desktop/src/**` 全部 51 处 import、`desktop/index.html` 全部 9 处样式引用、`desktop/server/*.mjs` 全部 7 处契约引用、`desktop/scripts/build-ui-kit.mjs` 输出目录，以及 `desktop/scripts/prepare-runtime.mjs` 与 `tests/desktop-runtime-package.test.mjs`、`tests/ui-kit-assets.test.mjs`、`tests/helpers/ui-action.mjs` 的契约/资源路径；
    - 在 `desktop/design-previews/` 对应原路径留下单行 `export *` / `@import` 转发垫片以保持历史预览页与既有单测兼容。
    判据：`npm --prefix desktop run prepare:runtime` 与 `node --test tests/desktop-runtime-package.test.mjs tests/ui-kit-assets.test.mjs` 全部通过；正式桌面目录零 `design-previews` 运行引用。
-3. **接入 `desktop/**` 全量 ESLint 与严格类型检查并进 CI。**
+3. **接入桌面 ESLint 与分范围类型检查并进 CI。**
    - 经实测 `typescript-eslint@8.73.0` 传递引入带 `picomatch` 高危告警的 `tinyglobby`，而 `@babel/core@8` 要求 Node `^22.18.0 || >=24.11.0` 与 Node 20 CI 矩阵不兼容；因此在 `eslint.config.mjs` 中惰性复用 `desktop/node_modules/@babel/parser`（`7.x`，支持 Node ≥6，由 `@vitejs/plugin-react` 锁定提供）的 `estree` + `typescript` + `jsx` 插件实现**零新依赖、零 lockfile 变动、零 `npm audit` 告警**的全量覆盖（覆盖 `desktop/**/*.{js,mjs,cjs,ts,tsx,mts,cts}`，仅忽略 `node_modules`、`dist`、`src-tauri`、受审第三方压缩 `vendor` 与纯 `.d.ts` 文件），对非预览桌面文件开启 `*design-previews*` 禁引规则；
-   - 在 `desktop/package.json` 新增 `"typecheck"` 脚本，串联三套配置：`tsconfig.json`（`allowJs: true`、`checkJs: true` 覆盖 `desktop/src/**` 含全部 36 个迁入模块，仅为 3 个压缩 vendor 入口补伴生 `.d.ts`/`.d.mts` 边界声明并清除 `desktop/src/shared.d.ts` 中全部 15 段通配 `declare module '*.js'` 遮蔽声明）、`tsconfig.ts.json`（对 `vite.config.ts` 与 `src/**/*.{ts,tsx}` 强制保持 `noImplicitAny: true` 与 `useUnknownInCatchVariables: true`）以及 `tsconfig.node.json`（配合 `desktop/node-env.d.ts` 与逐文件 `// @ts-check` 覆盖 `desktop/server/**/*.mjs` 全部 12 个文件与 `desktop/scripts/**/*.{js,mjs}` 全部 4 个文件）；
+   - `desktop/package.json` 的 `typecheck` 串联三套配置。
+     - `tsconfig.json` 对 `desktop/src` 开启 `allowJs` 和 `checkJs`，排除 vendor 目录。共享 JavaScript 使用 `noImplicitAny: false` 和 `useUnknownInCatchVariables: false`。三个压缩 vendor 入口以伴生 `.d.ts` 或 `.d.mts` 提供类型边界，原有 15 段通配模块声明已移除。
+     - `tsconfig.ts.json` 对 `vite.config.ts` 和 `src` 下的 `.ts`、`.tsx` 启用 `noImplicitAny` 与 `useUnknownInCatchVariables`，并关闭 `checkJs`。
+     - `tsconfig.node.json` 关闭 `checkJs`，桌面 server 与 scripts 的 JavaScript 通过逐文件 `// @ts-check` 开启检查。这套配置使用 `noImplicitAny: false` 和 `useUnknownInCatchVariables: false`。
    - 在 `ci.yml`、`release-rehearsal.yml` 与 `release.yml` 接入 `npm --prefix desktop run typecheck`。
    判据：`npm run lint`、`npm --prefix desktop run typecheck` 与 `npm --prefix desktop run build` 均退出码 0；第 1 步新增门禁测试全部变绿。
 4. **包体积预算、前端审查与全量门禁验收。** 实跑核对 `desktop/dist/.vite/bundle-budget.json`：启动包原始字节 `<= 750,000`、gzip `<= 250,000`、`errors` 为空且 `settings-renderer` 保持延迟加载；使用前端审查助手与零上下文子代理冷读复审迁移边界、类型真实性与可访问性/安全回归；跑通 §2 四项仓库门禁与全部 PR CI。
