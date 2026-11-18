@@ -226,6 +226,7 @@ export function createRightPanelController(container: HTMLElement, options: Righ
     onOpenRepairHistory: () => options.onOpenRepairHistory?.(),
     onOpenSource: url => options.onOpenSource?.(url),
     onOpenTools: () => options.onOpenTools?.(),
+    onOpenMaterials: () => options.onOpenMaterials?.(),
     onCloseDrawer: () => options.onCloseDrawer?.(),
     onSaveSubject: options.onSaveSubject
       ? (projectId, value) =>
