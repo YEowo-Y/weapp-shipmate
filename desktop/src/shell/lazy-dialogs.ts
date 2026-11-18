@@ -141,6 +141,9 @@ export function mountSubmissionMaterials(options: Parameters<typeof MountSubmiss
   }
 
   return {
+    async prepareOpen() {
+      return (await ensure())?.open;
+    },
     open(anchor: HTMLElement | null = null) {
       if (disposed) return;
       if (instance) {

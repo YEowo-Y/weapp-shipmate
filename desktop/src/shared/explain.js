@@ -7,7 +7,10 @@ import { createArtifactDownloader } from './artifact-download.js';
 
 export const REJECTION_SAMPLE = '您的小程序使用了地理位置接口，但未在《用户隐私保护指引》中声明收集"位置信息"的相关条款，请补充后重新提交。';
 
-function renderResult(root, container, output) {
+/** @typedef {'preflight' | 'materials'} ExplainFollowUp */
+
+/** @param {{ key: ExplainFollowUp | 'edit'; label: string; activate: () => void }[]} followUps */
+function renderResult(root, container, output, followUps) {
   const node = (tag, text, className = '') => {
     const element = root.createElement(tag);
     if (text) element.textContent = text;
@@ -15,6 +18,21 @@ function renderResult(root, container, output) {
     return element;
   };
   container.replaceChildren();
+  if (followUps.length) {
+    const next = node('section', '', 'rj-follow-up');
+    const title = node('h3', '下一步');
+    title.id = 'rjFollowUpHeading';
+    next.setAttribute('aria-labelledby', title.id);
+    const actions = node('div', '', 'rj-follow-up__actions');
+    for (const { key, label, activate } of followUps) {
+      const button = node('button', label);
+      button.type = 'button'; button.dataset.rjFollowUp = key;
+      button.addEventListener('click', activate);
+      actions.append(button);
+    }
+    next.append(title, actions);
+    container.append(next);
+  }
   const groups = new Map();
   const matches = [];
   const triage = output.items.length ? node('section', '', 'rj-triage') : null;
@@ -109,10 +127,11 @@ function renderResult(root, container, output) {
  *   query?: (args: { query: string; signal?: AbortSignal }) => Promise<any>;
  *   copyText?: (text: string) => Promise<void>;
  *   saveResult?: (text: string) => { ok: boolean; reason?: string; duplicate?: boolean };
+ *   onFollowUp?: (action: ExplainFollowUp, isCurrent: () => boolean) => string | void | Promise<string | void>;
  *   artifactDownloader?: { download: (artifact: any) => boolean; dispose: () => void };
  * }} [options]
  */
-export function mountExplain(root, { query = queryExplain, copyText = text => root.defaultView.navigator.clipboard.writeText(text), saveResult, artifactDownloader = createArtifactDownloader({ documentRef: root }) } = {}) {
+export function mountExplain(root, { query = queryExplain, copyText = text => root.defaultView.navigator.clipboard.writeText(text), saveResult, onFollowUp, artifactDownloader = createArtifactDownloader({ documentRef: root }) } = {}) {
   const form = root.getElementById('rjForm');
   if (!form) return;
   const input = root.getElementById('rjInput'), result = root.getElementById('rjResult');
@@ -134,6 +153,20 @@ export function mountExplain(root, { query = queryExplain, copyText = text => ro
     copy.disabled = save.disabled = download.disabled = !artifact;
   }
   function feedback(text, state = 'success') { actionStatus.textContent = text; actionStatus.dataset.state = state; }
+  /** @param {ExplainFollowUp} action @param {ReturnType<typeof createExplainArtifact>} currentArtifact */
+  async function followUp(action, currentArtifact) {
+    if (!onFollowUp || artifact !== currentArtifact) return;
+    const epoch = ++actionEpoch;
+    const isCurrent = () => epoch === actionEpoch && artifact === currentArtifact;
+    copy.disabled = false;
+    feedback('正在打开…', 'working');
+    try {
+      const refused = await onFollowUp(action, isCurrent);
+      if (isCurrent()) feedback(refused || '', refused ? 'error' : '');
+    } catch {
+      if (isCurrent()) feedback('未能打开下一步，请重试。', 'error');
+    }
+  }
   async function copyResult() {
     if (!artifact || copy.disabled) return;
     const epoch = ++actionEpoch;
@@ -201,8 +234,22 @@ export function mountExplain(root, { query = queryExplain, copyText = text => ro
       const output = await query({ query: request, signal: controller.signal });
       if (active !== controller) return;
       if (!validateExplainResult(output, request).ok) throw new Error('查询结果未通过校验，请重试。');
-      artifact = createExplainArtifact(request, output);
-      renderResult(root, items, output);
+      const currentArtifact = createExplainArtifact(request, output);
+      artifact = currentArtifact;
+      /** @type {Parameters<typeof renderResult>[3]} */
+      const next = [];
+      if (!output.items.length) {
+        next.push({ key: 'edit', label: '修改关键词', activate() {
+          if (artifact !== currentArtifact) return;
+          queryPanel.open = true;
+          input.focus();
+        } });
+      } else if (onFollowUp) {
+        const categories = new Set(output.items.flatMap(item => item.action_categories || []));
+        if (categories.has('code')) next.push({ key: 'preflight', label: '前往项目预检', activate: () => followUp('preflight', currentArtifact) });
+        if (categories.has('materials')) next.push({ key: 'materials', label: '打开提审材料包', activate: () => followUp('materials', currentArtifact) });
+      }
+      renderResult(root, items, output, next);
       const groups = new Set(output.items.map(item => item.rejectId)).size;
       heading.textContent = output.items.length ? `找到 ${groups} 类相关拒因 · ${output.items.length} 个匹配项` : '未找到相关拒因';
       result.hidden = false;

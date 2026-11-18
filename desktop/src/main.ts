@@ -490,13 +490,47 @@ window.addEventListener("DOMContentLoaded", () => {
     onStopError: message => setStatus(message, 'error'),
     onSettled: async () => { await projects?.refresh(); await workflow?.refresh(); },
   });
-  const explain = mountExplainDialog({ query: nativeExplain.query, saveResult: text => {
-    if (busy || explainProjectId === undefined || explainProjectId !== (projects?.getActiveId() ?? null)
-      || explainProjectId !== (sessions?.getCurrentSession()?.projectId ?? null)) return { ok: false, reason: 'scope' };
-    const saved: { ok: boolean; reason?: string; duplicate?: boolean } = sessions?.appendReport({ text, type: '拒因反查', deduplicate: true }) ?? { ok: false, reason: 'unavailable' };
-    if (saved.ok && !saved.duplicate) { shell.closeSidebarDrawer(); shell.closePanelDrawer(); }
-    return saved;
-  } });
+  const explain = mountExplainDialog({
+    query: nativeExplain.query,
+    async prepareFollowUp(action, opener, isCurrent) {
+      const projectId = explainProjectId;
+      const blocked = () => {
+        if (!isCurrent() || projectId === undefined || projectId !== explainProjectId || projectId !== (projects?.getActiveId() ?? null)) {
+          return '当前项目或查询结果已变化，请重新查询。';
+        }
+        if (busy || rightPanel?.canClose?.() === false) return '请等待当前项目操作结束后重试。';
+        if (!projects?.isReady()) return '项目存储尚未就绪，请重新加载项目后重试。';
+      };
+      const initialBlock = blocked();
+      if (initialBlock) return initialBlock;
+      let openMaterials: ((anchor: HTMLElement) => void) | undefined;
+      if (action === 'materials') {
+        // Prepare the destination while the result still owns focus and project scope.
+        try { openMaterials = await materials?.prepareOpen(); }
+        catch { return '未能加载提审材料包，请重试。'; }
+        if (!openMaterials) return '未能加载提审材料包，请重试。';
+        const afterLoadBlock = blocked();
+        if (afterLoadBlock) return afterLoadBlock;
+      }
+      if (!workspace.close()) return '当前工作区暂不能关闭，请完成当前操作后重试。';
+      shell.closeSidebarDrawer();
+      shell.closePanelDrawer();
+      const anchor = [opener, $('#desktop-sidebar-expand'), $('#desktop-more')].find(node =>
+        node?.isConnected && !node.closest('[inert]') && node.getClientRects().length,
+      ) ?? $('#desktop-more');
+      if (openMaterials) return () => openMaterials(anchor);
+      const project = projects?.getActive();
+      const target = project?.directory && project.directoryAvailable !== false ? $('#check-btn') : $('#pick-btn');
+      return () => tools.open(anchor, target);
+    },
+    saveResult: text => {
+      if (busy || explainProjectId === undefined || explainProjectId !== (projects?.getActiveId() ?? null)
+        || explainProjectId !== (sessions?.getCurrentSession()?.projectId ?? null)) return { ok: false, reason: 'scope' };
+      const saved: { ok: boolean; reason?: string; duplicate?: boolean } = sessions?.appendReport({ text, type: '拒因反查', deduplicate: true }) ?? { ok: false, reason: 'unavailable' };
+      if (saved.ok && !saved.duplicate) { shell.closeSidebarDrawer(); shell.closePanelDrawer(); }
+      return saved;
+    },
+  });
   explainPanel = explain;
   $("#start-explain").addEventListener("click", () => explain.open($("#start-explain")));
   $("#start-check").addEventListener("click", () => {
