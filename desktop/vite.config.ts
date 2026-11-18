@@ -10,6 +10,19 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(() => ({
   plugins: [react(), tailwindcss(), bundleBudget()],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+  build: {
+    rollupOptions: {
+      output: {
+        // Keep only the selected library modules in each manual chunk.
+        onlyExplicitManualChunks: true,
+        manualChunks(id) {
+          const path = id.replaceAll('\\', '/');
+          if (/\/node_modules\/(?:react|react-dom|scheduler)\//.test(path)) return 'react-runtime';
+          if (path.includes('/node_modules/@base-ui/')) return 'base-ui';
+        },
+      },
+    },
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
