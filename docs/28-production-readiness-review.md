@@ -215,15 +215,88 @@ precision：1.000 （recall 1.000 · TP55/FP0/FN0）
 - **没有审计 CI 工作流的安全性**（`actions` 按 SHA 固定等属于发布工程关口）。
 - **没有逐条核对 64 条规则的官方原文**；这是 T04/`verify:quotes` 的职责，不是本评审的范围。
 
-**中断的部分**（子代理因账户配额耗尽）：
+**中断过的部分，以及后来补到什么程度**（子代理因账户配额耗尽，三路各完成约五成后中断；§6 是主审在主线补做的结果）：
 
-- 交互与可访问性审查只完成约五成，**未覆盖**：完整的键盘焦点路径、抽屉与断点的竞态、全部三态缺失清单。
-- agent 运行时审查只完成约五成，**未覆盖**：取消路径的 Rust 侧追踪、错误分类到文案的完整映射、会话语义。
-- 安全审查只完成约五成，**未覆盖**：路径穿越的 Windows 特有形态（8.3 短路径、UNC、ADS）、凭据生命周期全链路。
+| 路 | 中断时未覆盖 | §6 补充后的状态 |
+|---|---|---|
+| 交互与可访问性 | 键盘焦点路径、抽屉与断点竞态、三态缺失清单 | **已覆盖主体**：四个对话框的焦点陷阱、关闭后焦点恢复、`inert` 切换、右栏三态组件逐一核对。仍未做实机验证 |
+| agent 运行时 | 取消路径的 Rust 侧追踪、错误分类到文案的映射 | **已覆盖**：`cancel()` → `child.kill()` 闭环、11 个错误码的真实来源、tombstone 语义 |
+| 安全 | Windows 路径特有形态、凭据生命周期 | **已覆盖**：8.3 / UNC / ADS / 保留名 / reparse point 逐项核对，凭据与诊断脱敏链路 |
 
-上述三项已由主审用定向检查补了一部分（鉴权覆盖 46/46、本地服务绑定、XSS 面、竞态模式），但**不等于完整覆盖**。若需要，应单独补一轮。
+仍不等于完整覆盖：**没有实机验证**这一条对上述三路同样成立。
 
 **判断不了的项**：
 
 - 包体积余量 25.5 kB 在功能 1/6/7 全部落地后是否够用——取决于按需分包执行得多严格。
 - 设计系统改造的实际收益，需要一次真实的视觉验收（截图对比）才能确认。
+
+## 6. 补充审查（主线补做，2026-11-18）
+
+三路子代理中断后，由主审直接读码补齐。本节只记录**新查到的**事实与结论，不重复 §3。
+
+### 6.1 交互与可访问性：整体成立，两处可加固
+
+**正向证据（逐项核对）**
+
+- **焦点陷阱**：四个对话框全部使用原生 `<dialog>.showModal()`（`explain-dialog.ts:38,79`、`repair-handoff.ts:126`、`source-freshness.ts:158`、`submission-materials-dialog.tsx:604`），因此浏览器自带焦点限制与 top-layer 语义。
+- **手动 Tab 循环**（仅两个原生对话框需要）：`repair-handoff.ts:102-105`、`source-freshness.ts:152-155` 处理首尾焦点回环，并正确排除 `isComposing`、`ctrlKey/altKey/metaKey` 与已 `defaultPrevented` 的事件。`submission-materials-dialog.tsx` 没有手写循环，改用 `visible()` 判定（`:575-577`，同时检查 `isConnected`、`[hidden]/[inert]` 与 `getClientRects()`）配合完整的焦点回退链。
+- **关闭后焦点恢复**：`repair-handoff.ts:100`、`source-freshness.ts:146`、`explain-dialog.ts:39,59` 在 `close` 时交还触发元素并检查 `isConnected`；`submission-materials-dialog.tsx` 的 `onDialogClose`（`:580-590`）更完整——当 `activeElement` 是 `body`、位于对话框内或不可见时，按 `trigger → 侧栏展开 → 面板开关` 的顺序找第一个可见元素，这正是抽屉布局下需要的回退。
+- **`inert` 隔离**：`shell-layout.ts:55-57` 提供属性与 property 双写，覆盖不支持 property 的旧路径。
+- **右栏三态**：`right-panel-states.tsx` 定义 `PanelSkeleton`（`role="status"` + `aria-busy`）、`PanelError`（`role="alert"`）、`PanelEmpty`；`right-panel-changes-devtools.tsx:14,16,20,33,86,88` 与 `right-panel-release-evidence.tsx:37,39,43,171,173,177` 逐个面板接入，无遗漏。
+
+**可加固项（P2）**
+
+| 项 | 位置 | 说明 |
+|---|---|---|
+| Tab 循环只拦首尾两点 | `repair-handoff.ts:103`、`source-freshness.ts:153` | 仅在焦点恰为 `dismiss`/`done` 时拦截。若对话框内出现动态增删的可聚焦元素，循环仍成立（因为始终是最外侧两点），但更稳妥的做法是基于 `querySelectorAll` 计算首末可聚焦元素 |
+| `PanelEmpty` 的图标与动作 | `right-panel-states.tsx:67-73` | 当前 `data-empty-action` 由调用方传字符串，未见集中校验；若将来接入更多面板，需确认无空 `actionId` |
+
+### 6.2 agent 运行时：取消闭环与错误分类均成立
+
+**取消是真闭环**
+
+- `tool_runner.rs:279-301`：`cancel()` 置 `active.cancelled = true`，并对 `active.child` 执行 `kill()` + `wait()`；第 300-301 行在另一条分支同样 kill/wait。
+- `tool_runner.rs:173-175`：`Drop` 路径同样 `kill()` + `wait()`，不存在「父进程先退出、子进程遗留」的路径。
+- `tool_runner.rs:410` 的注释与实现一致：spawn 与 shutdown 共用同一把锁，因此 shutdown 不会漏掉刚创建的子进程。
+- `tool_runner.rs:127-150` 的 `commit()`：在持锁状态下校验 `token`/`id` 匹配、未取消、未关闭、`child.is_none()`，再执行持久化。**取消与写入被线性化**，不存在「取消后又写了一半」的窗口。
+
+**错误码到真实来源的映射**
+
+| 错误码 | 真实来源 | 位置 |
+|---|---|---|
+| `network_error` | 上游 fetch 抛出 | `agent-stream.mjs:75` |
+| `auth_required` / `permission_denied` / `rate_limited` / `provider_unavailable` | 上游 HTTP 401 / 403 / 429 / 其它 | `agent-stream.mjs:77` |
+| `canceled` | 用户取消 | `agent-tool-rpc.mjs:25` |
+| `tool_timeout` | 本地工具超时定时器 | `agent-tool-rpc.mjs:26` |
+| `busy` / `tool_failed` / `not_authorized` / `invalid_request` | Rust `ToolFailure` 变体，由 `code()` 映射 | `tool_runner.rs:24`（实现）、`error.rs:361-370`（钉住映射的测试） |
+| 兜底 | `failure()` 的通用文案 | `agent-stream.mjs:13` |
+
+**一处值得记录的语义细节**：`ToolFailure::Canceled` 在 Rust 层映射为 `DesktopError` 的 `conflict` 类（`error.rs:363`），但在 agent 层仍以 `canceled` 码回给前端。两层语义不同是有意为之——对 IPC 调用方是「状态冲突」，对 Agent 是「用户主动停止」。这不是缺陷，但若将来有人把两层合并，会破坏其中一个语义。
+
+### 6.3 安全：Windows 路径防御完整，凭据链路干净
+
+**路径校验（`project_context.rs:130-200`）逐项核对**
+
+| 攻击形态 | 防御 | 位置 |
+|---|---|---|
+| UNC `\\server\share` | 显式拒绝 `\\` 与 `//` 前缀 | `:131-132` |
+| 绝对路径越界 | `strip_prefix(root/plain_root/canonical_root)` 三选一，失败即拒 | `:152-159` |
+| `..` 跳转 | 只接受 `Component::Normal` | `:166-168` |
+| NTFS 数据流 `file.txt:stream` | 拒绝含 `:` 的分量 | `:171` |
+| 尾部点/空格（Windows 会剥离） | 拒绝 `ends_with(['.', ' '])` | `:172` |
+| 保留设备名 | 22 个（CON/PRN/AUX/NUL/COM1-9/LPT1-9），按 `split('.')` 首段大写比对 | `:175-183` |
+| 符号链接 / reparse point | `linked()` 检查 `FILE_ATTRIBUTE_REPARSE_POINT (0x400)` | `:98-108` |
+| 校验与读取之间的 junction 替换（TOCTOU） | `hold_directory()` 以 `share_mode(3)`（不共享 DELETE）+ `0x02200000`（`FILE_FLAG_BACKUP_SEMANTICS`）持有目录句柄，并逐级持有 | `:112-129`、`:164`、`:186` |
+| 二进制/控制字符 | `validate_text()` 拒绝除 `\n\r\t` 外的控制字符 | `project_context.rs` 的 `validate_text` |
+| 疑似密钥内容 | `validate_text()` 匹配 `-----begin`、`sk-`、`ghp_`、`github_pat_`、`xoxb-`、`xoxp-`、`aizasy`、`akia`、`bearer ` 等标记 | 同上 |
+
+**这是本次评审中见到的最完整的一处防御**：它不仅挡住了常见形态，还用持有目录句柄的方式关闭了校验与读取之间的竞态窗口。绝大多数同类实现只做 canonicalize 后比较前缀，会在 junction 替换下失守。
+
+**凭据与诊断**
+
+- 凭据经 `keyring_core` + `windows_native_keyring_store` 存入 Windows 凭据库（`credential_store.rs:104-114`），不存在自有加密文件；`NoEntry` 被显式处理为 `Ok(None)`（`:135`、`:152`），不区分「不存在」与「读取失败」以外的状态。
+- 诊断日志的头部注释即声明「Never records project file contents, credentials, tokens, SQL parameters, or panic payloads」（`diagnostics.rs:2`），并且 `:358` 明确「不检查也不序列化 `info.payload()`」；`:565-571` 有一条用 `SECRET_CANARY_TOKEN_998877_DO_NOT_LOG` 做哨兵的测试，验证 panic payload 不落盘。
+
+**需要说明的边界（不是缺陷）**
+
+- `sensitive()` 只匹配**文件名本身**（`project_context.rs:64-68` 只看 `name`），不检查路径中的父目录名。`noSend` 里包含 `node_modules`、`.git` 这类目录名，因此对**用户手动选择的单个文件**这一入口是充分的；但如果将来新增「扫描整个项目」的入口，需要把匹配扩展到路径的每个分量。当前 `read_file` 确实逐分量调用了 `sensitive(name)`（`:173`），所以**现状是完整的**——这条只是提醒后续扩展时别退化。
