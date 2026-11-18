@@ -54,8 +54,9 @@ test('relocated Windows runtime executes local entrypoints with empty PATH', asy
   assert.ok(!Object.keys(first.files).some(path => /node_modules\/(?:@awesome|@tauri|vite|typescript)\//.test(path)));
   assert.equal(first.files['node.exe'], runtimeLock.binary.sha256);
   assert.ok(first.files['LICENSE.node']);
-  assert.ok(first.files['desktop/design-previews/explain-contract.js']);
-  assert.ok(first.files['desktop/design-previews/agent-contract.js']);
+  assert.ok(first.files['desktop/src/shared/explain-contract.js']);
+  assert.ok(first.files['desktop/src/shared/agent-contract.js']);
+  assert.ok(first.files['desktop/src/shared/guide-contract.js']);
   assert.ok(first.files['workflow-catalog.json']);
   assert.ok(first.files['source-catalog.json']);
   assert.ok(first.files['desktop/server/source-check.mjs']);

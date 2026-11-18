@@ -9,38 +9,65 @@ import { fileURLToPath } from "node:url";
 import { createModelConnectionHandler, isLocalHost } from "../server/model-connections.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const TYPES = { ".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "text/javascript", ".mjs": "text/javascript", ".svg": "image/svg+xml" };
+const sharedRoot = resolve(root, "../src/shared");
+const TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".css": "text/css",
+  ".js": "text/javascript",
+  ".mjs": "text/javascript",
+  ".svg": "image/svg+xml",
+  ".json": "application/json; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+};
 
-const connections = createModelConnectionHandler();
-const server = createServer(async (req, res) => {
-  if (!isLocalHost(req)) { res.writeHead(403); res.end("local host required"); return; }
-  if (await connections(req, res)) return;
-  if (!["GET", "HEAD"].includes(req.method)) { res.writeHead(405); res.end("method not allowed"); return; }
-  let p;
-  try {
-    p = decodeURIComponent((req.url || "/").split("?")[0]);
-  } catch {
-    res.writeHead(400);
-    res.end("bad request");
-    return;
-  }
-  if (p === "/") p = "/index.html";
-  const full = resolve(root, "." + p);
-  if (full !== root && !full.startsWith(root + sep)) {
-    // 遏制：解析后必须仍落在预览根目录内，../ 逃逸一律 403。
-    res.writeHead(403);
-    res.end("forbidden");
-    return;
-  }
-  try {
-    const buf = await readFile(full);
-    res.writeHead(200, { "content-type": TYPES[extname(full)] || "application/octet-stream", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY", "Cache-Control": "no-store" });
-    res.end(req.method === "HEAD" ? undefined : buf);
-  } catch {
-    res.writeHead(404);
-    res.end("not found");
-  }
-}).listen(5501, "127.0.0.1", () => console.log("preview http://127.0.0.1:5501"));
-server.requestTimeout = 20_000;
-server.headersTimeout = 10_000;
-server.on("close", () => connections.dispose());
+export function createPreviewServer() {
+  const connections = createModelConnectionHandler();
+  const server = createServer(async (req, res) => {
+    if (!isLocalHost(req)) { res.writeHead(403); res.end("local host required"); return; }
+    if (await connections(req, res)) return;
+    if (!["GET", "HEAD"].includes(req.method)) { res.writeHead(405); res.end("method not allowed"); return; }
+    let p;
+    try {
+      p = decodeURIComponent((req.url || "/").split("?")[0]);
+    } catch {
+      res.writeHead(400);
+      res.end("bad request");
+      return;
+    }
+    if (p === "/") p = "/index.html";
+    const useShared = p.startsWith("/src/shared/");
+    const baseRoot = useShared ? sharedRoot : root;
+    const full = resolve(baseRoot, "." + (useShared ? p.slice("/src/shared".length) : p));
+    if (!full.startsWith(baseRoot + sep)) {
+      // 遏制：解析后必须仍落在允许的目录内，../ 或目录根枚举一律 403。
+      res.writeHead(403);
+      res.end("forbidden");
+      return;
+    }
+    try {
+      const buf = await readFile(full);
+      res.writeHead(200, { "content-type": TYPES[extname(full)] || "application/octet-stream", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY", "Cache-Control": "no-store" });
+      res.end(req.method === "HEAD" ? undefined : buf);
+    } catch {
+      res.writeHead(404);
+      res.end("not found");
+    }
+  });
+  server.requestTimeout = 20_000;
+  server.headersTimeout = 10_000;
+  server.on("close", () => connections.dispose());
+  return {
+    server,
+    close() {
+      connections.dispose();
+      server.closeAllConnections?.();
+      return new Promise((resolveClose) => server.close(() => resolveClose()));
+    },
+  };
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const { server } = createPreviewServer();
+  server.listen(5501, "127.0.0.1", () => console.log("preview http://127.0.0.1:5501"));
+}

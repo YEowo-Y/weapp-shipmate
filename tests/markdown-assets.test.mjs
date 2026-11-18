@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
-const asset = name => new URL(`../desktop/design-previews/components/vendor/markdown-it/${name}`, import.meta.url);
+const asset = name => new URL(`../desktop/src/shared/components/vendor/markdown-it/${name}`, import.meta.url);
 test('browser parser and source map match the audited official release bytes', () => {
   const hashes = {
     'markdown-it.esm.min.mjs': 'd5432491790141da046b1197353705db03264f40b5727f3b4b591f5aba193e30',

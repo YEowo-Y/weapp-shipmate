@@ -471,3 +471,22 @@ test("glib-backport 双端强制执行锁定版 rustfmt 与 clippy 零告警门�
     }
   }
 });
+
+test("CI、演练与发布工作流均显式执行桌面 TypeScript 类型检查门禁", () => {
+  const ci = yaml.load(readFileSync(join(ROOT, ".github/workflows/ci.yml"), "utf8"));
+  const rehearsal = yaml.load(readFileSync(join(ROOT, ".github/workflows/release-rehearsal.yml"), "utf8"));
+  const release = yaml.load(readFileSync(join(ROOT, ".github/workflows/release.yml"), "utf8"));
+
+  for (const [label, steps] of [
+    ["ci.validate", ci.jobs.validate.steps],
+    ["release-rehearsal.rehearsal", rehearsal.jobs.rehearsal.steps],
+    ["release.release", release.jobs.release.steps],
+  ]) {
+    const desktopInstall = steps.findIndex((step) => step.run === "npm ci --prefix desktop");
+    const typecheck = steps.findIndex((step) => step.run === "npm --prefix desktop run typecheck");
+    const testStep = steps.findIndex((step) => step.run === "npm test");
+    assert.ok(desktopInstall >= 0, `${label} 缺少桌面依赖安装`);
+    assert.ok(typecheck > desktopInstall, `${label} 必须在安装桌面依赖后执行 npm --prefix desktop run typecheck`);
+    assert.ok(testStep > 0, `${label} 缺少 npm test`);
+  }
+});

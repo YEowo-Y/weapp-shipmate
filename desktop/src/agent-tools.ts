@@ -1,6 +1,6 @@
-import { createActionButton } from '../design-previews/components/ui-kit.js';
-import { createIcon } from '../design-previews/components/icons.js';
-import { createAgentPermissions } from '../design-previews/agent-permissions.js';
+import { createActionButton } from './shared/components/ui-kit.js';
+import { createIcon } from './shared/components/icons.js';
+import { createAgentPermissions } from './shared/agent-permissions.js';
 import './agent-tools.css';
 
 type Session = { id: string; projectId?: string | null };

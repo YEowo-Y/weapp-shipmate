@@ -37,7 +37,7 @@ function harness(snapshot, selection = null, options = {}) {
   const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
   const quickPicker = { open() { this.opened = true; }, close() { this.opened = false; }, destroy() {} };
   const context = { isUsableModelConnection, mountModelPicker: options => { quickPicker.options = options; options.anchor.addEventListener('click', () => quickPicker.open()); return quickPicker; }, document: doc, HTMLElement: Element, createConnectionClient: () => client, desktopModelFetch() {}, createIcon: () => new Element(), createProviderIcon: () => new Element(), openUrl: async () => {}, setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout() {} };
-  const actionSource = readFileSync(new URL('../desktop/design-previews/components/ui-kit.js', import.meta.url), 'utf8').match(/^export function createActionButton[^]*?^}/m)[0].replace('export ', '');
+  const actionSource = readFileSync(new URL('../desktop/src/shared/components/ui-kit.js', import.meta.url), 'utf8').match(/^export function createActionButton[^]*?^}/m)[0].replace('export ', '');
   vm.runInNewContext(actionSource, context);
   vm.runInNewContext(script, context);
   const picker = new Element(), button = new Element();
@@ -651,7 +651,7 @@ function embeddedHarness(snapshot, initialSelection = null, options = {}) {
     createIcon: () => document.createElement('span'), createProviderIcon: () => document.createElement('span'),
     openUrl: async () => {}, setTimeout: fn => { timers.push(fn); return timers.length; }, clearTimeout() {},
   };
-  const actionSource = readFileSync(new URL('../desktop/design-previews/components/ui-kit.js', import.meta.url), 'utf8').match(/^export function createActionButton[^]*?^}/m)[0].replace('export ', '');
+  const actionSource = readFileSync(new URL('../desktop/src/shared/components/ui-kit.js', import.meta.url), 'utf8').match(/^export function createActionButton[^]*?^}/m)[0].replace('export ', '');
   vm.runInNewContext(actionSource, context);
   const source = readFileSync(new URL('../desktop/src/model-connection.ts', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, context);

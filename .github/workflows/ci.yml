@@ -36,6 +36,7 @@ jobs:
       - run: npm ci --prefix desktop
       # E5：静态错误门禁（eslint:recommended 级，风格不管）。
       - run: npm run lint
+      - run: npm --prefix desktop run typecheck
       - run: npm test
       # 逐字红线：每条非 draft 规则的 source_quote 必须是其 official_url 归档快照的连续子串。
       # 部分执行 GOVERNANCE.md 来源核验准则 1——能抓改写 / 概括 / 翻译 / 词序调换 / 词句增删；

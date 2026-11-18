@@ -1,3 +1,4 @@
+// @ts-check
 import { createCustomEndpointFetch, validateCustomEndpoint } from './custom-endpoint.mjs';
 import { randomUUID } from 'node:crypto';
 import { TextDecoder } from 'node:util';
@@ -30,6 +31,13 @@ export function validateChatRequest(provider, body) {
 
 // Only documented text deltas are surfaced. Unknown tools, truncation, and EOF
 // without the provider's successful terminal event cannot become a success.
+/**
+ * @param {any} res
+ * @param {string} provider
+ * @param {string} key
+ * @param {any} body
+ * @param {Record<string, any>} [options]
+ */
 export async function streamChatResponse(res, provider, key, body, { fetchImpl = globalThis.fetch, signal, timeoutMs = 120000, endpoint: customEndpoint, customFetchImpl, maxOutputTokens = 2048 } = {}) {
   const controller = new AbortController();
   const abort = () => controller.abort();

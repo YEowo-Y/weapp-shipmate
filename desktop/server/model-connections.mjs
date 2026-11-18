@@ -1,7 +1,8 @@
+// @ts-check
 import { validateCustomEndpoint } from './custom-endpoint.mjs';
 import { streamGuideResponse } from './guide-stream.mjs';
-import { validateGuideInput } from '../design-previews/guide-contract.js';
-import { validateExplainInput } from '../design-previews/explain-contract.js';
+import { validateGuideInput } from '../src/shared/guide-contract.js';
+import { validateExplainInput } from '../src/shared/explain-contract.js';
 import { executeExplain } from './explain-query.mjs';
 import { validateChatRequest, streamChatResponse } from './chat-stream.mjs';
 import { validateAgentRequest, streamAgentResponse } from './agent-stream.mjs';
@@ -74,6 +75,7 @@ function readBody(req, limit = 16_384) {
 }
 
 // Shared broker: persistence is a private injected adapter; previews use memory.
+/** @param {Record<string, any>} [options] */
 export function createModelConnectionHandler({ fetchImpl = globalThis.fetch, now = Date.now, timeoutMs = 15_000, chatTimeoutMs = 120_000, guideRunner, guideTimeoutMs = 10_000, explainRunner, explainTimeoutMs = 10_000, maxSessions = 32, cookieName = COOKIE, credentialStore, customFetchImpl, projectToolRunner } = {}) {
   if (typeof cookieName !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(cookieName)) throw new TypeError('Invalid session cookie name');
   const sessions = new Map();

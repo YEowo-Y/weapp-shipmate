@@ -1,3 +1,4 @@
+// @ts-check
 import { readFileSync } from 'node:fs';
 import { request as httpsRequest } from 'node:https';
 import { Resolver } from 'node:dns/promises';
@@ -15,6 +16,10 @@ const keys = (value, expected) => value && typeof value === 'object' && !Array.i
 
 // A per-request DNS resolver can actually cancel outstanding queries; a timed
 // Promise.race around OS getaddrinfo would leave work alive after the deadline.
+/**
+ * @param {string} host
+ * @param {Record<string, any>} [options]
+ */
 export async function resolveOfficialAddresses(host, { signal, resolver = new Resolver({ timeout: 10000, tries: 1 }) } = {}) {
   const cancel = () => resolver.cancel();
   if (signal?.aborted) throw new Error('canceled');
@@ -47,6 +52,11 @@ export function validateSourceCatalog(catalog) {
   return catalog;
 }
 
+/**
+ * @param {any} catalog
+ * @param {string} sourceId
+ * @param {Record<string, any>} [options]
+ */
 export async function checkSource(catalog, sourceId, { lookup = resolveOfficialAddresses, request = httpsRequest, timeoutMs = 10000, maxBytes = 2 * 1024 * 1024, now = Date.now, signal, quote } = {}) {
   validateSourceCatalog(catalog);
   if (!SOURCE_ID.test(sourceId)) throw new Error('source');

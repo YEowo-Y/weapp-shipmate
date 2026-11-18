@@ -16,7 +16,7 @@ function harness() {
   const dom = new JSDOM('<!doctype html><body><div id="desktopComposer" data-model-provider="openai"><div class="agent-composer__actions"></div></div></body>');
   const { document, MutationObserver } = dom.window;
   const context = { document, MutationObserver, createAgentPermissions, createIcon };
-  const actionSource = readFileSync(new URL('../desktop/design-previews/components/ui-kit.js', import.meta.url), 'utf8').match(/^export function createActionButton[^]*?^}/m)[0].replace('export ', '');
+  const actionSource = readFileSync(new URL('../desktop/src/shared/components/ui-kit.js', import.meta.url), 'utf8').match(/^export function createActionButton[^]*?^}/m)[0].replace('export ', '');
   vm.runInNewContext(actionSource, context);
   const source = readFileSync(new URL('../desktop/src/agent-tools.ts', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, context);

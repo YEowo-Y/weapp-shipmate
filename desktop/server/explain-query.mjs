@@ -1,7 +1,16 @@
+// @ts-check
 import { ConnectionError } from './model-providers.mjs';
-import { validateExplainResult } from '../design-previews/explain-contract.js';
-const runExplain = async (...args) => (await import('../../src/explain.mjs')).runExplain(...args);
+import { validateExplainResult } from '../src/shared/explain-contract.js';
+/**
+ * @param {string} query
+ * @param {Record<string, any>} [options]
+ */
+const runExplain = async (query, options) => (await import('../../src/explain.mjs')).runExplain(query, options);
 
+/**
+ * @param {string} query
+ * @param {Record<string, any>} [options]
+ */
 export async function executeExplain(query, { explainRunner = runExplain, signal, timeoutMs = 10000 } = {}) {
   const controller = new AbortController();
   let timer, interrupt, cancellation;

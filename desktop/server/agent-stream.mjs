@@ -1,3 +1,4 @@
+// @ts-check
 /* global ReadableStream, Response, TransformStream */
 import { streamText, tool, jsonSchema, stepCountIs, wrapLanguageModel } from 'ai';
 import { randomUUID } from 'node:crypto';
@@ -6,7 +7,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { validateChatRequest } from './chat-stream.mjs';
 import { ConnectionError } from './model-providers.mjs';
-import { AGENT_PROVIDERS, AGENT_TOOL_NAME, validateAgentInput, validateAgentResult } from '../design-previews/agent-contract.js';
+import { AGENT_PROVIDERS, AGENT_TOOL_NAME, validateAgentInput, validateAgentResult } from '../src/shared/agent-contract.js';
 
 const id = value => typeof value === 'string' && /^[\w-]{1,80}$/.test(value);
 const failure = () => new Error('项目助手未完成，请检查连接或项目后重试。');
@@ -25,7 +26,7 @@ const recoveryMessages = Object.freeze({
 });
 const hiddenResult = '结果已保存到本机，未授权读取内容。请告知用户在本机成果区查看，不得猜测结果。';
 const inputSchema = jsonSchema({ type: 'object', properties: { kind: { type: 'string', enum: ['check', 'guide', 'explain'] }, query: { type: 'string', maxLength: 4096 } }, required: ['kind', 'query'], additionalProperties: false }, {
-  validate(value) { return validateAgentInput(value).ok ? { success: true, value } : { success: false, error: failure() }; },
+  validate(value) { return validateAgentInput(value).ok ? { success: true, value: /** @type {{ kind: 'check' | 'guide' | 'explain'; query: string }} */ (value) } : { success: false, error: failure() }; },
 });
 
 export function validateAgentRequest(body, providerId = 'openai') {
@@ -38,6 +39,12 @@ export function validateAgentRequest(body, providerId = 'openai') {
 
 // The SDK owns upstream protocol parsing and the tool loop. This boundary only
 // limits execution and publishes its standard UI Message Stream events.
+/**
+ * @param {any} res
+ * @param {string} key
+ * @param {any} body
+ * @param {Record<string, any>} [options]
+ */
 export async function streamAgentResponse(res, key, body, { providerId = 'openai', fetchImpl = globalThis.fetch, signal, timeoutMs = 120_000, requestId, projectToolRunner } = {}) {
   validateAgentRequest(body, providerId);
   if (!id(requestId) || typeof projectToolRunner !== 'function') throw new ConnectionError('agent_unavailable', '本地项目工具不可用。', 409);

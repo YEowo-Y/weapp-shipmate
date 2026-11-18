@@ -1,3 +1,4 @@
+// @ts-check
 import { build } from 'vite';
 import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -6,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const outDir = join(root, 'design-previews/components/vendor/web-awesome');
+const outDir = join(root, 'src/shared/components/vendor/web-awesome');
 const packageRoots = new Set();
 await build({
   configFile: false,

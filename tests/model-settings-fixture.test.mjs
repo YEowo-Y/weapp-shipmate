@@ -57,6 +57,10 @@ test('fixture serves identical product modules and marks HTML without editing pr
   assert.equal(script, await readFile(new URL('../desktop/design-previews/settings.js', import.meta.url), 'utf8'));
   const client = await (await fetch(app.origin + '/model-connection-client.js')).text();
   assert.equal(client, await readFile(new URL('../desktop/design-previews/model-connection-client.js', import.meta.url), 'utf8'));
+  const sharedClient = await (await fetch(app.origin + '/src/shared/model-connection-client.js')).text();
+  assert.equal(sharedClient, await readFile(new URL('../desktop/src/shared/model-connection-client.js', import.meta.url), 'utf8'));
+  assert.equal((await fetch(app.origin + '/src/shared/')).status, 403);
+  assert.equal((await fetch(app.origin + '/src/shared/%2e%2e%2fmain.ts')).status, 403);
   assert.equal((await fetch(app.origin + '/%2e%2e%2fpackage.json')).status, 403);
   assert.equal(app.fixture.upstreamCalls, 0);
 });

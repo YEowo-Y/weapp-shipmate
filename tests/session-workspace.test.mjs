@@ -7,7 +7,7 @@ import { literalSessionQuery, sessionMatch } from '../desktop/design-previews/se
 import { createSessionPersistence } from '../desktop/design-previews/session-persistence.js';
 import { createActionButton, bindActionMenu } from './helpers/ui-action.mjs';
 
-const source = readFileSync(new URL('../desktop/design-previews/session-workspace.js', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../desktop/src/shared/session-workspace.js', import.meta.url), 'utf8');
 function node(doc, tag = 'div') {
   const listeners = new Map();
   return { ownerDocument: doc, tag, children: [], dataset: {}, value: '', hidden: false,

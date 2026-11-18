@@ -1,4 +1,4 @@
-import { createActionButton } from '../design-previews/components/ui-kit.js';
+import { createActionButton } from './shared/components/ui-kit.js';
 import './system-notifications.css';
 
 type Snapshot = { schemaVersion: 1; revision: number; enabled: boolean; permission: 'granted' | 'denied' | 'prompt' | 'unknown'; delivery: 'idle' | 'submitted' | 'failed' | 'disabled' | 'permission_required'; message: string | null; installationRequired: boolean; lastAttempt?: { kind: 'test' | 'notice'; noticeId: string | null; attemptedAt: number; outcome: 'submitted' | 'failed' | 'permission_required' } | null };

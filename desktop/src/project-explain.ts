@@ -1,4 +1,4 @@
-import { validateExplainInput, validateExplainResult } from '../design-previews/explain-contract.js';
+import { validateExplainInput, validateExplainResult } from './shared/explain-contract.js';
 import type { Artifact } from './projects';
 
 type Options = {

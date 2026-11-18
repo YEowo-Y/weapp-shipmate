@@ -1,8 +1,8 @@
-import { createHandoff, parseHandoff, exportHandoff, renderHandoffSections, handoffWarnings, MAX_HANDOFF_BYTES, type RepairHandoff } from '../design-previews/repair-handoff.js';
-import { createArtifactDownloader } from '../design-previews/artifact-download.js';
-import { createActionButton } from '../design-previews/components/ui-kit.js';
-import { createIcon } from '../design-previews/components/icons.js';
-import { renderMessageText } from '../design-previews/components/message-markdown.js';
+import { createHandoff, parseHandoff, exportHandoff, renderHandoffSections, handoffWarnings, MAX_HANDOFF_BYTES, type RepairHandoff } from './shared/repair-handoff.js';
+import { createArtifactDownloader } from './shared/artifact-download.js';
+import { createActionButton } from './shared/components/ui-kit.js';
+import { createIcon } from './shared/components/icons.js';
+import { renderMessageText } from './shared/components/message-markdown.js';
 import type { Artifact, Project } from './projects';
 import './context.css';
 import './repair-handoff.css';

@@ -1,6 +1,6 @@
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { mountExplain } from '../design-previews/explain.js';
-import { queryExplain } from '../design-previews/explain-transport.js';
+import { mountExplain } from './shared/explain.js';
+import { queryExplain } from './shared/explain-transport.js';
 import { desktopModelFetch } from './model-fetch';
 
 /** Share the browser controller and validated result renderer over the fixed native bridge. */

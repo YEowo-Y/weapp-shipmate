@@ -1,5 +1,6 @@
+// @ts-check
 import { randomUUID } from 'node:crypto';
-import { validateAgentInput, validateAgentResult } from '../design-previews/agent-contract.js';
+import { validateAgentInput, validateAgentResult } from '../src/shared/agent-contract.js';
 
 const validId = value => typeof value === 'string' && /^[\w-]{1,128}$/.test(value);
 const unavailable = code => Object.assign(new Error('本地项目工具未完成，请重试。'), { code });

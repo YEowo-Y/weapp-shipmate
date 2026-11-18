@@ -4,8 +4,9 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const root = new URL('../desktop/design-previews/', import.meta.url);
-const composer = readFileSync(new URL('components/composer.css', root), 'utf8');
-const app = readFileSync(new URL('app.css', root), 'utf8');
+const sharedRoot = new URL('../desktop/src/shared/', import.meta.url);
+const composer = readFileSync(new URL('components/composer.css', sharedRoot), 'utf8');
+const app = readFileSync(new URL('app.css', sharedRoot), 'utf8');
 
 // These are source contracts, not browser layout or visual assertions.
 test('model choice keeps its only visible name when the composer becomes narrow', () => {
@@ -69,7 +70,7 @@ test('workspace delegates lifecycle to shared sessions across repeated bfcache v
   const source = readFileSync(new URL('main.js', root), 'utf8');
   assert.match(source, /await mountSessionWorkspace\(/);
   assert.doesNotMatch(source, /addEventListener\(['"]pagehide/);
-  const shared = readFileSync(new URL('session-workspace.js', root), 'utf8');
+  const shared = readFileSync(new URL('session-workspace.js', sharedRoot), 'utf8');
   const lifecycle = shared.match(/^ {2}bind\(win, 'pagehide', .*$/m)?.[0];
   assert.ok(lifecycle, 'shared workspace must own pagehide');
   const listeners = [];
