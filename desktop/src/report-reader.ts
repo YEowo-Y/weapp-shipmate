@@ -1,7 +1,7 @@
-import { createHandoff, handoffWarnings, formatRuleActions, formatRuleConfidence, type RepairHandoff } from '../design-previews/repair-handoff.js';
-import { createActionButton } from '../design-previews/components/ui-kit.js';
-import { createIcon } from '../design-previews/components/icons.js';
-import { renderMessageText } from '../design-previews/components/message-markdown.js';
+import { createHandoff, handoffWarnings, formatRuleActions, formatRuleConfidence, type RepairHandoff } from './shared/repair-handoff.js';
+import { createActionButton } from './shared/components/ui-kit.js';
+import { createIcon } from './shared/components/icons.js';
+import { renderMessageText } from './shared/components/message-markdown.js';
 import type { Artifact, Project } from './projects';
 import type { QuoteRow, QuoteState } from './report-quote-checks';
 import type { MissingFact } from './workflow';
@@ -90,7 +90,7 @@ export function mountReportReader(options: Options) {
     try { pack = createHandoff(artifact); }
     catch { summary.textContent = '此报告未提供有效的结构化摘要，以下保留完整原文。'; original.open = true; return; }
     const project = options.getProject(), source = pack.source;
-    provenance.textContent = `保存于 ${new Date(source.createdAt).toLocaleString('zh-CN', { hour12: false })} · ${source.projectId === null ? '未归属项目' : project?.id === source.projectId ? project.name : `来源项目 ${source.projectId}`}`;
+    provenance.textContent = `保存于 ${new Date(source.createdAt).toLocaleString('zh-CN', { hour12: false })} · ${source.projectId === null ? '未归属项目' : project && project.id === source.projectId ? project.name : `来源项目 ${source.projectId}`}`;
     versions.hidden = false;
     versionText.textContent = `报告 ${source.artifactId} · 执行 ${source.runId}\n项目版本 ${source.projectRevision ?? '未记录'} · 事实版本 ${source.contextRevision ?? '未记录'}\n工具 ${source.toolVersion}\n规则版本 ${source.rulesVersion}`;
     warning.textContent += ` ${handoffWarnings(pack, project, options.getRulesVersion()).join(' ')}`;
@@ -141,7 +141,7 @@ export function mountReportReader(options: Options) {
           edit.addEventListener('click', () => {
             if (disposed || !dialog.open) return;
             const current = options.getProject();
-            if (options.getArtifact()?.id !== snapshotId || current?.id !== source.projectId || current?.facts?.[field] != null) {
+            if (!current || options.getArtifact()?.id !== snapshotId || current.id !== source.projectId || current.facts?.[field] != null) {
               linkStatus.textContent = '报告或项目事实已变化，请重新生成清单后核对。'; return;
             }
             if (!options.onEditFact!(current.id, field, edit)) linkStatus.textContent = '当前操作尚未结束，请稍后重试。';

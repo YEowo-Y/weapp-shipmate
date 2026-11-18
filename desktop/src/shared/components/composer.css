@@ -1,0 +1,233 @@
+@import url('./icons.css');
+
+/* Shared composer proportions follow the supplied Codex desktop reference. */
+.agent-composer.composer {
+  --composer-bg: #292929;
+  --composer-border: #3d3d3d;
+  --composer-menu-bg: #2c2c2c;
+  --composer-hover: #424242;
+  --composer-text: #f3f3f3;
+  --composer-muted: #a3a3a3;
+  --composer-placeholder: #9e9e9e;
+  --composer-permission: #ff925b;
+  --composer-effort: #c395ff;
+  --composer-action: #ededed;
+  --composer-action-hover: #fff;
+  --composer-action-ink: #202020;
+  position: relative;
+  z-index: 6;
+  container: composer / inline-size;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+  width: calc(100% - 32px);
+  max-width: var(--conversation-reading-width, 680px);
+  margin: 10px auto;
+  padding: 8px 12px;
+  border: 1px solid var(--composer-border);
+  border-radius: 22px;
+  background: var(--composer-bg);
+  color: var(--composer-text);
+  box-shadow: none;
+  transition: border-color .16s var(--ease);
+}
+body[data-theme='light'] .agent-composer {
+  --composer-bg: #fff;
+  --composer-border: #dedede;
+  --composer-menu-bg: #fff;
+  --composer-hover: #f0f0f0;
+  --composer-text: #252525;
+  --composer-muted: #707070;
+  --composer-placeholder: #767676;
+  --composer-permission: #a94c1b;
+  --composer-effort: #7850ad;
+  --composer-action: #292929;
+  --composer-action-hover: #444;
+  --composer-action-ink: #fff;
+}
+.agent-composer.composer:focus-within { border-color: var(--composer-muted); }
+.agent-composer__edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0 6px 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--composer-border);
+  color: var(--composer-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.agent-composer__edit[hidden] { display: none; }
+.agent-composer__edit > svg { flex: none; width: 16px; height: 16px; }
+.agent-composer__cancel-edit {
+  flex: none;
+  min-width: 44px;
+  min-height: 32px;
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--composer-text);
+  font: inherit;
+  cursor: pointer;
+}
+.agent-composer__cancel-edit:hover { background: var(--composer-hover); }
+.agent-composer__cancel-edit:focus-visible { outline: 2px solid var(--composer-muted); outline-offset: 2px; }
+.agent-composer .agent-composer__input {
+  display: block;
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  max-height: min(144px, 28dvh);
+  margin: 0;
+  padding: 2px 4px 8px;
+  resize: none;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--composer-text);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.6;
+  scrollbar-width: thin;
+  scrollbar-color: var(--composer-muted) transparent;
+}
+.agent-composer__input:focus-visible { outline: none; }
+.agent-composer__input::placeholder { color: var(--composer-placeholder); opacity: 1; }
+.agent-composer__context:has(> :empty) { display: none; }
+.agent-composer__context { margin: 2px 6px 8px; }
+.agent-composer .agent-composer__context > * { padding: 0; }
+.agent-composer .ctxchip {
+  max-width: 100%;
+  min-height: 32px;
+  color: var(--composer-text);
+  background: var(--composer-hover);
+  border-color: var(--composer-border);
+  overflow-wrap: anywhere;
+}
+.agent-composer .ctxchip :is(svg, .x) { color: var(--composer-muted); }
+.agent-composer .ctxchip .x { flex: none; min-width: 28px; min-height: 28px; }
+.agent-composer .ctxchip .x:hover { color: var(--composer-text); }
+.agent-composer__toolbar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.agent-composer__actions { display: flex; flex-shrink: 0; align-items: center; gap: 10px; min-width: 0; margin-right: auto; }
+.agent-composer :is(.agent-composer__add, .agent-composer__model, .agent-composer__send) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 36px;
+  min-height: 36px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background .14s var(--ease), color .14s var(--ease), transform .12s var(--ease);
+}
+.agent-composer .agent-composer__add { width: 36px; padding: 0; background: transparent; color: var(--composer-text); }
+.agent-composer__add-icon { width: 20px; height: 20px; }
+.agent-composer__permission { display: inline-flex; align-items: center; gap: 6px; color: var(--composer-permission); font-size: 14px; white-space: nowrap; }
+.agent-composer__shield { width: 18px; height: 18px; flex: none; }
+.agent-composer .agent-composer__model {
+  gap: 5px;
+  flex-shrink: 1;
+  min-width: 64px;
+  max-width: min(240px, 45%);
+  margin: 0;
+  padding: 0 7px;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--composer-text);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.agent-composer__provider { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-composer__effort { color: var(--composer-effort); }
+.agent-composer .agent-composer__chevron { flex: none; width: 14px; height: 14px; margin-left: 3px; color: var(--composer-muted); }
+.agent-composer :is(.agent-composer__model, .agent-composer__add):is(:hover, [aria-expanded='true']) { background: var(--composer-hover); border-color: transparent; color: var(--composer-text); }
+.agent-composer :is(.agent-composer__add, .agent-composer__model, .agent-composer__send):focus-visible { outline: 2px solid var(--composer-muted); outline-offset: 2px; }
+.agent-composer .agent-composer__send { width: 36px; padding: 0; background: var(--composer-action); color: var(--composer-action-ink); }
+.agent-composer .agent-composer__send:hover:not(:disabled) { background: var(--composer-action-hover); }
+.agent-composer__send-icon, .agent-composer__stop-icon { width: 18px; height: 18px; }
+.agent-composer__stop-icon { display: none; fill: currentColor; width: 14px; height: 14px; }
+.agent-composer__send[data-mode='stop'] .agent-composer__send-icon { display: none; }
+.agent-composer__send[data-mode='stop'] .agent-composer__stop-icon { display: block; }
+.agent-composer [disabled] { opacity: .45; cursor: not-allowed; }
+.agent-composer__hint { margin: 3px 4px 0; color: var(--composer-muted); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.agent-composer > :is(.mentionpop, .slashpop) {
+  position: fixed;
+  inset: auto;
+  top: 0;
+  left: 0;
+  width: 100%;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--composer-border);
+  border-radius: 20px;
+  background: var(--composer-menu-bg);
+  color: var(--composer-text);
+  font: 14px/1.5 var(--font-ui);
+  box-shadow: 0 8px 24px #0002;
+  scrollbar-width: thin;
+  scrollbar-color: var(--composer-muted) transparent;
+}
+.agent-composer > :is(.mentionpop, .slashpop)[data-positioned='false'] { visibility: hidden; }
+.agent-composer :is(.mentionpop__h, .slashpop__h) { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; padding: 8px 10px; color: var(--composer-muted); font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.agent-composer :is(.mentionpop__h, .slashpop__h) > span { margin-left: auto; font-size: 11px; }
+.agent-composer :is(.mentionitem, .slashitem) { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--composer-text); text-align: left; font: inherit; cursor: pointer; transition: background .12s var(--ease); }
+.agent-composer :is(.mentionitem, .slashitem):is(:hover, .on) { background: var(--composer-hover); border-color: transparent; }
+.agent-composer .mentionitem__ico { display: flex; flex: 0 0 18px; color: var(--composer-muted); }
+.agent-composer .mentionitem__ico svg { width: 18px; height: 18px; }
+.agent-composer :is(.mentionitem__path, .slashitem code) { min-width: 0; color: var(--composer-text); font: 13px/1.5 var(--font-mono); overflow-wrap: anywhere; }
+.agent-composer .mentionitem__path { flex: 1; }
+.agent-composer .mentionitem__tag { flex: none; padding: 2px 6px; color: var(--composer-muted); font-size: 12px; }
+.agent-composer .slashitem .d { min-width: 0; margin-left: auto; color: var(--composer-muted); font-size: 12px; overflow-wrap: anywhere; }
+.agent-composer .completion-empty { margin: 0; padding: 18px 12px; color: var(--composer-muted); font-size: 13px; line-height: 1.6; }
+.agent-composer :is(.mentionitem, .slashitem):focus-visible { outline: 2px solid var(--composer-muted); outline-offset: -2px; }
+@container composer (max-width: 290px) {
+  .agent-composer__actions { gap: 4px; }
+  .agent-composer__permission { font-size: 12px; gap: 4px; }
+  .agent-composer__toolbar { gap: 4px; }
+  .agent-composer .agent-composer__model { font-size: 13px; padding-inline: 4px; }
+  .agent-composer .mentionitem__tag { display: none; }
+  .agent-composer :is(.mentionpop__h, .slashpop__h) > span { margin-left: 0; }
+  .agent-composer .slashitem { flex-wrap: wrap; gap: 2px 8px; border-radius: 14px; }
+  .agent-composer .slashitem .d { flex-basis: 100%; margin-left: 0; }
+}
+@container composer (max-width: 260px) {
+  .agent-composer__toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; }
+  .agent-composer__actions { grid-column: 1 / -1; }
+  .agent-composer .agent-composer__model { justify-self: start; max-width: 100%; }
+}
+@media (max-width: 700px) {
+  .agent-composer.composer { width: calc(100% - 24px); margin-block: 8px; }
+}
+@media (pointer: coarse) {
+  .agent-composer :is(.agent-composer__add, .agent-composer__model, .agent-composer__send) { height: 44px; min-height: 44px; }
+  .agent-composer :is(.agent-composer__add, .agent-composer__send) { width: 44px; }
+  .agent-composer .ctxchip .x { min-width: 44px; min-height: 44px; }
+  .agent-composer :is(.agent-composer__cancel-edit, .mentionitem, .slashitem) { min-height: 44px; }
+}
+@media (forced-colors: active) {
+  .agent-composer :is(.agent-composer__add, .agent-composer__model, .agent-composer__send, .agent-composer__cancel-edit):focus-visible { outline-color: Highlight; }
+  .agent-composer .agent-composer__send { border: 1px solid ButtonText; }
+  .agent-composer :is(.mentionitem, .slashitem).on { outline: 2px solid Highlight; outline-offset: -2px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .agent-composer :is(.agent-composer__add, .agent-composer__model, .agent-composer__send):active:not(:disabled) { transform: scale(.96); }
+  .agent-composer > :is(.mentionpop, .slashpop):popover-open { animation: composer-menu-enter .12s ease-out; }
+  @keyframes composer-menu-enter { from { opacity: 0; } to { opacity: 1; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-composer.composer,
+  .agent-composer :is(button, .mentionitem, .slashitem) { transition: none; }
+}

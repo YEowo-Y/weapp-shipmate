@@ -8,6 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createModelConnectionHandler, isLocalHost } from '../desktop/server/model-connections.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../desktop/design-previews');
+const sharedRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../desktop/src/shared');
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.mjs': 'text/javascript', '.svg': 'image/svg+xml' };
 const banner = '<aside data-fixture-banner style="position:fixed;inset:0 0 auto;z-index:2147483647;background:#ffd66b;color:#231d10;font:12px/20px system-ui;text-align:center;padding:2px 8px;pointer-events:none">本地验收模拟环境 · 无外部请求 · 非真实供应商连接</aside>';
 const scenarios = new Set(['fixture-success', 'fixture-auth-error', 'fixture-rate-limit', 'fixture-empty', 'fixture-slow', 'fixture-refresh-error']);
@@ -125,8 +126,10 @@ export function createFixtureServer({ slowMs = 2500, streamDelayMs = 400, stopDe
       try { path = decodeURIComponent((req.url || '/').split('?')[0]); }
       catch { res.writeHead(400); res.end(); return; }
       if (path === '/') path = '/settings.html';
-      const full = resolve(root, '.' + path);
-      if (!full.startsWith(root + sep)) { res.writeHead(403); res.end(); return; }
+      const useShared = path.startsWith('/src/shared/');
+      const baseRoot = useShared ? sharedRoot : root;
+      const full = resolve(baseRoot, '.' + (useShared ? path.slice('/src/shared'.length) : path));
+      if (!full.startsWith(baseRoot + sep)) { res.writeHead(403); res.end(); return; }
       let content;
       try { content = await readFile(full); }
       catch { res.writeHead(404); res.end(); return; }

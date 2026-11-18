@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { literalSessionQuery, sessionMatch } from '../desktop/design-previews/session-search.js';
+import { literalSessionQuery, sessionMatch } from '../desktop/src/shared/session-search.js';
 
 const session = (...messages) => ({ title: 'Conversation', messages });
 const assistant = text => ({ id: 'reply', role: 'assistant', text });
@@ -48,7 +48,7 @@ test('search cache invalidates when the same message streams or changes role', (
 test('repeated queries reuse parsed message text and streamed edits replace the cached version', () => {
   let parses = 0;
   const context = vm.createContext({ messageSearchText: value => { parses++; return value; } });
-  const source = readFileSync(new URL('../desktop/design-previews/session-search.js', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../desktop/src/shared/session-search.js', import.meta.url), 'utf8');
   vm.runInContext(source.replace(/^import .*;\r?\n/gm, '').replace(/export /g, ''), context);
   const message = assistant('first version'), saved = session(message);
   context.sessionMatch(saved, 'first'); context.sessionMatch(saved, 'version'); context.sessionMatch(saved, 'missing');

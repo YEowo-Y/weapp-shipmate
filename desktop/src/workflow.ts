@@ -1,13 +1,15 @@
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { deriveWorkflow } from '../../src/workflow.mjs';
-import { createIcon } from '../design-previews/components/icons.js';
+import { createIcon } from './shared/components/icons.js';
 import type { Project, ProjectFacts } from './projects';
-import { createWorkflowArtifact } from '../design-previews/workflow-artifact.js';
-import { createArtifactDownloader } from '../design-previews/artifact-download.js';
+import type { WorkflowResult } from './shared';
+import { createWorkflowArtifact } from './shared/workflow-artifact.js';
+import { createArtifactDownloader } from './shared/artifact-download.js';
 import './workflow.css';
 
 type Snapshot = { project: Project; catalog: unknown; rulesVersion: string; confirmations: unknown[] };
+const projectWorkflow = (basis: Snapshot): WorkflowResult => deriveWorkflow(basis as never) as WorkflowResult;
 export type MissingFact = 'collectsSensitive' | 'hasServerDomain';
 type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getProject(): Project | null; isBusy(): boolean; onProjectChanged(): Promise<void>; onGenerateGuide?(projectId: string): Promise<void>; onReadGuide?(trigger: HTMLElement): void };
 const labels: Record<string, string> = { confirmed: '人工已确认', not_applicable: '人工不适用', pending: '待确认', unknown: '事实待补充', stale: '待重检' };
@@ -29,7 +31,7 @@ export function mountWorkflow(options: Options) {
     return drafts.get(projectId)!;
   };
   const factsBasis = (basis: Snapshot) => JSON.stringify([basis.project.contextRevision, basis.project.facts?.businessType ?? '', basis.project.facts?.hasPayment ?? null, basis.project.facts?.collectsSensitive ?? null, basis.project.facts?.hasServerDomain ?? null]);
-  const noteBasis = (basis: Snapshot, stageId: string) => JSON.stringify([basis.project.contextRevision, basis.rulesVersion, deriveWorkflow(basis).stages.find(stage => stage.id === stageId)?.confirmation ?? null]);
+  const noteBasis = (basis: Snapshot, stageId: string) => JSON.stringify([basis.project.contextRevision, basis.rulesVersion, projectWorkflow(basis).stages.find(stage => stage.id === stageId)?.confirmation ?? null]);
   const factsConflict = (basis: Snapshot) => { const draft = draftFor(basis.project.id); return draft.factsBasis !== undefined && draft.factsBasis !== factsBasis(basis); };
   const noteConflict = (basis: Snapshot, stageId: string) => { const original = draftFor(basis.project.id).noteBases.get(stageId); return original !== undefined && original !== noteBasis(basis, stageId); };
   const listeners: (() => void)[] = [];
@@ -79,7 +81,7 @@ export function mountWorkflow(options: Options) {
       const value = Object.prototype.hasOwnProperty.call(draft.facts, key) ? draft.facts[key] : project.facts?.[key];
       el<HTMLSelectElement>(`workflow-${key}`).value = value == null ? 'unknown' : String(value);
     }
-    const model = deriveWorkflow(snapshot);
+    const model = projectWorkflow(snapshot);
     const confirmed = model.stages.filter(stage => stage.status === 'confirmed').length;
     const notApplicable = model.stages.filter(stage => stage.status === 'not_applicable').length;
     el('workflow-overview').textContent = `${model.stages.length} 个阶段 · 人工确认 ${confirmed} · 不适用 ${notApplicable} · 待处理 ${model.stages.length - confirmed - notApplicable}`;
@@ -182,7 +184,7 @@ export function mountWorkflow(options: Options) {
   async function saveStage(stageId: string, state: string, note: string) {
     const basis = currentBasis(); if (!basis) return;
     if (noteConflict(basis, stageId)) { message('旧备注的依据已变化，请先放弃旧备注并重新核对。', true); return; }
-    const stage = deriveWorkflow(basis).stages.find(item => item.id === stageId);
+    const stage = projectWorkflow(basis).stages.find(item => item.id === stageId);
     if (state !== 'pending' && (!stage || stage.blockedBy.length || stage.applicability !== (state === 'confirmed'))) { message('请先确认适用事实并完成前置阶段；仅不适用阶段可标记不适用。', true); return; }
     await operation(async () => { await invoke('project_stage_confirm', { projectId: basis.project.id, expectedRevision: basis.project.revision, expectedRulesVersion: basis.rulesVersion, stageId, state, note }); const draft = draftFor(basis.project.id); draft.notes.delete(stageId); draft.noteBases.delete(stageId); await saved(); });
   }
@@ -206,7 +208,7 @@ export function mountWorkflow(options: Options) {
   listen(el('workflow-next-open'), 'click', () => {
     if (!snapshot || blocked()) return;
     if (snapshot.project.id !== options.getProject()?.id) return;
-    const model = deriveWorkflow(snapshot), next = model.nextAction;
+    const model = projectWorkflow(snapshot), next = model.nextAction;
     if (!next) return;
     if (model.stages.find(stage => stage.id === next.stageId)?.applicability === null) {
       el<HTMLDetailsElement>('workflow-facts').open = true; draftFor(snapshot.project.id).factsOpen = true;

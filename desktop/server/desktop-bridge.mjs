@@ -1,6 +1,7 @@
+// @ts-check
 import { createCredentialRpc } from './credential-rpc.mjs';
 import { createAgentToolRpc } from './agent-tool-rpc.mjs';
-import { AGENT_PROVIDERS } from '../design-previews/agent-contract.js';
+import { AGENT_PROVIDERS } from '../src/shared/agent-contract.js';
 import { TextDecoder } from 'node:util';
 import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -86,7 +87,9 @@ export async function createDesktopBridge({ emit, brokerOptions = {} }) {
         } else if (payload.mode === 'manual') {
           flow = null;
         } else {
-          const callback = new URL(authorization.searchParams.get('callback_url'));
+          const callbackUrl = authorization.searchParams.get('callback_url');
+          if (!callbackUrl) throw new Error();
+          const callback = new URL(callbackUrl);
           if (callback.origin !== origin || !callback.pathname.startsWith(`${BASE}/oauth/callback/`)) throw new Error();
           flow = { path: callback.pathname, state: authorization.searchParams.get('state'), deadline: Date.parse(payload.expiresAt) };
         }
@@ -129,7 +132,7 @@ export async function runStdio(input = process.stdin, output = process.stdout) {
     else if (message.type === 'request') void bridge.request(message.request);
   };
   // Register the response dispatcher before bootstrap asks the native vault.
-  input.setEncoding('utf8');
+  input.setEncoding?.('utf8');
   input.on('data', chunk => {
     buffered += chunk;
     if (Buffer.byteLength(buffered) > MAX_LINE) { input.destroy(); close(); return; }

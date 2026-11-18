@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { mountProjectBackup } from './project-backup';
-import { createIcon } from '../design-previews/components/icons.js';
+import { createIcon } from './shared/components/icons.js';
 
 export type ProjectFacts = { businessType: string; hasPayment: boolean | null; collectsSensitive: boolean | null; hasServerDomain: boolean | null };
 export type Project = { id: string; name: string; directory: string; subject: string; revision: number; createdAt: number; updatedAt: number; directoryAvailable: boolean; facts?: ProjectFacts; contextRevision?: number };

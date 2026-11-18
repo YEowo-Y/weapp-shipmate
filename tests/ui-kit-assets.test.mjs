@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 
-const componentRoot = new URL('../desktop/design-previews/components/', import.meta.url);
+const componentRoot = new URL('../desktop/src/shared/components/', import.meta.url);
 const vendorRoot = new URL('vendor/web-awesome/', componentRoot);
 
 test('local UI kit assets match pinned package, licenses and integrity manifest', () => {

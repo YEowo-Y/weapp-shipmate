@@ -1,3 +1,4 @@
+// @ts-check
 import { TextDecoder } from 'node:util';
 import { createCustomEndpointFetch, validateCustomEndpoint } from './custom-endpoint.mjs';
 
@@ -23,7 +24,9 @@ export const PROVIDER_CONFIGS = Object.freeze(Object.fromEntries(Object.entries(
 export class ConnectionError extends Error {
   constructor(code, message, status = 400) { super(message); this.name = 'ConnectionError'; this.code = code; this.status = status; }
 }
+/** @returns {never} */
 const fail = (code, message, status) => { throw new ConnectionError(code, message, status); };
+/** @returns {never} */
 const malformed = () => fail('invalid_response', '服务商返回的数据格式不受支持，请稍后重试。', 502);
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const text = (value, max = 256) => typeof value === 'string' && value.length > 0 && value.length <= max && ![...value].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127);
@@ -44,6 +47,10 @@ function validateTree(value, depth = 0, budget = { left: 50000 }) {
   }
 }
 
+/**
+ * @param {(request: (url: string, options?: any) => Promise<any>) => Promise<any>} work
+ * @param {Record<string, any>} [options]
+ */
 async function boundedOperation(work, { fetchImpl = fetch, signal, timeoutMs = 15000 } = {}) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > 60000) fail('invalid_timeout', '连接超时设置无效。');
   const controller = new AbortController();
@@ -137,7 +144,7 @@ export async function discoverModels(providerId, apiKey, options = {}) {
     const models = new Map();
     let cursor = '';
     for (let page = 0; page < 3; page++) {
-      const url = new URL(provider.endpoint);
+      const url = new URL(/** @type {string} */ (provider.endpoint));
       if (providerId === 'anthropic') { url.searchParams.set('limit', '100'); if (cursor) url.searchParams.set('after_id', cursor); }
       if (providerId === 'google') { url.searchParams.set('pageSize', '100'); if (cursor) url.searchParams.set('pageToken', cursor); }
       const data = await request(url.href, { headers });

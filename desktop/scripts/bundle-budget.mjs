@@ -1,3 +1,4 @@
+// @ts-check
 import { gzipSync } from 'node:zlib';
 
 // 2026-11-07 baseline: 708,345 bytes / 232,895 gzip bytes. Count the entire
@@ -5,11 +6,13 @@ import { gzipSync } from 'node:zlib';
 export const STARTUP_LIMITS = Object.freeze({ bytes: 750_000, gzipBytes: 250_000 });
 const settingsModule = '/src/settings/settings-renderer.ts';
 
+/** @param {Record<string, any>} bundle */
 export function measureBundle(bundle) {
   const chunks = Object.values(bundle).filter(item => item.type === 'chunk');
   const byFile = new Map(chunks.map(chunk => [chunk.fileName, chunk]));
   const startup = new Set();
   const errors = [];
+  /** @param {any} chunk */
   function visit(chunk) {
     if (startup.has(chunk.fileName)) return;
     startup.add(chunk.fileName);
@@ -35,7 +38,8 @@ export function measureBundle(bundle) {
   const total = sizes.filter(chunk => chunk.startup).reduce((sum, chunk) => ({
     bytes: sum.bytes + chunk.bytes, gzipBytes: sum.gzipBytes + chunk.gzipBytes,
   }), { bytes: 0, gzipBytes: 0 });
-  for (const [unit, limit] of Object.entries(STARTUP_LIMITS)) {
+  for (const unit of /** @type {const} */ (['bytes', 'gzipBytes'])) {
+    const limit = STARTUP_LIMITS[unit];
     if (total[unit] > limit) errors.push(`Startup ${unit}: ${total[unit]} exceeds ${limit}.`);
   }
   return { startup: total, limits: STARTUP_LIMITS, chunks: sizes, errors };
@@ -44,10 +48,15 @@ export function measureBundle(bundle) {
 export function bundleBudget() {
   return {
     name: 'shipmate-bundle-budget',
-    apply: 'build',
+    apply: /** @type {'build'} */ ('build'),
     generateBundle: {
       // Vite rewrites preload references in generateBundle; measure afterwards.
-      order: 'post',
+      order: /** @type {'post'} */ ('post'),
+      /**
+       * @this {{ error: (msg: string) => void; emitFile: (asset: any) => void }}
+       * @param {any} _options
+       * @param {Record<string, any>} bundle
+       */
       handler(_options, bundle) {
         const report = measureBundle(bundle);
         if (report.errors.length) this.error(report.errors.join('\n'));

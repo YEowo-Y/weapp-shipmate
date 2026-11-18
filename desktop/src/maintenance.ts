@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { createActionButton } from '../design-previews/components/ui-kit.js';
+import { createActionButton } from './shared/components/ui-kit.js';
 import './maintenance.css';
 
 type Notice = { id: string; artifactId: string; createdAt: number; newCount: number; read: boolean };

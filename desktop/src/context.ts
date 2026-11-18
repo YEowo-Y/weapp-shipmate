@@ -1,11 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import { createActionButton } from '../design-previews/components/ui-kit.js';
-import { createIcon } from '../design-previews/components/icons.js';
-import { createChatContext, contextMetadata } from '../design-previews/chat-context.js';
+import { createActionButton } from './shared/components/ui-kit.js';
+import { createIcon } from './shared/components/icons.js';
+import { createChatContext, contextMetadata } from './shared/chat-context.js';
 import type { ProjectSnapshot } from './projects';
 import { mountProjectMemory, type MemorySnapshot } from './project-memory';
-import type { ChatArgs } from '../design-previews/chat-transport.js';
+import type { ChatArgs } from './shared/chat-transport.js';
 import './context.css';
 
 type Session = { id: string; projectId?: string | null };

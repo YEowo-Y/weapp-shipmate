@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noImplicitAny": true,
+    "useUnknownInCatchVariables": true,
+    "checkJs": false
+  },
+  "include": ["node-env.d.ts", "vite.config.ts", "src/**/*.ts", "src/**/*.tsx"]
+}

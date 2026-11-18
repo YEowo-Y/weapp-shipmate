@@ -8,7 +8,7 @@ import { createIcon } from '../desktop/design-previews/components/icons.js';
 import { normalizeSessionSnapshot } from '../desktop/design-previews/session-store.js';
 import { parseSessionBackup, mergeSessionBackup } from '../desktop/design-previews/session-transfer.js';
 
-const source = readFileSync(new URL('../desktop/design-previews/session-data-dialog.js', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../desktop/src/shared/session-data-dialog.js', import.meta.url), 'utf8');
 const snapshot = (title = 'Original') => ({ version: 1, currentSessionId: 'session-1', sessionSequence: 1,
   sessions: [{ id: 'session-1', title, draft: 'unsent draft', messages: [{ id: 'm1', role: 'user', text: 'Saved message' }] }] });
 function harness(options = {}) {

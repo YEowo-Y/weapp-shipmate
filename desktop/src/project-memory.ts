@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { ProjectSnapshot } from './projects';
-import { createActionButton } from '../design-previews/components/ui-kit.js';
-import { createIcon } from '../design-previews/components/icons.js';
+import { createActionButton } from './shared/components/ui-kit.js';
+import { createIcon } from './shared/components/icons.js';
 import './context.css';
 import './project-memory.css';
 

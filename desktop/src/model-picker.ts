@@ -1,8 +1,8 @@
-import { isUsableModelConnection } from '../design-previews/model-connection-client.js';
-import { createProviderIcon } from '../design-previews/components/provider-icons.js';
-import { createIcon } from '../design-previews/components/icons.js';
-import { attachFloatingSurface } from '../design-previews/components/floating-surface.js';
-import { createActionButton } from '../design-previews/components/ui-kit.js';
+import { isUsableModelConnection } from './shared/model-connection-client.js';
+import { createProviderIcon } from './shared/components/provider-icons.js';
+import { createIcon } from './shared/components/icons.js';
+import { attachFloatingSurface } from './shared/components/floating-surface.js';
+import { createActionButton } from './shared/components/ui-kit.js';
 
 type Selection = { providerId: string; model: string; label: string };
 type Connection = { providerId: string; status: string; hasCredential?: boolean; catalogSource?: string; inference?: { status: string; model: string | null }; models: { id: string; name: string }[] };

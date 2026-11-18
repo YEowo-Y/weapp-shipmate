@@ -1,6 +1,6 @@
-import { mountComposer } from '../design-previews/components/composer.js';
-import { mountSessionWorkspace } from '../design-previews/session-workspace.js';
-import { streamChat } from '../design-previews/chat-transport.js';
+import { mountComposer } from './shared/components/composer.js';
+import { mountSessionWorkspace } from './shared/session-workspace.js';
+import { streamChat } from './shared/chat-transport.js';
 import { desktopModelFetch } from './model-fetch';
 import { mountModelConnections } from './model-connection';
 import { mountChatContext } from './context';

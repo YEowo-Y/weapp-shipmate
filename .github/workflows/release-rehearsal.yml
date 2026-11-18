@@ -20,6 +20,7 @@ jobs:
       - run: npm ci
       - run: npm ci --prefix desktop
       - run: npm run lint
+      - run: npm --prefix desktop run typecheck
       - name: Verify version and choose distribution tag
         id: version
         run: |

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { setImmediate } from 'node:timers';
 
-const source = readFileSync(new URL('../desktop/design-previews/components/floating-surface.js', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../desktop/src/shared/components/floating-surface.js', import.meta.url), 'utf8');
 function harness() {
   const pending = []; let update; let cleaned = 0; const errors = []; const positioned = [];
   const context = vm.createContext({
@@ -69,7 +69,7 @@ test('current computation failure reports once and stale failures do not report'
 });
 
 async function geometry({ reference, floating, viewport }) {
-  const { computePosition, offset, flip, shift, size } = await import('../desktop/design-previews/components/vendor/floating-ui/floating-ui.core.mjs');
+  const { computePosition, offset, flip, shift, size } = await import('../desktop/src/shared/components/vendor/floating-ui/floating-ui.core.mjs');
   const dimensions = { ...floating }; const effects = [];
   const platform = {
     getElementRects: () => ({ reference, floating: { x: 0, y: 0, ...dimensions } }),
@@ -105,7 +105,7 @@ test('real core clamps oversized content and recomputes after a viewport resize'
 });
 test('vendored release bytes match provenance and only module specifiers were changed', async () => {
   const { createHash } = await import('node:crypto');
-  const base = new URL('../desktop/design-previews/components/vendor/floating-ui/', import.meta.url);
+  const base = new URL('../desktop/src/shared/components/vendor/floating-ui/', import.meta.url);
   const records = JSON.parse(readFileSync(new URL('provenance.json', base), 'utf8'));
   assert.deepEqual(records.map(record => [record.package, record.version]), [['@floating-ui/dom', '1.8.0'], ['@floating-ui/core', '1.8.0'], ['@floating-ui/utils', '0.2.12']]);
   for (const record of records) {

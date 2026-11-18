@@ -1,3 +1,4 @@
+// @ts-check
 import { watch, lstatSync, realpathSync } from 'node:fs';
 import { resolve, join, relative, isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -41,6 +42,10 @@ export function relevantWatchEvent(root, filename, event = 'rename') {
   return false;
 }
 
+/**
+ * @param {string} root
+ * @param {Record<string, any>} [options]
+ */
 export function startProjectWatch(root, {
   emit, watchFactory = watch, quietMs = 500, maxDelayMs = 3000, rootCheckMs = 1000,
 } = {}) {

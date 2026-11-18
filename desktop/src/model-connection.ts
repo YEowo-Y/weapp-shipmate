@@ -1,9 +1,9 @@
 import './model-connection.css';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { createConnectionClient, isUsableModelConnection } from '../design-previews/model-connection-client.js';
-import { createProviderIcon } from '../design-previews/components/provider-icons.js';
-import { createIcon } from '../design-previews/components/icons.js';
-import { createActionButton } from '../design-previews/components/ui-kit.js';
+import { createConnectionClient, isUsableModelConnection } from './shared/model-connection-client.js';
+import { createProviderIcon } from './shared/components/provider-icons.js';
+import { createIcon } from './shared/components/icons.js';
+import { createActionButton } from './shared/components/ui-kit.js';
 import { desktopModelFetch } from './model-fetch';
 import { mountModelPicker } from './model-picker';
 

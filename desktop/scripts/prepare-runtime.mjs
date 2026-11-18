@@ -1,3 +1,4 @@
+// @ts-check
 import { createHash } from 'node:crypto';
 import { copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -86,7 +87,7 @@ export async function prepareRuntime({ root = ROOT, output = join(root, 'desktop
     }
     await copyAllowed(join(root, 'rules'), join(temporary, 'rules'), path => /\.ya?ml$/.test(path));
     for (const name of ['guide-contract.js', 'explain-contract.js', 'agent-contract.js']) {
-      await copyAllowed(join(root, 'desktop/design-previews', name), join(temporary, 'desktop/design-previews', name), () => true);
+      await copyAllowed(join(root, 'desktop/src/shared', name), join(temporary, 'desktop/src/shared', name), () => true);
     }
     const lock = await json(join(root, 'package-lock.json'));
     const dependencyFiles = {

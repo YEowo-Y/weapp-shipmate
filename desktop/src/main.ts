@@ -20,10 +20,10 @@ import { mountProjectMaintenance } from "./maintenance";
 import { mountPreferences } from "./preferences";
 import { mountSourceFreshness } from "./source-freshness";
 import { mountSystemNotifications } from "./system-notifications";
-import { createIcon } from '../design-previews/components/icons.js';
-import { renderMessageText } from '../design-previews/components/message-markdown.js';
-import { bindActionMenu } from '../design-previews/components/ui-kit.js';
-import { mountScrollFades } from '../design-previews/components/scroll-fade.js';
+import { createIcon } from './shared/components/icons.js';
+import { renderMessageText } from './shared/components/message-markdown.js';
+import { bindActionMenu } from './shared/components/ui-kit.js';
+import { mountScrollFades } from './shared/components/scroll-fade.js';
 // Product polish must evaluate after every feature stylesheet imported above.
 import "./product-polish.css";
 

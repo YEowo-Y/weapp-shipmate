@@ -1,7 +1,13 @@
+// @ts-check
 import { randomUUID } from 'node:crypto';
 const runGuide = async (...args) => (await import('../../src/guide.mjs')).runGuide(...args);
-import { GUIDE_TOOL_NAME, validateGuideResult } from '../design-previews/guide-contract.js';
+import { GUIDE_TOOL_NAME, validateGuideResult } from '../src/shared/guide-contract.js';
 
+/**
+ * @param {any} res
+ * @param {any} input
+ * @param {Record<string, any>} [options]
+ */
 export async function streamGuideResponse(res, input, { guideRunner = runGuide, signal, timeoutMs = 10000 } = {}) {
   const controller = new AbortController();
   let timedOut = false;

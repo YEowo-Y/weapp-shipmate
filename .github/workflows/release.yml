@@ -36,6 +36,7 @@ jobs:
       - run: npm --prefix desktop run build
       # 门禁与 CI 同口径：任何一道红都不允许出资产。
       - run: npm run lint
+      - run: npm --prefix desktop run typecheck
       - run: npm run release:check
       - run: npm test
       - run: npm run verify:quotes

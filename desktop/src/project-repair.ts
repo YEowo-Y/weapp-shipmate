@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
-import { createActionButton } from '../design-previews/components/ui-kit.js';
-import { createIcon } from '../design-previews/components/icons.js';
+import { createActionButton } from './shared/components/ui-kit.js';
+import { createIcon } from './shared/components/icons.js';
 import type { Artifact } from './projects';
 import './context.css';
 import './project-repair.css';

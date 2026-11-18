@@ -34,7 +34,7 @@ function harness() {
   }
   doc = { body: new Element(), createElement: tag => new Element(tag), activeElement: null };
   const context = { isUsableModelConnection, document: doc, createProviderIcon: () => new Element(), createIcon: () => new Element(), attachFloatingSurface: () => () => { cleanup++; } };
-  const actionSource = readFileSync(new URL('../desktop/design-previews/components/ui-kit.js', import.meta.url), 'utf8').match(/^export function createActionButton[^]*?^}/m)[0].replace('export ', '');
+  const actionSource = readFileSync(new URL('../desktop/src/shared/components/ui-kit.js', import.meta.url), 'utf8').match(/^export function createActionButton[^]*?^}/m)[0].replace('export ', '');
   vm.runInNewContext(actionSource, context);
   const source = readFileSync(new URL('../desktop/src/model-picker.ts', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, context);

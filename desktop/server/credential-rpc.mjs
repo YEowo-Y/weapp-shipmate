@@ -1,3 +1,4 @@
+// @ts-check
 import { randomUUID } from 'node:crypto';
 
 // This channel belongs to the native child process, never the WebView transport.

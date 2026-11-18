@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-import { createIcon } from '../../design-previews/components/icons.js';
+import { createIcon } from '../shared/components/icons.js';
 
 /** Reuse the pinned Lucide whitelist; React never accepts icon markup from data. */
 export function Icon({ name, className = '' }: { name: string; className?: string }) {

@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { iconNodes } from '../desktop/design-previews/components/lucide-icons.js';
-import { iconMarkup } from '../desktop/design-previews/components/icons.js';
+import { iconNodes } from '../desktop/src/shared/components/lucide-icons.js';
+import { iconMarkup } from '../desktop/src/shared/components/icons.js';
 
 // One geometry source for dynamic DOM icons and static, same-origin SVG use.
 const output = new URL('../desktop/design-previews/components/icons.svg', import.meta.url);

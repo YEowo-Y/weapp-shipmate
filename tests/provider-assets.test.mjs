@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { createProviderIcon } from '../desktop/design-previews/components/provider-icons.js';
 import { PROVIDERS } from '../desktop/design-previews/settings-state.js';
 
-const assetRoot = new URL('../desktop/design-previews/components/brands/', import.meta.url);
+const assetRoot = new URL('../desktop/src/shared/components/brands/', import.meta.url);
 
 test('vendored brand assets and license match their pinned upstream manifest', () => {
   const manifest = JSON.parse(readFileSync(new URL('manifest.json', assetRoot), 'utf8'));

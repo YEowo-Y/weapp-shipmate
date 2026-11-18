@@ -309,7 +309,7 @@ async function archivedSessionHarness(loaded = null) {
     mountConversation(options) { let messages = options.initialMessages; return { stop() {}, destroy() {}, getMessages: () => messages, getDraftState: () => ({ draft: input.value }), getViewState: () => null, getModelSelection: () => null,
       replaceMessages(value) { messages = value; }, setModelSelection() {}, setDraft(value) { input.value = value; }, restoreViewState() {} }; },
   });
-  const workspaceSource = readFileSync(new URL('../desktop/design-previews/session-workspace.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export \{.*\};\r?\n/gm, '').replace(/export /g, '');
+  const workspaceSource = readFileSync(new URL('../desktop/src/shared/session-workspace.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export \{.*\};\r?\n/gm, '').replace(/export /g, '');
   vm.runInContext(workspaceSource, context);
   const element = () => document.createElement('div');
   const workspace = await context.mountSessionWorkspace({ host, input, sendButton: element(), scroll: element(), list: element(), status: element(), jumpButton: element(), projectScoped: true, layout: 'sidebar' });
