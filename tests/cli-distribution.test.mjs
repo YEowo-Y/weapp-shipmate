@@ -28,7 +28,11 @@ test("npm tarball and staged MCPB/plugins ship the versioned CLI schema and comp
     const npm = process.env.npm_execpath || join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
     const packed = JSON.parse(run(process.execPath, [npm, "pack", "--ignore-scripts", "--json", "--pack-destination", temp], root));
     assert.ok(packed[0].files.some(file => file.path === "schemas/cli-report-v1.schema.json"));
-    run("tar", ["-xf", join(temp, packed[0].filename), "-C", temp], temp);
+    // Extract by bare filename with the cwd already at the destination. GNU tar
+    // reads `D:/...` as a remote host named `D`, so an absolute Windows path in
+    // either the archive or `-C` fails with "Cannot connect to D: resolve failed".
+    // Both arguments stay relative to the cwd the helper sets.
+    run("tar", ["-xf", packed[0].filename], temp);
     const unpacked = join(temp, "package");
     // npm consumers install production dependencies separately from the tarball.
     cpSync(join(stage, "node_modules"), join(unpacked, "node_modules"), { recursive: true });
