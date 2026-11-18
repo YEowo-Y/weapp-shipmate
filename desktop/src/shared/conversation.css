@@ -445,7 +445,7 @@
     padding: 12px 16px;
   }
 
-  .workspace-preview .workspace-head h1 { font-size: var(--ds-text-input, 15px); }
+  .workspace-preview .workspace-head h1 { font-size: 15px; }
   .workspace-preview .conversation-shell > .workspace-section { padding: 4px 16px 0; }
 
   .approval-card__actions > *,
