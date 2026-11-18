@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { TextEncoder } from 'node:util';
 import vm from 'node:vm';
 import { setImmediate } from 'node:timers/promises';
 import { createPreviewDocument } from './helpers/preview-dom.mjs';
@@ -14,7 +15,7 @@ const requireDesktop = createRequire(new URL('../desktop/package.json', import.m
 let ts;
 try { ts = requireDesktop('typescript'); } catch { /* Optional for CLI-only installation. */ }
 const desktopTest = (name, fn) => test(name, { skip: !ts && 'Install desktop dependencies' }, fn);
-function harness({ copyText = async () => {}, getProject = () => null, getRulesVersion = () => 'rules' } = {}) {
+function harness({ copyText = async () => {}, getProject = () => null, getRulesVersion = () => 'rules', loadSourceCatalog = async () => null } = {}) {
   const downloads = [];
   const document = createPreviewDocument(), create = document.createElement.bind(document), nodes = [];
   document.createElement = tag => {
@@ -29,10 +30,13 @@ function harness({ copyText = async () => {}, getProject = () => null, getRulesV
   };
   document.body = document.createElement('body');
   const source = readFileSync(new URL('../desktop/src/repair-handoff.ts', import.meta.url), 'utf8').replace(/^import .*\r?\n/gm, '').replace('export function', 'function');
-  const context = vm.createContext({ ...contract, Error, document, createIcon, renderMessageText, createActionButton: (doc, label) => { const node = doc.createElement('wa-button'); node.textContent = label; return node; }, createArtifactDownloader: () => ({ download: value => { downloads.push(value); return true; }, dispose() {} }) });
-  vm.runInContext(ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, context);
+  const context = vm.createContext({ ...contract, Error, URL, TextEncoder, document, createIcon, renderMessageText, createActionButton: (doc, label) => { const node = doc.createElement('wa-button'); node.textContent = label; return node; }, createArtifactDownloader: () => ({ download: value => { downloads.push(value); return true; }, dispose() {} }) });
+  const formatter = new URL('../desktop/src/handoff-summary.ts', import.meta.url);
+  const runModule = text => vm.runInContext(ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, context);
+  runModule(readFileSync(formatter, 'utf8').replace(/^import .*\r?\n/gm, '').replace('export function', 'function'));
+  runModule(source);
   const artifact = { id: 'source-1', runId: 'run-1', projectId: null, projectRevision: null, contextRevision: null, kind: 'guide', title: '上线清单', createdAt: 1792700000000, toolVersion: 'test', rulesVersion: 'rules', ...runProjectTool('guide', { subject: 'personal' }) };
-  const app = context.mountRepairHandoff({ getArtifact: () => artifact, getProject, getRulesVersion, isBusy: () => false, copyText });
+  const app = context.mountRepairHandoff({ getArtifact: () => artifact, getProject, getRulesVersion, isBusy: () => false, copyText, loadSourceCatalog });
   const node = id => nodes.find(node => node.id === id), trigger = document.createElement('button');
   const select = text => { node('handoff-file').files = [{ size: 100, text }]; node('handoff-file').listeners.change(); };
   return { app, artifact, node, trigger, select, document, downloads };
@@ -195,4 +199,158 @@ desktopTest('late clipboard completion cannot change feedback after close and re
   assert.equal(h.node('handoff-status').textContent, '');
   assert.equal(h.node('handoff-copy').disabled, false);
   h.app.destroy();
+});
+
+const sourceCatalog = {
+  catalog: { schemaVersion: 1, sources: [{
+    url: 'https://developers.weixin.qq.com/miniprogram/dev/framework/',
+    references: [{ id: 'privacy.getLocation', title: '目录中核验的地点权限', lastVerified: '2026-11-13', draft: false }],
+  }] },
+};
+
+function summaryHarness(options = {}) {
+  const project = { id: 'summary-project', revision: 1, contextRevision: 1 };
+  const h = harness({ getProject: () => project, loadSourceCatalog: async () => sourceCatalog, ...options });
+  Object.assign(h.artifact, runProjectTool('explain', { query: '地理位置接口没有在隐私保护指引中声明位置信息' }), {
+    projectId: project.id, projectRevision: 1, contextRevision: 1, kind: 'explain',
+  });
+  h.app.open(h.trigger, true);
+  return h;
+}
+
+desktopTest('agent handoff previews the exact plain text before copying', async () => {
+  let reads = 0;
+  const copies = [];
+  const h = summaryHarness({ loadSourceCatalog: async () => { reads++; return sourceCatalog; }, copyText: async text => { copies.push(text); } });
+  const generate = h.node('handoff-agent-generate');
+  const copy = h.node('handoff-agent-copy');
+  const preview = h.node('handoff-agent-text');
+  assert.equal(reads, 0);
+  assert.equal(copy.disabled, true);
+  generate.focus();
+  await generate.listeners.click();
+  assert.equal(reads, 1);
+  assert.equal(preview.readOnly, true);
+  assert.equal(h.document.activeElement, preview);
+  assert.equal(preview.selectionStart, 0);
+  assert.equal(preview.scrollTop, 0);
+  assert.equal(h.node('handoff-agent-preview').hidden, false);
+  assert.match(preview.value, /privacy\.getLocation.*目录中核验的地点权限/s);
+  assert.doesNotMatch(preview.value, /summary-project|地理位置接口没有在隐私保护指引中声明位置信息/);
+  assert.deepEqual(copies, []);
+  await copy.listeners.click();
+  assert.deepEqual(copies, [preview.value]);
+  assert.match(h.node('handoff-agent-status').textContent, /已复制/);
+  h.node('desktop-handoff').close();
+  assert.equal(h.node('handoff-agent-preview').hidden, true);
+  assert.equal(preview.value, '');
+  assert.equal(h.document.activeElement, h.trigger);
+});
+
+desktopTest('agent handoff reports catalog and clipboard failures and keeps retry available', async () => {
+  let catalogUnavailable = true, blocked = true;
+  const h = summaryHarness({
+    loadSourceCatalog: async () => {
+      if (catalogUnavailable) throw Error('internal-catalog-path');
+      return sourceCatalog;
+    },
+    copyText: async () => { if (blocked) throw Error('internal-clipboard-detail'); },
+  });
+  const generate = h.node('handoff-agent-generate');
+  const copy = h.node('handoff-agent-copy');
+  const status = h.node('handoff-agent-status');
+  await generate.listeners.click();
+  assert.match(status.textContent, /规则来源目录/);
+  assert.doesNotMatch(status.textContent, /internal-catalog-path/);
+  assert.equal(copy.disabled, true);
+  catalogUnavailable = false;
+  await generate.listeners.click();
+  const text = h.node('handoff-agent-text').value;
+  await copy.listeners.click();
+  assert.match(status.textContent, /复制失败/);
+  assert.doesNotMatch(status.textContent, /internal-clipboard-detail/);
+  assert.equal(h.node('handoff-agent-text').value, text);
+  assert.equal(copy.disabled, false);
+  blocked = false;
+  await copy.listeners.click();
+  assert.match(status.textContent, /已复制/);
+});
+
+desktopTest('agent handoff rejects stale previews and results after a project or report change', async () => {
+  let currentProject = { id: 'summary-project' }, finish;
+  const copies = [];
+  const h = summaryHarness({ getProject: () => currentProject, loadSourceCatalog: () => new Promise(resolve => { finish = resolve; }), copyText: async text => { copies.push(text); } });
+  const generate = h.node('handoff-agent-generate');
+  const copy = h.node('handoff-agent-copy');
+  const preview = h.node('handoff-agent-text');
+  const pending = generate.listeners.click();
+  currentProject = { id: 'other-project' };
+  h.app.refresh();
+  finish(sourceCatalog); await pending;
+  assert.equal(preview.value, '');
+  assert.equal(copy.disabled, true);
+  assert.equal(h.node('handoff-agent-preview').hidden, true);
+  currentProject = { id: 'summary-project' };
+  h.app.refresh();
+  const next = generate.listeners.click();
+  finish(sourceCatalog); await next;
+  assert.ok(preview.value);
+  h.artifact.id = 'new-report';
+  await copy.listeners.click();
+  assert.deepEqual(copies, []);
+  assert.equal(preview.value, '');
+  assert.equal(copy.disabled, true);
+});
+
+desktopTest('agent handoff has no copy step for empty and imported reports', async () => {
+  let reads = 0;
+  const h = summaryHarness({ loadSourceCatalog: async () => { reads++; return { catalog: { schemaVersion: 1, sources: [] } }; } });
+  const generate = h.node('handoff-agent-generate');
+  await generate.listeners.click();
+  assert.match(h.node('handoff-agent-status').textContent, /没有.*规则/);
+  assert.equal(h.node('handoff-agent-copy').disabled, true);
+  h.select(async () => contract.exportHandoff(contract.createHandoff(h.artifact), 'json').text);
+  await setImmediate();
+  assert.equal(generate.disabled, true);
+  assert.match(h.node('handoff-agent-status').textContent, /外部/);
+  await generate.listeners.click();
+  assert.equal(reads, 1);
+});
+
+desktopTest('closing or reopening during catalog load discards the old handoff preview', async () => {
+  let finish;
+  const h = summaryHarness({ loadSourceCatalog: () => new Promise(resolve => { finish = resolve; }) });
+  const generate = h.node('handoff-agent-generate');
+  const pending = generate.listeners.click();
+  h.node('desktop-handoff').close();
+  h.app.open(h.trigger, true);
+  finish(sourceCatalog); await pending;
+  assert.equal(h.node('handoff-agent-preview').hidden, true);
+  assert.equal(h.node('handoff-agent-status').textContent, '');
+  assert.equal(generate.disabled, false);
+});
+
+desktopTest('agent and Markdown clipboard writes stay serialized across dialog reopen', async () => {
+  let finish;
+  const copies = [];
+  const h = summaryHarness({ copyText: text => {
+    copies.push(text);
+    if (copies.length === 1) return new Promise(resolve => { finish = resolve; });
+    return Promise.resolve();
+  } });
+  const legacy = h.node('handoff-copy');
+  const copy = h.node('handoff-agent-copy');
+  const exporting = legacy.listeners.click();
+  h.node('desktop-handoff').close();
+  h.app.open(h.trigger, true);
+  await h.node('handoff-agent-generate').listeners.click();
+  const text = h.node('handoff-agent-text').value;
+  assert.ok(text);
+  assert.equal(copy.disabled, true);
+  await copy.listeners.click();
+  assert.equal(copies.length, 1);
+  finish(); await exporting;
+  assert.equal(copy.disabled, false);
+  await copy.listeners.click();
+  assert.deepEqual(copies, [contract.exportHandoff(contract.createHandoff(h.artifact), 'markdown').text, text]);
 });

@@ -409,7 +409,13 @@ window.addEventListener("DOMContentLoaded", () => {
     },
     onCloseDrawer: () => shell.closePanel(),
   });
-  handoff = mountRepairHandoff({ getArtifact: () => lastSuccessful?.artifact ?? null, getProject: () => projects?.getActive() ?? null, getRulesVersion: () => projects?.getRulesVersion() ?? null, isBusy: () => busy });
+  handoff = mountRepairHandoff({
+    getArtifact: () => lastSuccessful?.artifact ?? null,
+    getProject: () => projects?.getActive() ?? null,
+    getRulesVersion: () => projects?.getRulesVersion() ?? null,
+    isBusy: () => busy,
+    loadSourceCatalog: () => invoke('source_freshness_snapshot'),
+  });
   materials = mountSubmissionMaterials({
     invoke,
     getProject: () => projects?.getActive() ?? null,

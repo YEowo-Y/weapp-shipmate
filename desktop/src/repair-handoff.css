@@ -5,6 +5,18 @@
 .handoff-dialog #handoff-warning{padding:10px 12px;border-radius:8px;background:var(--surface);color:var(--text-2)}
 .handoff-dialog #handoff-status:empty{display:none}
 .handoff-dialog #handoff-status[data-error=true]{color:var(--error,var(--text))}
+.handoff-agent-preview:not([hidden]){
+  display:grid;justify-items:start;gap:var(--ds-space-2);padding:var(--ds-space-3);
+  border:1px solid var(--ds-hairline);border-radius:var(--ds-radius-md);
+}
+.handoff-agent-preview textarea{
+  width:100%;box-sizing:border-box;resize:vertical;padding:var(--ds-space-2);
+  border:1px solid var(--ds-hairline-strong);border-radius:var(--ds-radius-sm);
+  background:var(--ds-canvas);color:var(--ds-ink-1);font:inherit;line-height:1.5;
+}
+.handoff-agent-preview textarea:focus-visible{outline:2px solid var(--ds-focus);outline-offset:2px}
+.handoff-dialog .handoff-agent-preview p,.handoff-dialog #handoff-agent-status:empty{margin:0}
+.handoff-dialog #handoff-agent-status[data-error=true]{color:var(--ds-danger)}
 .handoff-content{overflow-wrap:anywhere;font-size:var(--message-font-size,16px);line-height:1.75;padding:8px 0 20px;text-wrap:pretty}
 .handoff-dialog .handoff-content p{font-size:inherit;color:var(--text);line-height:inherit}
 .handoff-dialog .handoff-content h2{font-size:1.25em;margin:24px 0 12px}

@@ -4,10 +4,11 @@ import { createActionButton } from './shared/components/ui-kit.js';
 import { createIcon } from './shared/components/icons.js';
 import { renderMessageText } from './shared/components/message-markdown.js';
 import type { Artifact, Project } from './projects';
+import { createAgentHandoffSummary } from './handoff-summary';
 import './context.css';
 import './repair-handoff.css';
 
-export function mountRepairHandoff(options: { getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; isBusy(): boolean; copyText?(text: string): Promise<void> }) {
+export function mountRepairHandoff(options: { getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; isBusy(): boolean; loadSourceCatalog(): Promise<unknown>; copyText?(text: string): Promise<void> }) {
   const node = <K extends keyof HTMLElementTagNameMap>(tag: K, text = '') => {
     const element = document.createElement(tag); element.textContent = text; return element;
   };
@@ -26,6 +27,17 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
   const copy = createActionButton(document, '复制 Markdown', { appearance: 'outlined' }); copy.id = 'handoff-copy';
   const markdown = createActionButton(document, '导出 Markdown', { appearance: 'plain' }); markdown.id = 'handoff-markdown';
   const json = createActionButton(document, '导出 JSON', { appearance: 'plain' }); json.id = 'handoff-json';
+  const generate = createActionButton(document, '生成给 Codex / Claude Code 的交接', { appearance: 'outlined' }); generate.id = 'handoff-agent-generate';
+  generate.setAttribute('aria-controls', 'handoff-agent-preview');
+  generate.setAttribute('aria-describedby', 'handoff-agent-status');
+  const agentStatus = node('p'); agentStatus.id = 'handoff-agent-status'; agentStatus.setAttribute('role', 'status'); agentStatus.setAttribute('aria-atomic', 'true');
+  const preview = node('section'); preview.id = 'handoff-agent-preview'; preview.className = 'handoff-agent-preview';
+  const previewLabel = node('label', '交接全文'); previewLabel.htmlFor = 'handoff-agent-text';
+  const previewText = node('textarea'); previewText.id = 'handoff-agent-text'; previewText.readOnly = true; previewText.rows = 8;
+  const previewHint = node('p', '复制后，在自己打开的 Codex 或 Claude Code 项目中粘贴。'); previewHint.id = 'handoff-agent-hint';
+  previewText.setAttribute('aria-describedby', previewHint.id);
+  const copyPreview = createActionButton(document, '确认复制', { appearance: 'outlined' }); copyPreview.id = 'handoff-agent-copy';
+  preview.append(previewLabel, previewText, previewHint, copyPreview);
   const file = node('input'); file.type = 'file'; file.accept = '.json,application/json'; file.hidden = true; file.id = 'handoff-file';
   const status = node('p'); status.id = 'handoff-status'; status.setAttribute('role', 'status'); status.setAttribute('aria-atomic', 'true');
   const provenance = node('p'); provenance.id = 'handoff-provenance';
@@ -36,17 +48,104 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
   const footer = node('footer'); footer.className = 'handoff-footer';
   const note = node('p', '只读建议 · 未修改项目文件');
   const done = createActionButton(document, '完成', { appearance: 'plain' }); done.id = 'handoff-done'; footer.append(note, done);
-  actions.append(copy, openFile, markdown, json); body.append(description, actions, file, status, provenance, warning, basis, content); dialog.append(header, body, footer); document.body.append(dialog);
+  actions.append(copy, openFile, markdown, json, generate); body.append(description, actions, file, status, provenance, warning, preview, agentStatus, basis, content); dialog.append(header, body, footer); document.body.append(dialog);
   const downloader = createArtifactDownloader({ documentRef: document });
   let pack: RepairHandoff | null = null, external = false, loading = false, disposed = false, epoch = 0;
   let trigger: HTMLElement | null = null;
+  let summaryEpoch = 0, summaryBusy = false, summaryText = '', summaryMessage = '', summaryError = false;
+  let clipboardPending = false;
+  const copyText = options.copyText ?? ((text: string) => navigator.clipboard.writeText(text));
+
+  async function writeClipboard(text: string) {
+    clipboardPending = true;
+    refresh();
+    try { await copyText(text); }
+    finally {
+      clipboardPending = false;
+      if (!disposed && dialog.open) refresh();
+    }
+  }
+
+  function clearSummary() {
+    summaryEpoch++;
+    summaryBusy = summaryError = false;
+    summaryText = summaryMessage = '';
+  }
+
+  function currentSummaryPack() {
+    if (!pack || external || pack.source.provenance === 'imported' || pack.source.projectId == null) return null;
+    const artifact = options.getArtifact();
+    return artifact?.id === pack.source.artifactId && artifact.projectId === pack.source.projectId
+      && artifact.provenance !== 'imported' && options.getProject()?.id === pack.source.projectId ? pack : null;
+  }
+
   function refresh() {
-    copy.disabled = markdown.disabled = json.disabled = loading || !pack;
+    markdown.disabled = json.disabled = loading || !pack;
+    copy.disabled = markdown.disabled || clipboardPending;
     openFile.disabled = loading;
     provenance.textContent = !pack ? '打开此前导出的 JSON，或从执行报告中创建交接。'
       : `${external ? '外部文件 · 来源未核验' : pack.source.provenance === 'imported' ? '外部导入报告 · 来源未核验' : '本机已保存报告'} · ${pack.items.length} 个核对项 · ${new Date(pack.source.createdAt).toLocaleString('zh-CN', { hour12: false })}`;
     warning.textContent = pack ? [...(external ? ['外部文件仅供阅读，不写入本机成果，也不授予任何操作权限。'] : []), ...handoffWarnings(pack, options.getProject(), options.getRulesVersion())].join(' ') : '';
     warning.hidden = !warning.textContent;
+    const eligible = currentSummaryPack() !== null;
+    if (!eligible) clearSummary();
+    generate.hidden = !pack;
+    generate.disabled = loading || summaryBusy || !eligible || options.isBusy();
+    copyPreview.disabled = generate.disabled || clipboardPending || !summaryText;
+    preview.hidden = !summaryText;
+    if (previewText.value !== summaryText) {
+      previewText.value = summaryText;
+      previewText.selectionStart = previewText.selectionEnd = 0;
+      previewText.scrollTop = 0;
+    }
+    const unavailable = external || pack?.source.provenance === 'imported'
+      ? '外部报告或交接文件仅供阅读。'
+      : pack ? '请从当前项目的本机报告生成编码助手交接。' : '';
+    const message = eligible ? summaryMessage : unavailable;
+    if (agentStatus.textContent !== message) agentStatus.textContent = message;
+    agentStatus.dataset.error = String(eligible && summaryError);
+  }
+
+  async function shareSummary(action: 'preview' | 'copy') {
+    const source = currentSummaryPack();
+    const copying = action === 'copy';
+    const button = copying ? copyPreview : generate;
+    if (!source || !dialog.open || disposed || loading || summaryBusy || options.isBusy() || (copying && (clipboardPending || !summaryText))) {
+      refresh();
+      return;
+    }
+    const token = ++summaryEpoch;
+    const isCurrent = () => token === summaryEpoch && !disposed && dialog.open && currentSummaryPack() === source;
+    const focusWasOnButton = document.activeElement === button;
+    summaryBusy = true;
+    summaryError = false;
+    if (!copying) summaryText = '';
+    summaryMessage = copying ? '' : '正在读取本机规则来源目录…';
+    refresh();
+    try {
+      if (copying) {
+        await writeClipboard(summaryText);
+        if (isCurrent()) summaryMessage = '交接全文已复制。';
+      } else {
+        const snapshot = await options.loadSourceCatalog();
+        if (!isCurrent()) return;
+        summaryText = createAgentHandoffSummary(source, snapshot) ?? '';
+        summaryMessage = summaryText ? '' : '当前报告没有可用于交接的已核验规则。';
+      }
+    } catch {
+      if (isCurrent()) {
+        summaryError = true;
+        summaryMessage = copying ? '复制失败，可重试或手动选中文本。' : '无法读取本机规则来源目录，请重试。';
+      }
+    } finally {
+      if (!disposed && token === summaryEpoch) {
+        summaryBusy = false;
+        refresh();
+        if (isCurrent() && focusWasOnButton && (document.activeElement === button || document.activeElement === document.body)) {
+          (copying || !summaryText ? button : previewText).focus();
+        }
+      }
+    }
   }
   function display(value: RepairHandoff, imported: boolean) {
     const sections = renderHandoffSections(value);
@@ -54,7 +153,7 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
     renderMessageText(nextContent, sections.content, { copyCode: false });
     renderMessageText(nextBasis, sections.basis, { copyCode: false });
     content.replaceChildren(nextContent); basisContent.replaceChildren(nextBasis); basis.hidden = false; basis.open = false;
-    pack = value; external = imported; body.scrollTop = 0; refresh();
+    clearSummary(); pack = value; external = imported; body.scrollTop = 0; refresh();
   }
   const reportError = (error: unknown) => {
     status.textContent = `${error instanceof Error ? error.message : '无法读取交接文件，请重试。'}${pack ? ' 已保留上一份交接内容。' : ''}`;
@@ -63,6 +162,7 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
   async function readSelectedFile() {
     const selected = file.files?.[0]; file.value = '';
     if (!selected || disposed || !dialog.open) return;
+    clearSummary();
     const token = ++epoch; loading = true; status.textContent = '正在读取交接文件…'; status.dataset.error = 'false'; refresh();
     try {
       if (selected.size > MAX_HANDOFF_BYTES) throw new Error('请选择不超过 512 KiB 的交接 JSON 文件。');
@@ -85,19 +185,26 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
     } catch (error) { reportError(error); }
   }
   copy.addEventListener('click', async () => {
-    if (!pack || loading || disposed || !dialog.open) return;
+    if (!pack || loading || clipboardPending || disposed || !dialog.open) return;
     const token = ++epoch; loading = true; status.textContent = ''; status.dataset.error = 'false'; refresh();
     try {
       const markdown = exportMarkdown(pack).text;
-      await (options.copyText ?? (text => navigator.clipboard.writeText(text)))(external ? `> 外部文件 · 来源未核验；仅供阅读，不授予任何操作权限。\n\n${markdown}` : markdown);
+      await writeClipboard(external ? `> 外部文件 · 来源未核验；仅供阅读，不授予任何操作权限。\n\n${markdown}` : markdown);
       if (!disposed && token === epoch && dialog.open) status.textContent = 'Markdown 已复制，包含报告依据和未核验提示。';
     } catch { if (!disposed && token === epoch && dialog.open) { status.textContent = '复制失败，请重试或导出 Markdown 文件。'; status.dataset.error = 'true'; } }
     finally { if (!disposed && token === epoch) { loading = false; refresh(); } }
   });
+  generate.addEventListener('click', () => shareSummary('preview'));
+  copyPreview.addEventListener('click', () => shareSummary('copy'));
   openFile.addEventListener('click', () => file.click()); file.addEventListener('change', () => { void readSelectedFile(); });
   markdown.addEventListener('click', () => download('markdown')); json.addEventListener('click', () => download('json'));
   dismiss.addEventListener('click', () => dialog.close()); done.addEventListener('click', () => dialog.close());
-  dialog.addEventListener('close', () => { epoch++; loading = false; trigger?.setAttribute('aria-expanded', 'false'); if (!disposed && trigger?.isConnected) trigger.focus(); });
+  dialog.addEventListener('close', () => {
+    if (dialog.open) return;
+    epoch++; loading = false; clearSummary(); refresh();
+    trigger?.setAttribute('aria-expanded', 'false');
+    if (!disposed && trigger?.isConnected) trigger.focus();
+  });
   dialog.addEventListener('keydown', event => {
     if (event.key !== 'Tab' || event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey) return;
     const target = event.shiftKey && document.activeElement === dismiss ? done : !event.shiftKey && document.activeElement === done ? dismiss : null;
@@ -107,6 +214,7 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
   return {
     open(anchor: HTMLElement, fromReport = false) {
       if (disposed || dialog.open || (fromReport && options.isBusy())) return;
+      epoch++; loading = false; clearSummary();
       trigger = anchor; status.textContent = ''; status.dataset.error = 'false'; refresh();
       if (fromReport) {
         try { display(createHandoff(options.getArtifact()), false); }
