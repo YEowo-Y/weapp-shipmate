@@ -1,6 +1,7 @@
 import type { mountExplainDialog as MountExplainDialogFn } from '../explain-dialog';
 import type { mountRepairHandoff as MountRepairHandoffFn } from '../repair-handoff';
 import type { mountSourceFreshness as MountSourceFreshnessFn } from '../source-freshness';
+import type { mountSubmissionMaterials as MountSubmissionMaterialsFn } from '../submission-materials-dialog';
 
 function reportDialogLoadFailure() {
   const status = document.getElementById('status');
@@ -109,6 +110,47 @@ export function mountRepairHandoff(options: Parameters<typeof MountRepairHandoff
         return;
       }
       void ensure().then(ctrl => ctrl?.open(anchor, fromReport)).catch(reportDialogLoadFailure);
+    },
+    refresh() {
+      instance?.refresh();
+    },
+    destroy() {
+      disposed = true;
+      instance?.destroy();
+      instance = undefined;
+    },
+  };
+}
+
+export function mountSubmissionMaterials(options: Parameters<typeof MountSubmissionMaterialsFn>[0]) {
+  let instance: ReturnType<typeof MountSubmissionMaterialsFn> | undefined;
+  let loading: Promise<ReturnType<typeof MountSubmissionMaterialsFn> | undefined> | undefined;
+  let disposed = false;
+
+  async function ensure() {
+    if (disposed) return undefined;
+    if (instance) return instance;
+    loading ??= import('../submission-materials-dialog')
+      .then(mod => {
+        if (disposed) return undefined;
+        instance = mod.mountSubmissionMaterials(options);
+        return instance;
+      })
+      .finally(() => { loading = undefined; });
+    return loading;
+  }
+
+  return {
+    open(anchor: HTMLElement | null = null) {
+      if (disposed) return;
+      if (instance) {
+        instance.open(anchor);
+        return;
+      }
+      void ensure().then(ctrl => ctrl?.open(anchor)).catch(reportDialogLoadFailure);
+    },
+    close() {
+      instance?.close();
     },
     refresh() {
       instance?.refresh();

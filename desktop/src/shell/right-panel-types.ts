@@ -124,6 +124,7 @@ export type RightPanelCallbacks = {
   onOpenRepairHistory(): void;
   onOpenSource(url: string): void;
   onOpenTools(): void;
+  onOpenMaterials?(): void;
   onCloseDrawer(): void;
   onSaveSubject?(projectId: string, subject: string): Promise<boolean>;
   onSaveFacts?(projectId: string, expectedRevision: number, facts: ProjectFacts): Promise<void>;

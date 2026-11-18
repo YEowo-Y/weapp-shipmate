@@ -3,7 +3,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import corePackage from '../../package.json';
 import type { SettingsPanel } from './settings/types';
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { mountProjects, type Artifact, type Project } from "./projects";
+import { mountProjects, type Artifact, type Project, type ProjectSnapshot } from "./projects";
 import { mountDesktopSessions } from "./sessions";
 import { mountToolsPanel } from "./tools-panel";
 import { mountWorkspacePages } from './workspace-pages';
@@ -20,7 +20,7 @@ import { mountSystemNotifications } from "./system-notifications";
 import { createIcon } from './shared/components/icons.js';
 import { renderMessageText } from './shared/components/message-markdown.js';
 import { mountScrollFades } from './shared/components/scroll-fade.js';
-import { mountExplainDialog, mountRepairHandoff, mountSourceFreshness } from './shell/lazy-dialogs';
+import { mountExplainDialog, mountRepairHandoff, mountSourceFreshness, mountSubmissionMaterials } from './shell/lazy-dialogs';
 import { mountShellLayout } from './shell/shell-layout';
 import { mountRightPanel } from './shell/right-panel';
 import "./repair-handoff.css";
@@ -34,6 +34,7 @@ let projects: ReturnType<typeof mountProjects> | null = null;
 let workflow: ReturnType<typeof mountWorkflow> | null = null;
 let explainPanel: ReturnType<typeof mountExplainDialog> | null = null;
 let handoff: ReturnType<typeof mountRepairHandoff> | null = null;
+let materials: ReturnType<typeof mountSubmissionMaterials> | null = null;
 let reader: ReturnType<typeof mountReportReader> | null = null;
 let repair: ReturnType<typeof mountProjectRepair> | null = null;
 let health: ReturnType<typeof mountProjectHealth> | null = null;
@@ -204,6 +205,7 @@ function applyProject(project: Project | null) {
   if (sessions?.isTemporary()) $("#status").textContent += " 当前对话为临时模式，不会关联或自动保存；项目成果仍由本机独立保存。";
   setBusy(busy);
   void workflow?.refresh();
+  materials?.refresh();
   rightPanel?.syncProject(project, null);
 }
 
@@ -213,6 +215,7 @@ function showArtifact(artifact: Artifact) {
   const type = artifact.kind === "check" ? "代码预检" : artifact.kind === "explain" ? "拒因反查" : "流程导航";
   lastSuccessful = { text: artifact.markdown, type, projectId: artifact.projectId, artifact };
   rightPanel?.setArtifact(artifact);
+  materials?.refresh();
   resetCopy();
   $("#report-title").textContent = type;
   $("#report-note").textContent = `保存于 ${new Date(artifact.createdAt).toLocaleString('zh-CN', { hour12: false })} · 工具 ${artifact.toolVersion} · 项目版本 ${artifact.projectRevision ?? "未归属"}。这是历史执行快照，未重新检查当前文件。`;
@@ -363,6 +366,7 @@ window.addEventListener("DOMContentLoaded", () => {
         : Promise.resolve(false),
     onProjectMutated: async () => {
       await projects?.refresh();
+      materials?.refresh();
       await workflow?.refresh();
     },
     onGenerateGuide: async projectId => {
@@ -394,9 +398,38 @@ window.addEventListener("DOMContentLoaded", () => {
       void Promise.resolve(openUrl(url)).catch(() => setStatus("无法打开系统浏览器，请手动复制链接核对。", "error"));
     },
     onOpenTools: () => tools.open($("#desktop-panel-toggle") ?? $("#desktop-more")),
+    onOpenMaterials: () => {
+      const wasDrawer = document.querySelector<HTMLElement>(".desktop-layout")?.dataset.panelMode === "drawer";
+      shell.closePanelDrawer();
+      const anchor = wasDrawer
+        ? ($("#desktop-panel-toggle") ?? $("#desktop-materials-open"))
+        : ($("#panel-workflow-materials") ?? $("#desktop-panel-toggle") ?? $("#desktop-materials-open"));
+      materials?.open(anchor);
+    },
     onCloseDrawer: () => shell.closePanel(),
   });
   handoff = mountRepairHandoff({ getArtifact: () => lastSuccessful?.artifact ?? null, getProject: () => projects?.getActive() ?? null, getRulesVersion: () => projects?.getRulesVersion() ?? null, isBusy: () => busy });
+  materials = mountSubmissionMaterials({
+    invoke,
+    getProject: () => projects?.getActive() ?? null,
+    async getArtifact(projectId) {
+      const { artifacts } = await invoke<ProjectSnapshot>('project_snapshot');
+      const checks = artifacts.filter(item => item.projectId === projectId && item.kind === 'check')
+        .sort((a, b) => b.createdAt - a.createdAt);
+      const latest = checks.find(item => item.provenance !== 'imported') ?? checks[0];
+      if (!latest) return null;
+      if (latest.provenance === 'imported') return latest;
+      const artifact = await invoke<Artifact>('project_artifact', { artifactId: latest.id, localProjectId: projectId });
+      if (artifact.id !== latest.id || artifact.projectId !== projectId || artifact.kind !== 'check' ||
+        artifact.provenance !== latest.provenance) throw new Error('预检报告与当前项目不一致。');
+      return artifact;
+    },
+    onManageProject: () => projects?.openManager(),
+    onOpenSource: url => {
+      try { if (new URL(url).protocol !== "https:") return; } catch { return; }
+      void Promise.resolve(openUrl(url)).catch(() => setStatus("无法打开系统浏览器，请手动复制链接核对。", "error"));
+    },
+  });
   repair = mountProjectRepair({
     getProjectId: () => projects?.getActiveId() ?? null,
     isBusy: () => busy,
@@ -449,7 +482,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   $("#handoff-report").addEventListener('click', () => handoff?.open($("#handoff-report"), true));
   $("#repair-report").addEventListener('click', () => { if (lastSuccessful) repair?.openForArtifact(lastSuccessful.artifact, $("#repair-report")); });
-  window.addEventListener('pagehide', () => { reader?.destroy(); handoff?.destroy(); repair?.destroy(); }, { once: true });
+  window.addEventListener('pagehide', () => { reader?.destroy(); handoff?.destroy(); materials?.destroy(); repair?.destroy(); }, { once: true });
   const nativeExplain = createProjectExplain({
     invoke, getProjectId: () => projects?.getActiveId() ?? null,
     isReady: () => Boolean(projects?.isReady()), isBusy: () => busy, setBusy,
@@ -495,6 +528,11 @@ window.addEventListener("DOMContentLoaded", () => {
   $("#desktop-search-open")?.addEventListener("click", () => { if (workspace.close()) sessions?.openHistory($("#desktop-search-open")); });
   $("#desktop-new-session")?.addEventListener("click", () => { if (workspace.close()) { shell.closeSidebarDrawer(); shell.closePanelDrawer(); sessions?.createSession(); } });
   $("#desktop-explain-open")?.addEventListener("click", () => explain.open($("#desktop-explain-open")));
+  $("#desktop-materials-open")?.addEventListener("click", () => {
+    const trigger = $("#desktop-materials-open");
+    shell.closeSidebarDrawer();
+    materials?.open(trigger);
+  });
   $("#desktop-memory-open")?.addEventListener("click", () => sessions?.openMemory($("#desktop-memory-open")));
   $("#desktop-handoff-open")?.addEventListener("click", () => handoff?.open($("#desktop-handoff-open")));
   $("#desktop-repair-history")?.addEventListener("click", () => repair?.openHistory($("#desktop-repair-history")));
@@ -652,6 +690,7 @@ window.addEventListener("DOMContentLoaded", () => {
     getProject: () => projects?.getActive() ?? null, isBusy: () => busy,
     onProjectChanged: async () => {
       await projects?.refresh();
+      materials?.refresh();
       rightPanel?.syncProject(
         projects?.getActive() ?? null,
         lastSuccessful ? new Date(lastSuccessful.artifact.createdAt).toLocaleString("zh-CN", { hour12: false }) : null,
