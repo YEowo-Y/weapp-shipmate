@@ -114,4 +114,3 @@ test('the current bundled catalog supplies official links and dates for real rul
   assert.equal(listed(output).length, ids.length);
   for (const id of ids) assert.ok(listed(output).some(row => row.includes(id)));
 });
-
