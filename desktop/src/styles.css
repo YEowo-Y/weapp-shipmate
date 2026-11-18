@@ -70,7 +70,7 @@
 .desktop-tools[open] { display:flex; flex-direction:column; }
 .desktop-tools::backdrop { background:rgb(0 0 0 / .28); }
 .desktop-tools-header { display:flex; align-items:flex-start; justify-content:space-between; gap:var(--ds-space-3); flex-shrink:0; padding:22px var(--ds-space-5) 18px; }
-.container h2 { margin:0; font-size:var(--ds-text-input); font-weight:600; }
+.container h2 { margin:0; font-size:15px; font-weight:600; }
 .tagline { color:var(--text-3); margin:5px 0 0; font-size:var(--ds-text-meta); }
 .desktop-tools-body { min-height:0; overflow:auto; padding:0 var(--ds-space-5) var(--ds-space-6); }
 .bridge-note { margin:var(--ds-space-3) 0; font-size:var(--ds-text-caption); color:var(--text-3); line-height:1.7; }
