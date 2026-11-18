@@ -81,7 +81,7 @@ button[data-copy-state="error"] .message-action__feedback { color: var(--block);
 .tool-details > summary::before { display: none; }
 .tool-details > summary::after { content: ""; width: 6px; height: 6px; flex: 0 0 auto; margin: 0 3px 3px 2px; border-right: 1.5px solid var(--text-3); border-bottom: 1.5px solid var(--text-3); transform: rotate(45deg); transition: transform .16s var(--ease); }
 .tool-details[open] > summary::after { transform: rotate(225deg); }
-.tool-details__title { flex: 0 1 auto; min-width: 0; color: var(--text-2); font-size: var(--ds-text-input, 15px); font-weight: 400; overflow-wrap: anywhere; }
+.tool-details__title { flex: 0 1 auto; min-width: 0; color: var(--text-2); font-size: 15px; font-weight: 400; overflow-wrap: anywhere; }
 .tool-details > summary:hover { background: var(--surface-2); }
 .tool-details .tool-details__body { margin: 8px 10px 4px; padding: 4px 0 4px 16px; border-left: 1px solid var(--border-2); color: var(--text-2); font-family: var(--font-ui); font-size: var(--ds-text-ui, 13px); line-height: 1.65; }
 .tool-identity { margin: 0 0 12px; color: var(--text-3); font-size: var(--ds-text-meta, 12px); }
