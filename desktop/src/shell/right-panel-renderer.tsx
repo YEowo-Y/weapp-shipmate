@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { deriveWorkflow } from '../../../src/workflow.mjs';
 import { createArtifactDownloader } from '../shared/artifact-download.js';
+import { validatePreflightItem } from '../shared/guide-contract.js';
 import { createHandoff } from '../shared/repair-handoff.js';
 import { createWorkflowArtifact } from '../shared/workflow-artifact.js';
 import type { Artifact, Project } from '../projects';
@@ -19,6 +20,7 @@ import {
   type DevtoolsPanelState,
   type EvidencePanelState,
   type EvidenceRuleItem,
+  type PreflightEvidence,
   type RightPanelCallbacks,
   type RightPanelSnapshot,
   type RightPanelTabId,
@@ -50,42 +52,68 @@ const WRITE_STATE_LABELS: Record<RepairHistoryRecord['writeState'], string> = {
   undone: '已恢复原文件',
 };
 
-type RawHandoffItem = {
-  rule?: {
-    ruleId?: string;
-    title?: string;
-    severity?: 'blocker' | 'warning' | 'info';
-    confidence?: 'high' | 'medium' | 'low';
-    source_quote?: string | null;
-    official_url?: string | null;
-    last_verified?: string | null;
-    requires?: string[];
-    stage?: string | null;
-  };
+type EvidenceRule = {
+  ruleId: string;
+  title: string;
+  severity: EvidenceRuleItem['severity'];
+  confidence?: EvidenceRuleItem['confidence'];
+  source_quote?: string | null;
+  official_url?: string | null;
+  last_verified?: string | null;
+  requires: string[];
+  stage: string;
 };
 
-export function deriveEvidenceState(artifact: Artifact | null): EvidencePanelState {
+function preflightRules(artifact: Artifact): EvidenceRule[] {
+  const data = artifact.data;
+  const result = data?.result as { command?: unknown; items?: unknown } | undefined;
+  if (data?.schemaVersion !== 1 || data.kind !== 'check' || result?.command !== 'check' || !Array.isArray(result.items)) return [];
+  // A valid scan can have a domain-list instruction longer than the handoff
+  // format permits. Check rule and source fields independently of that limit.
+  return result.items.filter((rule): rule is EvidenceRule => rule && Array.isArray(rule.requires)
+    && rule.requires.every((entry: unknown) => typeof entry === 'string')
+    && validatePreflightItem({ ...rule, requires: [] }));
+}
+
+export function deriveEvidenceState(artifact: Artifact | null, preflightEvidence?: PreflightEvidence): EvidencePanelState {
   if (!artifact) return { status: 'empty', hasArtifact: false };
   try {
-    const pack = createHandoff(artifact);
-    const items: EvidenceRuleItem[] = (pack.items as RawHandoffItem[])
-      .filter(entry => entry?.rule?.ruleId && entry?.rule?.title)
-      .map(entry => {
-        const rule = entry.rule!;
-        return {
-          ruleId: rule.ruleId!,
-          title: rule.title!,
-          severity: rule.severity ?? 'info',
-          confidence: rule.confidence,
-          sourceQuote: rule.source_quote ?? null,
-          officialUrl: rule.official_url ?? null,
-          lastVerified: rule.last_verified ?? null,
-          requires: Array.isArray(rule.requires) ? [...rule.requires] : [],
-          location: rule.stage ? `阶段 · ${rule.stage}` : null,
-        };
-      });
+    const isPreflight = artifact.kind === 'check';
+    const imported = artifact.provenance === 'imported';
+    const rules = isPreflight
+      ? preflightRules(artifact)
+      : (createHandoff(artifact).items as { rule: EvidenceRule }[]).map(entry => entry.rule);
+    const captured = isPreflight && !imported && artifact.projectId && Array.isArray(preflightEvidence?.items)
+      ? preflightEvidence
+      : undefined;
+    const locationsByRule = new Map(captured?.items.map(item => [item.ruleId, item]));
+    const items: EvidenceRuleItem[] = rules.map(rule => {
+      const finding = locationsByRule.get(rule.ruleId);
+      return {
+        ruleId: rule.ruleId,
+        title: rule.title,
+        severity: rule.severity,
+        confidence: rule.confidence,
+        sourceQuote: rule.source_quote ?? null,
+        officialUrl: rule.official_url ?? null,
+        lastVerified: rule.last_verified ?? null,
+        requires: [...rule.requires],
+        stage: rule.stage,
+        codeLocations: finding && {
+          status: finding.status,
+          locations: finding.locations.map(({ file, line }) => ({ file, line })),
+        },
+      };
+    });
     if (!items.length) return { status: 'empty', hasArtifact: true };
-    return { status: 'ready', items, reportTitle: artifact.title };
+    return {
+      status: 'ready',
+      items,
+      reportTitle: artifact.title,
+      preflightContext: isPreflight ? (imported ? 'imported' : captured ? 'current' : 'history') : undefined,
+      locationsTruncated: captured?.truncated,
+      sourceImported: imported,
+    };
   } catch {
     return { status: 'empty', hasArtifact: true };
   }
@@ -432,11 +460,20 @@ export function createRightPanelController(container: HTMLElement, options: Righ
     render();
   }
 
+  function applyArtifact(artifact: Artifact | null, preflightEvidence?: PreflightEvidence) {
+    snapshot.artifact = artifact;
+    snapshot.evidenceState = deriveEvidenceState(artifact, preflightEvidence);
+  }
+
   render();
 
   return {
     update(partial: Partial<RightPanelSnapshot>) {
       if (disposed) return;
+      if (partial.project !== undefined && partial.project?.id !== snapshot.project?.id) {
+        applyArtifact(null);
+      }
+      if (partial.artifact !== undefined && !partial.evidenceState) applyArtifact(partial.artifact);
       Object.assign(snapshot, partial);
       render();
     },
@@ -445,14 +482,14 @@ export function createRightPanelController(container: HTMLElement, options: Righ
       snapshot.activeTab = tab;
       render();
     },
-    setArtifact(artifact: Artifact | null) {
-      if (disposed) return;
-      snapshot.artifact = artifact;
-      snapshot.evidenceState = deriveEvidenceState(artifact);
+    setArtifact(artifact: Artifact | null, preflightEvidence?: PreflightEvidence) {
+      if (disposed || (artifact && artifact.projectId !== (snapshot.project?.id ?? null))) return;
+      applyArtifact(artifact, preflightEvidence);
       render();
     },
     syncProject(project: Project | null, lastCheckSummary?: string | null) {
       if (disposed) return;
+      if (snapshot.project?.id !== project?.id) applyArtifact(null);
       snapshot.project = project;
       const badge = container.ownerDocument.getElementById('desktop-workflow-progress');
       if (!project) {
