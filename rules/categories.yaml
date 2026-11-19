@@ -151,3 +151,22 @@ rules:
     source_quote: "《营业执照》（经营范围需含教育咨询服务）"
     last_verified: "2026-11-13"
     manual_required: true
+
+  - id: category.anthropomorphic-interaction
+    action_categories: ["manual_check"]
+    title: "拟人化互动类目资质自查"
+    kind: navigation
+    stage: category
+    subject_type: ["individual_business", "enterprise"]
+    severity: warning
+    confidence: medium
+    signal: ["拟人化互动", "情感陪伴", "情感照护"]
+    warn: "若小程序利用人工智能提供模拟自然人人格特征、思维模式和沟通风格的持续性情感互动服务，请对照微信后台的「深度合成—拟人化互动」类目核对所需材料。"
+    requires:
+      - "核对小程序主体的《互联网信息服务算法备案》，算法类型为生成合成类。"
+      - "核对公示的算法机制机理内容，确认算法应用场景或算法目的意图覆盖实际提供的情感照护、陪伴或支持服务。"
+    why: "微信官方服务类目表在「拟人化互动」条目同时列出小程序主体的算法备案和算法机制机理公示两项材料。"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
+    source_quote: "小程序主体的《互联网信息服务算法备案》（算法类型为“生成合成类”）"
+    last_verified: "2026-11-19"
+    manual_required: true
