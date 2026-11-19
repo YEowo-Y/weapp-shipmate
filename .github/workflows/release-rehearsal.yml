@@ -64,6 +64,7 @@ jobs:
       - run: npm --prefix desktop run prepare:runtime
       - run: node --test tests/desktop-runtime-package.test.mjs
       - run: npm --prefix desktop run build
+      - run: npm test
       - run: cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked
       - run: npm pack
       - name: build mcpb bundle
