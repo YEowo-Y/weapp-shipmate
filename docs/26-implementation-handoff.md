@@ -844,6 +844,20 @@ Windows WebView2 157.0.4341.60 用两个隔离项目实测，在 1240 px 和 780
 
 **Windows 实机复验（2026-11-19）。** 使用与 `main@8f56fbe` 相同产品源码构建的 Tauri 调试包、WebView2 157.0.4341.60 和两个隔离项目。1240 px 与 780 px 下均通过定位预检按钮、打开当前项目材料包及未命中后保留原文重新编辑。两处导航关闭后，宽窗回到「拒因反查」，窄窗回到「展开侧栏」。切换项目会清空旧结果和导航入口，保留输入并提示重新查询。试验项目仅产生六条主动发起的拒因成果，项目文件清单和内容哈希均一致。
 
+### 功能 5 · 拟人化互动类目自查（范围待确认）
+
+**目标与关口。** 补齐 P1-5 所列资质覆盖缺口中的一项。首批在类目阶段增加一条「拟人化互动」人工自查，服务于确实提供持续性情感互动的非个人主体。新增规则的场景、断言及材料范围按 §3、§6 提交维护者确认。 [生产就绪评审 P1-5](28-production-readiness-review.md#p1-5-规则库密度失衡最易被拒的两个面覆盖最薄)
+
+**已核对的基线。** `main@1005adb` 有 64 条默认 YAML 规则。用预约服务和持续 AI 情感陪伴两种描述分别执行三类主体的 `guide`。六次均缺少专项自查，个人主体返回 20 条确定项和 43 条条件自查，个体工商户与企业均返回 19 条确定项和 41 条条件自查。既有类目与虚拟支付规则仍提供课程销售和支付核对。 [T04 复核](27-rule-source-review.md)
+
+2026-11-19 从微信开发者文档匿名读取现文。「拟人化互动」条目位于非个人主体服务类目下，正文与 2026-11-13 快照该条目逐字一致。课程销售及课程销售平台条目也一致，《运营规范》正文和虚拟支付引文保持一致。《小程序开放的服务类目》现文另更新了公共事业缴费编号及境外共享单车材料。未成年人提示继续按对应业务场景单独核对。 [官方类目表](https://developers.weixin.qq.com/miniprogram/product/material/) [运营规范](https://developers.weixin.qq.com/miniprogram/product/) [类目快照](../corpus/source-snapshots/opers-weixin-qq-com-miniprogram-product-material-5080a757.txt#L3125)
+
+1. **固定来源与两项材料。** 复核现文与归档中的同一行，拟使用该行的连续短摘录 `小程序主体的《互联网信息服务算法备案》（算法类型为“生成合成类”）`。在要求中说明需同时核对小程序主体的生成合成类算法备案，以及覆盖实际情感照护、陪伴或支持场景的算法机制机理公示内容。正式核验日期以实施时的现文复核记录为准，按平台提交时的材料清单核对。
+2. **沿用条件自查。** 在 `rules/categories.yaml` 新增 `category.anthropomorphic-interaction`，采用 `navigation`、`category`、`warning`、`confidence: medium`、`manual_required: true` 和 `manual_check`。主体范围为 `individual_business` 与 `enterprise`。仅用「拟人化互动」「情感陪伴」「情感照护」等具体线索供人工对照。在现有「可能适用」中显示该条目。由用户结合功能确认是否适用，通用问答和普通聊天使用各自的业务判据。
+3. **核对导航与来源。** 对个体工商户及企业，分别输入明确场景、普通 AI 问答及空业务，断言新项仅在 `selfCheck` 中，确定项和阻断概览保持一致。个人主体和未知主体沿用主体过滤。用同一夹具逐字对照 `check` 和 `explain` 的既有结果。核对 CLI、项目工具与工作流的条件分组，以及 Markdown、JSON 和现有机器报告字段。独立冷读复核材料与文案后，执行 `npm run lint`、`npm test`、`npm run verify:quotes`、`npm run coverage`、`npm run accuracy` 和全部 PR CI。支持新增逐字引文，并核对金快照、夹具标注及命中集合。
+
+**允许变更的文件。** `rules/categories.yaml`、针对导航与规则来源的回归测试、本文和 `progress.txt`。课程销售、支付与通用未成年人保护沿用 T04 已核对的现有规则。
+
 ### 功能 8 · 交接给 Codex / Claude Code
 
 **目标与关口。** 用户在桌面「修复交接」里查看一份给外部编码助手的任务摘要，确认后复制，并在自己打开的 Codex 或 Claude Code 项目中粘贴。首版采用同一份纯文本，通过预览和剪贴板交付。沿用本机报告、已打包的规则来源目录和现有剪贴板能力。
@@ -889,4 +903,6 @@ T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://
 
 **功能 7（公测前只读连接检测）** 已完成，本机已验收「已安装但未启动」和「已运行但未登录」。 [范围 #77](https://github.com/YEowo-Y/weapp-shipmate/pull/77) [已合并 #78](https://github.com/YEowo-Y/weapp-shipmate/pull/78)
 
-**功能 1（桌面预检发现项带证据）** 的公测首版范围已确认并合入，实施 PR 中。 [范围 #79](https://github.com/YEowo-Y/weapp-shipmate/pull/79)
+**功能 1（桌面预检发现项带证据）** 的公测首版已完成，Windows WebView2 验收通过。 [范围 #79](https://github.com/YEowo-Y/weapp-shipmate/pull/79) [已合并 #80](https://github.com/YEowo-Y/weapp-shipmate/pull/80)
+
+**功能 5（拟人化互动类目自查）** 的首批范围待维护者确认。
