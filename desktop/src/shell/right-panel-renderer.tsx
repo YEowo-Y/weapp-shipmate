@@ -14,7 +14,9 @@ import { ChangesTabBody, DevtoolsTabBody } from './right-panel-changes-devtools'
 import { EvidenceTabBody, ReleaseTabBody } from './right-panel-release-evidence';
 import type { ProjectWorkflowDraft } from './right-panel-workflow';
 import {
+  DEVTOOLS_CONNECTION_STATUSES,
   STAGE_LABELS,
+  type DevtoolsPanelState,
   type EvidencePanelState,
   type EvidenceRuleItem,
   type RightPanelCallbacks,
@@ -27,7 +29,7 @@ import {
 type InvokeFn = <T = unknown>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 
 export type RightPanelHostOptions = Partial<
-  Omit<RightPanelCallbacks, 'onTabChange' | 'onSaveFacts' | 'onConfirmStage' | 'onExportWorkflow'>
+  Omit<RightPanelCallbacks, 'onTabChange' | 'onCheckDevtools' | 'onSaveFacts' | 'onConfirmStage' | 'onExportWorkflow'>
 > & {
   invoke?: InvokeFn;
   onProjectMutated?(): Promise<void> | void;
@@ -213,6 +215,40 @@ export function createRightPanelController(container: HTMLElement, options: Righ
     return typeof win?.__TAURI_INTERNALS__?.invoke === 'function';
   }
 
+  async function checkDevtools(selectInstall: boolean) {
+    const previous = snapshot.devtoolsState;
+    if (disposed || !options.invoke || !hasNativeBridge() || previous.status === 'loading') return;
+
+    const pending: DevtoolsPanelState = { status: 'loading', previous };
+    snapshot.devtoolsState = pending;
+    render();
+
+    let next: DevtoolsPanelState = { status: 'error' };
+    try {
+      const result = await options.invoke<{ status?: unknown; version?: unknown }>('devtools_status', { selectInstall });
+      const connection = DEVTOOLS_CONNECTION_STATUSES.find(status => status === result?.status);
+      if (connection) {
+        const version = typeof result.version === 'string' && result.version.length <= 32 && /^[0-9]+(?:\.[0-9]+){1,3}$/.test(result.version)
+          ? result.version
+          : null;
+        next = { status: 'result', connection, version };
+      } else if (selectInstall && result?.status === 'selection_canceled') {
+        next = previous;
+      }
+    } catch {
+      // The panel displays fixed guidance for probe failures.
+    }
+    if (disposed || snapshot.devtoolsState !== pending) return;
+
+    const picker = selectInstall ? container.querySelector('[data-devtools-action="choose-install"]') : null;
+    const pickerHadFocus = picker && container.ownerDocument.activeElement === picker;
+    snapshot.devtoolsState = next;
+    render();
+    if (pickerHadFocus && !picker.isConnected) {
+      container.querySelector<HTMLButtonElement>('[data-devtools-action="check"]')?.focus({ preventScroll: true });
+    }
+  }
+
   const callbacks: RightPanelCallbacks = {
     onTabChange(tab) {
       snapshot.activeTab = tab;
@@ -226,6 +262,7 @@ export function createRightPanelController(container: HTMLElement, options: Righ
     onOpenRepairHistory: () => options.onOpenRepairHistory?.(),
     onOpenSource: url => options.onOpenSource?.(url),
     onOpenTools: () => options.onOpenTools?.(),
+    onCheckDevtools: hasNativeBridge() ? selectInstall => { void checkDevtools(selectInstall); } : undefined,
     onOpenMaterials: () => options.onOpenMaterials?.(),
     onCloseDrawer: () => options.onCloseDrawer?.(),
     onSaveSubject: options.onSaveSubject
