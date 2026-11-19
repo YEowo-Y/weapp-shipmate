@@ -1,20 +1,22 @@
+// @ts-check
 import { autoUpdate, computePosition, offset, flip, shift, size } from './vendor/floating-ui/floating-ui.dom.mjs';
 
 // Keep positioning alive only for this open surface. A later update owns all
 // DOM effects, including size middleware executed before computePosition resolves.
 /**
- * @param {Element | any} anchor
- * @param {HTMLElement | any} menu
+ * @param {Element} anchor
+ * @param {HTMLElement} menu
  * @param {{
  *   placement?: string;
  *   matchWidth?: boolean;
  *   onError?: (error?: unknown) => void;
- *   onPositioned?: (result?: any) => void;
+ *   onPositioned?: (result: Awaited<ReturnType<typeof computePosition>>) => void;
  * }} [options]
  */
 export function attachFloatingSurface(anchor, menu, { placement = 'bottom-end', matchWidth = false, onError = () => {}, onPositioned = () => {} } = {}) {
   let active = true;
   let revision = 0;
+  /** @type {(() => void) | undefined} */
   let stop;
   const cleanup = () => {
     if (!active) return;
