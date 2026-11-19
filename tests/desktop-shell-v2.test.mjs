@@ -646,6 +646,155 @@ test('F00 right panel React + Base UI tabs: preserves initial HTML skeleton, chu
   assert.equal(getTabs()[0].getAttribute('aria-selected'), 'true');
 });
 
+function mountDevtoolsFixture(native = true) {
+  const { createRightPanelController } = loadDesktopModule('src/shell/right-panel-renderer.tsx');
+  const { document } = dom.window;
+  const originalBridge = Object.getOwnPropertyDescriptor(dom.window, '__TAURI_INTERNALS__');
+  if (native) {
+    Object.defineProperty(dom.window, '__TAURI_INTERNALS__', { configurable: true, value: { invoke() {} } });
+  } else {
+    delete dom.window.__TAURI_INTERNALS__;
+  }
+  const host = document.createElement('div');
+  document.body.replaceChildren(host);
+  const calls = [];
+  const actions = [];
+  let panel;
+  act(() => {
+    panel = createRightPanelController(host, {
+      invoke: (command, args) => new Promise((resolve, reject) => calls.push({ command, args, resolve, reject })),
+      onOpenTools: () => actions.push('openTools'),
+      onRunCheck: () => actions.push('runCheck'),
+      onOpenSource: url => actions.push(url),
+    });
+    panel.selectTab('devtools');
+    flushRaf();
+  });
+  cleanupCurrent = () => {
+    act(() => {
+      panel.destroy();
+      flushRaf();
+    });
+    document.body.replaceChildren();
+    if (originalBridge) Object.defineProperty(dom.window, '__TAURI_INTERNALS__', originalBridge);
+    else delete dom.window.__TAURI_INTERNALS__;
+  };
+  const button = action => host.querySelector('[data-devtools-action="' + action + '"]');
+  const click = action => {
+    const control = button(action);
+    assert.ok(control, action);
+    act(() => {
+      control.click();
+      flushRaf();
+    });
+  };
+  const settle = async (value, index = calls.length - 1, reject = false) => {
+    await act(async () => {
+      calls[index][reject ? 'reject' : 'resolve'](value);
+      await setImmediate();
+      flushRaf();
+    });
+  };
+  return { host, panel, calls, actions, button, click, settle };
+}
+
+test('F07 checks only on explicit clicks, preserves focus during loading and shows native status guidance', async () => {
+  const { host, calls, actions, button, click, settle } = mountDevtoolsFixture();
+  const status = () => host.querySelector('#panel-devtools-status').textContent;
+  const check = button('check');
+  assert.match(check.textContent, /检测连接/);
+  assert.equal(calls.length, 0);
+  assert.deepEqual(actions, []);
+
+  check.focus();
+  click('check');
+  click('check');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, 'devtools_status');
+  assert.deepEqual(calls[0].args, { selectInstall: false });
+  assert.match(status(), /正在检查/);
+  assert.equal(check.getAttribute('aria-disabled'), 'true');
+  assert.equal(dom.window.document.activeElement, check);
+  assert.ok(host.querySelector('[data-empty-action="open-tools"]'));
+
+  await settle({ status: 'not_detected', version: null });
+  assert.match(status(), /未检测到安装/);
+  assert.equal(button('check'), check);
+  assert.match(check.textContent, /重新检测/);
+  assert.equal(dom.window.document.activeElement, check);
+  assert.deepEqual(actions, []);
+
+  click('download');
+  assert.deepEqual(actions, ['https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html']);
+  assert.equal(calls.length, 1);
+  button('choose-install').focus();
+  click('choose-install');
+  assert.deepEqual(calls[1].args, { selectInstall: true });
+  assert.equal(dom.window.document.activeElement, button('choose-install'));
+  await settle({ status: 'selection_canceled', version: null });
+  assert.match(status(), /未检测到安装/);
+  assert.equal(dom.window.document.activeElement, button('choose-install'));
+
+  click('choose-install');
+  await settle({ status: 'not_running', version: '2.01.2510290' });
+  assert.match(status(), /请先打开工具.*2\.01\.2510290/s);
+  assert.equal(dom.window.document.activeElement, check);
+  assert.equal(button('choose-install'), null);
+
+  const fixtures = [
+    ['port_unavailable', /请检查服务端口.*安全设置/s],
+    ['signed_out', /请在工具内登录/],
+    ['ready', /已就绪/],
+    ['manual_check', /请手动核对.*保留现有访问令牌设置/s],
+    ['unsupported', /请手动核对.*Windows/s],
+  ];
+  for (const [result, expected] of fixtures) {
+    click('check');
+    await settle({ status: result, version: null });
+    assert.match(status(), expected);
+  }
+  assert.ok(calls.every(call => call.command === 'devtools_status'));
+  assert.deepEqual(calls.map(call => call.args), [
+    { selectInstall: false }, { selectInstall: true }, { selectInstall: true },
+    { selectInstall: false }, { selectInstall: false }, { selectInstall: false },
+    { selectInstall: false }, { selectInstall: false },
+  ]);
+  act(() => host.querySelector('[data-empty-action="open-tools"]').click());
+  assert.deepEqual(actions, ['https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html', 'openTools']);
+});
+
+test('F07 uses fixed status copy for malformed desktop data and ignores superseded responses', async () => {
+  const { host, panel, actions, click, settle } = mountDevtoolsFixture();
+  const status = () => host.querySelector('#panel-devtools-status').textContent;
+  click('check');
+  await settle(new Error('opaque backend details should stay out'), 0, true);
+  assert.match(status(), /开发者工具状态读取失败/);
+  assert.doesNotMatch(host.textContent, /opaque backend details/);
+  click('check');
+  await settle({ status: 'unknown native status', version: '1.2.3' });
+  assert.match(status(), /开发者工具状态读取失败/);
+  assert.doesNotMatch(host.textContent, /unknown native status|1\.2\.3/);
+
+  click('check');
+  act(() => panel.update({ devtoolsState: { status: 'empty' } }));
+  click('check');
+  await settle({ status: 'manual_check', version: 'opaque version value' }, 3);
+  await settle({ status: 'ready', version: '1.2.3' }, 2);
+  assert.match(status(), /请手动核对/);
+  assert.doesNotMatch(host.textContent, /已就绪|opaque version value|1\.2\.3/);
+  assert.deepEqual(actions, []);
+});
+
+test('F07 browser-only mount provides manual guidance without invoking the desktop bridge', () => {
+  const { host, calls, actions, button } = mountDevtoolsFixture(false);
+  assert.match(host.querySelector('#panel-devtools-status').textContent, /Windows.*手动核对/s);
+  assert.equal(button('check'), null);
+  assert.equal(button('choose-install'), null);
+  assert.ok(host.querySelector('[data-empty-action="open-tools"]'));
+  assert.deepEqual(calls, []);
+  assert.deepEqual(actions, []);
+});
+
 test('F00 Base UI DropdownMenu primitive: renders --ds-* classes, opens via keyboard/click, and invokes item callbacks', () => {
   assert.ok(existsSync(new URL('desktop/src/components/ui/dropdown-menu.tsx', rootUrl)), 'missing desktop/src/components/ui/dropdown-menu.tsx');
   const {

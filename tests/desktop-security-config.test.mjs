@@ -31,6 +31,17 @@ test('only local main window receives explicit tool and model permissions', () =
   assert.ok(capability.permissions.includes('dialog:allow-open'));
 });
 
+test('the DevTools probe is restricted to the authorized desktop IPC', () => {
+  const build = read('build.rs');
+  const root = read('src/lib.rs');
+  const command = read('src/devtools_status.rs');
+  assert.ok(build.includes('"devtools_status"'));
+  assert.ok(capability.permissions.includes('allow-devtools-status'));
+  assert.ok(root.includes('devtools_status::devtools_status'));
+  assert.match(command, /pub async fn devtools_status\([^)]*\)[\s\S]*?authorize\(&window\)\?/);
+  assert.doesNotMatch(command, /\bCommand::|model_bridge/);
+});
+
 test('external references only open web URLs, without file or arbitrary application scopes', () => {
   const scope = capability.permissions.find(value => value.identifier === 'opener:allow-open-url');
   assert.ok(scope);

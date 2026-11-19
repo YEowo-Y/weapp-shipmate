@@ -1,5 +1,6 @@
 mod agent_tools;
 mod credential_store;
+mod devtools_status;
 mod diagnostics;
 mod error;
 mod model_bridge;
@@ -86,6 +87,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .manage(devtools_status::DevtoolsSelection::default())
         .manage(model_bridge::ModelBridge::default())
         .manage(tool_runner::ToolRunner::default())
         .manage(project_store::ProjectStore::default())
@@ -98,6 +100,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            devtools_status::devtools_status,
             project_store::project_snapshot,
             project_store::project_save,
             project_store::project_select,
