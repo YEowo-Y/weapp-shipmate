@@ -90,7 +90,7 @@ function harness({ open = async () => null, invoke = async () => 'report', write
     return { id: args.runId, runId: args.runId, projectId: args.projectId, kind: args.kind, title: args.kind === 'check' ? '代码预检' : '流程导航', markdown: result, createdAt: Date.now(), projectRevision: project?.revision ?? null, toolVersion: 'test', rulesVersion: '{}', inputSummary: '本地测试' };
   };
   if (!explain.reset) explain.reset = () => {};
-  vm.runInNewContext(script, { attachFloatingSurface: () => () => {}, mountRightPanel: options => { integration.rightPanel = options; return { update() {}, selectTab() {}, setArtifact() {}, syncProject() {}, setDrawerMode() {}, destroy() {} }; }, mountWorkspacePages: () => ({ close: workspaceClose, open: () => true, destroy() {} }), bindApplicationShortcuts: options => { integration.shortcuts = options; return () => {}; }, crypto: { randomUUID: () => 'test-run-' + (++harness.runSequence) }, document, open, getVersion: async () => 'desktop-test', corePackage: { version: 'core-test' }, openUrl() {}, mountSystemNotifications: options => { notificationOptions = options; return { element: null, open() {}, close() {}, destroy() {} }; }, mountScrollFades: () => () => {}, invoke: nativeInvoke, renderMessageText, mountProjects: options => { projectOptions = options; return projects; }, createProjectExplain: options => { integration.nativeExplain = options; return { query() {} }; }, mountProjectMaintenance: options => { maintenanceOptions = options; return maintenance; }, mountPreferences: options => { preferencesOptions = options; return { open(anchor, section) { integration.preferenceOpens.push(anchor); integration.preferenceSections.push(section); }, close() { integration.preferenceCloses++; }, destroy() {} }; }, mountSourceFreshness: () => ({ open() { integration.sourceOpens++; }, close() {}, destroy() {} }), mountProjectHealth: options => { healthOptions = options; return ({ open() {}, close() { integration.healthClosed++; }, restoreMaintenance() { integration.maintenanceRestores++; }, refresh() {}, destroy() {} }); }, mountReportReader: options => { readerOptions = options; return { open(anchor) { integration.readerOpens.push({ anchor, artifact: options.getArtifact() }); }, showRecheck(artifact) { integration.readerRechecks.push(artifact); }, close() { integration.readerCloses++; }, destroy() {} }; }, mountProjectRepair: options => { repairOptions = options; return { openForArtifact(artifact, anchor) { integration.repairOpens.push({ artifact, anchor }); }, openHistory() {}, sync() { integration.repairSyncs++; }, destroy() {} }; }, mountRepairHandoff: () => ({ open() {}, refresh() {}, destroy() {} }), mountSubmissionMaterials: options => { integration.materials = options; return { open() {}, close() {}, prepareOpen() { return integration.prepareMaterials?.(); }, refresh() { integration.materialsRefreshes = (integration.materialsRefreshes ?? 0) + 1; }, destroy() {} }; }, mountWorkflow: () => ({ refresh() {}, setBusy() {}, destroy() {}, open() {} }), mountExplainDialog: options => { integration.explainDialog = options; return explain; }, mountToolsPanel: () => tools, mountDesktopSessions: async options => { sessionOptions = options; return sessions; }, navigator: { clipboard: { writeText } }, window: { setTimeout: callback => { scheduled.push(callback); return scheduled.length; }, __TAURI_INTERNALS__: bridgeAvailable ? { invoke } : undefined, matchMedia: query => query.includes('820px') ? media : panelMedia, addEventListener: (event, ready) => { if (event === "DOMContentLoaded") ready(); }, removeEventListener() {} } });
+  vm.runInNewContext(script, { attachFloatingSurface: () => () => {}, mountRightPanel: options => { integration.rightPanel = options; return { update() {}, selectTab() {}, setArtifact(artifact, evidence) { integration.panelArtifact = { artifact, evidence }; }, syncProject() {}, setDrawerMode() {}, destroy() {} }; }, mountWorkspacePages: () => ({ close: workspaceClose, open: () => true, destroy() {} }), bindApplicationShortcuts: options => { integration.shortcuts = options; return () => {}; }, crypto: { randomUUID: () => 'test-run-' + (++harness.runSequence) }, document, open, getVersion: async () => 'desktop-test', corePackage: { version: 'core-test' }, openUrl() {}, mountSystemNotifications: options => { notificationOptions = options; return { element: null, open() {}, close() {}, destroy() {} }; }, mountScrollFades: () => () => {}, invoke: nativeInvoke, renderMessageText, mountProjects: options => { projectOptions = options; return projects; }, createProjectExplain: options => { integration.nativeExplain = options; return { query() {} }; }, mountProjectMaintenance: options => { maintenanceOptions = options; return maintenance; }, mountPreferences: options => { preferencesOptions = options; return { open(anchor, section) { integration.preferenceOpens.push(anchor); integration.preferenceSections.push(section); }, close() { integration.preferenceCloses++; }, destroy() {} }; }, mountSourceFreshness: () => ({ open() { integration.sourceOpens++; }, close() {}, destroy() {} }), mountProjectHealth: options => { healthOptions = options; return ({ open() {}, close() { integration.healthClosed++; }, restoreMaintenance() { integration.maintenanceRestores++; }, refresh() {}, destroy() {} }); }, mountReportReader: options => { readerOptions = options; return { open(anchor) { integration.readerOpens.push({ anchor, artifact: options.getArtifact() }); }, showRecheck(artifact) { integration.readerRechecks.push(artifact); }, close() { integration.readerCloses++; }, destroy() {} }; }, mountProjectRepair: options => { repairOptions = options; return { openForArtifact(artifact, anchor) { integration.repairOpens.push({ artifact, anchor }); }, openHistory() {}, sync() { integration.repairSyncs++; }, destroy() {} }; }, mountRepairHandoff: options => { integration.handoff = options; return { open() {}, refresh() {}, destroy() {} }; }, mountSubmissionMaterials: options => { integration.materials = options; return { open() {}, close() {}, prepareOpen() { return integration.prepareMaterials?.(); }, refresh() { integration.materialsRefreshes = (integration.materialsRefreshes ?? 0) + 1; }, destroy() {} }; }, mountWorkflow: () => ({ refresh() {}, setBusy() {}, destroy() {}, open() {} }), mountExplainDialog: options => { integration.explainDialog = options; return explain; }, mountToolsPanel: () => tools, mountDesktopSessions: async options => { sessionOptions = options; return sessions; }, navigator: { clipboard: { writeText } }, window: { setTimeout: callback => { scheduled.push(callback); return scheduled.length; }, __TAURI_INTERNALS__: bridgeAvailable ? { invoke } : undefined, matchMedia: query => query.includes('820px') ? media : panelMedia, addEventListener: (event, ready) => { if (event === "DOMContentLoaded") ready(); }, removeEventListener() {} } });
   return { flushTimers() { for (const callback of scheduled.splice(0)) callback(); }, selectProject(value) { project = value; projectOptions.onChange(value); }, integration, panels: { projects: projects.settings, backup: projects.backupSettings, maintenance }, repairOptions: () => repairOptions, readerOptions: () => readerOptions, sessionOptions: () => sessionOptions, notificationOptions: () => notificationOptions, healthOptions: () => healthOptions, maintenanceOptions: () => maintenanceOptions, preferencesOptions: () => preferencesOptions, node: id => nodes.get(`#${id}`), click: id => nodes.get(`#${id}`).listeners.click(), document, navControl, projectOptions: () => projectOptions, setModal(value, sidebar = true) { const selector = sidebar ? ".session-workspace-dialog[data-kind]:modal, #desktop-model-dialog:modal" : "dialog:modal"; if (value) nodes.set(selector, value); else nodes.delete(selector); }, resizeNavigation(narrow) { media.matches = narrow; media.listener(); } };
 }
 
@@ -104,6 +104,71 @@ desktopTest('desktop selection enables checks and passes the selected directory 
   assert.match(request.runId, /^[A-Za-z0-9_-]{1,80}$/);
   assert.deepEqual({ ...request, runId: undefined }, { cmd: 'project_run', projectId: 'C:/project', kind: 'check', subject: 'enterprise', runId: undefined });
   assert.equal(app.node('report').textContent, 'checked');
+});
+
+function preflightReceipt(args, preflightEvidence) {
+  return {
+    id: args.runId, runId: args.runId, projectId: args.projectId, kind: args.kind,
+    title: 'Fixture preflight', markdown: 'Fixture Markdown', createdAt: 1, projectRevision: 1,
+    contextRevision: 3, toolVersion: 'test', rulesVersion: '{}', inputSummary: '{}', preflightEvidence,
+  };
+}
+
+const preflightProject = {
+  id: 'evidence-project', name: 'Evidence fixture', directory: 'C:/fixture',
+  directoryAvailable: true, subject: 'personal', revision: 1, contextRevision: 3,
+};
+
+const fixtureEvidence = {
+  items: [{ ruleId: 'privacy.getLocation', status: 'located', locations: [{ file: 'pages/current.js', line: 4 }] }],
+  truncated: false,
+};
+
+desktopTest('manual preflight passes positions only to the rail, and history clears them', async () => {
+  const copied = [];
+  const app = harness({
+    invoke: async (_cmd, args) => preflightReceipt(args, fixtureEvidence),
+    writeText: async text => { copied.push(text); },
+  });
+  app.selectProject(preflightProject);
+  await app.click('check-btn');
+  const current = app.integration.panelArtifact;
+  assert.equal(current.evidence, fixtureEvidence);
+  assert.equal(Object.hasOwn(current.artifact, 'preflightEvidence'), false);
+  app.click('read-report');
+  assert.equal(app.integration.readerOpens.at(-1).artifact, current.artifact);
+  assert.equal(app.integration.handoff.getArtifact(), current.artifact);
+  assert.doesNotMatch(JSON.stringify(app.integration.handoff.getArtifact()), /preflightEvidence|pages\/current\.js/);
+  await app.click('copy-report');
+  assert.deepEqual(copied, ['Fixture Markdown']);
+  app.projectOptions().onArtifact(current.artifact);
+  assert.equal(app.integration.panelArtifact.evidence, undefined);
+  assert.equal(app.integration.panelArtifact.artifact, current.artifact);
+});
+
+desktopTest('a new check clears positions and a late receipt cannot restore them after a project round trip', async () => {
+  const pending = deferred();
+  let calls = 0;
+  const app = harness({
+    invoke: async (_cmd, args) => {
+      if (++calls > 1) await pending.promise;
+      return preflightReceipt(args, fixtureEvidence);
+    },
+  });
+  app.selectProject(preflightProject);
+  await app.click('check-btn');
+  assert.equal(app.integration.panelArtifact.evidence, fixtureEvidence);
+  const running = app.click('check-btn');
+  assert.equal(app.integration.panelArtifact.artifact.markdown, 'Fixture Markdown');
+  assert.equal(app.integration.panelArtifact.evidence, undefined);
+  app.selectProject({ ...preflightProject, id: 'other-project' });
+  assert.equal(app.integration.panelArtifact.artifact, null);
+  app.selectProject(preflightProject);
+  pending.resolve();
+  await running;
+  assert.equal(app.integration.panelArtifact.artifact.projectId, preflightProject.id);
+  assert.equal(app.integration.panelArtifact.evidence, undefined);
+  assert.equal(Object.hasOwn(app.integration.panelArtifact.artifact, 'preflightEvidence'), false);
 });
 
 desktopTest('desktop guide remains usable without selecting a folder and renders output as text', async () => {
