@@ -174,6 +174,23 @@ test("category matches are scoped clues, never official selections or confirmati
   assert.ok(catalog.rules.every(rule => !rule.draft));
 });
 
+test("情感陪伴关键词产生的工作流候选提示保留拟人化互动的适用条件", () => {
+  const ruleId = "category.anthropomorphic-interaction";
+  const workflow = derive({ project: {
+    ...project, subject: "enterprise", facts: { businessType: "真人志愿者提供情感陪伴" },
+  } });
+  const candidate = workflow.categoryCandidates.find(item => item.ruleId === ruleId);
+  assert.deepEqual(candidate.matchedSignals, ["情感陪伴"]);
+  assert.equal(candidate.requires.length, 2);
+  assert.match(candidate.requires[0], /人工智能.*模拟自然人.*持续性情感互动.*算法备案/);
+  assert.match(candidate.requires[1], /上述场景.*公示.*算法机制机理/);
+  const category = workflow.stages.find(stage => stage.id === "category");
+  const checklistItem = category.items.find(item => item.ruleId === ruleId);
+  assert.equal(checklistItem.conditional, true);
+  assert.deepEqual(checklistItem.requires, candidate.requires);
+  assert.equal(category.status, "pending");
+});
+
 test("guide public payment/business inputs explain finite scope and retain unknown stages", () => {
   const result = runGuide({ has_payment: true, business_type: "商城", collects_sensitive: null });
   assert.ok(result.notes.some(note => note.includes("支付") && note.includes("不代表")));
