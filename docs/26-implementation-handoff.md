@@ -841,8 +841,21 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 Windows WebView2 157.0.4341.60 在 1240 px 与 780 px 使用真实本机拒因报告生成摘要。键盘预览从全文起始位置打开，验证了复制失败重试、关闭回焦、切换项目失效，以及真实 Markdown 与 JSON 下载。复制验收使用受控 WebView2 Clipboard API，逐字核对预览文本并保留系统剪贴板。生产构建的 JavaScript 启动包为 725,482 字节，gzip 为 237,255 字节，交接分包仍按需加载。
 
+### 功能 7 · 公测前只读连接检测（范围待确认）
+
+**目标与关口。** 按 §6 确认范围后，在右栏「开发者工具」提供 Windows 本机连接检测。公测首版检查微信开发者工具的安装、运行、服务端口与登录状态。由用户点击发起和重试。沿用已有 Tauri 主窗口鉴权、现有依赖和右栏按需分包；其他平台提供手动核对提示。
+
+**已验证的基线。** `main@a02e029` 的右栏只显示连接说明。本机 Windows 注册表发现自定义目录中的 2.01.2510290 安装，目录内有官方启动程序与 `cli.bat`。按官方 HTTP V2 规则从安装路径和 `version.latestNw` 推导到唯一用户配置目录。该目录留有一个格式有效的端口文件，同次检查没有匹配的进程或端口监听。文件存在不能证明服务可用。官方文档确认了回环地址上的只读登录状态接口，未列出可据以判定的响应字段。当前未运行工具，登录状态与开启访问令牌时的响应仍待同版本验证。 [HTTP V2](https://developers.weixin.qq.com/miniprogram/dev/devtools/http.html) [命令行文档](https://developers.weixin.qq.com/miniprogram/dev/devtools/cli.html)
+
+1. **发现安装与当前服务。** 通过 Windows 安装记录和已知路径定位官方程序及 `cli.bat`。未检测到时提供官方下载说明和本次手动选择安装目录的入口。运行状态按已验证安装路径的进程身份判断。按官方公式定位该安装的 `.ide` 文件，仅读取有界端口数字，并查验该回环监听由对应的开发者工具进程持有。未运行、已运行且服务未就绪、归属无法确认分别处理。超出预期的路径、重解析点、无法验证身份的进程或冲突的监听均提示手动核对。
+2. **确认登录状态。** 对已认定的服务只发送固定 `GET /v2/islogin` 到 `127.0.0.1`，限制响应大小与耗时，不跟随重定向或使用代理。首先核对同版本真实接口的无凭据响应形状，只按验证过的明确登录标记显示「未登录」或「已就绪」，可用时显示已确认的版本。鉴权拒绝、格式不明、超时或无法建立可信连接时进入「请手动核对」。界面给出微信开发者工具中的核对步骤，保留用户的访问令牌设置。只返回固定状态和已验证版本，凭据、响应原文、进程命令行和项目内容不进入界面、日志或存储。
+3. **接入右栏。** 复用「开发者工具」标签、现有原语和状态组件。首次提示用户点击检测。结果为「未检测到安装」「请先打开工具」「请检查服务端口」「请在工具内登录」「已就绪」或「请手动核对」，各状态配对应操作说明。保留本机预检入口。禁止打开或修改工具及其项目、启动登录或扫码、编译、走查、预览、上传、访问模型、暴露公开 MCP 操作。
+4. **验收。** 用替身覆盖自定义安装、工具退出后残留端口文件、错误监听所有者、明确已登录和未登录、鉴权受限、无效或超限响应、超时和重试。断言受限分支不发送请求，允许分支只连接对应回环状态接口且无凭据。Windows 实机验收到已安装但未启动及可以安全复现的服务状态；分别记录实测与夹具结果。WebView2 验证宽窗和窄窗入口、键盘操作、提示和重试。跑四项仓库门禁、桌面类型检查和构建、Rust 检查与测试及完整 PR CI。
+
+**允许变更的文件。** 右栏开发者工具标签及其接线、类型和样式，`desktop/src-tauri/` 内的本机检测模块和命令注册及已有 Windows 依赖特性、必要的测试、`docs/12-current-capabilities.md`、本文与 `progress.txt`。沿用现有锁定依赖，范围为本机状态检测。
+
 ## 7. 当前推进入口
 
 T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并；T11C1 CLI 显式证据已按 [#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47) 批准范围实施并合入 [#49](https://github.com/YEowo-Y/weapp-shipmate/pull/49)，baseline 契约待定。通用基线和验证命令见 §2。
 
-桌面与工程底座工作线的 T12A（[#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48)）、T13A（[#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51)）、T13B（[#52](https://github.com/YEowo-Y/weapp-shipmate/pull/52)）、T14（[#54](https://github.com/YEowo-Y/weapp-shipmate/pull/54)）、**功能 0 · 新外壳**（[#55](https://github.com/YEowo-Y/weapp-shipmate/pull/55)、[#56](https://github.com/YEowo-Y/weapp-shipmate/pull/56)）、**功能 2 · 上线进度进右侧面板**（[#57](https://github.com/YEowo-Y/weapp-shipmate/pull/57)、[#58](https://github.com/YEowo-Y/weapp-shipmate/pull/58)）和 **功能 3 · 提审材料包**（[#59](https://github.com/YEowo-Y/weapp-shipmate/pull/59)、[#60](https://github.com/YEowo-Y/weapp-shipmate/pull/60)）已合并并通过云端验收。**功能 4 · 被拒处理闭环**已按 [#61](https://github.com/YEowo-Y/weapp-shipmate/pull/61) 范围实施，并随 [#62](https://github.com/YEowo-Y/weapp-shipmate/pull/62) 合入。**功能 8 · 交接给 Codex / Claude Code** 已按 [#75](https://github.com/YEowo-Y/weapp-shipmate/pull/75) 确认的范围完成本机验收。之后推进 **功能 7（公测前只读连接检测部分）**。
+桌面与工程底座工作线的 T12A（[#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48)）、T13A（[#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51)）、T13B（[#52](https://github.com/YEowo-Y/weapp-shipmate/pull/52)）、T14（[#54](https://github.com/YEowo-Y/weapp-shipmate/pull/54)）、**功能 0 · 新外壳**（[#55](https://github.com/YEowo-Y/weapp-shipmate/pull/55)、[#56](https://github.com/YEowo-Y/weapp-shipmate/pull/56)）、**功能 2 · 上线进度进右侧面板**（[#57](https://github.com/YEowo-Y/weapp-shipmate/pull/57)、[#58](https://github.com/YEowo-Y/weapp-shipmate/pull/58)）和 **功能 3 · 提审材料包**（[#59](https://github.com/YEowo-Y/weapp-shipmate/pull/59)、[#60](https://github.com/YEowo-Y/weapp-shipmate/pull/60)）已合并并通过云端验收。**功能 4 · 被拒处理闭环**已按 [#61](https://github.com/YEowo-Y/weapp-shipmate/pull/61) 范围实施，并随 [#62](https://github.com/YEowo-Y/weapp-shipmate/pull/62) 合入。**功能 8 · 交接给 Codex / Claude Code** 已按 [#75](https://github.com/YEowo-Y/weapp-shipmate/pull/75) 范围实施并随 [#76](https://github.com/YEowo-Y/weapp-shipmate/pull/76) 合入。下一步确认 **功能 7（公测前只读连接检测部分）** 的上述范围。
