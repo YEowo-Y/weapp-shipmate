@@ -1,11 +1,133 @@
-fn parse_envelope(text: &str, kind: &str) -> crate::error::DesktopResult<(String, serde_json::Value)> {
-    if text.len() > 2 * 1024 * 1024 {
+const PROJECT_ENVELOPE_LIMIT: usize = 2 * 1024 * 1024;
+const PREFLIGHT_EVIDENCE_LIMIT: usize = 16 * 1024;
+const PREFLIGHT_OMISSION_BYTES: usize =
+    r#","preflightEvidence":{"items":[],"truncated":true}"#.len();
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct PreflightEvidence {
+    items: Vec<PreflightItem>,
+    truncated: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct PreflightItem {
+    rule_id: String,
+    status: PreflightLocationStatus,
+    locations: Vec<PreflightLocation>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum PreflightLocationStatus {
+    Located,
+    Partial,
+    Unavailable,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct PreflightLocation {
+    file: String,
+    #[serde(deserialize_with = "Deserialize::deserialize")]
+    line: Option<u32>,
+}
+
+fn safe_preflight_relative_path(file: &str) -> bool {
+    file.split('/')
+        .all(|name| !name.is_empty() && !name.ends_with(['.', ' ']))
+        && !file.chars().any(|ch| {
+            ch.is_control()
+                || matches!(
+                    ch,
+                    '<' | '>' | ':' | '"' | '\\' | '|' | '?' | '*' | '\u{60}'
+                        | '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}'
+                        | '\u{2066}'..='\u{2069}'
+                )
+        })
+}
+
+fn parse_preflight_evidence(
+    value: &serde_json::Value,
+    findings: &[serde_json::Value],
+) -> Option<PreflightEvidence> {
+    if serde_json::to_vec(value).ok()?.len() > PREFLIGHT_EVIDENCE_LIMIT {
+        return None;
+    }
+    let evidence: PreflightEvidence = serde_json::from_value(value.clone()).ok()?;
+    let mut rule_ids: std::collections::BTreeSet<_> = findings
+        .iter()
+        .filter_map(|item| item["ruleId"].as_str())
+        .collect();
+    for item in &evidence.items {
+        if !rule_ids.remove(item.rule_id.as_str())
+            || item
+                .locations
+                .iter()
+                .any(|loc| !safe_preflight_relative_path(&loc.file) || loc.line == Some(0))
+        {
+            return None;
+        }
+        match item.status {
+            PreflightLocationStatus::Located
+                if item.locations.is_empty()
+                    || item.locations.iter().any(|loc| loc.line.is_none()) =>
+            {
+                return None;
+            }
+            PreflightLocationStatus::Unavailable if !item.locations.is_empty() => return None,
+            _ => {}
+        }
+    }
+    Some(evidence)
+}
+
+fn receipt_preflight_evidence(
+    value: Option<&serde_json::Value>,
+    findings: &[serde_json::Value],
+    envelope_bytes: usize,
+) -> Option<PreflightEvidence> {
+    match value {
+        Some(value) => parse_preflight_evidence(value, findings),
+        // The bundled producer leaves the envelope untouched if even its empty
+        // omission marker would overflow stdout. Report that limit in the IPC receipt.
+        None if envelope_bytes > PROJECT_ENVELOPE_LIMIT - PREFLIGHT_OMISSION_BYTES => {
+            Some(PreflightEvidence {
+                items: Vec::new(),
+                truncated: true,
+            })
+        }
+        None => None,
+    }
+}
+
+struct ProjectEnvelope {
+    markdown: String,
+    data: serde_json::Value,
+    preflight_evidence: Option<PreflightEvidence>,
+}
+
+fn parse_envelope(
+    text: &str,
+    kind: &str,
+) -> crate::error::DesktopResult<(String, serde_json::Value)> {
+    let envelope = parse_project_envelope(text, kind, false)?;
+    Ok((envelope.markdown, envelope.data))
+}
+
+fn parse_project_envelope(
+    text: &str,
+    kind: &str,
+    include_preflight_evidence: bool,
+) -> crate::error::DesktopResult<ProjectEnvelope> {
+    if text.len() > PROJECT_ENVELOPE_LIMIT {
         return Err("结构化成果超过保存限制。".into());
     }
     let v: serde_json::Value = serde_json::from_str(text).map_err(|_| "工具返回格式无效。")?;
     let markdown = v["markdown"]
         .as_str()
-        .filter(|v| !v.trim().is_empty() && v.len() <= 2 * 1024 * 1024)
+        .filter(|v| !v.trim().is_empty() && v.len() <= PROJECT_ENVELOPE_LIMIT)
         .ok_or("工具报告无效。")?;
     let data = &v["data"];
     if data["schemaVersion"] != 1 || data["kind"] != kind || !data["result"].is_object() {
@@ -14,7 +136,8 @@ fn parse_envelope(text: &str, kind: &str) -> crate::error::DesktopResult<(String
     if data["result"]["command"] != kind || !data["result"]["items"].is_array() {
         return Err("工具结果类型不匹配。".into());
     }
-    for item in data["result"]["items"].as_array().ok_or("清单无效。")? {
+    let findings = data["result"]["items"].as_array().ok_or("清单无效。")?;
+    for item in findings {
         if ["ruleId", "title", "stage", "severity"]
             .iter()
             .any(|k| item[k].as_str().is_none_or(|v| v.is_empty()))
@@ -55,7 +178,13 @@ fn parse_envelope(text: &str, kind: &str) -> crate::error::DesktopResult<(String
     } else if !data["scope"].is_null() {
         return Err("工具范围类型无效。".into());
     }
-    Ok((markdown.into(), data.clone()))
+    Ok(ProjectEnvelope {
+        markdown: markdown.into(),
+        data: data.clone(),
+        preflight_evidence: (include_preflight_evidence && kind == "check")
+            .then(|| receipt_preflight_evidence(v.get("preflightEvidence"), findings, text.len()))
+            .flatten(),
+    })
 }
 fn finish_structured(
     c: &mut Connection,
@@ -443,6 +572,99 @@ mod workflow_tests {
         assert!(parse_envelope(&good, "guide").is_ok());
         assert!(parse_envelope(&good, "check").is_err());
         assert!(parse_envelope(&good.replace("guide", "check"), "check").is_err());
+    }
+    #[test]
+    fn preflight_evidence_validates_size_membership_paths_and_status() {
+        let findings = serde_json::json!([{"ruleId":"one"},{"ruleId":"two"},{"ruleId":"three"}]);
+        let findings = findings.as_array().unwrap();
+        let good = serde_json::json!({
+            "items": [
+                {"ruleId":"one","status":"located","locations":[{"file":"pages/首页.js","line":7}]},
+                {"ruleId":"two","status":"partial","locations":[{"file":"app.json","line":null}]},
+                {"ruleId":"three","status":"unavailable","locations":[]}
+            ],
+            "truncated": false
+        });
+        let parsed = parse_preflight_evidence(&good, findings).unwrap();
+        assert_eq!(serde_json::to_value(parsed).unwrap(), good);
+        assert!(parse_preflight_evidence(
+            &serde_json::json!({"items":[],"truncated":true}),
+            findings
+        )
+        .is_some());
+
+        for file in [
+            "/absolute.js",
+            "D:\\secret.js",
+            "\\\\host\\share.js",
+            "pages/../private.js",
+            "pages//index.js",
+            "pages/./index.js",
+            "pages./index.js",
+            "pages /index.js",
+            "pages/index.js:stream",
+            "pages/line\nbreak.js",
+            "pages/label\u{202e}.js",
+            "pages/",
+        ] {
+            let mut malformed = good.clone();
+            malformed["items"][0]["locations"][0]["file"] = file.into();
+            assert!(
+                parse_preflight_evidence(&malformed, findings).is_none(),
+                "{file:?}"
+            );
+        }
+        for (key, value) in [
+            (
+                "file",
+                serde_json::json!("大".repeat(PREFLIGHT_EVIDENCE_LIMIT / 2)),
+            ),
+            ("line", serde_json::json!(0)),
+            ("line", serde_json::Value::Null),
+            ("line", serde_json::json!(1.5)),
+            ("snippet", serde_json::json!("not a location")),
+        ] {
+            let mut malformed = good.clone();
+            malformed["items"][0]["locations"][0][key] = value;
+            assert!(
+                parse_preflight_evidence(&malformed, findings).is_none(),
+                "{key}"
+            );
+        }
+        let mut malformed = good.clone();
+        malformed["items"][1]["locations"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("line");
+        assert!(parse_preflight_evidence(&malformed, findings).is_none());
+        malformed = good.clone();
+        malformed["items"][1]["status"] = "unavailable".into();
+        assert!(parse_preflight_evidence(&malformed, findings).is_none());
+        malformed = good.clone();
+        malformed["items"][2]["ruleId"] = "missing".into();
+        assert!(parse_preflight_evidence(&malformed, findings).is_none());
+        malformed["items"][2]["ruleId"] = "one".into();
+        assert!(parse_preflight_evidence(&malformed, findings).is_none());
+    }
+    #[test]
+    fn preflight_evidence_reports_omission_when_stdout_has_no_room_for_a_marker() {
+        let original = serde_json::json!({"markdown": "x", "data": {}});
+        let mut with_marker = original.clone();
+        with_marker["preflightEvidence"] = serde_json::json!({"items": [], "truncated": true});
+        assert_eq!(
+            with_marker.to_string().len() - original.to_string().len(),
+            PREFLIGHT_OMISSION_BYTES
+        );
+        let room_for_marker = PROJECT_ENVELOPE_LIMIT - PREFLIGHT_OMISSION_BYTES;
+        assert!(receipt_preflight_evidence(None, &[], room_for_marker).is_none());
+        let omitted = receipt_preflight_evidence(None, &[], room_for_marker + 1).unwrap();
+        assert!(omitted.truncated && omitted.items.is_empty());
+        assert!(receipt_preflight_evidence(
+            Some(&serde_json::Value::Null),
+            &[],
+            PROJECT_ENVELOPE_LIMIT
+        )
+        .is_none());
     }
     #[test]
     fn old_artifact_has_no_structured_payload() {

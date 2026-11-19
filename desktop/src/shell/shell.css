@@ -1272,13 +1272,39 @@ details[open] > summary > .shell-wf-chevron {
   font-size: var(--ds-text-meta);
 }
 
+.shell-ev-detail {
+  margin: var(--ds-space-2) 0 0;
+  color: var(--ds-ink-3);
+  font-size: var(--ds-text-meta);
+}
+
+.shell-ev-locations {
+  display: grid;
+  gap: var(--ds-space-2);
+  margin: var(--ds-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
 .shell-code-loc {
-  padding: 8px 12px;
+  padding: var(--ds-space-2) var(--ds-space-3);
   border-radius: var(--ds-radius-md);
   background: var(--ds-sunken);
   box-shadow: inset 0 0 0 1px var(--ds-hairline);
-  font-family: var(--ds-font-mono);
   font-size: var(--ds-text-meta);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.shell-code-loc > code {
+  font-family: var(--ds-font-mono);
+  white-space: pre-wrap;
+}
+
+.shell-code-loc > small {
+  margin-inline-start: var(--ds-space-2);
+  color: var(--ds-ink-3);
+  font-size: inherit;
 }
 
 .shell-quote {

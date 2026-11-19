@@ -193,6 +193,20 @@ export function EvidenceTabBody({
   const safeIndex = Math.min(selectedIndex, state.items.length - 1);
   const item = state.items[safeIndex];
   const sev = SEVERITY_META[item.severity] ?? SEVERITY_META.info;
+  const locations = item.codeLocations?.locations ?? [];
+  let locationNote: string | undefined;
+  switch (state.preflightContext) {
+    case 'imported':
+      locationNote = '导入报告提供规则依据。请在本机重新预检以查看代码位置。';
+      break;
+    case 'history':
+      locationNote = '当前会话暂无此报告的代码位置，可重新预检。';
+      break;
+    case 'current':
+      if (item.codeLocations?.status === 'partial') locationNote = '本次预检的代码位置不完整。';
+      else if (!locations.length) locationNote = '本次预检未能定位此条目的代码位置。';
+      break;
+  }
 
   return (
     <div className="shell-pane-content">
@@ -233,17 +247,29 @@ export function EvidenceTabBody({
         <code className="shell-ev-id">{item.ruleId}</code>
       </div>
 
-      {item.location ? (
+      {item.stage ? <p className="shell-ev-detail">阶段 · {item.stage}</p> : null}
+
+      {state.preflightContext ? (
         <section className="shell-sec" aria-labelledby="panel-ev-loc">
-          <div className="shell-sec-h" id="panel-ev-loc">位置线索</div>
-          <div className="shell-code-loc">
-            <code>{item.location}</code>
-          </div>
+          <div className="shell-sec-h" id="panel-ev-loc">代码位置</div>
+          {locationNote ? <p className="shell-ev-detail">{locationNote}</p> : null}
+          {locations.length ? (
+            <ul className="shell-ev-locations" role="list">
+              {locations.map(({ file, line }) => (
+                <li className="shell-code-loc" key={`${file}:${line ?? ''}`}>
+                  <code>{file}{line === null ? '' : `:${line}`}</code>
+                  {line === null ? <small>仅定位到文件</small> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {state.locationsTruncated ? <p className="shell-ev-detail">已达代码位置显示上限，部分位置省略。</p> : null}
         </section>
       ) : null}
 
       <section className="shell-sec" aria-labelledby="panel-ev-quote">
-        <div className="shell-sec-h" id="panel-ev-quote">官方原文</div>
+        <div className="shell-sec-h" id="panel-ev-quote">{state.sourceImported ? '导入报告引文' : '官方原文'}</div>
+        {state.sourceImported ? <p className="shell-ev-detail">引文、链接与日期来自导入报告，请人工核对。</p> : null}
         <blockquote className="shell-quote">
           {item.sourceQuote || '该条目暂无内联引文，请打开官方链接或完整报告核对。'}
         </blockquote>
@@ -258,7 +284,7 @@ export function EvidenceTabBody({
               <span>{item.officialUrl.replace(/^https?:\/\//, '')}</span>
             </button>
           ) : null}
-          {item.lastVerified ? <span className="tabular shell-src-date">核验于 {item.lastVerified}</span> : null}
+          {item.lastVerified ? <span className="tabular shell-src-date">{state.sourceImported ? '导入报告记录日期' : '仓库核验日期'} {item.lastVerified}</span> : null}
         </div>
       </section>
 

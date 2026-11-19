@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { setImmediate } from 'node:timers/promises';
 import { installDesktopDom, loadDesktopModule, requireDesktop } from './helpers/react-desktop.mjs';
 import { iconNodes } from '../desktop/src/shared/components/lucide-icons.js';
+import { loadData, ruleToItem } from '../src/data.mjs';
 
 const { JSDOM } = requireDesktop('jsdom');
 const React = requireDesktop('react');
@@ -565,7 +566,7 @@ test('F00 right panel React + Base UI tabs: preserves initial HTML skeleton, chu
             officialUrl: 'https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/',
             lastVerified: '2026-06-13',
             requires: ['在《小程序用户隐私保护指引》中声明地理位置用途', '在 app.json 声明 requiredPrivateInfos'],
-            location: 'pages/nearby/nearby.js:24',
+            stage: 'privacy',
           },
           {
             ruleId: 'login.after-experience',
@@ -576,7 +577,7 @@ test('F00 right panel React + Base UI tabs: preserves initial HTML skeleton, chu
             officialUrl: 'javascript:alert(1)',
             lastVerified: '2026-06-13',
             requires: ['将登录延后到实际需要账号的操作节点'],
-            location: 'pages/index/index.js:12',
+            stage: 'review',
           },
         ],
       },
@@ -644,6 +645,92 @@ test('F00 right panel React + Base UI tabs: preserves initial HTML skeleton, chu
   });
   assert.equal(document.activeElement === getTabs()[0], true, 'Home must focus first tab');
   assert.equal(getTabs()[0].getAttribute('aria-selected'), 'true');
+});
+
+test('F01 rail binds location evidence to the current local check through lazy mount and history', async () => {
+  const { mountRightPanel } = loadDesktopModule('src/shell/right-panel.ts');
+  const renderer = loadDesktopModule('src/shell/right-panel-renderer.tsx');
+  const { document } = dom.window;
+  const host = document.createElement('div');
+  document.body.replaceChildren(host);
+  const project = { id: 'evidence-project', name: '证据夹具', directory: 'C:/fixture', subject: 'personal', revision: 1, contextRevision: 1, createdAt: 1, updatedAt: 1, directoryAvailable: true };
+  const other = { ...project, id: 'other-project' };
+  const official = 'https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/';
+  const rules = ['located', 'partial', 'unavailable'].map(ruleId => ({
+    ruleId, title: '合成规则 ' + ruleId, stage: 'privacy', severity: 'warning', why: '固定原因',
+    requires: ['核对要求'], official_url: official, source_quote: '固定官方引文', last_verified: '2026-11-13', manual_required: true,
+  }));
+  rules[2].requires.push(`检测到出站域名：${'subdomain.example.com、'.repeat(200)}`);
+  const paymentRule = ruleToItem(loadData().rules.find(rule => rule.id === 'payment.requires-merchant'));
+  rules.push(paymentRule);
+  const artifact = {
+    id: 'fresh-check', runId: 'fresh-check', projectId: project.id, kind: 'check',
+    title: '本机预检', markdown: '原始报告', projectRevision: 1, contextRevision: 1, toolVersion: 'test', rulesVersion: '{}', createdAt: 1,
+    data: { schemaVersion: 1, kind: 'check', result: { command: 'check', meta: { scan: { filesScanned: 4, scope: { complete: true } } }, items: rules } },
+  };
+  const preflightEvidence = {
+    items: [
+      { ruleId: 'located', status: 'located', locations: [{ file: 'pages/new-location.js', line: 9 }] },
+      { ruleId: 'partial', status: 'partial', locations: [{ file: 'app.json', line: null }] },
+      { ruleId: 'unavailable', status: 'unavailable', locations: [] },
+      { ruleId: paymentRule.ruleId, status: 'located', locations: [{ file: 'pages/payment.js', line: 11 }] },
+      { ruleId: 'other-rule', status: 'located', locations: [{ file: 'wrong-location.js', line: 2 }] },
+    ],
+    truncated: true,
+  };
+
+  let load;
+  const panel = mountRightPanel({ host, onOpenSource: url => { assert.equal(url, official); } }, () => new Promise(resolve => { load = resolve; }));
+  cleanupCurrent = () => {
+    act(() => { panel.destroy(); flushRaf(); });
+    document.body.replaceChildren();
+  };
+  panel.syncProject(project);
+  panel.setArtifact(artifact, preflightEvidence);
+  panel.syncProject(other);
+  panel.syncProject(project);
+  panel.selectTab('evidence');
+  await act(async () => { load(renderer); await setImmediate(); flushRaf(); });
+  assert.ok(!host.textContent.includes('new-location.js'), 'a switch before hydration cancels queued evidence');
+
+  const render = change => act(() => { change(); flushRaf(); });
+  const locations = () => [...host.querySelectorAll('.shell-code-loc > code')].map(node => node.textContent);
+  render(() => panel.setArtifact(artifact, preflightEvidence));
+  assert.deepEqual(locations(), ['pages/new-location.js:9']);
+  assert.match(host.textContent, /阶段 · privacy/);
+  assert.match(host.textContent, /固定官方引文/);
+  assert.match(host.textContent, /仓库核验日期 2026-11-13/);
+  assert.match(host.textContent, /部分位置省略/);
+  assert.ok(!host.textContent.includes('wrong-location.js'));
+  render(() => { panel.setDrawerMode(true); panel.selectTab('devtools'); });
+  render(() => panel.selectTab('evidence'));
+  assert.deepEqual(locations(), ['pages/new-location.js:9']);
+  render(() => host.querySelector('[data-evidence-next]').click());
+  assert.deepEqual(locations(), ['app.json']);
+  assert.match(host.textContent, /仅定位到文件/);
+  assert.match(host.textContent, /代码位置不完整/);
+  render(() => host.querySelector('[data-evidence-next]').click());
+  assert.deepEqual(locations(), []);
+  assert.match(host.textContent, /未能定位/);
+  render(() => host.querySelector('[data-evidence-next]').click());
+  assert.deepEqual(locations(), ['pages/payment.js:11']);
+  assert.match(host.textContent, /pay\.weixin\.qq\.com/);
+
+  render(() => panel.setArtifact({ ...artifact, id: 'history' }));
+  assert.match(host.textContent, /当前会话暂无/);
+  assert.match(host.textContent, /固定官方引文/);
+  assert.deepEqual(locations(), []);
+  render(() => panel.setArtifact(artifact, { items: [], truncated: true }));
+  assert.match(host.textContent, /部分位置省略/);
+  assert.doesNotMatch(host.textContent, /当前会话暂无/);
+  render(() => panel.setArtifact({ ...artifact, id: 'external', provenance: 'imported' }, preflightEvidence));
+  assert.match(host.textContent, /导入报告/);
+  assert.match(host.textContent, /固定官方引文/);
+  assert.match(host.textContent, /导入报告记录日期 2026-11-13/);
+  assert.doesNotMatch(host.textContent, /仓库核验日期/);
+  assert.deepEqual(locations(), []);
+  render(() => { panel.syncProject(other); panel.setArtifact(artifact, preflightEvidence); });
+  assert.ok(!host.textContent.includes('new-location.js'));
 });
 
 function mountDevtoolsFixture(native = true) {

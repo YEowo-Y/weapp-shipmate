@@ -23,6 +23,7 @@ import { mountScrollFades } from './shared/components/scroll-fade.js';
 import { mountExplainDialog, mountRepairHandoff, mountSourceFreshness, mountSubmissionMaterials } from './shell/lazy-dialogs';
 import { mountShellLayout } from './shell/shell-layout';
 import { mountRightPanel } from './shell/right-panel';
+import type { PreflightEvidence } from './shell/right-panel-types';
 import "./repair-handoff.css";
 import "./source-freshness.css";
 import "./submission-materials.css";
@@ -49,7 +50,9 @@ let dir = "";
 let busy = false;
 type ToolRun = { id: string; canceled: boolean; settled: boolean; stopping: boolean; stopPromise: Promise<void> | null; stopFailed: boolean };
 let activeRun: ToolRun | null = null;
+type ProjectRunReceipt = Artifact & { preflightEvidence?: PreflightEvidence };
 let lastSuccessful: { text: string; type: string; projectId: string | null; artifact: Artifact } | null = null;
+let reportGeneration = 0;
 let copyEpoch = 0;
 let copying = false;
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -156,6 +159,7 @@ async function copyReport() {
 }
 
 function resetReport() {
+  reportGeneration++;
   lastSuccessful = null;
   reader?.close();
   rightPanel?.setArtifact(null);
@@ -210,12 +214,13 @@ function applyProject(project: Project | null) {
   rightPanel?.syncProject(project, null);
 }
 
-function showArtifact(artifact: Artifact) {
+function showArtifact(artifact: Artifact, preflightEvidence?: PreflightEvidence) {
   if (artifact.projectId !== (projects?.getActiveId() ?? null)) return;
   if (typeof artifact.markdown !== "string" || !artifact.markdown.trim()) throw new Error("执行未返回有效报告，请重试。");
   const type = artifact.kind === "check" ? "代码预检" : artifact.kind === "explain" ? "拒因反查" : "流程导航";
+  reportGeneration++;
   lastSuccessful = { text: artifact.markdown, type, projectId: artifact.projectId, artifact };
-  rightPanel?.setArtifact(artifact);
+  rightPanel?.setArtifact(artifact, preflightEvidence);
   materials?.refresh();
   resetCopy();
   $("#report-title").textContent = type;
@@ -254,6 +259,8 @@ async function run(cmd: "run_check" | "run_guide"): Promise<Artifact | null> {
   const type = cmd === "run_check" ? "代码预检" : "流程导航";
   const currentRun: ToolRun = { id: crypto.randomUUID(), canceled: false, settled: false, stopping: false, stopPromise: null, stopFailed: false };
   activeRun = currentRun;
+  const runReportGeneration = reportGeneration;
+  if (kind === 'check') rightPanel?.setArtifact(lastSuccessful?.artifact ?? null);
   resetCopy();
   setBusy(true);
   report.setAttribute("aria-busy", "true");
@@ -265,12 +272,16 @@ async function run(cmd: "run_check" | "run_guide"): Promise<Artifact | null> {
   if (!lastSuccessful) report.textContent = "等待执行结果…";
   let completed = false;
   try {
-    const artifact = await invoke<Artifact>("project_run", { projectId, kind, subject, runId: currentRun.id });
+    const receipt = await invoke<ProjectRunReceipt>("project_run", { projectId, kind, subject, runId: currentRun.id });
     currentRun.settled = true;
     if (currentRun.canceled) return null;
-    if (artifact?.runId !== currentRun.id || artifact.projectId !== projectId || artifact.kind !== kind
+    if (receipt?.runId !== currentRun.id || receipt.projectId !== projectId || receipt.kind !== kind
       || projectId !== projects.getActiveId()) throw new Error("返回成果与当前项目或运行不匹配，请从历史成果重新查看。");
-    showArtifact(artifact);
+    const { preflightEvidence, ...artifact } = receipt;
+    const currentEvidence = kind === 'check' && projectId !== null && artifact.provenance !== 'imported'
+      && artifact.id === currentRun.id && runReportGeneration === reportGeneration
+      && typeof artifact.contextRevision === 'number' && artifact.contextRevision === projects.getActive()?.contextRevision;
+    showArtifact(artifact, currentEvidence ? preflightEvidence : undefined);
     completed = true;
     setStatus(`${type}完成，报告已保存到本机。报告仅供参考，不构成合规担保。`, "ok");
     return artifact;

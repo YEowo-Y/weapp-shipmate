@@ -1,11 +1,12 @@
 import { apiMatches } from "./data.mjs";
+import { reportRelativePath } from "./scanner.mjs";
 import { checkRequiredPrivateInfos, checkBackendApiInFrontend, checkIpOrLocalhost } from "./crosscheck.mjs";
 
 const MAX_ITEM_LOCATIONS = 100;
 const identity = ({ kind, signal, file }) => JSON.stringify([
   kind === "api-reference" || kind === "api-import" ? "api" : kind,
   signal,
-  kind === "secret-key" ? file : null,
+  kind === "secret-key" && typeof file === "string" ? reportRelativePath(file) : null,
 ]);
 const compare = (a, b) => a === b ? 0 : a < b ? -1 : 1;
 const compareLocations = (a, b) => compare(a.file, b.file)
@@ -59,7 +60,7 @@ export function attachCheckEvidence(report, rules, collected) {
   const locations = [...uniqueLocations.values()].sort(compareLocations);
   const scan = report.meta.scan;
   let truncated = collected.truncated;
-  for (const item of report.items) {
+  const items = report.items.map(item => {
     const rule = ruleById.get(item.ruleId);
     const expected = expectedSignals(item, rule, scan);
     const matching = locations.filter(location => expected.has(identity(location)));
@@ -70,11 +71,11 @@ export function attachCheckEvidence(report, rules, collected) {
       || [...expected].some(key => !observed.has(key));
     const status = collected.truncated || dynamic ? "partial"
       : !matching.length ? "unavailable" : partial ? "partial" : "located";
-    item.evidence = { status, locations: matching.slice(0, MAX_ITEM_LOCATIONS) };
     truncated ||= capped;
-  }
-  report.meta.evidence = { schemaVersion: 1, truncated };
-  if (truncated)
-    report.notes.push("证据位置已截断（全局最多 20,000 个、每项最多 100 个）；规则扫描与退出阈值仍按原发现项计算，请结合扫描限制人工核对。");
-  return report;
+    return { ...item, evidence: { status, locations: matching.slice(0, MAX_ITEM_LOCATIONS) } };
+  });
+  const notes = truncated
+    ? [...report.notes, "证据位置已截断（全局最多 20,000 个、每项最多 100 个）；规则扫描与退出阈值仍按原发现项计算，请结合扫描限制人工核对。"]
+    : report.notes;
+  return { ...report, meta: { ...report.meta, evidence: { schemaVersion: 1, truncated } }, items, notes };
 }

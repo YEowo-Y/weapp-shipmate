@@ -736,9 +736,9 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 本机实施验收（2026-11-18，按范围 [#55](https://github.com/YEowo-Y/weapp-shipmate/pull/55)）：`tests/desktop-shell-v2.test.mjs` 新增新外壳结构、16 图标、令牌/`DESIGN.md`、响应式抽屉、菜单与右侧四标签断言先红后绿；补齐 16 个 Lucide 固定提交图标并同步 `icons.svg`（66 symbols）；基于 `@base-ui/react` 与 `--ds-*` 令牌落地 `desktop/src/components/ui/{tabs,tooltip,dropdown-menu}.tsx`、异步分包 `desktop/src/shell/right-panel-renderer.tsx` 与次级对话框懒加载代理 `desktop/src/shell/lazy-dialogs.ts`；将 `desktop/index.html` 与 `desktop/src/shell/{shell-layout.ts,shell.css}` 升级为左 `264px` / 中自适应（`704px` 阅读列） / 右 `404px` 三栏新外壳（`<= 1180px` 右栏模态抽屉、`<= 820px` 侧栏模态抽屉，新壳层零 `<wa-*>` 标签，全页 `<wa-*>` 开标签由 49 降至 34）并更新 `DESIGN.md` 第 16、25、31、40 行。零上下文子代理两轮冷读审查指出的 7 项发现（窄屏左右抽屉 `inert` 提前解除顺序、窄屏侧栏模态触发器返回焦点保留、`#desktop-more` 菜单焦点归还与显式 CSS `anchor-name`、次级弹窗分包释放启动包余量、首屏四标签骨架保留与已保存报告时间戳、`DropdownMenu` 令牌样式与真实方向键自动激活、死样式清理与 `Object.hasOwn`/`https:` 校验）全部修复并通过二轮 `Approve`。本机实跑 `npm run lint`、`npm --prefix desktop run typecheck`、`npm --prefix desktop run build`（`bundle-budget.json`：`startup.bytes = 719,645 <= 750,000`、`startup.gzipBytes = 235,803 <= 250,000`、`settings-renderer` 与 `right-panel-renderer` 均为 `startup: false`、`errors: []`）、全量 `npm test`（1768 通过、0 失败）、`npm run verify:quotes`（69/69）与 `npm run coverage`（precision 1.000 / recall 1.000）全部退出码 0；PR [#56](https://github.com/YEowo-Y/weapp-shipmate/pull/56) 十项 CI 全绿并合入 `main@23447a9`。
 
-### 功能 1 · 桌面预检发现项带证据（公测首版，范围待确认）
+### 功能 1 · 桌面预检发现项带证据（公测首版）
 
-**目标与关口。** 用户手动预检当前本机项目后，可以在右栏「依据」看到该条发现的相对文件与行号，以及报告记录的官方原文、链接和核验日期。按 §6 确认范围后实施。本节限定桌面首版，CLI 显式证据已交付，MCP 证据、稳定指纹、baseline 和 SARIF 后续分别确定契约。 [公测路线](25-vertical-agent-shell-plan.md#8-路线与工作量) [CLI 证据 #49](https://github.com/YEowo-Y/weapp-shipmate/pull/49)
+**目标与关口。** 首版范围已获维护者批准。用户手动预检当前本机项目后，可以在右栏「依据」看到该条发现的相对文件与行号，以及报告记录的官方原文、链接和核验日期。CLI 显式证据已交付，MCP 证据、稳定指纹、baseline 和 SARIF 后续分别确定契约。 [公测路线](25-vertical-agent-shell-plan.md#8-路线与工作量) [CLI 证据 #49](https://github.com/YEowo-Y/weapp-shipmate/pull/49) [桌面范围 #79](https://github.com/YEowo-Y/weapp-shipmate/pull/79)
 
 **范围基线。** 在 `main@0a74025` 检查 `fixtures/sample-app`。CLI JSON v1 证据模式的 5 条发现中，4 条为 `located`，1 条为 `partial`，例如 `pages/index/index.js:9`。移除显式证据字段后，同一报告内容与退出码一致。随包 Node 项目工具返回 5 条发现和现有规则来源字段，位置字段为零。当前右栏把规则阶段填入「位置线索」。 [项目工具](../src/project-artifact.mjs) [右栏取数](../desktop/src/shell/right-panel-renderer.tsx)
 
@@ -748,6 +748,12 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 4. **验收。** 执行 `node --test tests/project-domain.test.mjs tests/desktop-shell-v2.test.mjs tests/desktop-report-reader.test.mjs` 及相关新用例，覆盖有位置、部分定位、不可用、超限、旧报告和过期结果。运行 `cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked`，确认运行回执与保存成果隔离。Windows WebView2 在 1240 px 和 780 px 用真实本机夹具验证位置、来源、重新预检、项目切换和窄窗键盘回焦。四项仓库门禁、桌面类型检查、构建预算、独立冷审和 PR CI 通过。
 
 **允许变更的文件。** 现有项目工具及预检证据的内部投影、Tauri 项目运行回执、桌面预检接线和右栏「依据」的类型、组件及样式，以及相关测试、本文与 `progress.txt`。沿用现有扫描、规则、依赖、ACL、持久化格式与公开 CLI/MCP 契约。
+
+**本机实施验收。** 使用同一次扫描附带最多 16 KiB 的相对位置。两种响应上限边界均保留原报告并明确提示位置省略。右栏按发现项展示文件和行号、规则阶段、官方原文及仓库核验日期。部分定位逐项提示，导入引文和日期标明其来源。冷审后补齐长域名核对项、微信支付官方链接、导入来源和容量边界。
+
+Windows WebView2 157.0.4341.60 用两个隔离项目实测，在 1240 px 和 780 px 查看代码位置与原有规则依据。调整源码所在行再预检，位置随之更新。切换项目、重启、宽窄窗键盘操作和窄窗 Esc 回焦通过。读取 SQLite 成果和实际项目备份、用受控剪贴板复制报告时，内容保留原报告字段。证据见 `.omx/artifacts/f01-native/run-2026-11-19T16-19-11-782Z-final/results.json`。
+
+四项仓库门禁、桌面三套类型检查、锁定 Windows 调试构建、Rust fmt 和 Clippy、独立冷审均通过。Node 1,820 项通过，1 项 POSIX 文件名测试在 Windows 跳过。Rust 146 项通过，3 项既有测试忽略。启动 JavaScript 726,158 字节，gzip 237,484 字节，右栏仍按需加载。
 
 ### 功能 2 · 上线进度进右侧面板（已验收）
 
@@ -883,4 +889,4 @@ T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://
 
 **功能 7（公测前只读连接检测）** 已完成，本机已验收「已安装但未启动」和「已运行但未登录」。 [范围 #77](https://github.com/YEowo-Y/weapp-shipmate/pull/77) [已合并 #78](https://github.com/YEowo-Y/weapp-shipmate/pull/78)
 
-**功能 1（桌面预检发现项带证据）** 的公测首版范围见上文，待维护者确认。
+**功能 1（桌面预检发现项带证据）** 的公测首版范围已确认并合入，实施 PR 中。 [范围 #79](https://github.com/YEowo-Y/weapp-shipmate/pull/79)

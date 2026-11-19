@@ -2,7 +2,7 @@
 // 安全：默认 local-only；忽略密钥/证照/私有配置；只输出 API 名、域名 host、配置键、文件路径，
 //       绝不回显文件内容、Token、手机号、身份证号等（见 SECURITY.md）。
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, basename, extname, relative, resolve } from "node:path";
+import { join, basename, extname, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { mapText, removeMapped, createEvidenceCollector } from "./scanner-evidence.mjs";
 
@@ -502,13 +502,18 @@ function parseAppConfig(base, code, rel, facts) {
   }
 }
 
+// B5：旧报告统一净化相对路径，避免控制字符或反引号进入 Markdown、模型与 MCP 文本。
+export function reportRelativePath(file) {
+  // eslint-disable-next-line no-control-regex -- 本正则的净化目标就是控制字符本身
+  return file.replace(/\\/g, "/").replace(/[\u0000-\u001f\u007f`]/g, "?");
+}
+
 /**
  * 扫描一个小程序项目目录（R1/FX-05 后只负责编排：walk 边界 → 逐文件事实提取 → 配置解析 → 汇总）。
  * @param {string} dir 小程序项目目录
- * @param {{maxEntries?:number}} opts 仅供内部/测试注入更小的遍历预算；默认使用 MAX_WALK_ENTRIES
- * @returns {{ filesScanned:number, apis:string[], domains:string[], dynamicRequest:boolean, configKeys:string[] }}
+ * @param {{maxEntries?:number, evidence?:boolean, preserveEvidencePaths?:boolean}} opts
  */
-export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES, evidence = false } = {}) {
+export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES, evidence = false, preserveEvidencePaths = false } = {}) {
   const collector = evidence ? createEvidenceCollector() : null;
   const facts = {
     apis: new Set(),
@@ -532,10 +537,6 @@ export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES, evidence = fal
     maxEntries: Math.min(maxEntries, MAX_WALK_ENTRIES),
     truncated: false,
   };
-  // B5：相对路径统一净化——控制字符/反引号可借恶意文件名注入 markdown/提示词到报告与 MCP 文本。
-  // eslint-disable-next-line no-control-regex -- 本正则的净化目标就是控制字符本身
-  const relSafe = (f) => relative(dir, f).replace(/\\/g, "/").replace(/[\u0000-\u001f\u007f`]/g, "?");
-
   for (const { file, size } of walk(dir, 0, walkStats)) {
     if (size > MAX_FILE_BYTES) { skippedLargeFiles++; continue; } // B2：超大文件跳过并计数
     let text;
@@ -543,13 +544,14 @@ export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES, evidence = fal
     catch {
       walkStats.readErrors++;
       if (isConfigCarrier(basename(file)))
-        facts.configErrors.push({ file: relSafe(file), reason: "读取失败" });
+        facts.configErrors.push({ file: reportRelativePath(relative(dir, file)), reason: "读取失败" });
       continue;
     }
     filesScanned++;
-    scannedFiles.push(relative(dir, file).replace(/\\/g, "/"));
-    const rel = relSafe(file);
-    const record = collector?.forFile(rel, text);
+    const sourcePath = relative(dir, file);
+    scannedFiles.push(sourcePath.replace(/\\/g, "/"));
+    const rel = reportRelativePath(sourcePath);
+    const record = collector?.forFile(preserveEvidencePaths ? sourcePath.split(sep).join("/") : rel, text);
     const code = extractFacts(file, text, rel, facts, record);
     // The parser confirms each key; JSON source offsets are unavailable, so report file-only evidence.
     const configFacts = record ? { ...facts, configKeys: { add(key) {
