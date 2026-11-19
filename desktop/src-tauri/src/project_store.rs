@@ -168,6 +168,14 @@ pub struct Artifact {
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ProjectRunReceipt {
+    #[serde(flatten)]
+    artifact: Artifact,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    preflight_evidence: Option<PreflightEvidence>,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Snapshot {
     pub rules_version: Option<String>,
     pub projects: Vec<Project>,
@@ -1149,6 +1157,10 @@ pub(crate) fn validate_agent_project(
     c: &Connection,
     project_id: &str,
 ) -> crate::error::DesktopResult<()> {
+    selected_project(c, project_id).map(|_| ())
+}
+
+fn selected_project(c: &Connection, project_id: &str) -> crate::error::DesktopResult<Project> {
     let active: Option<String> = c
         .query_row(
             "SELECT value FROM settings WHERE key='active_project'",
@@ -1163,8 +1175,38 @@ pub(crate) fn validate_agent_project(
             "请先选择当前项目，再启用项目工具。",
         ));
     }
-    project(c, project_id)?;
-    Ok(())
+    project(c, project_id)
+}
+
+fn current_preflight_project(c: &Connection, run: &Run) -> bool {
+    run.kind == "check"
+        && run.project_id.as_deref().is_some_and(|id| {
+            selected_project(c, id)
+                .is_ok_and(|project| Some(project.context_revision) == run.context_revision)
+        })
+}
+
+fn prepare_run_input(
+    c: &Connection,
+    run: &mut Run,
+    query: &str,
+    user_directed: bool,
+) -> crate::error::DesktopResult<(serde_json::Value, bool)> {
+    let mut input: serde_json::Value = serde_json::from_str(&run.input_summary)
+        .map_err(|_| crate::error::DesktopError::validation("工具输入无效。"))?;
+    input["query"] = serde_json::json!(query);
+    run.input_summary = encode(&input)?;
+    c.execute(
+        "UPDATE runs SET data=? WHERE id=?",
+        params![encode(&run)?, run.id],
+    )
+    .map_err(db_error)?;
+
+    let include_preflight_evidence = user_directed && current_preflight_project(c, run);
+    if include_preflight_evidence {
+        input["includePreflightEvidence"] = serde_json::Value::Bool(true);
+    }
+    Ok((input, include_preflight_evidence))
 }
 
 pub(crate) struct AgentRun {
@@ -1263,9 +1305,9 @@ pub async fn project_run(
     run_id: String,
     subject: Option<String>,
     query: Option<String>,
-) -> crate::error::DesktopResult<Artifact> {
+) -> crate::error::DesktopResult<ProjectRunReceipt> {
     crate::runtime::authorize(&window)?;
-    run_internal(
+    run_internal_guarded(
         app,
         state.inner().clone(),
         project_id,
@@ -1274,6 +1316,8 @@ pub async fn project_run(
         subject,
         query,
         None,
+        None,
+        true,
     )
     .await
     .map_err(Into::into)
@@ -1291,9 +1335,10 @@ pub(crate) async fn run_internal(
     agent: Option<AgentRun>,
 ) -> Result<Artifact, crate::tool_runner::ToolFailure> {
     run_internal_guarded(
-        app, store, project_id, kind, run_id, subject, query, agent, None,
+        app, store, project_id, kind, run_id, subject, query, agent, None, false,
     )
     .await
+    .map(|receipt| receipt.artifact)
 }
 
 pub(crate) async fn run_maintenance(
@@ -1312,8 +1357,10 @@ pub(crate) async fn run_maintenance(
         None,
         None,
         Some(binding),
+        false,
     )
     .await
+    .map(|receipt| receipt.artifact)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1327,7 +1374,8 @@ async fn run_internal_guarded(
     query: Option<String>,
     agent: Option<AgentRun>,
     maintenance: Option<crate::project_maintenance::RunBinding>,
-) -> Result<Artifact, crate::tool_runner::ToolFailure> {
+    user_directed: bool,
+) -> Result<ProjectRunReceipt, crate::tool_runner::ToolFailure> {
     let runner = app
         .state::<crate::tool_runner::ToolRunner>()
         .inner()
@@ -1364,17 +1412,8 @@ async fn run_internal_guarded(
                 run.session_id = Some(session_id);
                 run.tool_call_id = Some(tool_call_id);
             }
-            let mut input: serde_json::Value = serde_json::from_str(&run.input_summary)
-                .map_err(|_| crate::error::DesktopError::validation("工具输入无效。"))?;
-            input["query"] = serde_json::json!(query);
-            run.input_summary = encode(&input)?;
-            store.access(&app, |c| {
-                c.execute(
-                    "UPDATE runs SET data=? WHERE id=?",
-                    params![encode(&run)?, run.id],
-                )
-                .map_err(db_error)?;
-                Ok(())
+            let (input, include_preflight_evidence) = store.access(&app, |c| {
+                prepare_run_input(c, &mut run, &query, user_directed)
             })?;
             if run.kind == "check" {
                 crate::tool_runner::directory(
@@ -1385,13 +1424,17 @@ async fn run_internal_guarded(
             }
             let mut command = crate::runtime::node_command(&app, "src/project-tool.mjs", false)?;
             command.arg(&run.kind).arg(encode(&input)?);
-            Ok::<_, crate::error::DesktopError>(command)
+            Ok::<_, crate::error::DesktopError>((command, include_preflight_evidence))
         })();
-        let command = match prepared {
-            Ok(command) => command,
+        let (command, include_preflight_evidence) = match prepared {
+            Ok(prepared) => prepared,
             Err(error) => {
                 return store
                     .finish(&app, run, Err(error.into()))
+                    .map(|artifact| ProjectRunReceipt {
+                        artifact,
+                        preflight_evidence: None,
+                    })
                     .map_err(Into::into)
             }
         };
@@ -1404,32 +1447,41 @@ async fn run_internal_guarded(
         let result = validate()
             .and_then(|()| reservation.run_reserved_outcome(command, run.kind == "check"))
             .and_then(|text| validate().map(|()| text));
+        let mut preflight_evidence = None;
         let outcome =
             match result {
-                Ok(text) => match parse_envelope(&text, &run.kind) {
-                    Ok((markdown, data)) => {
-                        if let Some(binding) = &maintenance {
-                            let saved = app
-                                .state::<crate::project_maintenance::ProjectMaintenance>()
-                                .commit_run(&app, binding, |c| {
-                                    finish_structured(c, run.clone(), markdown, data, &store.1)
-                                });
-                            if let Err(error) = &saved {
-                                let _ = store.finish(&app, run, Err(error.clone()));
+                Ok(text) => {
+                    match parse_project_envelope(&text, &run.kind, include_preflight_evidence) {
+                        Ok(ProjectEnvelope {
+                            markdown,
+                            data,
+                            preflight_evidence: evidence,
+                        }) => {
+                            if let Some(binding) = &maintenance {
+                                let saved = app
+                                    .state::<crate::project_maintenance::ProjectMaintenance>()
+                                    .commit_run(&app, binding, |c| {
+                                        finish_structured(c, run.clone(), markdown, data, &store.1)
+                                    });
+                                if let Err(error) = &saved {
+                                    let _ = store.finish(&app, run, Err(error.clone()));
+                                }
+                                saved
+                            } else {
+                                store
+                                    .access(&app, |c| {
+                                        preflight_evidence =
+                                            evidence.filter(|_| current_preflight_project(c, &run));
+                                        finish_structured(c, run, markdown, data, &store.1)
+                                    })
+                                    .map_err(Into::into)
                             }
-                            saved
-                        } else {
-                            store
-                                .access(&app, |c| {
-                                    finish_structured(c, run, markdown, data, &store.1)
-                                })
-                                .map_err(Into::into)
                         }
+                        Err(error) => store
+                            .finish(&app, run, Err(error.into()))
+                            .map_err(Into::into),
                     }
-                    Err(error) => store
-                        .finish(&app, run, Err(error.into()))
-                        .map_err(Into::into),
-                },
+                }
                 Err(error) => store
                     .finish(&app, run, Err(error.clone()))
                     .map_err(|message| match error {
@@ -1441,7 +1493,10 @@ async fn run_internal_guarded(
             app.state::<crate::project_maintenance::ProjectMaintenance>()
                 .completed(&app, report, maintenance.as_ref());
         }
-        outcome
+        outcome.map(|artifact| ProjectRunReceipt {
+            artifact,
+            preflight_evidence,
+        })
     })
     .await
     .map_err(|_| {
@@ -1488,6 +1543,95 @@ mod tests {
             &Mutex::new(BTreeMap::new()),
         )
         .unwrap()
+    }
+    #[test]
+    fn preflight_evidence_is_only_returned_with_the_selected_manual_receipt() {
+        let f = Fixture::new();
+        let mut c = open_database(&f.path).unwrap();
+        save(&mut c, f.input("one", None)).unwrap();
+        save(&mut c, f.input("two", None)).unwrap();
+        let template = maintenance_report(&mut c, "one", "plain", "rules", 'a', &["sample"]);
+        let (mut run, _, _) = begin(
+            &mut c,
+            Some("one".into()),
+            "check".into(),
+            "manual".into(),
+            None,
+            ("1".into(), "rules".into()),
+        )
+        .unwrap();
+
+        let (inactive_input, requested) = prepare_run_input(&c, &mut run, "", true).unwrap();
+        assert!(!requested && inactive_input.get("includePreflightEvidence").is_none());
+        select(&c, Some("one".into())).unwrap();
+        let (background_input, requested) = prepare_run_input(&c, &mut run, "", false).unwrap();
+        assert!(!requested && background_input.get("includePreflightEvidence").is_none());
+        let (manual_input, requested) = prepare_run_input(&c, &mut run, "", true).unwrap();
+        assert!(requested);
+        assert_eq!(manual_input["includePreflightEvidence"], true);
+        assert!(!run.input_summary.contains("includePreflightEvidence"));
+
+        let evidence = serde_json::json!({
+            "items": [{"ruleId":"sample","status":"located","locations":[{"file":"pages/evidence-only.js","line":13}]}],
+            "truncated": false
+        });
+        let envelope = serde_json::json!({
+            "markdown": template.markdown,
+            "data": template.data,
+            "preflightEvidence": evidence
+        });
+        let text = envelope.to_string();
+        let (plain_markdown, plain_data) = parse_envelope(&text, "check").unwrap();
+        assert_eq!(plain_markdown, template.markdown);
+        assert_eq!(Some(plain_data), template.data);
+        assert!(parse_project_envelope(&text, "check", false)
+            .unwrap()
+            .preflight_evidence
+            .is_none());
+        let mut malformed = envelope.clone();
+        malformed["preflightEvidence"]["items"][0]["locations"][0]["file"] = "/absolute.js".into();
+        let malformed = parse_project_envelope(&malformed.to_string(), "check", true).unwrap();
+        assert!(malformed.preflight_evidence.is_none());
+        assert_eq!(Some(malformed.data), template.data);
+
+        select(&c, Some("two".into())).unwrap();
+        assert!(!current_preflight_project(&c, &run));
+        select(&c, Some("one".into())).unwrap();
+        let mut stale_run = run.clone();
+        stale_run.context_revision = run.context_revision.map(|revision| revision + 1);
+        assert!(!current_preflight_project(&c, &stale_run));
+        assert!(current_preflight_project(&c, &run));
+        let ProjectEnvelope {
+            markdown,
+            data,
+            preflight_evidence,
+        } = parse_project_envelope(&text, "check", true).unwrap();
+        let artifact = finish_structured(&mut c, run, markdown, data, &Mutex::default()).unwrap();
+        let receipt = serde_json::to_value(ProjectRunReceipt {
+            artifact,
+            preflight_evidence,
+        })
+        .unwrap();
+        assert_eq!(receipt["id"], "manual");
+        assert_eq!(receipt["runId"], "manual");
+        assert_eq!(receipt["projectId"], "one");
+        assert_eq!(receipt["preflightEvidence"], evidence);
+        for table in ["runs", "artifacts"] {
+            let stored = c
+                .query_row(
+                    &format!("SELECT data FROM {table} WHERE id='manual'"),
+                    [],
+                    |r| r.get::<_, String>(0),
+                )
+                .unwrap();
+            assert!(!stored.contains("includePreflightEvidence"));
+            assert!(!stored.contains("preflightEvidence"));
+            assert!(!stored.contains("evidence-only.js"));
+        }
+        let exported = export_snapshot(&c, "one").unwrap();
+        assert!(!exported.contains("includePreflightEvidence"));
+        assert!(!exported.contains("preflightEvidence"));
+        assert!(!exported.contains("evidence-only.js"));
     }
     #[test]
     fn maintenance_settings_default_off_persist_and_isolate_cas() {
