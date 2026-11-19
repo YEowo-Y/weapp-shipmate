@@ -21,14 +21,17 @@ export function computeCoverage() {
   const lv = def.map((r) => r.last_verified).filter(Boolean).sort();
   const { labels, subjectDefault } = loadLabels();
   const { global } = computeAccuracy(labels, { subjectDefault });
-  // 标注锚定：该规则在 labels.json 至少有一条 hit/no_hit。precision/recall 只对已标注
-  // (project,ruleId) 对计分——零锚点规则的误报/漏报对指标完全不可见，缺口必须显性化。
-  const anchoredIds = new Set(labels.map((l) => l.ruleId));
+  // 精度和召回按标注的项目、主体和规则组合计算。
+  const activeIds = new Set([...def.map((rule) => rule.id), ...CROSSCHECK_RULE_IDS]);
+  const anchoredIds = new Set(labels.filter((label) =>
+    activeIds.has(label.ruleId) && (label.expect === "hit" || label.expect === "no_hit")
+  ).map((label) => label.ruleId));
   return {
     rules: def.length,
     drafts: all.length - def.length,
     crosscheck: CROSSCHECK_RULE_IDS.length,
     anchored: anchoredIds.size,
+    labelCount: labels.length,
     verbatim,
     precision: global.precision,
     recall: global.recall,
@@ -42,10 +45,10 @@ function main() {
   const c = computeCoverage();
   console.log("覆盖率红线（docs/08 §15.4：覆盖与 precision 同速增长）\n");
   console.log("三数：");
-  console.log(`  覆盖（默认规则）：${c.rules} 条  +  交叉核验合成 ${c.crosscheck} = ${c.rules + c.crosscheck} 条可命中   | draft ${c.drafts}`);
-  console.log(`  逐字核验（official_url + source_quote + last_verified）：${c.verbatim} / ${c.rules}`);
-  console.log(`  precision：${f3(c.precision)}   （recall ${f3(c.recall)} · TP${c.matrix.tp}/FP${c.matrix.fp}/FN${c.matrix.fn}）`);
-  console.log(`  标注锚定：${c.anchored} / ${c.rules + c.crosscheck} 条可命中规则在 labels.json 有 hit/no_hit 锚点（零锚点规则对 precision 不可见）`);
+  console.log(`  规则库：${c.rules} 条默认数据规则 + ${c.crosscheck} 项交叉核验 | draft ${c.drafts}`);
+  console.log(`  引文凭据（official_url + source_quote + last_verified）：${c.verbatim} / ${c.rules}`);
+  console.log(`  标注锚定：${c.anchored} / ${c.rules + c.crosscheck} 个默认或交叉核验规则 ID 在 labels.json 有 hit/no_hit 标注`);
+  console.log(`  precision：${f3(c.precision)}（recall ${f3(c.recall)} · TP${c.matrix.tp}/FP${c.matrix.fp}/FN${c.matrix.fn} · 基于 ${c.labelCount} 条标注）`);
   console.log(`\n对照 §15.1 官方要求条目 ${BACKLOG_TOTAL}（去重）：默认规则覆盖其一部分，缺口见 docs/08 §15.2 backlog（T0/T1/T2）。`);
   console.log(`新鲜度：last_verified 最早 ${c.freshness.earliest} / 最近 ${c.freshness.latest}（以官方实时文档为准 · rot 监控保鲜）`);
   console.log("\n按阶段分布：");
@@ -59,7 +62,7 @@ function main() {
   if (!verbatimOk) console.error(`\n❌ 红线告警：${c.rules - c.verbatim} 条默认规则缺逐字核验字段（覆盖跑赢了逐字核验）。`);
   if (!precisionOk) console.error(`❌ 红线告警：precision ${f3(c.precision)} < ${PRECISION_MIN}（覆盖跑赢了准确性）。`);
   if (!fnOk) console.error(`❌ 红线告警：FN=${c.matrix.fn}（已标注锚点出现漏报——召回回归不允许绿灯放行）。`);
-  if (verbatimOk && precisionOk && fnOk) console.log("\n✅ 红线：每条默认规则均逐字核验，precision ≥ 0.95 且零漏报——覆盖与准确性同速。");
+  if (verbatimOk && precisionOk && fnOk) console.log("\n✅ 红线：每条默认数据规则均具备引文字段，标注语料 precision ≥ 0.95 且零漏报。");
   process.exit(verbatimOk && precisionOk && fnOk ? 0 : 1);
 }
 
