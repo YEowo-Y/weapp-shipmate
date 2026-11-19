@@ -687,11 +687,12 @@
     box-shadow var(--ds-dur-state) var(--ds-ease-standard);
 }
 
-.shell-btn:hover:not(:disabled) {
+.shell-btn:hover:not(:disabled, [aria-disabled="true"]) {
   box-shadow: var(--ds-shadow-card-hover);
 }
 
 .shell-btn:disabled,
+.shell-btn[data-devtools-action][aria-disabled="true"],
 .shell-link-btn:disabled,
 .shell-wf-select:disabled,
 .shell-wf-textarea:disabled {
@@ -705,7 +706,7 @@
   box-shadow: none;
 }
 
-.shell-btn--primary:hover:not(:disabled) {
+.shell-btn--primary:hover:not(:disabled, [aria-disabled="true"]) {
   background: var(--ds-accent-hover);
   box-shadow: none;
 }
@@ -1403,7 +1404,7 @@ details[open] > summary > .shell-wf-chevron {
   font-weight: var(--ds-weight-medium);
 }
 
-.shell-conn-card__copy > small {
+.shell-conn-card__copy small {
   display: block;
   margin-top: 2px;
   color: var(--ds-ink-3);
@@ -1566,6 +1567,7 @@ details[open] > summary > .shell-wf-chevron {
   }
 
   .shell-btn:disabled,
+  .shell-btn[data-devtools-action][aria-disabled="true"],
   .shell-wf-select:disabled,
   .shell-wf-textarea:disabled {
     color: GrayText;
