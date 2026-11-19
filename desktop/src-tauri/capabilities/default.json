@@ -8,6 +8,7 @@
     "core:event:default",
     "core:app:allow-version",
     "dialog:allow-open",
+    "allow-devtools-status",
     "allow-project-snapshot",
     "allow-project-save",
     "allow-project-select",
