@@ -2,8 +2,9 @@
 // 这些场景无法用仓库内静态夹具表达（符号链接不宜入 git、5MB 文件不宜提交），故用临时目录现场构造。
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scanProject, MAX_FILE_BYTES } from "../src/scanner.mjs";
@@ -117,25 +118,29 @@ test("B3 边界: 顶层目录不存在仍显性抛错——e2e 的 exit-1 契约
 test("B3: 拒权子目录跳过但显性计数 + 报告注记，不再全静默", () => {
   const dir = mkdtempSync(join(tmpdir(), "ws-boundary-"));
   const denied = join(dir, "denied");
-  const who = process.env.USERNAME || process.env.USER;
+  const readdirSync = fs.readdirSync;
+  let deniedReads = 0;
   try {
     mkdirSync(denied);
     writeFileSync(join(denied, "hidden.js"), "wx.chooseAddress()");
     writeFileSync(join(dir, "a.js"), "wx.getLocation()");
-    // Windows：icacls 拒绝当前用户列目录（无需管理员）。失败（非 Windows / 权限模型不同）则跳过用例。
-    const deny = spawnSync("icacls", [denied, "/deny", `${who}:(RD)`], { encoding: "utf-8" });
-    if (deny.status !== 0) return;
-    try {
-      const r = scanProject(dir);
-      assert.ok(r.apis.includes("wx.getLocation"), "可读部分照常扫描");
-      assert.ok(!r.apis.includes("wx.chooseAddress"), "拒权目录内容不可见");
-      assert.equal(r.skippedDirs, 1, "跳过的子目录必须计数");
-      const rc = runCheck(dir, {});
-      assert.ok(rc.notes.some((n) => n.includes("子目录无法读取")), "报告须有未覆盖面注记");
-    } finally {
-      spawnSync("icacls", [denied, "/remove:d", who], { encoding: "utf-8" });
-    }
+    // Inject the filesystem error for one directory so the assertion also runs under CI service accounts.
+    fs.readdirSync = (path, options) => {
+      if (path !== denied) return readdirSync(path, options);
+      deniedReads++;
+      throw Object.assign(new Error("Fixture directory is unreadable"), { code: "EACCES" });
+    };
+    syncBuiltinESMExports();
+    const r = scanProject(dir);
+    assert.ok(r.apis.includes("wx.getLocation"), "可读部分照常扫描");
+    assert.ok(!r.apis.includes("wx.chooseAddress"), "拒权目录内容不可见");
+    assert.equal(r.skippedDirs, 1, "跳过的子目录必须计数");
+    const rc = runCheck(dir, {});
+    assert.ok(rc.notes.some((n) => n.includes("子目录无法读取")), "报告须有未覆盖面注记");
+    assert.equal(deniedReads, 2, "扫描和报告应各遇到一次目录读取错误");
   } finally {
+    fs.readdirSync = readdirSync;
+    syncBuiltinESMExports();
     rmSync(dir, { recursive: true, force: true });
   }
 });

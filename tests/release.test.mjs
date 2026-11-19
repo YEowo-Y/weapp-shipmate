@@ -391,6 +391,7 @@ test("release-rehearsal 提供仅手动触发的只读 Windows 安装器与 SHA2
   const prepareRuntime = indexOfRun("npm --prefix desktop run prepare:runtime");
   const runtimeTest = indexOfRun("node --test tests/desktop-runtime-package.test.mjs");
   const desktopBuild = indexOfRun("npm --prefix desktop run build");
+  const nodeTest = indexOfRun("npm test");
   const cargoTest = indexOfRun("cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked");
   const npmPack = indexOfRun("npm pack");
   const mcpbPack = indexOfRun("npm run build:mcpb");
@@ -404,7 +405,8 @@ test("release-rehearsal 提供仅手动触发的只读 Windows 安装器与 SHA2
     desktopInstall < prepareRuntime &&
     prepareRuntime < runtimeTest &&
     runtimeTest < desktopBuild &&
-    desktopBuild < cargoTest &&
+    desktopBuild < nodeTest &&
+    nodeTest < cargoTest &&
     rustup < cargoTest,
   );
   for (const pack of [npmPack, mcpbPack, tauriBuild]) {
