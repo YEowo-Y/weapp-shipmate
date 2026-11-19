@@ -28,7 +28,20 @@ rusqlite = { version = "=0.40.2", default-features = false, features = ["bundled
 tauri-plugin-notification = "=2.4.0"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security_Cryptography"] }
+windows-sys = { version = "=0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_NetworkManagement_IpHelper",
+  "Win32_Networking_WinSock",
+  "Win32_Security_Cryptography",
+  "Win32_Security_Cryptography_Catalog",
+  "Win32_Security_Cryptography_Sip",
+  "Win32_Security_WinTrust",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Registry",
+  "Win32_System_Threading",
+  "Win32_System_WindowsProgramming",
+] }
 keyring-core = "=1.0.1"
 # Includes upstream cross-process Credential Manager serialization (not in registry 1.1.0).
 windows-native-keyring-store = { git = "https://github.com/open-source-cooperative/windows-native-keyring-store", rev = "493ecaa5442c3cbd445253ad78b58f54382a9049", default-features = false }
