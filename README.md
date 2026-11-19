@@ -6,7 +6,7 @@
 
 ## 先从桌面候选开始
 
-当前源码版本是 `0.2.0-rc.4`。Windows NSIS 安装包处于候选阶段，公开下载和可信签名待交付。本机安装、运行与卸载的验收记录按所测候选版本保存。[首跑与试用说明](docs/14-first-run-and-trial.md)
+当前源码为发布候选。Windows NSIS 安装包处于候选阶段，公开下载和可信签名待交付。本机安装、运行与卸载的验收记录按所测候选版本保存。 [源码版本](package.json) [首跑与试用说明](docs/14-first-run-and-trial.md)
 
 公开版 `v0.1.0` 提供 CLI `.tgz` 和 MCPB 扩展。npm registry 暂无 `weapp-shipmate` 包。取得 Windows 候选后，先核对版本和 SHA256，再按首跑说明安装并记录安装结果、系统告警和 WebView2 网络要求。[GitHub Release](https://github.com/YEowo-Y/weapp-shipmate/releases/tag/v0.1.0)
 
@@ -205,7 +205,7 @@ MCPB 是供兼容宿主安装的扩展。以 Claude Desktop 为例，宿主提�
 
 weapp-shipmate helps WeChat Mini Program developers inspect local projects, understand review feedback, and decide what to prepare next. It provides a desktop interface plus CLI and MCP tools. Deterministic checks run locally; optional model connections require explicit choices about project reading and context sharing.
 
-The source version is `0.2.0-rc.4`. Local install, native smoke and uninstall records identify the Windows NSIS candidate tested. The public `v0.1.0` release contains a CLI tarball and an MCPB extension for compatible hosts. The Windows installer awaits public distribution and trusted signing. The narrowly scoped `app.json` repair candidate passed this batch's native acceptance and uses non-atomic locked writes with local plaintext backups. Real-account model quality and user trials are pending. [GitHub Release](https://github.com/YEowo-Y/weapp-shipmate/releases/tag/v0.1.0)
+The source tracks a release candidate. Local install, native smoke and uninstall records identify the Windows NSIS candidate tested. The public `v0.1.0` release contains a CLI tarball and an MCPB extension for compatible hosts. The Windows installer awaits public distribution and trusted signing. The narrowly scoped `app.json` repair candidate passed this batch's native acceptance and uses non-atomic locked writes with local plaintext backups. Real-account model quality and user trials are pending. [Source version](package.json) [GitHub Release](https://github.com/YEowo-Y/weapp-shipmate/releases/tag/v0.1.0)
 
 ## License
 
