@@ -122,6 +122,29 @@ test("空白 guide 不再把内容相关规则当成确定阻断（修假阳性�
   assert.ok((r.selfCheck || []).length >= 6, "内容相关规则应完整保留在 selfCheck");
 });
 
+test("拟人化互动资质仅列入个体工商户和企业的业务自查", () => {
+  const ruleId = "category.anthropomorphic-interaction";
+  const eligibleSubjects = ["individual_business", "enterprise"];
+  for (const subject_type of [...eligibleSubjects, "personal", undefined]) {
+    for (const business_type of ["用 AI 提供持续的情感陪伴", "普通 AI 问答", undefined]) {
+      const { items, selfCheck } = runGuide({ subject_type, business_type });
+      assert.ok(!items.some(item => item.ruleId === ruleId));
+      const checks = selfCheck.filter(item => item.ruleId === ruleId);
+      assert.equal(checks.length, eligibleSubjects.includes(subject_type) ? 1 : 0,
+        `${subject_type} / ${business_type}`);
+    }
+  }
+  const check = runGuide({ subject_type: "enterprise" }).selfCheck.find(item => item.ruleId === ruleId);
+  assert.equal(check.conditional, true);
+  assert.equal(check.severity, "warning");
+  assert.equal(check.manual_required, true);
+  assert.deepEqual(check.action_categories, ["manual_check"]);
+  assert.equal(check.official_url, "https://developers.weixin.qq.com/miniprogram/product/material/");
+  assert.equal(check.requires.length, 2);
+  assert.match(check.requires[0], /小程序主体.*算法备案.*生成合成类/);
+  assert.match(check.requires[1], /公示.*算法机制机理.*算法应用场景或算法目的意图.*情感照护、陪伴或支持/);
+});
+
 test("draft 门禁：默认集不含 draft 规则，--include-drafts 为其超集", () => {
   // 不依赖某条具体 draft 规则存在，直接验证门禁不变量（当前已无 draft 规则，机制仍须成立）。
   const def = loadData({ includeDrafts: false });
