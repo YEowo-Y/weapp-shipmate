@@ -56,6 +56,16 @@ export type ReleasePanelState =
       workflowModel?: WorkflowResult | null;
     };
 
+type FindingLocations = {
+  status: 'located' | 'partial' | 'unavailable';
+  locations: { file: string; line: number | null }[];
+};
+
+export type PreflightEvidence = {
+  items: (FindingLocations & { ruleId: string })[];
+  truncated: boolean;
+};
+
 export type EvidenceRuleItem = {
   ruleId: string;
   title: string;
@@ -65,14 +75,22 @@ export type EvidenceRuleItem = {
   officialUrl?: string | null;
   lastVerified?: string | null;
   requires: string[];
-  location?: string | null;
+  stage?: string | null;
+  codeLocations?: FindingLocations;
 };
 
 export type EvidencePanelState =
   | { status: 'loading' }
   | { status: 'error'; message: string; onRetry?: () => void }
   | { status: 'empty'; hasArtifact?: boolean }
-  | { status: 'ready'; items: EvidenceRuleItem[]; reportTitle?: string };
+  | {
+      status: 'ready';
+      items: EvidenceRuleItem[];
+      reportTitle?: string;
+      preflightContext?: 'current' | 'history' | 'imported';
+      locationsTruncated?: boolean;
+      sourceImported?: boolean;
+    };
 
 export type ChangeOperationItem = {
   operationId: string;
