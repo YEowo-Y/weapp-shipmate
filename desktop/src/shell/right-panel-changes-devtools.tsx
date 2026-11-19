@@ -1,6 +1,6 @@
 import { LucideSvg } from './lucide-svg';
 import { InfoHint, PanelEmpty, PanelError, PanelSkeleton } from './right-panel-states';
-import type { ChangesPanelState, DevtoolsPanelState, RightPanelCallbacks, RightPanelSnapshot } from './right-panel-types';
+import type { ChangesPanelState, DevtoolsConnectionStatus, DevtoolsPanelState, RightPanelCallbacks, RightPanelSnapshot } from './right-panel-types';
 
 export function ChangesTabBody({
   project,
@@ -76,6 +76,56 @@ export function ChangesTabBody({
   );
 }
 
+const DEVTOOLS_GUIDANCE: Record<
+  DevtoolsConnectionStatus | 'empty' | 'browser' | 'loading' | 'error',
+  { title: string; detail: string }
+> = {
+  empty: {
+    title: '尚未检测',
+    detail: '按需检查本机安装、运行、服务端口与登录状态。',
+  },
+  browser: {
+    title: '请在 Windows 桌面应用中检测',
+    detail: '也可在微信开发者工具内手动核对服务端口和登录状态。',
+  },
+  loading: {
+    title: '正在检查微信开发者工具状态',
+    detail: '',
+  },
+  error: {
+    title: '开发者工具状态读取失败',
+    detail: '请重新检测，或在微信开发者工具内核对服务端口和登录状态。',
+  },
+  not_detected: {
+    title: '未检测到安装',
+    detail: '已安装时可以手动选择安装目录，或查看官方下载。',
+  },
+  not_running: {
+    title: '请先打开工具',
+    detail: '打开微信开发者工具后重新检测。',
+  },
+  port_unavailable: {
+    title: '请检查服务端口',
+    detail: '在微信开发者工具的「设置 → 安全设置」中核对服务端口，然后重新检测。',
+  },
+  signed_out: {
+    title: '请在工具内登录',
+    detail: '在微信开发者工具内完成登录后重新检测。',
+  },
+  ready: {
+    title: '已就绪',
+    detail: '服务端口可用，微信开发者工具已登录。',
+  },
+  manual_check: {
+    title: '请手动核对',
+    detail: '在微信开发者工具内核对服务端口和登录状态，保留现有访问令牌设置。',
+  },
+  unsupported: {
+    title: '请手动核对',
+    detail: '在微信开发者工具内核对服务端口和登录状态。本机检测适用于 Windows 桌面应用。',
+  },
+};
+
 export function DevtoolsTabBody({
   state,
   callbacks,
@@ -83,10 +133,12 @@ export function DevtoolsTabBody({
   state: DevtoolsPanelState;
   callbacks: RightPanelCallbacks;
 }) {
-  if (state.status === 'loading') return <PanelSkeleton label="正在检查微信开发者工具状态" />;
-  if (state.status === 'error') {
-    return <PanelError title="开发者工具状态读取失败" message={state.message} retryId="devtools" onRetry={state.onRetry} />;
-  }
+  const checking = state.status === 'loading';
+  const current = state.status === 'loading' ? state.previous : state;
+  const result = current?.status === 'result' ? current : null;
+  const initialStatus = callbacks.onCheckDevtools ? 'empty' : 'browser';
+  const fallbackStatus = current?.status === 'error' ? 'error' : initialStatus;
+  const guidance = DEVTOOLS_GUIDANCE[checking ? 'loading' : (result?.connection ?? fallbackStatus)];
 
   return (
     <div className="shell-pane-content">
@@ -94,34 +146,77 @@ export function DevtoolsTabBody({
         <span className="shell-dot" aria-hidden="true" />
         <div className="shell-conn-card__copy">
           <strong>微信开发者工具</strong>
-          <small>{state.note || '尚未接入本机连接检测 · 当前仅执行静态文件预检'}</small>
+          <div id="panel-devtools-status" role="status" aria-atomic="true">
+            <small>
+              {guidance.title}
+              {!checking && result?.version ? ` · 版本 ${result.version}` : null}
+            </small>
+            {guidance.detail ? <small>{guidance.detail}</small> : null}
+          </div>
         </div>
       </div>
+
+      {callbacks.onCheckDevtools ? (
+        <div className="shell-pane-actions" aria-busy={checking || undefined}>
+          <button
+            type="button"
+            className="shell-btn shell-btn--primary"
+            data-devtools-action="check"
+            aria-disabled={checking || undefined}
+            onClick={() => callbacks.onCheckDevtools?.(false)}
+          >
+            <LucideSvg name={checking ? 'loader-circle' : 'refresh-cw'} size="sm" className={checking ? 'shell-ic--spin' : undefined} />
+            <span>{checking ? '正在检测…' : current?.status === 'empty' ? '检测连接' : '重新检测'}</span>
+          </button>
+          {result?.connection === 'not_detected' || result?.connection === 'manual_check' ? (
+            <button
+              type="button"
+              className="shell-btn"
+              data-devtools-action="choose-install"
+              aria-disabled={checking || undefined}
+              onClick={() => callbacks.onCheckDevtools?.(true)}
+            >
+              <LucideSvg name="folder-open" size="sm" />
+              <span>选择安装目录</span>
+            </button>
+          ) : null}
+          {result?.connection === 'not_detected' ? (
+            <button
+              type="button"
+              className="shell-btn shell-btn--plain"
+              data-devtools-action="download"
+              onClick={() => callbacks.onOpenSource('https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html')}
+            >
+              查看官方下载
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <section className="shell-sec" aria-labelledby="panel-devtools-scope">
         <div className="shell-sec-h">
           <span id="panel-devtools-scope">连接边界</span>
-          <span className="shell-spacer" />
-          <InfoHint label="安全边界说明" content="连接检测只检查安装位置、本机服务端口与登录状态，不读取登录凭据或上传密钥，也不会替你提审或发布。" />
+          <InfoHint label="安全边界说明" content="连接检测由你发起并在本机完成。登录凭据由微信开发者工具自行管理。" />
         </div>
         <ul className="shell-todo-list" role="list">
           <li>
             <LucideSvg name="shield" size="sm" />
-            <span>不读取微信开发者工具登录凭据，也不保存任何会话令牌</span>
-          </li>
-          <li>
-            <LucideSvg name="eye" size="sm" />
-            <span>当前可直接使用本机静态代码预检、上线清单与拒因反查</span>
+            <span>登录与服务端口设置在微信开发者工具内完成</span>
           </li>
           <li>
             <LucideSvg name="upload" size="sm" />
-            <span>提审与发布上线始终由你在微信公众平台后台自行操作</span>
+            <span>在微信公众平台后台自行提审与发布</span>
           </li>
         </ul>
       </section>
 
       <div className="shell-pane-actions">
-        <button type="button" className="shell-btn shell-btn--primary" data-empty-action="open-tools" onClick={callbacks.onOpenTools}>
+        <button
+          type="button"
+          className={callbacks.onCheckDevtools ? 'shell-btn' : 'shell-btn shell-btn--primary'}
+          data-empty-action="open-tools"
+          onClick={callbacks.onOpenTools}
+        >
           <LucideSvg name="terminal" size="sm" />
           <span>打开本机预检控制台</span>
         </button>
