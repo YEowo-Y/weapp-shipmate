@@ -82,13 +82,15 @@ precision：1.000 （recall 1.000 · TP55/FP0/FN0）
 
 ### 3.2 P1
 
-#### P1-1 发布链路：`0.2.0-rc.4` 从未打 tag，公开版本停在 7 月
+#### P1-1 发布链路与候选分发
 
 - **位置**：`package.json`、`desktop/package.json`、`desktop/src-tauri/Cargo.toml`、`desktop/src-tauri/tauri.conf.json`（四处均为 `0.2.0-rc.4`）；`.github/workflows/release.yml:8-9`（仅 `push tags: ["v*"]` 触发）
-- **证据**：`git tag -l` 最远到 `v0.2.0-rc.3`；`gh release list` 显示 rc.1/rc.2/rc.3 均为 **Draft**，唯一 `Latest` 是 2026-07-02 的 `v0.1.0`。
+- **初评证据**：`git tag -l` 当时最远到 `v0.2.0-rc.3`。rc.1 至 rc.3 的 Release 均为草稿，公开版为 2026-07-02 的 `v0.1.0`。
 - **影响**：代码领先公开发布物四个候选版本。任何「已发布」表述都不成立。
 - **修复建议**：由维护者裁决是否发 rc.4 tag（**§3 关口：打 tag / 发布 Release 须明确批准**）。裁决前，文档与 CHANGELOG 统一用「候选版本」措辞——`CHANGELOG.md` 开头已经这么写了，需确保别处一致。
 - **复验**：`git tag -l && gh release list` 与四处版本号对账。
+
+2026-11-19，`main@b5093c5` 的 npm 包和 Windows NSIS 手动演练通过。维护者批准后推送了固定到该提交的 `v0.2.0-rc.4` 标签。打标工作流两次在 B3 拒权目录测试失败。该夹具原先把 `icacls` 的成功退出当作测试进程无法读取目录的证据。现在定向模拟 `readdirSync` 返回 EACCES，核对已读文件、跳过计数和报告提示，并将同一套 Node.js 测试加入手动 Windows 演练。rc.4 留作失败候选记录。 [演练](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/44579242924) [打标构建](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/44581911230)
 
 #### P1-2 `precision 1.000` 的口径必须带分母
 
