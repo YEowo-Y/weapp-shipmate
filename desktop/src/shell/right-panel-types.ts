@@ -87,10 +87,26 @@ export type ChangesPanelState =
   | { status: 'empty' }
   | { status: 'ready'; operations: ChangeOperationItem[] };
 
+export const DEVTOOLS_CONNECTION_STATUSES = [
+  'not_detected',
+  'not_running',
+  'port_unavailable',
+  'signed_out',
+  'ready',
+  'manual_check',
+  'unsupported',
+] as const;
+
+export type DevtoolsConnectionStatus = (typeof DEVTOOLS_CONNECTION_STATUSES)[number];
+
+type DevtoolsPanelStableState =
+  | { status: 'empty' }
+  | { status: 'result'; connection: DevtoolsConnectionStatus; version: string | null }
+  | { status: 'error' };
+
 export type DevtoolsPanelState =
-  | { status: 'loading' }
-  | { status: 'error'; message: string; onRetry?: () => void }
-  | { status: 'empty'; note?: string };
+  | DevtoolsPanelStableState
+  | { status: 'loading'; previous?: DevtoolsPanelStableState };
 
 export type RightPanelSnapshot = {
   activeTab: RightPanelTabId;
@@ -124,6 +140,7 @@ export type RightPanelCallbacks = {
   onOpenRepairHistory(): void;
   onOpenSource(url: string): void;
   onOpenTools(): void;
+  onCheckDevtools?(selectInstall: boolean): void;
   onOpenMaterials?(): void;
   onCloseDrawer(): void;
   onSaveSubject?(projectId: string, subject: string): Promise<boolean>;
