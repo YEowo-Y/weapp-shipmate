@@ -736,6 +736,19 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 本机实施验收（2026-11-18，按范围 [#55](https://github.com/YEowo-Y/weapp-shipmate/pull/55)）：`tests/desktop-shell-v2.test.mjs` 新增新外壳结构、16 图标、令牌/`DESIGN.md`、响应式抽屉、菜单与右侧四标签断言先红后绿；补齐 16 个 Lucide 固定提交图标并同步 `icons.svg`（66 symbols）；基于 `@base-ui/react` 与 `--ds-*` 令牌落地 `desktop/src/components/ui/{tabs,tooltip,dropdown-menu}.tsx`、异步分包 `desktop/src/shell/right-panel-renderer.tsx` 与次级对话框懒加载代理 `desktop/src/shell/lazy-dialogs.ts`；将 `desktop/index.html` 与 `desktop/src/shell/{shell-layout.ts,shell.css}` 升级为左 `264px` / 中自适应（`704px` 阅读列） / 右 `404px` 三栏新外壳（`<= 1180px` 右栏模态抽屉、`<= 820px` 侧栏模态抽屉，新壳层零 `<wa-*>` 标签，全页 `<wa-*>` 开标签由 49 降至 34）并更新 `DESIGN.md` 第 16、25、31、40 行。零上下文子代理两轮冷读审查指出的 7 项发现（窄屏左右抽屉 `inert` 提前解除顺序、窄屏侧栏模态触发器返回焦点保留、`#desktop-more` 菜单焦点归还与显式 CSS `anchor-name`、次级弹窗分包释放启动包余量、首屏四标签骨架保留与已保存报告时间戳、`DropdownMenu` 令牌样式与真实方向键自动激活、死样式清理与 `Object.hasOwn`/`https:` 校验）全部修复并通过二轮 `Approve`。本机实跑 `npm run lint`、`npm --prefix desktop run typecheck`、`npm --prefix desktop run build`（`bundle-budget.json`：`startup.bytes = 719,645 <= 750,000`、`startup.gzipBytes = 235,803 <= 250,000`、`settings-renderer` 与 `right-panel-renderer` 均为 `startup: false`、`errors: []`）、全量 `npm test`（1768 通过、0 失败）、`npm run verify:quotes`（69/69）与 `npm run coverage`（precision 1.000 / recall 1.000）全部退出码 0；PR [#56](https://github.com/YEowo-Y/weapp-shipmate/pull/56) 十项 CI 全绿并合入 `main@23447a9`。
 
+### 功能 1 · 桌面预检发现项带证据（公测首版，范围待确认）
+
+**目标与关口。** 用户手动预检当前本机项目后，可以在右栏「依据」看到该条发现的相对文件与行号，以及报告记录的官方原文、链接和核验日期。按 §6 确认范围后实施。本节限定桌面首版，CLI 显式证据已交付，MCP 证据、稳定指纹、baseline 和 SARIF 后续分别确定契约。 [公测路线](25-vertical-agent-shell-plan.md#8-路线与工作量) [CLI 证据 #49](https://github.com/YEowo-Y/weapp-shipmate/pull/49)
+
+**范围基线。** 在 `main@0a74025` 检查 `fixtures/sample-app`。CLI JSON v1 证据模式的 5 条发现中，4 条为 `located`，1 条为 `partial`，例如 `pages/index/index.js:9`。移除显式证据字段后，同一报告内容与退出码一致。随包 Node 项目工具返回 5 条发现和现有规则来源字段，位置字段为零。当前右栏把规则阶段填入「位置线索」。 [项目工具](../src/project-artifact.mjs) [右栏取数](../desktop/src/shell/right-panel-renderer.tsx)
+
+1. **复用同一次预检。** 已鉴权的桌面手动 `project_run(check)` 为当前已选项目启用 T11C1 采集器。每项位置沿用原始扫描的相对路径和行号，保留文件级及部分定位状态。原 Markdown 和结构化报告从同次预检的原结果生成。用固定夹具核对重复引用、原始行号、私有文件与链接边界，断言源码只扫描一次、规则命中和原报告字节一致。
+2. **用执行回执传递位置。** 在桌面内部结果中独立携带本次位置，按项目、运行和成果身份核对后仅存当前窗口内存。只传安全的相对文件名、行号及定位状态。额外位置数据最多 16 KiB，并给既有 2 MiB 子进程响应上限优先保留原报告空间。裁剪或省略位置时明确提示。持久化成果、备份、复制、导出、交接及模型摘要继续读取原报告。用合成标记验证这些出口和日志，另覆盖后台监听、模型工具与独立修复执行器。
+3. **在右栏逐条查看。** 阶段与文件位置分别标注。已定位项显示 `file:line`，只定位到文件时显示文件名和明确提示。来源日期标为仓库记录的核验日期。历史、外部、空结果及定位不足的报告只呈现可证实的依据和相应提示。更换项目或报告、发起新预检及重启桌面时清理旧位置。迟到结果必须核对项目和运行，切换右栏标签或收起抽屉时可重新打开同一份当前依据。
+4. **验收。** 执行 `node --test tests/project-domain.test.mjs tests/desktop-shell-v2.test.mjs tests/desktop-report-reader.test.mjs` 及相关新用例，覆盖有位置、部分定位、不可用、超限、旧报告和过期结果。运行 `cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked`，确认运行回执与保存成果隔离。Windows WebView2 在 1240 px 和 780 px 用真实本机夹具验证位置、来源、重新预检、项目切换和窄窗键盘回焦。四项仓库门禁、桌面类型检查、构建预算、独立冷审和 PR CI 通过。
+
+**允许变更的文件。** 现有项目工具及预检证据的内部投影、Tauri 项目运行回执、桌面预检接线和右栏「依据」的类型、组件及样式，以及相关测试、本文与 `progress.txt`。沿用现有扫描、规则、依赖、ACL、持久化格式与公开 CLI/MCP 契约。
+
 ### 功能 2 · 上线进度进右侧面板（已验收）
 
 **目标与关口。** 按 `docs/25` §3、§6.1–§6.2 与本文功能表将右侧面板「上线」标签从只读阶段摘要升级为可直接操作的主工作视图：完整呈现与 `flow.yaml` 一致的八个上线阶段（`registration` → `certification` → `filing` → `category` → `privacy` → `domain` → `review` → `release`），按项目主体类型（`personal` / `individual_business` / `enterprise`）筛选适用规则与类目资质线索，支持在右侧面板内直接切换项目主体、编辑并保存四项项目事实（`businessType`、`hasPayment`、`collectsSensitive`、`hasServerDomain`）、展开各阶段核对规则要求与官方来源、填写备注并执行阶段人工确认 / 标记不适用 / 撤销确认、导出已保存准备清单与触发更新上线清单；同时完整保留侧栏 `#desktop-workflow-open` 与面板内「完整视图」按钮打开原 `#desktop-workflow` 工作页的等价入口，并保证两侧状态双向实时同步。依赖功能 0（[#56](https://github.com/YEowo-Y/weapp-shipmate/pull/56) 已合入 `main@23447a9`）；零新增生产或开发依赖，不新增任何 `<wa-*>` 标签，不改 Rust / CLI / MCP 契约，无 §3 关口。
@@ -868,4 +881,6 @@ T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://
 
 桌面与工程底座工作线的 T12A（[#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48)）、T13A（[#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51)）、T13B（[#52](https://github.com/YEowo-Y/weapp-shipmate/pull/52)）、T14（[#54](https://github.com/YEowo-Y/weapp-shipmate/pull/54)）、**功能 0 · 新外壳**（[#55](https://github.com/YEowo-Y/weapp-shipmate/pull/55)、[#56](https://github.com/YEowo-Y/weapp-shipmate/pull/56)）、**功能 2 · 上线进度进右侧面板**（[#57](https://github.com/YEowo-Y/weapp-shipmate/pull/57)、[#58](https://github.com/YEowo-Y/weapp-shipmate/pull/58)）和 **功能 3 · 提审材料包**（[#59](https://github.com/YEowo-Y/weapp-shipmate/pull/59)、[#60](https://github.com/YEowo-Y/weapp-shipmate/pull/60)）已合并并通过云端验收。**功能 4 · 被拒处理闭环**已按 [#61](https://github.com/YEowo-Y/weapp-shipmate/pull/61) 范围实施，并随 [#62](https://github.com/YEowo-Y/weapp-shipmate/pull/62) 合入。**功能 8 · 交接给 Codex / Claude Code** 已按 [#75](https://github.com/YEowo-Y/weapp-shipmate/pull/75) 范围实施并随 [#76](https://github.com/YEowo-Y/weapp-shipmate/pull/76) 合入。
 
-**功能 7（公测前只读连接检测）** 的范围已确认并合入，实施 PR 中。本机已验收「已安装但未启动」和「已运行但未登录」。 [范围 #77](https://github.com/YEowo-Y/weapp-shipmate/pull/77) [实施 #78](https://github.com/YEowo-Y/weapp-shipmate/pull/78)
+**功能 7（公测前只读连接检测）** 已完成，本机已验收「已安装但未启动」和「已运行但未登录」。 [范围 #77](https://github.com/YEowo-Y/weapp-shipmate/pull/77) [已合并 #78](https://github.com/YEowo-Y/weapp-shipmate/pull/78)
+
+**功能 1（桌面预检发现项带证据）** 的公测首版范围见上文，待维护者确认。
