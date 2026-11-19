@@ -301,3 +301,25 @@ Windows WebView2 中确认右栏异步载入 React 与 Base UI 并能切换标�
 **需要说明的边界（不是缺陷）**
 
 - `sensitive()` 只匹配**文件名本身**（`project_context.rs:64-68` 只看 `name`），不检查路径中的父目录名。`noSend` 里包含 `node_modules`、`.git` 这类目录名，因此对**用户手动选择的单个文件**这一入口是充分的；但如果将来新增「扫描整个项目」的入口，需要把匹配扩展到路径的每个分量。当前 `read_file` 确实逐分量调用了 `sensitive(name)`（`:173`），所以**现状是完整的**——这条只是提醒后续扩展时别退化。
+
+## 7. 主线收口复核（2026-11-19）
+
+| 评审项 | 结果与证据 |
+|---|---|
+| P0-1 主色 | Windows WebView2 浅色和深色实测均一致。见 §3.1 与 [#70](https://github.com/YEowo-Y/weapp-shipmate/pull/70)。 |
+| P1-1 发布 | `v0.2.0-rc.4` 已固定到 `b5093c5`，受 Windows 目录权限夹具阻塞。修复和新增演练门禁已合入。维护者已批准下一候选通过完整演练后打新 tag 并生成草稿。 [#84](https://github.com/YEowo-Y/weapp-shipmate/pull/84) |
+| P1-2 准确性口径 | 规则库锚点与标注规模在 `coverage` 和能力台账显式显示。当前为 30/70 个规则 ID、15 个夹具、89 条标注，55 TP、0 FP、0 FN。 [#83](https://github.com/YEowo-Y/weapp-shipmate/pull/83) |
+| P1-3 共享类型 | 下载、浮层定位、会话搜索和保存控制器四个共享模块已进入严格检查。全局隐式 any 临时探针从 932 降至 918 条，共享目录从 899 降至 885 条，四个文件零诊断。会话备份快照类型依赖存储和转换模块的输出契约。 |
+| P1-4 启动预算 | 当前生产 JavaScript 启动包 726,270 B / gzip 237,551 B，满足 750,000 B / 250,000 B 上限。将规则来源临时作为静态入口导入后，实际 Vite 构建拒绝并指名 `desktop/src/source-freshness.ts`。七个延迟模块的回归检查通过。 |
+| P1-5 规则覆盖 | 拟人化互动资质首批已合并。第二批拟补「其他拟人化互动服务」向不满十四周岁用户提供时的监护人同意自查，待确认规则范围。 [#82](https://github.com/YEowo-Y/weapp-shipmate/pull/82) [实施交接](26-implementation-handoff.md#第二批--拟人化互动的监护人同意自查范围待确认) |
+| P2-1 弹窗失败提示 | 就近错误提示、原入口恢复与焦点已实测。 [#72](https://github.com/YEowo-Y/weapp-shipmate/pull/72) |
+| P2-2 代码覆盖 | Ubuntu Node 22 CI 输出 V8 代码覆盖报告。 [#71](https://github.com/YEowo-Y/weapp-shipmate/pull/71) |
+| P2-3 能力链接 | 能力台账改指正式实现。 [#71](https://github.com/YEowo-Y/weapp-shipmate/pull/71) |
+| P2-4 响应断点 | CSS 与 `matchMedia` 断点由测试对账，并有四个临界宽度的实机记录。 [#72](https://github.com/YEowo-Y/weapp-shipmate/pull/72) |
+| P2-5 设计度量 | 字号与间距迁移和双主题样式比对均已验收。本次字号变量覆盖 333/547（60.9%）。生产深色 `--surface-3` 由设计系统覆盖公共样式默认值。 [#73](https://github.com/YEowo-Y/weapp-shipmate/pull/73) |
+| P2-6 模型桥 | 初次启动保留类型化错误路径，Rust 测试和 Clippy 已通过。 [#72](https://github.com/YEowo-Y/weapp-shipmate/pull/72) |
+| P2-7 证据截图 | 4 张历史截图保留原件。新入库的评审和验收截图使用 WebP。 [贡献指南](../CONTRIBUTING.md) |
+| P2-8 旧分支 | 本地 `codex/plan-checkpoint-source-review` 保留在 `4a3223c`。尚有 `19310bc` 与 `4a3223c` 两个独有文档提交，当前事项由 T04、T05、T07 的正式验收记录追溯。 |
+| P2-9 关闭竞态 | 规则来源和提审材料包的待执行打开可被关闭撤销，重开及焦点归还已实测。 [#68](https://github.com/YEowo-Y/weapp-shipmate/pull/68) [#69](https://github.com/YEowo-Y/weapp-shipmate/pull/69) |
+
+补审 §6.1 的焦点路径已在 Windows WebView2 157.0.4341.60、1240 px 与 780 px 复核。规则来源筛选有结果和无结果时，以及修复交接预览展开前后，均可用 Tab 和 Shift+Tab 在首尾循环。预览区能用键盘进入，Escape 归还焦点至原触发控件。右栏 `PanelEmpty` 的四处调用点均提供有效动作标识。实机取证见本机 `.omx/artifacts/readiness-closeout/run-20261119T174025Z/native-evidence.json`。
