@@ -1,13 +1,17 @@
+// @ts-check
 // Download already-serialized local data. No network request or filesystem path.
 // Object URLs live beyond click dispatch; the timeout is cleanup, not a promise
 // that the browser has finished saving. Session/page teardown also releases them.
+/** @typedef {{ filename: string; mimeType: string; text: string }} DownloadArtifact */
+/** @typedef {DownloadArtifact & { url: string; timer: number | undefined }} PendingDownload */
+
 /**
  * @param {{
- *   documentRef?: Document | any;
- *   urlAPI?: any;
- *   BlobType?: any;
- *   setTimer?: typeof setTimeout;
- *   clearTimer?: typeof clearTimeout;
+ *   documentRef?: Document;
+ *   urlAPI?: Pick<typeof URL, 'createObjectURL' | 'revokeObjectURL'>;
+ *   BlobType?: typeof Blob;
+ *   setTimer?: Window['setTimeout'];
+ *   clearTimer?: Window['clearTimeout'];
  *   retireMs?: number;
  * }} [options]
  */
@@ -15,6 +19,7 @@ export function createArtifactDownloader({ documentRef,
   urlAPI = documentRef?.defaultView?.URL, BlobType = documentRef?.defaultView?.Blob,
   setTimer = setTimeout, clearTimer = clearTimeout, retireMs = 30000,
 } = {}) {
+  /** @type {Set<PendingDownload>} */
   const pending = new Set();
   const windowRef = documentRef?.defaultView;
   let listening = false;
@@ -24,16 +29,18 @@ export function createArtifactDownloader({ documentRef,
       listening = false;
     }
   }
+  /** @param {PendingDownload} entry */
   function release(entry) {
     if (!pending.delete(entry)) return;
     clearTimer(entry.timer);
-    try { urlAPI.revokeObjectURL(entry.url); } catch { /* Cleanup cannot break navigation. */ }
+    try { urlAPI?.revokeObjectURL(entry.url); } catch { /* Cleanup cannot break navigation. */ }
     unlisten();
   }
   function dispose() {
     for (const entry of pending) release(entry);
     unlisten();
   }
+  /** @param {DownloadArtifact | null | undefined} artifact */
   function download(artifact) {
     if (typeof artifact?.filename !== 'string') return false;
     const type = artifact.filename.endsWith('.md') ? 'text/markdown;charset=utf-8'
@@ -61,7 +68,8 @@ export function createArtifactDownloader({ documentRef,
       documentRef.body.append(link);
       link.click();
       clearTimer(entry.timer);
-      entry.timer = setTimer(() => release(entry), retireMs);
+      const downloaded = entry;
+      entry.timer = setTimer(() => release(downloaded), retireMs);
       return true;
     } catch {
       if (entry) release(entry);
