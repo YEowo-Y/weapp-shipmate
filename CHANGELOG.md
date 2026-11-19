@@ -1,9 +1,15 @@
 # Changelog
 
 本项目变更记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
-版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。当前仓库发布候选版本为 `0.2.0-rc.4`，最新公开版为 `v0.1.0`；后续改动记录在 Unreleased，尚未发布到 npm registry。
+版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。当前仓库发布候选版本为 `0.2.0-rc.5`，最新公开版为 `v0.1.0`；后续改动记录在 Unreleased，尚未发布到 npm registry。
 
 ## [Unreleased]
+
+## [0.2.0-rc.5] - 2026-11-19
+
+### Bug Fixes
+
+* **coverage:** disclose rule and label denominators ([56fbfd4](https://github.com/YEowo-Y/weapp-shipmate/commit/56fbfd425c74870acc3394bf830d05776f6a2d51))
 
 ## [0.2.0-rc.4] - 2026-11-15
 

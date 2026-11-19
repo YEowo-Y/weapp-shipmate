@@ -3,7 +3,7 @@
   "manifest_version": "0.4",
   "name": "weapp-shipmate",
   "display_name": "上线船友 weapp-shipmate",
-  "version": "0.2.0-rc.4",
+  "version": "0.2.0-rc.5",
   "description": "微信小程序合规上线导航与代码感知预检（规则即数据）。",
   "long_description": "你写代码，我陪你上线。把已核验官方来源的微信小程序上线规则暴露为三个本地工具：weapp_shipmate_check（扫描本地源码输出个性化上线预检清单）、weapp_shipmate_guide（按主体/功能输出上线流程导航）与 weapp_shipmate_explain（按驳回反馈匹配拒因与修复路径）。纯本地执行，不上传源码或密钥；不代办、不做合规担保——官方提交仍由用户本人确认。",
   "author": {
