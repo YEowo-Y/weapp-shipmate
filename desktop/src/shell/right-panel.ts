@@ -1,6 +1,6 @@
 import type { Artifact, Project } from '../projects';
 import type { RightPanelHostOptions } from './right-panel-renderer';
-import type { RightPanelSnapshot, RightPanelTabId } from './right-panel-types';
+import type { PreflightEvidence, RightPanelSnapshot, RightPanelTabId } from './right-panel-types';
 
 export type RightPanelOptions = RightPanelHostOptions & {
   host?: HTMLElement | null;
@@ -19,7 +19,7 @@ export function mountRightPanel(
     return {
       update(_partial: Partial<RightPanelSnapshot>) {},
       selectTab(_tab: RightPanelTabId) {},
-      setArtifact(_artifact: Artifact | null) {},
+      setArtifact(_artifact: Artifact | null, _preflightEvidence?: PreflightEvidence) {},
       syncProject(_project: Project | null, _lastCheckSummary?: string | null) {},
       setDrawerMode(_isDrawer: boolean) {},
       setBusy(_isBusy: boolean) {},
@@ -33,7 +33,7 @@ export function mountRightPanel(
   let controller: ReturnType<Awaited<ReturnType<typeof loadRenderer>>['createRightPanelController']> | undefined;
   let loading: Promise<void> | undefined;
   let queuedPartial: Partial<RightPanelSnapshot> | undefined;
-  let queuedArtifact: Artifact | null | undefined;
+  let queuedArtifact: { artifact: Artifact | null; preflightEvidence?: PreflightEvidence } | undefined;
   let queuedProject: { project: Project | null; summary?: string | null } | undefined;
   let queuedDrawer: boolean | undefined;
   let queuedBusy: boolean | undefined;
@@ -75,7 +75,10 @@ export function mountRightPanel(
         if (queuedDrawer !== undefined) controller.setDrawerMode(queuedDrawer);
         if (queuedBusy !== undefined) controller.setBusy(queuedBusy);
         if (queuedProject !== undefined) controller.syncProject(queuedProject.project, queuedProject.summary);
-        if (queuedArtifact !== undefined) controller.setArtifact(queuedArtifact);
+        if (queuedArtifact) {
+          controller.setArtifact(queuedArtifact.artifact, queuedArtifact.preflightEvidence);
+          queuedArtifact = undefined;
+        }
         if (queuedPartial !== undefined) controller.update(queuedPartial);
       } catch {
         if (!disposed) showFallback(true);
@@ -97,13 +100,21 @@ export function mountRightPanel(
       if (controller) controller.selectTab(tab);
       else queuedPartial = { ...queuedPartial, activeTab: tab };
     },
-    setArtifact(artifact: Artifact | null) {
-      if (controller) controller.setArtifact(artifact);
-      else queuedArtifact = artifact;
+    setArtifact(artifact: Artifact | null, preflightEvidence?: PreflightEvidence) {
+      if (disposed) return;
+      if (controller) controller.setArtifact(artifact, preflightEvidence);
+      else if (!artifact || !queuedProject || artifact.projectId === (queuedProject.project?.id ?? null)) {
+        queuedArtifact = { artifact, preflightEvidence };
+      }
     },
     syncProject(project: Project | null, summary?: string | null) {
       if (controller) controller.syncProject(project, summary);
-      else queuedProject = { project, summary };
+      else {
+        if (queuedArtifact?.artifact && queuedArtifact.artifact.projectId !== (project?.id ?? null)) {
+          queuedArtifact = undefined;
+        }
+        queuedProject = { project, summary };
+      }
     },
     setDrawerMode(isDrawer: boolean) {
       if (controller) controller.setDrawerMode(isDrawer);
@@ -121,6 +132,7 @@ export function mountRightPanel(
     },
     destroy() {
       disposed = true;
+      queuedArtifact = undefined;
       controller?.destroy();
       controller = undefined;
     },
