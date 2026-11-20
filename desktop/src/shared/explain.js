@@ -1,5 +1,6 @@
-import { queryExplain } from './explain-transport.js';
-import { validateExplainInput, validateExplainResult } from './explain-contract.js';
+// @ts-check
+import { isExplainAbort, queryExplain } from './explain-transport.js';
+import { isExplainResult, validateExplainInput } from './explain-contract.js';
 import { createIcon } from './components/icons.js';
 import { createExplainArtifact } from './explain-artifact.js';
 import { formatRuleActions, formatRuleConfidence } from './guide-artifact.js';
@@ -8,9 +9,28 @@ import { createArtifactDownloader } from './artifact-download.js';
 export const REJECTION_SAMPLE = '您的小程序使用了地理位置接口，但未在《用户隐私保护指引》中声明收集"位置信息"的相关条款，请补充后重新提交。';
 
 /** @typedef {'preflight' | 'materials'} ExplainFollowUp */
+/** @typedef {import('./explain-contract.js').ExplainResult} ExplainResult */
+/** @typedef {import('./explain-contract.js').ExplainItem} ExplainItem */
+/** @typedef {import('./explain-transport.js').ExplainRequest} ExplainRequest */
+/** @typedef {ReturnType<typeof createExplainArtifact>} ExplainArtifact */
+/** @typedef {'idle' | 'invalid' | 'running' | 'stopped' | 'error' | 'matched' | 'empty'} ExplainStatus */
+/** @typedef {{ key: ExplainFollowUp | 'edit'; label: string; activate: () => void }} FollowUpControl */
+/** @typedef {{ key: string; label: string; accepts: (item: ExplainItem) => boolean }} ResultFilter */
+/** @typedef {HTMLElement & { disabled: boolean }} ExplainButton */
+/**
+ * @typedef {{ rjInput: HTMLTextAreaElement; rjQuery: HTMLDetailsElement }
+ *   & Record<'rjBtn' | 'rjStop' | 'rjSample' | 'rjCopy' | 'rjSave' | 'rjDownload', ExplainButton>
+ *   & Record<'rjResult' | 'rjStatus' | 'rjResultHeading' | 'rjResultItems' | 'rjQuerySummary' | 'rjQueryText' | 'rjActionStatus', HTMLElement>} ExplainElements
+ */
 
-/** @param {{ key: ExplainFollowUp | 'edit'; label: string; activate: () => void }[]} followUps */
+/**
+ * @param {Document} root
+ * @param {HTMLElement} container
+ * @param {ExplainResult} output
+ * @param {FollowUpControl[]} followUps
+ */
 function renderResult(root, container, output, followUps) {
+  /** @template {keyof HTMLElementTagNameMap} Tag @param {Tag} tag @param {string} [text] */
   const node = (tag, text, className = '') => {
     const element = root.createElement(tag);
     if (text) element.textContent = text;
@@ -33,13 +53,16 @@ function renderResult(root, container, output, followUps) {
     next.append(title, actions);
     container.append(next);
   }
+  /** @type {Map<string, HTMLElement>} */
   const groups = new Map();
+  /** @type {{ item: ExplainItem; article: HTMLElement }[]} */
   const matches = [];
   const triage = output.items.length ? node('section', '', 'rj-triage') : null;
   if (triage) container.append(triage);
   for (const item of output.items) {
-    if (!groups.has(item.rejectId)) {
-      const section = node('section', '', 'rj-group');
+    let section = groups.get(item.rejectId);
+    if (!section) {
+      section = node('section', '', 'rj-group');
       section.append(node('h3', `${item.relevance === 'direct' ? '直接相关' : '可能相关'} · ${item.rejectSummary}`, 'rj-group__title'));
       container.append(section); groups.set(item.rejectId, section);
     }
@@ -71,9 +94,10 @@ function renderResult(root, container, output, followUps) {
       link.href = item.official_url; link.target = '_blank'; link.rel = 'noopener noreferrer';
       link.append(createIcon(root, 'external-link')); evidence.append(link);
     } else evidence.append(node('p', '未收录官方链接，请自行核对官方要求。', 'rj-rule__meta'));
-    article.append(evidence); groups.get(item.rejectId).append(article);
+    article.append(evidence); section.append(article);
   }
   if (triage) {
+    /** @type {ResultFilter[]} */
     const filters = [
       { key: 'all', label: '全部', accepts: () => true },
       { key: 'direct', label: '直接相关', accepts: item => item.relevance === 'direct' },
@@ -94,7 +118,9 @@ function renderResult(root, container, output, followUps) {
     empty.append(node('p', '当前分类没有匹配项，可查看全部结果继续核对。'));
     const reset = node('button', '查看全部'); reset.type = 'button'; reset.dataset.rjReset = '';
     empty.append(reset);
+    /** @type {Map<string, HTMLButtonElement>} */
     const buttons = new Map();
+    /** @param {ResultFilter} filter */
     function select(filter) {
       let count = 0;
       const visibleGroups = new Set();
@@ -113,7 +139,7 @@ function renderResult(root, container, output, followUps) {
       button.addEventListener('click', () => select(filter));
       controls.append(button); buttons.set(filter.key, button);
     }
-    reset.addEventListener('click', () => { select(filters[0]); buttons.get('all').focus({ preventScroll: true }); });
+    reset.addEventListener('click', () => { select(filters[0]); buttons.get('all')?.focus({ preventScroll: true }); });
     triage.append(controls, help, status, empty);
     select(filters[0]);
   }
@@ -122,29 +148,48 @@ function renderResult(root, container, output, followUps) {
 }
 
 /**
- * @param {Document | any} root
+ * @param {Document} root
  * @param {{
- *   query?: (args: { query: string; signal?: AbortSignal }) => Promise<any>;
+ *   query?: (args: ExplainRequest) => Promise<unknown>;
  *   copyText?: (text: string) => Promise<void>;
  *   saveResult?: (text: string) => { ok: boolean; reason?: string; duplicate?: boolean };
  *   onFollowUp?: (action: ExplainFollowUp, isCurrent: () => boolean) => string | void | Promise<string | void>;
- *   artifactDownloader?: { download: (artifact: any) => boolean; dispose: () => void };
+ *   artifactDownloader?: ReturnType<typeof createArtifactDownloader>;
  * }} [options]
  */
-export function mountExplain(root, { query = queryExplain, copyText = text => root.defaultView.navigator.clipboard.writeText(text), saveResult, onFollowUp, artifactDownloader = createArtifactDownloader({ documentRef: root }) } = {}) {
-  const form = root.getElementById('rjForm');
-  if (!form) return;
-  const input = root.getElementById('rjInput'), result = root.getElementById('rjResult');
-  const status = root.getElementById('rjStatus'), heading = root.getElementById('rjResultHeading');
-  const submit = root.getElementById('rjBtn'), stop = root.getElementById('rjStop'), sample = root.getElementById('rjSample');
-  const items = root.getElementById('rjResultItems');
-  const queryPanel = root.getElementById('rjQuery'), querySummary = root.getElementById('rjQuerySummary'), queryText = root.getElementById('rjQueryText');
-  const copy = root.getElementById('rjCopy'), save = root.getElementById('rjSave'), download = root.getElementById('rjDownload'), actionStatus = root.getElementById('rjActionStatus');
-  let active = null, artifact = null, actionEpoch = 0;
+export function mountExplain(root, {
+  query = queryExplain,
+  copyText = async text => {
+    const clipboard = root.defaultView?.navigator.clipboard;
+    if (!clipboard) throw new Error('Clipboard unavailable.');
+    await clipboard.writeText(text);
+  },
+  saveResult, onFollowUp, artifactDownloader = createArtifactDownloader({ documentRef: root }),
+} = {}) {
+  const formElement = root.getElementById('rjForm');
+  if (!formElement) return;
+  const form = formElement;
+  /** @template {keyof ExplainElements} Id @param {Id} id @returns {ExplainElements[Id]} */
+  function control(id) {
+    const element = root.getElementById(id);
+    if (!element) throw new Error(`Missing rejection lookup control: ${id}`);
+    return /** @type {ExplainElements[Id]} */ (element);
+  }
+  const input = control('rjInput'), result = control('rjResult');
+  const status = control('rjStatus'), heading = control('rjResultHeading');
+  const submit = control('rjBtn'), stop = control('rjStop'), sample = control('rjSample');
+  const items = control('rjResultItems');
+  const queryPanel = control('rjQuery'), querySummary = control('rjQuerySummary'), queryText = control('rjQueryText');
+  const copy = control('rjCopy'), save = control('rjSave'), download = control('rjDownload'), actionStatus = control('rjActionStatus');
+  /** @type {AbortController | null} */
+  let active = null;
+  /** @type {ExplainArtifact | null} */
+  let artifact = null;
+  let actionEpoch = 0;
   result.hidden = true; stop.hidden = true;
   queryPanel.open = true; querySummary.hidden = true;
   copy.disabled = save.disabled = download.disabled = true; save.hidden = !saveResult;
-  for (const [button, name] of [[copy, 'copy'], [save, 'message-square'], [download, 'arrow-down']]) {
+  for (const [button, name] of /** @type {const} */ ([[copy, 'copy'], [save, 'message-square'], [download, 'arrow-down']])) {
     const icon = createIcon(root, name); icon.setAttribute('slot', 'start'); button.append(icon);
   }
   function resetActions(clearResult = false) {
@@ -152,8 +197,9 @@ export function mountExplain(root, { query = queryExplain, copyText = text => ro
     if (clearResult) artifact = null;
     copy.disabled = save.disabled = download.disabled = !artifact;
   }
+  /** @param {string} text @param {'' | 'success' | 'error' | 'working'} [state] */
   function feedback(text, state = 'success') { actionStatus.textContent = text; actionStatus.dataset.state = state; }
-  /** @param {ExplainFollowUp} action @param {ReturnType<typeof createExplainArtifact>} currentArtifact */
+  /** @param {ExplainFollowUp} action @param {ExplainArtifact} currentArtifact */
   async function followUp(action, currentArtifact) {
     if (!onFollowUp || artifact !== currentArtifact) return;
     const epoch = ++actionEpoch;
@@ -193,6 +239,7 @@ export function mountExplain(root, { query = queryExplain, copyText = text => ro
       feedback(saved.duplicate ? '结果已在当前会话中，无需重复加入。' : '已加入当前会话；保存状态见会话区。');
     } catch { feedback('未能加入会话，请重试；结果仍保留在此处。', 'error'); }
   }
+  /** @param {ExplainStatus} state @param {string} message */
   function present(state, message, restoreFocus = true) {
     const returnFocus = restoreFocus && ['stopped', 'error'].includes(state) && root.activeElement === stop;
     status.dataset.state = state; status.textContent = message;
@@ -203,6 +250,7 @@ export function mountExplain(root, { query = queryExplain, copyText = text => ro
     form.setAttribute('aria-busy', String(busy));
     if (returnFocus) input.focus();
   }
+  /** @param {ExplainStatus} state @param {string} message */
   function invalidate(state, message, restoreFocus = true) {
     const previous = active; active = null; previous?.abort();
     resetActions(true); queryPanel.open = true;
@@ -218,6 +266,7 @@ export function mountExplain(root, { query = queryExplain, copyText = text => ro
   }
   function cancelled() { invalidate('stopped', '查询已停止，输入已保留。'); }
   function pageHidden() { invalidate('stopped', '查询已停止，输入已保留。', false); artifactDownloader.dispose(); }
+  /** @param {Event} event */
   async function submitQuery(event) {
     event.preventDefault();
     if (active) return;
@@ -233,10 +282,10 @@ export function mountExplain(root, { query = queryExplain, copyText = text => ro
     try {
       const output = await query({ query: request, signal: controller.signal });
       if (active !== controller) return;
-      if (!validateExplainResult(output, request).ok) throw new Error('查询结果未通过校验，请重试。');
+      if (!isExplainResult(output, request)) throw new Error('查询结果未通过校验，请重试。');
       const currentArtifact = createExplainArtifact(request, output);
       artifact = currentArtifact;
-      /** @type {Parameters<typeof renderResult>[3]} */
+      /** @type {FollowUpControl[]} */
       const next = [];
       if (!output.items.length) {
         next.push({ key: 'edit', label: '修改关键词', activate() {
@@ -259,7 +308,12 @@ export function mountExplain(root, { query = queryExplain, copyText = text => ro
       heading.focus({ preventScroll: true }); heading.scrollIntoView({ block: 'nearest', behavior: 'instant' });
     } catch (error) {
       if (active !== controller) return;
-      present(error?.name === 'AbortError' ? 'stopped' : 'error', error?.name === 'AbortError' ? '查询已停止，输入已保留。' : error.message || '查询失败，请重试。');
+      if (isExplainAbort(error)) present('stopped', '查询已停止，输入已保留。');
+      else {
+        const message = error !== null && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
+          ? error.message : '';
+        present('error', message || '查询失败，请重试。');
+      }
     } finally { if (active === controller) active = null; }
   }
   form.addEventListener('submit', submitQuery);
