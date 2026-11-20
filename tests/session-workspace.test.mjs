@@ -23,13 +23,13 @@ function node(doc, tag = 'div') {
     focus() { doc.activeElement = this; }, select() {}, showModal() { this.open = true; }, close() { this.open = false; Promise.resolve().then(() => this.fire('close')); },
   };
 }
-function harness({ loaded = null, loadError = false, saveError = false, layout, projectScoped, onOpenDataSettings } = {}) {
+function harness({ loaded = null, loadError = false, saveError = false, layout, projectScoped, onOpenDataSettings, onSessionChange } = {}) {
   const doc = { createElement(tag) { return node(doc, tag); } };
   doc.createTextNode = text => Object.assign(node(doc, '#text'), { textContent: text });
   doc.createElementNS = (_namespace, tag) => node(doc, tag);
   Object.assign(doc, node(doc)); doc.body = node(doc);
   const win = node(doc); win.location = { reload() { win.reloaded = true; } }; doc.defaultView = win;
-  const host = node(doc), input = node(doc), writes = [], lifecycle = [], hooks = [], dataDialogs = [], dataPanels = [];
+  const host = node(doc), input = node(doc), scroll = node(doc), writes = [], lifecycle = [], hooks = [], dataDialogs = [], dataPanels = [];
   const store = { async load() { if (loadError) throw new Error('offline'); return { revision: 3, snapshot: loaded }; },
     async save(snapshot, revision) { if (typeof saveError === 'function' ? saveError() : saveError) throw Object.assign(new Error('Conflict'), { code: 'conflict' }); writes.push(JSON.parse(JSON.stringify(snapshot))); return { revision: revision + 1 }; }, close() {} };
   const context = vm.createContext({ createSessionStore: () => store, createSessionPersistence, literalSessionQuery, sessionMatch,
@@ -48,12 +48,13 @@ function harness({ loaded = null, loadError = false, saveError = false, layout, 
         getModelSelection: () => model, setModelSelection(value) { model = value; options.onModelSelectionChange?.(value); },
         replaceMessages(value) { messages = value; options.onMessagesChange?.(value); },
         setDraft(value, editing) { input.value = value; edit = editing || null; options.onDraftChange?.(); },
-        restoreViewState(value) { view = value || null; },
+        restoreViewState(value) { view = value || null; scroll.scrollTop = value?.scrollTop ?? 0; },
       };
     },
   });
   vm.runInContext(source.replace(/^import .*;\r?\n/gm, '').replace(/^export \{.*\};\r?\n/gm, '').replace(/export /g, ''), context);
-  const args = { host, input, layout, projectScoped, onOpenDataSettings, sendButton: node(doc), scroll: node(doc), list: node(doc), status: node(doc), jumpButton: node(doc), onSessionChange: session => lifecycle.push(session.id) };
+  const args = { host, input, layout, projectScoped, onOpenDataSettings, sendButton: node(doc), scroll, list: node(doc), status: node(doc), jumpButton: node(doc),
+    onSessionChange(session) { lifecycle.push(session.id); onSessionChange?.(session, scroll); } };
   const mounting = context.mountSessionWorkspace(args);
   return { mounting, context, host, doc, win, args, hooks, writes, lifecycle, dataDialogs, dataPanels, setLoadError(value) { loadError = value; }, setSaveError(value) { saveError = value; } };
 }
@@ -68,6 +69,25 @@ function rowMenu(app, id, action) {
   menu.fire('wa-after-hide');
   return menu;
 }
+
+test('returning from an empty conversation restores reading position after the host changes layout', async () => {
+  const app = harness({
+    layout: 'sidebar',
+    loaded: { version: 1, currentSessionId: 'session-2', sessionSequence: 2, sessions: [
+      { id: 'session-2', title: 'Empty', draft: '', messages: [] },
+      { id: 'session-1', title: 'Reading', draft: '', messages: [{ id: 'message-1', role: 'user', text: 'Saved message' }], viewState: { scrollTop: 708 } },
+    ] },
+    onSessionChange(session, viewport) {
+      // Removing the host's empty state can adjust an already-restored scroll offset.
+      if (session.messages.length) viewport.scrollTop = 0;
+    },
+  });
+  const workspace = await app.mounting;
+  const reading = flatten(app.host).find(item => item.dataset.action === 'recent-session' && item.dataset.sessionId === 'session-1');
+  reading.click();
+  assert.equal(app.args.scroll.scrollTop, 708);
+  workspace.destroy();
+});
 
 test('sidebar menus rename another conversation without switching or losing the current draft', async () => {
   const app = harness({ layout: 'sidebar' }), workspace = await app.mounting;
@@ -385,7 +405,7 @@ test('current conversation find locates the first result with Enter without inte
   assert.equal(app.lifecycle.includes('stop'), false);
   assert.equal(app.args.status.textContent, '已定位到匹配消息。');
   const second = node(app.doc, 'article'); second.dataset.messageId = 'second';
-  second.getBoundingClientRect = () => ({ top: 280 }); app.args.list.append(second);
+  second.getBoundingClientRect = () => ({ top: 280 - (app.args.scroll.scrollTop - 40) }); app.args.list.append(second);
   workspace.openFind();
   const nextDialog = app.doc.body.children.at(-1), nextSearch = flatten(nextDialog).find(item => item.tag === 'input');
   nextSearch.value = '隐私'; nextSearch.fire('input');
