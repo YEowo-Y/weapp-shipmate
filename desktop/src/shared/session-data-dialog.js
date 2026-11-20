@@ -1,21 +1,30 @@
+// @ts-check
 import { createActionButton } from './components/ui-kit.js';
 import { createIcon } from './components/icons.js';
 import { normalizeSessionSnapshot } from './session-store.js';
 import { parseSessionBackup, mergeSessionBackup } from './session-transfer.js';
 
+/** @typedef {import('./session-store.js').SessionSnapshot} SessionSnapshot */
+
 /**
  * @typedef {{
- *   document: Document | any;
- *   trigger?: HTMLElement | any;
- *   capture: () => any;
+ *   document: Document;
+ *   trigger?: HTMLElement;
+ *   capture: () => unknown;
  *   prepare: () => Promise<void>;
- *   commit: (snapshot: any) => Promise<void>;
+ *   commit: (snapshot: SessionSnapshot) => Promise<void>;
  *   onBusyChange?: (busy: boolean) => void;
  *   isDisposed?: () => boolean;
  *   isReloadRequired?: () => boolean;
- *   onClose?: (node: any) => void;
+ *   onClose?: (node: HTMLDialogElement) => void;
  * }} SessionDataOptions
  */
+
+/** @param {unknown} error */
+function errorCode(error) {
+  const code = /** @type {{ code?: unknown } | null | undefined} */ (error)?.code;
+  return typeof code === 'string' ? code : undefined;
+}
 
 // Both presentations use the owner's existing store and import transaction.
 /** @param {SessionDataOptions} options */
@@ -37,15 +46,23 @@ export function createSessionDataPanel(options) {
 function createSessionDataSurface({ document: doc, trigger, capture, prepare, commit,
   onBusyChange = () => {}, isDisposed = () => false, isReloadRequired = () => false, onClose = () => {} }, embedded) {
   const win = doc.defaultView;
+  /**
+   * @template {keyof HTMLElementTagNameMap} Tag
+   * @param {Tag} tag
+   * @param {string} [className]
+   * @param {string} [text]
+   */
   const element = (tag, className = '', text) => {
     const node = doc.createElement(tag); node.className = className;
     if (text !== undefined) node.textContent = text;
     return node;
   };
+  /** @param {string} label @param {string} name @param {Parameters<typeof createActionButton>[2]} options */
   const action = (label, name, options = {}) => {
     const control = createActionButton(doc, label, options); control.dataset.action = name; return control;
   };
-  const node = element(embedded ? 'section' : 'dialog', embedded ? 'session-workspace-data-panel' : 'session-workspace-dialog');
+  const dialog = embedded ? null : element('dialog', 'session-workspace-dialog');
+  const node = dialog ?? element('section', 'session-workspace-data-panel');
   node.dataset.kind = 'data'; node.setAttribute('aria-label', '数据与会话备份'); node.hidden = true;
   const header = element('div', 'session-workspace-dialog__header');
   const dismiss = action('', 'close', { appearance: 'plain', className: 'ui-action-icon' });
@@ -73,7 +90,9 @@ function createSessionDataSurface({ document: doc, trigger, capture, prepare, co
     actions.append(choose, confirm); importSection.append(actions); node.append(body);
   }
   else { body.append(scope, exportSection, importSection, feedback); actions.append(cancel, confirm); node.append(header, body, actions); }
-  let parsed = null, busy = false, active = false, destroyed = false, needsReload = false, readSequence = 0;
+  /** @type {SessionSnapshot | null} */
+  let parsed = null;
+  let busy = false, active = false, destroyed = false, needsReload = false, readSequence = 0;
   const alive = () => active && !destroyed && !isDisposed();
   const reloadMessage = embedded
     ? '会话已保存到本地，但界面未能更新。请返回应用并重新载入，不要重复导入；重新载入后可下载最新备份。'
@@ -88,26 +107,28 @@ function createSessionDataSurface({ document: doc, trigger, capture, prepare, co
     confirm.disabled = busy || needsReload || !parsed;
     confirm.textContent = busy ? '正在保存…' : '追加导入';
   }
+  /** @param {boolean} value */
   function setBusy(value) { busy = value; renderBusy(); onBusyChange(value); }
   function close() {
     if (busy) return false;
     if (!active) return true;
-    if (embedded) { active = false; resetPreview(); node.hidden = true; }
-    else node.close();
+    if (dialog) dialog.close();
+    else { active = false; resetPreview(); node.hidden = true; }
     return true;
   }
   function destroy() {
     if (destroyed) return;
     destroyed = true; active = false; resetPreview(); node.remove();
   }
-  if (!embedded) {
+  if (dialog) {
     dismiss.addEventListener('click', close); cancel.addEventListener('click', close);
-    node.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
-    node.addEventListener('close', () => { destroy(); onClose(node); if (!isDisposed()) trigger?.focus(); });
+    dialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
+    dialog.addEventListener('close', () => { destroy(); onClose(dialog); if (!isDisposed()) trigger?.focus(); });
   }
   backup.addEventListener('click', () => {
     if (busy || needsReload || !alive()) return;
     try {
+      if (!win) throw new Error('缺少下载上下文。');
       const snapshot = normalizeSessionSnapshot(capture(), { mode: 'export' });
       const url = win.URL.createObjectURL(new win.Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' }));
       const link = element('a'); link.href = url; link.download = `shipmate-history-${new Date().toISOString().slice(0, 10)}.json`; link.click();
@@ -128,7 +149,7 @@ function createSessionDataSurface({ document: doc, trigger, capture, prepare, co
       preview.hidden = false; confirm.disabled = false;
     } catch (error) {
       if (!alive() || sequence !== readSequence) return;
-      feedback.textContent = error?.code === 'limit' ? '备份或合并后的会话超过容量限制，未修改原记录。'
+      feedback.textContent = errorCode(error) === 'limit' ? '备份或合并后的会话超过容量限制，未修改原记录。'
         : '无法读取此备份。请检查文件格式、版本或 20 MiB 大小限制；原记录未修改。';
     }
   });
@@ -144,12 +165,13 @@ function createSessionDataSurface({ document: doc, trigger, capture, prepare, co
       resetPreview();
       feedback.textContent = `已追加导入并保存 ${merged.importedCount} 个会话。可在历史会话中查看，当前草稿保持不变。`;
     } catch (error) {
-      if (alive() && error?.code === 'apply-failed') {
+      const code = errorCode(error);
+      if (alive() && code === 'apply-failed') {
         needsReload = true; resetPreview(); feedback.textContent = reloadMessage;
-      } else if (alive() && error?.code === 'projects-unavailable') {
+      } else if (alive() && code === 'projects-unavailable') {
         feedback.textContent = embedded ? '项目列表尚未加载，未导入备份。请到项目配置中重试加载后，再追加导入。'
           : '项目列表尚未加载，未导入备份。请关闭弹窗，在项目区重试加载后，再追加导入。';
-      } else if (alive()) feedback.textContent = ['conflict', 'changed', 'busy'].includes(error?.code)
+      } else if (alive()) feedback.textContent = ['conflict', 'changed', 'busy'].includes(code ?? '')
         ? '会话已被其他操作更新，未导入备份。请处理保存冲突后重新选择文件。'
         : '导入未完成，原会话仍保留。请处理保存错误后重试；也可先下载当前备份。';
     } finally {
@@ -167,11 +189,11 @@ function createSessionDataSurface({ document: doc, trigger, capture, prepare, co
     resetPreview(); active = true; node.hidden = false;
     needsReload ||= isReloadRequired();
     feedback.textContent = needsReload ? reloadMessage : ''; renderBusy();
-    if (embedded) return;
-    doc.body.append(node); node.showModal();
+    if (!dialog) return;
+    doc.body.append(dialog); dialog.showModal();
     const initialFocus = doc.activeElement;
     void Promise.resolve(cancel.updateComplete).then(() => {
-      if (alive() && node.open && doc.activeElement === initialFocus) cancel.focus();
+      if (alive() && dialog.open && doc.activeElement === initialFocus) cancel.focus();
     });
   }
   return { node, element: node, open, close, canClose: () => !busy, destroy };
