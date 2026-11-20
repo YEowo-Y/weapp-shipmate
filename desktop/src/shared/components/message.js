@@ -14,6 +14,9 @@ import { renderMessageText } from './message-markdown.js';
 /** @typedef {Omit<SessionMessage, 'live'> & { live?: LiveModel | null }} RenderMessage */
 /** @typedef {NonNullable<SessionMessage['tool']>} MessageTool */
 /** @typedef {ReturnType<typeof import('../demo-result.js').createDemoResult>} DemoResult */
+/** @typedef {import('../agent-contract.js').AgentResult} AgentResult */
+/** @typedef {import('../guide-contract.js').GuideItem} GuideItem */
+/** @typedef {import('../guide-contract.js').GuideResult} GuideResult */
 /** @typedef {{ result?: unknown; error?: SessionMessage['error']; messageId?: string; provenance?: SessionMessage['provenance'] }} ToolCardContext */
 /** @typedef {Omit<NonNullable<SessionMessage['trace']>, 'kind'> & { kind?: 'guide' | 'model' }} RunTrace */
 /** @typedef {{ label: string; phase: ReturnType<typeof getToolPhase>['phase'] }} TraceStep */
@@ -144,14 +147,6 @@ export function createToolCard(doc, tool, context = {}) {
   return card;
 }
 
-/**
- * @typedef {{
- *   title: string; summary: string; itemCount: number; truncated: boolean; scopeComplete: boolean | null;
- *   projectRevision: number; contextRevision: number; artifactId: string;
- *   items: { ruleId: string; title: string; sourceUrl: string }[];
- * }} ProjectToolSummary
- */
-
 /** @param {Document} doc @param {MessageTool} tool @param {ToolCardContext} context */
 function createProjectToolCard(doc, tool, context) {
   const imported = tool.provenance === 'imported' || context.provenance === 'imported';
@@ -166,7 +161,7 @@ function createProjectToolCard(doc, tool, context) {
   const body = element(doc, 'div', 'tool-details__body');
   body.append(element(doc, 'p', 'tool-identity', imported ? '导入历史 · 尚未核验本机报告' : '项目只读工具 · 打开报告前将核验本机记录'));
   if (tool.state === 'success' && validateAgentResult(context.result).ok) {
-    const result = /** @type {ProjectToolSummary} */ (context.result);
+    const result = /** @type {AgentResult} */ (context.result);
     body.append(element(doc, 'strong', '', result.title), element(doc, 'p', 'tool-output-message', result.summary));
     body.append(element(doc, 'p', 'component-caption', `共 ${result.itemCount} 项${result.truncated ? ' · 当前展示部分摘要' : ''} · 项目版本 ${result.projectRevision} · 事实版本 ${result.contextRevision}`));
     if (result.scopeComplete === false) body.append(element(doc, 'p', 'component-caption', '本次扫描范围不完整，请在报告中核对限制。'));
@@ -255,23 +250,12 @@ export function restoreGuideViewState(card, saved) {
   updateGuideFilter(card, saved.query);
 }
 
-/**
- * Fields displayed from a validated guide item.
- * @typedef {{
- *   title: string; ruleId: string; stage: string; requires: string[];
- *   why?: string | null; warn?: string | null; note?: string | null; source_quote?: string | null;
- *   official_url?: string | null; last_verified?: string | null;
- *   confidence?: 'high' | 'medium' | 'low';
- *   action_categories?: ('code' | 'console' | 'materials' | 'manual_check')[];
- * }} GuideItem
- */
-/** @typedef {{ items: GuideItem[]; selfCheck: GuideItem[]; notes: string[] }} GuideContent */
 /** @typedef {Pick<ToolCardContext, 'messageId' | 'provenance'> & { input?: SessionMessage['guide'] }} GuideCardContext */
 
 /** @param {Document} doc @param {unknown} value @param {GuideCardContext} [context] */
 export function createGuideResultCard(doc, value, context = {}) {
   if (!validateGuideResult(value).ok) throw new Error('Cannot render an invalid guide result');
-  const result = /** @type {GuideContent} */ (value);
+  const result = /** @type {GuideResult} */ (value);
   const card = element(doc, 'section', 'structured-result guide-result');
   card.dataset.component = 'guide-result';
   card.dataset.messageId = context.messageId || '';
