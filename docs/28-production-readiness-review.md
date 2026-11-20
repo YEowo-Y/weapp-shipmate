@@ -309,7 +309,7 @@ Windows WebView2 中确认右栏异步载入 React 与 Base UI 并能切换标�
 | P0-1 主色 | Windows WebView2 浅色和深色实测均一致。见 §3.1 与 [#70](https://github.com/YEowo-Y/weapp-shipmate/pull/70)。 |
 | P1-1 发布 | `v0.2.0-rc.4` 固定到 `b5093c5`，记录当时的 Windows 目录权限夹具失败。修复后，候选 `317679f` 的完整演练与打标流程均通过，生成 `v0.2.0-rc.5` 草稿。下载复核 npm 包、MCPB、NSIS 安装器的 SHA-256，三件均与清单匹配。安装器签名状态为 `NotSigned`。 [#84](https://github.com/YEowo-Y/weapp-shipmate/pull/84) [#85](https://github.com/YEowo-Y/weapp-shipmate/pull/85) [rc.5 演练](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/44588849348) [草稿构建](https://github.com/YEowo-Y/weapp-shipmate/actions/runs/44675972044) |
 | P1-2 准确性口径 | 规则库锚点与标注规模在 `coverage` 和能力台账显式显示。F05 第二批合入后为 30/71 个规则 ID、15 个夹具、89 条标注，55 TP、0 FP、0 FN。 [#83](https://github.com/YEowo-Y/weapp-shipmate/pull/83) |
-| P1-3 共享类型 | 下载、浮层定位、会话搜索和保存控制器四个共享模块已进入严格检查。全局隐式 any 临时探针从 932 降至 918 条，共享目录从 899 降至 885 条，四个文件零诊断。会话备份快照类型依赖存储和转换模块的输出契约。 |
+| P1-3 共享类型 | 下载、浮层定位、会话搜索和保存控制器已进入严格检查。会话存储从现有校验器推导快照类型，备份导入及界面提交沿用该类型。采集和解析的原始数据仍先经过运行时校验。本批存储、备份转换和备份界面三个模块零诊断。桌面全局隐式 any 临时探针由 918 降至 745 条，共享目录由 885 降至 712 条，严格检查继续逐模块启用。 |
 | P1-4 启动预算 | 当前生产 JavaScript 启动包 726,270 B / gzip 237,551 B，满足 750,000 B / 250,000 B 上限。将规则来源临时作为静态入口导入后，实际 Vite 构建拒绝并指名 `desktop/src/source-freshness.ts`。七个延迟模块的回归检查通过。 |
 | P1-5 规则覆盖 | 已补拟人化互动类目资质与未成年人监护人同意两项人工自查。第二批通过 CLI、工作流、随包项目工具与 WebView2 宽窄窗口的验证。 [首批 #82](https://github.com/YEowo-Y/weapp-shipmate/pull/82) [第二批 #87](https://github.com/YEowo-Y/weapp-shipmate/pull/87) [实施交接](26-implementation-handoff.md#第二批--拟人化互动的监护人同意自查) |
 | P2-1 弹窗失败提示 | 就近错误提示、原入口恢复与焦点已实测。 [#72](https://github.com/YEowo-Y/weapp-shipmate/pull/72) |

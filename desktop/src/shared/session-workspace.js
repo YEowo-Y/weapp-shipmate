@@ -7,6 +7,8 @@ import { literalSessionQuery, sessionMatch } from './session-search.js';
 import { openSessionDataDialog, createSessionDataPanel } from './session-data-dialog.js';
 export { sessionMatch };
 
+/** @typedef {import('./session-store.js').SessionSnapshot} SessionSnapshot */
+
 let workspaceSequence = 0;
 
 // The caller owns its mounted composer and passes its existing input/send nodes.
@@ -132,11 +134,16 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
       store.close(); store = createSessionStore({ workspace }); saved.textContent = '正在重新读取…';
     }
   }
+  /** @type {SessionSnapshot['sessions']} */
   let sessions = loaded.snapshot?.sessions || [{ id: 'session-1', title: '新会话', draft: '', messages: initialMessages,
     references: [], pendingScenario: 'normal', autoTitle: true }];
   let currentSessionId = loaded.snapshot?.currentSessionId || sessions[0].id;
   let sessionSequence = loaded.snapshot?.sessionSequence || 1;
-  const current = () => sessions.find(session => session.id === currentSessionId);
+  const current = () => {
+    const session = sessions.find(session => session.id === currentSessionId);
+    if (!session) throw new Error('当前会话不存在。');
+    return session;
+  };
   let activeProjectId = current().projectId ?? null;
   let knownProjects = null;
   let projectCurrentSessions = loaded.snapshot?.projectCurrentSessions || [];
@@ -154,7 +161,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     if (conversation) Object.assign(current(), conversation.getDraftState(), {
       messages: conversation.getMessages(), modelSelection: conversation.getModelSelection(), viewState: conversation.getViewState(),
     });
-    const snapshot = { version: 1, currentSessionId, sessionSequence, sessions, ...(projectCurrentSessions.length ? { projectCurrentSessions } : {}) };
+    const snapshot = { version: /** @type {const} */ (1), currentSessionId, sessionSequence, sessions, ...(projectCurrentSessions.length ? { projectCurrentSessions } : {}) };
     remember(snapshot); projectCurrentSessions = snapshot.projectCurrentSessions || [];
     return snapshot;
   }
@@ -508,6 +515,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
   function createSession() {
     if (disposed || mutationBusy) return;
     conversation.stop(); capture();
+    /** @type {SessionSnapshot['sessions'][number]} */
     const session = { id: `session-${++sessionSequence}`, title: '新会话', draft: '', messages: [], references: [], pendingScenario: 'normal', autoTitle: true, ...(projectScoped ? { projectId: activeProjectId } : {}) };
     sessions.unshift(session); currentSessionId = session.id; restore(); schedule(); input.focus(); return session;
   }
@@ -560,6 +568,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     create.disabled = rename.disabled = title.disabled = value;
     for (const entry of recentRows.values()) entry.trigger.disabled = entry.row.disabled = value;
   }
+  /** @param {SessionSnapshot} snapshot */
   async function commitSnapshot(snapshot) {
     restoring = true;
     try {
@@ -574,6 +583,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
   function requireProjectRegistry() {
     if (projectScoped && knownProjects === null) throw Object.assign(new Error('项目列表尚未加载，请先在项目区重试，再追加导入。'), { code: 'projects-unavailable' });
   }
+  /** @returns {import('./session-data-dialog.js').SessionDataOptions} */
   function dataOptions() {
     return { document: doc, capture: () => {
       if (persistence?.getState().code === 'apply-failed') throw Object.assign(new Error('重新载入后可下载最新备份。'), { code: 'apply-failed' });
@@ -633,8 +643,11 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
         }
         remember(snapshot);
       }
-      if (associate) snapshot.sessions.find(item => item.id === currentSessionId).projectId = projectId;
-      else {
+      if (associate) {
+        const target = snapshot.sessions.find(item => item.id === snapshot.currentSessionId);
+        if (!target) return false;
+        target.projectId = projectId;
+      } else {
         const remembered = snapshot.projectCurrentSessions?.find(ref => ref.projectId === projectId);
         let target = snapshot.sessions.find(item => item.id === remembered?.sessionId && !item.archived && (item.projectId ?? null) === projectId)
           || snapshot.sessions.find(item => !item.archived && (item.projectId ?? null) === projectId);
