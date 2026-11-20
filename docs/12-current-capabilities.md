@@ -6,9 +6,9 @@
 
 2026-10-25更新：CLI未回答事实保留未知，源码依赖规则归入条件自查，精简清单保留检查限制。新增问答只补充事实，不把未知推断成否。导入会话和项目备份标记外部历史；打开报告前核对项目、运行和成果关联，导入摘要本身仍未核验。项目备份恢复已有预览、重新绑定本机目录和追加恢复路径；不恢复执行权限或重放工具。受限文件修复是另一个需要明确确认的候选流程，不能由导入历史触发。
 
-当前有 65 条默认数据规则、5 条跨项核验规则、2 条草稿规则和 24 条拒因记录。13 份规则文件按 `code / console / materials / manual_check` 标注处理动作，拒因记录按 `direct / possible` 标注相关性。AppSecret 暴露、不安全 HTTP 调用等本机代码项属于 `code`，域名配置也可能涉及 `console`。分类用于提示人工处理动作。
+当前有 66 条默认数据规则、5 条跨项核验规则、2 条草稿规则和 24 条拒因记录。13 份规则文件按 `code / console / materials / manual_check` 标注处理动作，拒因记录按 `direct / possible` 标注相关性。AppSecret 暴露、不安全 HTTP 调用等本机代码项属于 `code`，域名配置也可能涉及 `console`。分类用于提示人工处理动作。
 
-2026-11-19 实测 `npm run coverage` 和 `npm run accuracy`。15 个夹具共有 89 条人工标注。在 65 条默认数据规则和 5 项交叉核验中，有 30 个规则 ID 具备标注锚点。按这组标注计算，precision 和 recall 均为 1.000（TP55、FP0、FN0），分母分别是 TP + FP 和 TP + FN。 [规则覆盖率脚本](../scripts/coverage.mjs) [标注语料](../corpus/labels.json)
+2026-11-19 实测 `npm run coverage` 和 `npm run accuracy`。15 个夹具共有 89 条人工标注。在 66 条默认数据规则和 5 项交叉核验中，有 30 个规则 ID 具备标注锚点。按这组标注计算，precision 和 recall 均为 1.000（TP55、FP0、FN0），分母分别是 TP + FP 和 TP + FN。 [规则覆盖率脚本](../scripts/coverage.mjs) [标注语料](../corpus/labels.json)
 
 CI 的 Ubuntu 和 Node.js 22 组合另外生成一份供参考的 V8 代码覆盖率报告，统计测试执行到的 `bin/`、`src/` 和 `desktop/server/` 中的 `.mjs` 模块。
 

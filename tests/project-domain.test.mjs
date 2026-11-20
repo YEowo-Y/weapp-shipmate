@@ -191,6 +191,37 @@ test("情感陪伴关键词产生的工作流候选提示保留拟人化互动�
   assert.equal(category.status, "pending");
 });
 
+test("拟人化互动的监护人同意只进入对应主体的审核条件自查", () => {
+  const ruleId = "minor.anthropomorphic-guardian-consent";
+  for (const subject of ["enterprise", "individual_business", "personal", null]) {
+    const eligible = subject === "enterprise" || subject === "individual_business";
+    for (const businessType of ["向不满十四周岁用户提供其他拟人化互动服务", "普通 AI 问答", null]) {
+      const facts = { ...project.facts, businessType };
+      const report = runProjectTool("guide", { subject, facts });
+      const { items, selfCheck } = report.data.result;
+      const checks = selfCheck.filter(item => item.ruleId === ruleId);
+      assert.equal(checks.length, eligible ? 1 : 0, `${subject} / ${businessType}`);
+      assert.ok(!items.some(item => item.ruleId === ruleId));
+      const workflow = derive({ project: { ...project, subject, facts } });
+      const review = workflow.stages.find(stage => stage.id === "review");
+      const projected = review.items.filter(item => item.ruleId === ruleId);
+      assert.equal(projected.length, checks.length);
+      assert.ok(!workflow.categoryCandidates.some(item => item.ruleId === ruleId));
+      for (const [index, check] of checks.entries()) {
+        assert.equal(check.conditional, true);
+        assert.equal(check.manual_required, true);
+        assert.equal(check.severity, "warning");
+        assert.deepEqual(check.action_categories, ["manual_check"]);
+        assert.match(check.requires.join(" "), /不满十四周岁.*其他拟人化互动服务.*父母或其他监护人同意/);
+        assert.equal(check.official_url, "https://developers.weixin.qq.com/miniprogram/product/material/");
+        assert.equal(projected[index].conditional, true);
+        assert.deepEqual(projected[index].requires, check.requires);
+        assert.equal(review.status, "pending");
+      }
+    }
+  }
+});
+
 test("guide public payment/business inputs explain finite scope and retain unknown stages", () => {
   const result = runGuide({ has_payment: true, business_type: "商城", collects_sensitive: null });
   assert.ok(result.notes.some(note => note.includes("支付") && note.includes("不代表")));

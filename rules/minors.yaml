@@ -19,3 +19,21 @@ rules:
     source_quote: "对可能涉及不宜未成年人接触的内容或服务予以提醒或处理，保护未成年人的身心健康和合法权益。"
     last_verified: "2026-11-13"
     manual_required: true
+
+  - id: minor.anthropomorphic-guardian-consent
+    action_categories: ["manual_check"]
+    title: "拟人化互动监护人同意自查"
+    kind: navigation
+    stage: review
+    subject_type: ["individual_business", "enterprise"]
+    severity: warning
+    confidence: high
+    signal: ["不满十四周岁", "其他拟人化互动服务", "监护人同意"]
+    warn: "请对照微信「深度合成—拟人化互动」类目说明核对服务场景、适用年龄和监护人同意。"
+    requires:
+      - "若向不满十四周岁的未成年人提供微信类目条目所述的「其他拟人化互动服务」，请核对是否已取得该未成年人的父母或其他监护人同意。"
+    why: "微信官方服务类目表的「拟人化互动」条目对该年龄和服务场景列明监护人同意要求。"
+    official_url: "https://developers.weixin.qq.com/miniprogram/product/material/"
+    source_quote: "向不满十四周岁未成年人提供其他拟人化互动服务的，应当取得未成年人的父母或者其他监护人的同意。"
+    last_verified: "2026-11-19"
+    manual_required: true
