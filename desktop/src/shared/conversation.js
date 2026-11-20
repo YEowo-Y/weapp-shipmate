@@ -591,8 +591,9 @@ export function mountConversation(options) {
     });
     const guideCard = article.querySelector('[data-component="guide-result"]');
     if (guideCard) guideCardResults.set(guideCard, message.structuredResult);
-    for (const control of article.querySelectorAll('[data-action]')) {
-      if (message.role === 'assistant' && message.guide && ['copy', 'copy-guide'].includes(control.dataset.action)) control.dataset.copyGuide = 'true';
+    const actions = /** @type {NodeListOf<HTMLButtonElement>} */ (article.querySelectorAll('[data-action]'));
+    for (const control of actions) {
+      if (message.role === 'assistant' && message.guide && ['copy', 'copy-guide'].includes(control.dataset.action ?? '')) control.dataset.copyGuide = 'true';
       if (control.dataset.action === 'retry' || control.dataset.action === 'regenerate') {
         const source = sourceUserMessage(message);
         const label = source?.guide ? '使用原参数重新生成上线清单' : source?.live ? `使用原模型 ${source.live.label || source.live.model} ${control.dataset.action === 'retry' ? '重试' : '重新生成'}` : '重新运行本地演示';
@@ -736,7 +737,8 @@ export function mountConversation(options) {
     if (message.status === 'complete' && previousGuide && nextGuide && guideCardResults.get(previousGuide) === message.structuredResult) nextGuide.replaceWith(previousGuide);
     // Keep the live text subtrees: code scroll, selection, and in-flight copy
     // controls belong to the content, not to a tool/status update around it.
-    for (const nextText of replacement.querySelectorAll('.msg__text')) {
+    const textParts = /** @type {NodeListOf<HTMLDivElement>} */ (replacement.querySelectorAll('.msg__text'));
+    for (const nextText of textParts) {
       const previousText = [...article.querySelectorAll('.msg__text')]
         .find(node => node.dataset.partIndex === nextText.dataset.partIndex);
       if (!previousText) continue;
@@ -744,12 +746,14 @@ export function mountConversation(options) {
       updateMessageText(previousText, part ? part.text : message.text);
       nextText.replaceWith(previousText);
     }
-    for (const disclosure of replacement.querySelectorAll('details[data-component]')) {
+    const disclosures = /** @type {NodeListOf<HTMLDetailsElement>} */ (replacement.querySelectorAll('details[data-component]'));
+    for (const disclosure of disclosures) {
       if (expanded.has(disclosure.dataset.component)) disclosure.open = expanded.get(disclosure.dataset.component);
     }
-    const details = replacement.querySelector('.tool-details');
+    const details = /** @type {HTMLDetailsElement | null} */ (replacement.querySelector('.tool-details'));
     if (details && message.tool?.state === 'fail') details.open = true;
-    for (const detail of replacement.querySelectorAll('[data-component^="project-tool-"]')) if (detail.dataset.toolState === 'fail') detail.open = true;
+    const projects = /** @type {NodeListOf<HTMLDetailsElement>} */ (replacement.querySelectorAll('[data-component^="project-tool-"]'));
+    for (const detail of projects) if (detail.dataset.toolState === 'fail') detail.open = true;
     article.replaceWith(replacement);
     const nextResult = replacement.querySelector('.tool-result-json');
     if (resultScroll && nextResult) {
@@ -761,11 +765,12 @@ export function mountConversation(options) {
       if (replacement.contains(focused)) {
         nextFocus = focused;
       } else if (focusedAction) {
-        nextFocus = [...replacement.querySelectorAll('[data-action]')]
+        const actions = /** @type {NodeListOf<HTMLButtonElement>} */ (replacement.querySelectorAll('[data-action]'));
+        nextFocus = [...actions]
           .find(control => control.dataset.action === focusedAction && control.dataset.blockKey === focused.dataset.blockKey && control.dataset.artifactId === focused.dataset.artifactId && !control.disabled);
       } else if (focusedDisclosure) {
         nextFocus = [...replacement.querySelectorAll('details[data-component] > summary')]
-          .find(summary => summary.parentElement.dataset.component === focusedDisclosure);
+          .find(summary => summary.parentElement?.dataset.component === focusedDisclosure);
       } else if (focusedLink) {
         nextFocus = [...replacement.querySelectorAll('a')]
           .find(link => link.getAttribute('href') === focusedLink);

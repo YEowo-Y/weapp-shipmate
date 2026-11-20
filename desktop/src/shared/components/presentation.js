@@ -1,5 +1,9 @@
+// @ts-check
 import { validateGuideResult } from '../guide-contract.js';
 import { validateDemoResult } from '../demo-result.js';
+
+/** @typedef {import('../session-store.js').SessionSnapshot['sessions'][number]['messages'][number]} SessionMessage */
+/** @typedef {Pick<NonNullable<SessionMessage['live']>, 'providerId' | 'model' | 'label'>} LiveModel */
 
 // Canonical presentation of the existing preview states. No transport protocol.
 const reviews = Object.freeze({
@@ -22,11 +26,20 @@ const runs = Object.freeze({
   stopped: Object.freeze({ label: '已停止', announcement: '已停止，已保留生成内容。', tone: 'neutral' }),
   error: Object.freeze({ label: '失败', announcement: '运行失败，可重试本次请求。', tone: 'danger' }),
 });
+/**
+ * @template {Record<string, unknown>} Table
+ * @param {Table} table
+ * @param {unknown} state
+ * @param {string} kind
+ */
 function lookup(table, state, kind) {
-  if (!Object.hasOwn(table, state)) throw new Error(`Unknown ${kind} state: ${String(state)}`);
-  return table[state];
+  const key = /** @type {keyof Table} */ (state);
+  if (!Object.hasOwn(table, key)) throw new Error(`Unknown ${kind} state: ${String(state)}`);
+  return table[key];
 }
+/** @param {unknown} state */
 export const getReviewPresentation = state => lookup(reviews, state, 'review');
+/** @param {unknown} state */
 export const getToolPresentation = state => lookup(tools, state, 'tool');
 // Three visual phases (open-claude-ui McpToolDecisionCard): running → success | error.
 // A user stop settles as a quiet error-phase card, like upstream `user_denied`.
@@ -36,10 +49,12 @@ const toolPhases = Object.freeze({
   fail: Object.freeze({ phase: 'error', settle: 'failed' }),
   canceled: Object.freeze({ phase: 'error', settle: 'canceled' }),
 });
+/** @param {unknown} state */
 export const getToolPhase = state => lookup(toolPhases, state, 'tool');
 /**
- * @param {string} state
- * @param {{ result?: any; error?: any; kind?: string }} [options]
+ * @param {unknown} state
+ * @param {{ result?: unknown; error?: { message?: unknown; code?: unknown } | null; kind?: string }} [options]
+ * @returns {{ kind: 'empty' | 'error' | 'unavailable' | 'result'; text: string; code?: string }}
  */
 export function getToolOutputPresentation(state, { result, error, kind } = {}) {
   getToolPresentation(state);
@@ -55,7 +70,12 @@ export function getToolOutputPresentation(state, { result, error, kind } = {}) {
   if (!(kind === 'guide' ? validateGuideResult(result) : validateDemoResult(result)).ok) return { kind: 'unavailable', text: '结果不可用：本次未提供通过校验的数据。' };
   return { kind: 'result', text: JSON.stringify(result, null, 2) };
 }
+/** @param {unknown} state */
 export const getRunPresentation = state => lookup(runs, state, 'run');
+/**
+ * @param {unknown} state
+ * @param {{ text?: string; guide?: unknown; live?: LiveModel | null; error?: { retryable?: boolean } | null } | null} [message]
+ */
 export function getRunAnnouncement(state, message) {
   if (state === 'idle') return '';
   if (state === 'working' && message?.guide) return '正在整理本机已收录规则…';
@@ -64,7 +84,8 @@ export function getRunAnnouncement(state, message) {
   if (state === 'stopped' && !message?.text) return '已在输出前停止。';
   return getRunPresentation(state).announcement;
 }
+/** @param {{ state: unknown; elapsedMs?: number }} trace */
 export function formatTraceLabel(trace) {
-  const elapsed = Number.isFinite(trace.elapsedMs) ? Math.max(0, trace.elapsedMs) : 0;
+  const elapsed = typeof trace.elapsedMs === 'number' && Number.isFinite(trace.elapsedMs) ? Math.max(0, trace.elapsedMs) : 0;
   return `运行记录 · ${getRunPresentation(trace.state).label} · ${(elapsed / 1000).toFixed(1)} 秒`;
 }

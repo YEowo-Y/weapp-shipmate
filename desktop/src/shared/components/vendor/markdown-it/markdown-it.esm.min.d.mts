@@ -8,6 +8,7 @@ export interface MarkdownToken {
   markup: string;
   nesting: number;
   level: number;
+  hidden: boolean;
   attrGet(name: string): string | null;
 }
 export default class MarkdownIt {
