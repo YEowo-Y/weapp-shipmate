@@ -32,6 +32,7 @@
 - **broker 的 stdout 只能有 JSON 行**：`desktop/server/` 里不要用 `console.log`，Rust 端读到非 JSON 行会断开连接。
 - **改规则会牵动金快照和夹具钉板**：按 `CONTRIBUTING.md`「改规则的验收协议」裁决。
 - **前端**：新组件用 React 加 Base UI 原语，源码放 `desktop/src/components/ui/`，样式只用 `desktop/src/design-system.css` 的 `--ds-*` 令牌。不引入新的组件库，不再新增 Web Awesome 标签。
+- 实现或审查 HTML、CSS 或浏览器端 JavaScript 时，涉及原生能力选型、浏览器兼容性、可访问性、渲染性能，或考虑为常见交互引入依赖，优先查阅 [Modern Web Guidance 官方指南](https://developer.chrome.com/docs/modern-web-guidance/guides)。按任务选用相关建议，并在项目支持的浏览器或 WebView 中验证。项目已确认的布局、交互、组件约定和验收标准优先。
 - **文件名**：根 `.gitignore` 忽略 `secret*`、`.env*`、`*.log`，新文件不要用这些名字。文本文件一律 LF、UTF-8、末尾换行。
 - **PowerShell 输出中文**：先执行 `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8`。
 
