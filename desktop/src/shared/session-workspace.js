@@ -9,15 +9,16 @@ import { openSessionDataDialog, createSessionDataPanel } from './session-data-di
 export { sessionMatch };
 
 /** @typedef {import('./session-store.js').SessionSnapshot} SessionSnapshot */
-/** @typedef {SessionSnapshot['sessions'][number]} Session */
-/** @typedef {Pick<Session, 'references' | 'pendingScenario'>} DraftContext */
+/** @typedef {import('./conversation.js').ConversationMessage} ConversationMessage */
+/** @typedef {import('./conversation.js').ConversationOptions} ConversationOptions */
+/** @typedef {Omit<SessionSnapshot['sessions'][number], 'messages'> & { messages: ConversationMessage[] }} Session */
+/** @typedef {Omit<SessionSnapshot, 'sessions'> & { sessions: Session[] }} WorkspaceSnapshot */
 /** @typedef {import('./conversation-controller.js').ConversationEvent} ConversationEvent */
-/** @typedef {{ runId: string; kind: (typeof import('./agent-contract.js').AGENT_KINDS)[number]; projectRevision: number; contextRevision: number }} ArtifactReference */
 /** @typedef {HTMLElementTagNameMap & { 'wa-dropdown': HTMLElement; 'wa-dropdown-item': HTMLElement & { disabled: boolean } }} WorkspaceElements */
 /** @typedef {HTMLElementEventMap & DocumentEventMap & WindowEventMap} WorkspaceEvents */
 /** @typedef {ReturnType<typeof createActionButton>} ActionButton */
 /** @typedef {{ row: HTMLButtonElement; container: HTMLDivElement; trigger: ActionButton; dispose: () => void; title: string | null; active: boolean | null }} RecentRow */
-/** @typedef {ReturnType<typeof createSessionPersistence<SessionSnapshot>>} SessionPersistence */
+/** @typedef {ReturnType<typeof createSessionPersistence<WorkspaceSnapshot>>} SessionPersistence */
 
 /** @param {unknown} error */
 function errorCode(error) {
@@ -47,20 +48,7 @@ let workspaceSequence = 0;
  *   onOpenDataSettings?: (anchor: HTMLElement) => void;
  *   projectNavigation?: HTMLElement | null;
  *   navigationHeader?: HTMLElement | null;
- *   conversationOptions?: {
- *     requireModel?: boolean;
- *     allowRecords?: boolean;
- *     getSendShortcut?: () => string;
- *     transport?: (args: import('./chat-transport.js').ChatArgs) => ReturnType<typeof import('./chat-transport.js').streamChat>;
- *     setDraftContext?: (context: DraftContext) => void;
- *     onDraftChange?: () => void;
- *     onModelSelectionChange?: (selection: NonNullable<Session['modelSelection']> | null) => void;
- *     onMessagesChange?: (messages: Session['messages']) => void;
- *     onEvent?: (event: ConversationEvent) => void;
- *     onModelRequired?: () => void;
- *     onOpenArtifact?: (artifactId: string, expected: ArtifactReference) => Promise<void>;
- *     [key: string]: unknown;
- *   };
+ *   conversationOptions?: ConversationOptions;
  * }} options
  */
 export async function mountSessionWorkspace({ host, input, sendButton, scroll, list, status, jumpButton,
@@ -194,7 +182,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
   let projectCurrentSessions = loaded.snapshot?.projectCurrentSessions || [];
   /** @param {Session} session */
   const inScope = session => !projectScoped || (session.projectId ?? null) === activeProjectId;
-  /** @param {SessionSnapshot} snapshot */
+  /** @param {WorkspaceSnapshot} snapshot */
   function remember(snapshot) {
     if (!projectScoped) return;
     const { currentSessionId: sessionId } = snapshot;
@@ -207,9 +195,10 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
   }
   const notifySession = () => onSessionChange?.(current());
   function capture() {
-    if (conversation) Object.assign(current(), conversation.getDraftState(), {
+    if (conversation) Object.assign(current(), /** @satisfies {Pick<Session, 'draft' | 'draftView' | 'edit' | 'messages' | 'modelSelection' | 'viewState'>} */ ({
+      ...conversation.getDraftState(),
       messages: conversation.getMessages(), modelSelection: conversation.getModelSelection(), viewState: conversation.getViewState(),
-    });
+    }));
     const snapshot = { version: /** @type {const} */ (1), currentSessionId, sessionSequence, sessions, ...(projectCurrentSessions.length ? { projectCurrentSessions } : {}) };
     remember(snapshot); projectCurrentSessions = snapshot.projectCurrentSessions || [];
     return snapshot;
@@ -295,29 +284,26 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     conversation.replaceMessages(session.messages);
     conversation.setModelSelection(session.modelSelection || null);
     conversation.setDraft(session.draft, session.edit, session.draftView);
-    conversation.restoreViewState(session.viewState);
     restoring = false; renderTitle(); notifySession();
+    // The host can change scroll geometry when it hides the empty state.
+    conversation.restoreViewState(session.viewState);
   }
   input.disabled = sendButton.disabled = false;
   conversation = mountConversation({ ...conversationOptions, input, sendButton, scroll, list, status, jumpButton,
     initialMessages: current().messages,
     getDraftContext: () => ({ references: [...(current().references || [])], pendingScenario: current().pendingScenario || 'normal' }),
-    /** @param {DraftContext} context */
     setDraftContext(context) {
       Object.assign(current(), context, { references: [...(context.references || [])] });
       conversationOptions.setDraftContext?.(context); schedule();
     },
     onDraftChange() { conversationOptions.onDraftChange?.(); schedule(); },
-    /** @param {NonNullable<Session['modelSelection']> | null} selection */
     onModelSelectionChange(selection) { current().modelSelection = selection; conversationOptions.onModelSelectionChange?.(selection); schedule(); },
-    /** @param {Session['messages']} messages */
     onMessagesChange(messages) {
       current().messages = messages;
       const first = current().autoTitle && messages.find(message => message.role === 'user' && message.text.trim());
       if (first) { current().title = [...first.text.replace(/\s+/g, ' ').trim()].slice(0, 32).join(''); current().autoTitle = false; }
       renderTitle(); conversationOptions.onMessagesChange?.(messages); if (!restoring) notifySession(); schedule();
     },
-    /** @param {ConversationEvent} event */
     onEvent(event) { conversationOptions.onEvent?.(event); onEvent?.(event); },
   });
   restore();
@@ -583,7 +569,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
   function createSession() {
     if (disposed || mutationBusy) return;
     conversation.stop(); capture();
-    /** @type {SessionSnapshot['sessions'][number]} */
+    /** @type {Session} */
     const session = { id: `session-${++sessionSequence}`, title: '新会话', draft: '', messages: [], references: [], pendingScenario: 'normal', autoTitle: true, ...(projectScoped ? { projectId: activeProjectId } : {}) };
     sessions.unshift(session); currentSessionId = session.id; restore(); schedule(); input.focus(); return session;
   }
