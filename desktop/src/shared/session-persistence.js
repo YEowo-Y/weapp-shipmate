@@ -87,8 +87,9 @@ export function createSessionPersistence({ store, revision = 0, getSnapshot, onS
   // The caller locks edits until this resolves. Lifecycle schedules are queued behind
   // the transaction, so they capture the newly applied state instead of the old one.
   /**
-   * @param {Snapshot} snapshot
-   * @param {(snapshot: Snapshot) => void} apply
+   * @template {Snapshot} Candidate
+   * @param {Candidate} snapshot
+   * @param {(snapshot: Candidate) => void} apply
    */
   async function commitSnapshot(snapshot, apply) {
     /** @param {string} value */
