@@ -1,22 +1,43 @@
+// @ts-check
 import { createConnectionClient, isUsableModelConnection } from './model-connection-client.js';
-import { readUIMessageStream } from './ui-message-stream.js';
+import { isStreamId, parseUIMessagePayload, readUIMessageStream } from './ui-message-stream.js';
 import { AGENT_PROVIDERS, AGENT_TOOL_NAME, validateAgentInput, validateAgentResult } from './agent-contract.js';
 
 export const SUPPORTED_CHAT_PROVIDERS = Object.freeze({ openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', deepseek: 'DeepSeek', glm: 'GLM · 智谱', kimi: 'Kimi', openrouter: 'OpenRouter', ollama: 'Ollama', custom: '自定义兼容服务' });
 class ChatTransportError extends Error {}
-const fail = message => { throw new ChatTransportError(message); };
+/** @param {string} message @returns {never} */
+function fail(message) { throw new ChatTransportError(message); }
 const abortError = () => Object.assign(new Error('回复已停止。'), { name: 'AbortError' });
+/** @param {AbortSignal} [signal] */
 const checkAbort = signal => { if (signal?.aborted) throw abortError(); };
+
+/** @typedef {import('./agent-contract.js').AgentInput} AgentInput */
+/** @typedef {import('./agent-contract.js').AgentResult} AgentResult */
+/** @typedef {{ projectId: string; sessionId: string; allowRead: true; shareResults: boolean }} AgentGrant */
+/** @typedef {(text: string, meta?: { textId?: string }) => void} OnDelta */
+/**
+ * @typedef {{ toolCallId: string } & (
+ *   { type: 'tool-input-start'; toolName: typeof AGENT_TOOL_NAME } |
+ *   { type: 'tool-input-delta'; inputTextDelta: string } |
+ *   { type: 'tool-input-available'; toolName: typeof AGENT_TOOL_NAME; input: AgentInput } |
+ *   { type: 'tool-input-error'; toolName: typeof AGENT_TOOL_NAME; errorText: string } |
+ *   { type: 'tool-output-available'; output: AgentResult } |
+ *   { type: 'tool-output-error'; errorText: string }
+ * )} AgentToolEvent
+ */
+/** @typedef {(event: AgentToolEvent) => void} OnToolEvent */
+/** @typedef {{ state: 'input' | 'running' | 'success' | 'error'; inputLength: number; input?: AgentInput }} ToolProgress */
+/** @typedef {{ fetcher?: typeof fetch; timeoutMs?: number; setTimer?: typeof setTimeout; clearTimer?: typeof clearTimeout }} TransportOptions */
 
 /**
  * @typedef {{
  *   providerId: string;
  *   model: string;
- *   messages: { role: string; content: string }[];
- *   signal: AbortSignal;
- *   agent?: { projectId: string; sessionId: string; allowRead: boolean; shareResults: boolean } | any;
- *   onDelta?: (text: string, meta?: { textId?: string }) => void;
- *   onToolEvent?: (event: any) => void;
+ *   messages: ReadonlyArray<{ role: string; content: string }>;
+ *   signal?: AbortSignal;
+ *   agent?: AgentGrant;
+ *   onDelta?: OnDelta;
+ *   onToolEvent?: OnToolEvent;
  * }} ChatArgs
  */
 
@@ -32,30 +53,35 @@ export async function loadChatConnections({ signal, fetcher = fetch } = {}) {
     return snapshot;
   } catch (error) {
     checkAbort(signal);
-    throw new ChatTransportError(error.message);
+    const message = (/** @type {{ message?: unknown } | null | undefined} */ (error))?.message;
+    throw new ChatTransportError(typeof message === 'string' ? message : '本地连接服务不可用，请重新启动应用后重试。');
   } finally { signal?.removeEventListener('abort', abort); client.dispose(); }
 }
 
 // AI SDK UI Message Stream v1, deliberately limited to one plain-text block.
 // SSE is decoded independently of fetch chunk boundaries, including split CRLF.
+/** @param {ReadableStream<Uint8Array>} body @param {AbortSignal} signal @param {OnDelta} onDelta */
 async function readTextStream(body, signal, onDelta) {
-  let textLength = 0, stage = 'initial', textId = null;
+  let textLength = 0;
+  /** @type {'initial' | 'started' | 'text' | 'ended' | 'finished'} */
+  let stage = 'initial';
+  /** @type {string | null} */
+  let textId = null;
+  /** @type {() => never} */
   const malformed = () => fail('回复流格式不受支持，请重试。');
-  const id = value => typeof value === 'string' && value.length > 0 && value.length <= 256;
+  /** @param {string} payload */
   function onData(payload) {
     if (payload === '[DONE]') {
       if (stage !== 'finished') fail('回复在完成前中断，请重试。');
       return true;
     }
-    let value;
-    try { value = JSON.parse(payload); } catch { malformed(); }
-    if (!value || typeof value !== 'object' || Array.isArray(value)) malformed();
+    const value = parseUIMessagePayload(payload, malformed);
     if (value.type === 'error') {
       fail(typeof value.errorText === 'string' && value.errorText.length <= 500 ? value.errorText : '模型未能完成回复，请重试。');
     }
     if (value.type === 'abort') fail('服务端已中止回复，已保留收到的文本。');
-    if (value.type === 'start' && stage === 'initial' && id(value.messageId)) stage = 'started';
-    else if (value.type === 'text-start' && stage === 'started' && id(value.id)) { stage = 'text'; textId = value.id; }
+    if (value.type === 'start' && stage === 'initial' && isStreamId(value.messageId)) stage = 'started';
+    else if (value.type === 'text-start' && stage === 'started' && isStreamId(value.id)) { stage = 'text'; textId = value.id; }
     else if (value.type === 'text-delta' && stage === 'text' && value.id === textId && typeof value.delta === 'string') {
       textLength += value.delta.length;
       if (textLength > 262144) fail('回复超出显示长度限制，已保留收到的文本。');
@@ -71,23 +97,35 @@ async function readTextStream(body, signal, onDelta) {
 }
 
 // Agent mode uses the SDK's standard lifecycle, independently of the legacy text subset.
+/**
+ * @param {ReadableStream<Uint8Array>} body
+ * @param {AbortSignal} signal
+ * @param {OnDelta} onDelta
+ * @param {OnToolEvent} onToolEvent
+ */
 export async function readAgentStream(body, signal, onDelta, onToolEvent) {
   let started = false, finished = false, step = false, steps = 0, length = 0;
-  const texts = new Map(), tools = new Map();
+  /** @type {Map<string, 'open' | 'closed'>} */
+  const texts = new Map();
+  /** @type {Map<string, ToolProgress>} */
+  const tools = new Map();
+  /** @type {() => never} */
   const malformed = () => fail('Agent 回复流格式或执行顺序无效，已保留收到的内容。');
-  const id = value => typeof value === 'string' && value.length > 0 && value.length <= 256;
+  /** @param {ToolProgress} tool */
   const terminal = tool => ['success', 'error'].includes(tool.state);
+  /** @param {Record<string, unknown>} value */
   const createTool = value => {
-    if (!id(value.toolCallId) || value.toolName !== AGENT_TOOL_NAME || tools.size >= 2 || [...tools.values()].some(tool => !terminal(tool))) malformed();
+    if (!isStreamId(value.toolCallId) || value.toolName !== AGENT_TOOL_NAME || tools.size >= 2 || [...tools.values()].some(tool => !terminal(tool))) malformed();
+    /** @type {ToolProgress} */
     const tool = { state: 'input', inputLength: 0 }; tools.set(value.toolCallId, tool); return tool;
   };
   await readUIMessageStream(body, { signal, fail, checkAbort, onData(payload) {
     if (payload === '[DONE]') { if (!finished) malformed(); return true; }
-    let value; try { value = JSON.parse(payload); } catch { malformed(); }
-    if (!value || typeof value !== 'object' || Array.isArray(value) || finished) malformed();
+    const value = parseUIMessagePayload(payload, malformed);
+    if (finished) malformed();
     if (value.type === 'error') fail(typeof value.errorText === 'string' && value.errorText.length <= 500 ? value.errorText : 'Agent 未完成本次执行。');
     if (value.type === 'abort') fail('执行已中止，已保留收到的内容。');
-    if (value.type === 'start') { if (started || !id(value.messageId)) malformed(); started = true; return; }
+    if (value.type === 'start') { if (started || !isStreamId(value.messageId)) malformed(); started = true; return; }
     if (!started) malformed();
     if (value.type === 'start-step') { if (step || ++steps > 3) malformed(); step = true; return; }
     if (value.type === 'finish-step') {
@@ -100,14 +138,14 @@ export async function readAgentStream(body, signal, onDelta, onToolEvent) {
       finished = true; return;
     }
     if (!step) malformed();
-    if (value.type === 'text-start') { if (!id(value.id) || texts.has(value.id) || texts.size >= 24) malformed(); texts.set(value.id, 'open'); return; }
+    if (value.type === 'text-start') { if (!isStreamId(value.id) || texts.has(value.id) || texts.size >= 24) malformed(); texts.set(value.id, 'open'); return; }
     if (value.type === 'text-delta') {
-      if (texts.get(value.id) !== 'open' || typeof value.delta !== 'string') malformed();
+      if (typeof value.id !== 'string' || texts.get(value.id) !== 'open' || typeof value.delta !== 'string') malformed();
       length += value.delta.length; if (length > 262144) fail('回复超出显示长度限制。');
       checkAbort(signal); if (value.delta) onDelta(value.delta, { textId: value.id }); return;
     }
-    if (value.type === 'text-end') { if (texts.get(value.id) !== 'open') malformed(); texts.set(value.id, 'closed'); return; }
-    if (!id(value.toolCallId)) malformed();
+    if (value.type === 'text-end') { if (typeof value.id !== 'string' || texts.get(value.id) !== 'open') malformed(); texts.set(value.id, 'closed'); return; }
+    if (!isStreamId(value.toolCallId)) malformed();
     let tool = tools.get(value.toolCallId);
     if (value.type === 'tool-input-start') { if (tool) malformed(); createTool(value); }
     else if (value.type === 'tool-input-delta') {
@@ -117,20 +155,24 @@ export async function readAgentStream(body, signal, onDelta, onToolEvent) {
       if (!tool) tool = createTool(value);
       if (tool.state !== 'input' || value.toolName !== AGENT_TOOL_NAME) malformed();
       if (value.type === 'tool-input-available') {
-        if (!validateAgentInput(value.input).ok) malformed(); tool.state = 'running'; tool.input = value.input;
+        if (!validateAgentInput(value.input).ok) malformed();
+        tool.state = 'running'; tool.input = /** @type {AgentInput} */ (value.input);
       } else { if (typeof value.errorText !== 'string' || value.errorText.length > 500) malformed(); tool.state = 'error'; }
     } else if (value.type === 'tool-output-available') {
-      if (!tool || tool.state !== 'running' || !validateAgentResult(value.output).ok || value.output.kind !== tool.input.kind) malformed(); tool.state = 'success';
+      if (!tool || tool.state !== 'running' || !validateAgentResult(value.output).ok || (/** @type {AgentResult} */ (value.output)).kind !== tool.input?.kind) malformed();
+      tool.state = 'success';
     } else if (value.type === 'tool-output-error') {
       if (!tool || tool.state !== 'running' || typeof value.errorText !== 'string' || value.errorText.length > 500) malformed(); tool.state = 'error';
     } else malformed();
-    checkAbort(signal); onToolEvent(value);
+    checkAbort(signal);
+    // The matching branch validates this event's payload and current tool state.
+    onToolEvent(/** @type {AgentToolEvent} */ (value));
   } });
 }
 
 /**
  * @param {ChatArgs} request
- * @param {{ fetcher?: typeof fetch; timeoutMs?: number; setTimer?: typeof setTimeout; clearTimer?: typeof clearTimeout }} [options]
+ * @param {TransportOptions} [options]
  */
 export async function streamChat({ providerId, model, messages, signal, agent, onDelta = () => {}, onToolEvent = () => {} }, {
   fetcher = fetch, timeoutMs = 130000, setTimer = setTimeout, clearTimer = clearTimeout,
@@ -138,9 +180,13 @@ export async function streamChat({ providerId, model, messages, signal, agent, o
   checkAbort(signal);
   if (!Object.hasOwn(SUPPORTED_CHAT_PROVIDERS, providerId)) fail('此服务商尚不支持文本对话。');
   if (typeof model !== 'string' || !model || !Array.isArray(messages) || !messages.length) fail('对话请求格式不正确。');
-  if (agent && (!AGENT_PROVIDERS.includes(providerId) || agent.allowRead !== true || typeof agent.shareResults !== 'boolean' || !['projectId', 'sessionId'].every(key => typeof agent[key] === 'string' && agent[key].length > 0 && agent[key].length <= 256) || Object.keys(agent).some(key => !['projectId', 'sessionId', 'allowRead', 'shareResults'].includes(key)))) fail('项目工具授权格式无效。');
+  if (agent && (!AGENT_PROVIDERS.includes(providerId) || agent.allowRead !== true || typeof agent.shareResults !== 'boolean' || !(/** @type {const} */ (['projectId', 'sessionId'])).every(key => isStreamId(agent[key])) || Object.keys(agent).some(key => !['projectId', 'sessionId', 'allowRead', 'shareResults'].includes(key)))) fail('项目工具授权格式无效。');
   const controller = new AbortController();
-  let timer, interrupt;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timer;
+  /** @type {(reason: unknown) => void} */
+  let interrupt;
+  /** @type {Promise<never>} */
   const interrupted = new Promise((_resolve, reject) => { interrupt = reject; });
   const stop = () => { controller.abort(); interrupt(abortError()); };
   signal?.addEventListener('abort', stop, { once: true });
@@ -161,6 +207,7 @@ export async function streamChat({ providerId, model, messages, signal, agent, o
       if (controller.signal.aborted) { void response.body?.cancel().catch(() => {}); checkAbort(controller.signal); }
       if (!response.ok) {
         void response.body?.cancel().catch(() => {});
+        /** @type {Partial<Record<number, string>>} */
         const errors = {
           400: '模型或输入不受支持，请检查所选模型与文本。',
           401: '模型连接或本地会话已失效，请重新连接。',
@@ -180,7 +227,7 @@ export async function streamChat({ providerId, model, messages, signal, agent, o
     })()]);
   } catch (error) {
     if (signal?.aborted) throw abortError();
-    if (error instanceof ChatTransportError || error?.name === 'AbortError') throw error;
+    if (error instanceof ChatTransportError || (/** @type {{ name?: unknown } | null | undefined} */ (error))?.name === 'AbortError') throw error;
     fail('回复连接中断，请检查网络后手动重试。');
   } finally { clearTimer(timer); signal?.removeEventListener('abort', stop); controller.abort(); }
 }
