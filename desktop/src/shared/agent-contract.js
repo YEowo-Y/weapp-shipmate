@@ -3,7 +3,7 @@
 // These validators never grant permissions or accept paths/identities from the model.
 export const AGENT_TOOL_NAME = 'project_read';
 export const AGENT_PROVIDERS = Object.freeze(['openai', 'anthropic', 'google']);
-export const AGENT_KINDS = Object.freeze(['check', 'guide', 'explain']);
+export const AGENT_KINDS = Object.freeze(/** @type {const} */ (['check', 'guide', 'explain']));
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const exact = (value, keys) => record(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
 // eslint-disable-next-line no-control-regex -- Deliberately reject non-whitespace control characters at the data boundary.
