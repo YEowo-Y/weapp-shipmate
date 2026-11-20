@@ -1,3 +1,4 @@
+// @ts-check
 import { validateAgentResult } from '../agent-contract.js';
 import { STAGES } from '../stages.js';
 import { validateGuideResult } from '../guide-contract.js';
@@ -7,12 +8,30 @@ import { getReviewPresentation, getToolPresentation, getToolPhase, getToolOutput
 import { createIcon } from './icons.js';
 import { renderMessageText } from './message-markdown.js';
 
+/** @typedef {import('../session-store.js').SessionSnapshot['sessions'][number]} Session */
+/** @typedef {Session['messages'][number]} SessionMessage */
+/** @typedef {import('./presentation.js').LiveModel} LiveModel */
+/** @typedef {Omit<SessionMessage, 'live'> & { live?: LiveModel | null }} RenderMessage */
+/** @typedef {NonNullable<SessionMessage['tool']>} MessageTool */
+/** @typedef {ReturnType<typeof import('../demo-result.js').createDemoResult>} DemoResult */
+/** @typedef {{ result?: unknown; error?: SessionMessage['error']; messageId?: string; provenance?: SessionMessage['provenance'] }} ToolCardContext */
+/** @typedef {Omit<NonNullable<SessionMessage['trace']>, 'kind'> & { kind?: 'guide' | 'model' }} RunTrace */
+/** @typedef {{ label: string; phase: ReturnType<typeof getToolPhase>['phase'] }} TraceStep */
+
+/**
+ * @template {keyof HTMLElementTagNameMap} Tag
+ * @param {Document} doc
+ * @param {Tag} tag
+ * @param {string} [className]
+ * @param {string} [text]
+ */
 function element(doc, tag, className, text) {
   const node = doc.createElement(tag);
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
 }
+/** @param {Document} doc @param {string} label @param {string} name @param {string} messageId */
 function action(doc, label, name, messageId) {
   const node = element(doc, 'button', 'message-action', label);
   node.type = 'button';
@@ -21,48 +40,56 @@ function action(doc, label, name, messageId) {
   return node;
 }
 // Tool cards expose one of three visual phases plus why they settled.
+/** @param {HTMLElement} card @param {MessageTool['state']} state */
 function applyToolPhase(card, state) {
   const { phase, settle } = getToolPhase(state);
   card.dataset.toolPhase = phase;
   card.dataset.settle = settle;
 }
+/** @param {Document} doc @param {MessageTool['state']} state */
 function toolIndicator(doc, state) {
-  const iconName = { success: 'check', fail: 'circle-alert', canceled: 'square' }[state];
+  const iconName = state && state !== 'running' ? { success: 'check', fail: 'circle-alert', canceled: 'square' }[state] : undefined;
   if (iconName) return createIcon(doc, iconName, 'tool-details__icon');
   const pulse = element(doc, 'span', 'tool-details__pulse');
   pulse.setAttribute('aria-hidden', 'true');
   return pulse;
 }
+/** @param {Document} doc @param {{ label: string; tone: string }} presentation */
 function badge(doc, presentation) {
   const node = element(doc, 'span', 'component-status', presentation.label);
   node.dataset.tone = presentation.tone;
   return node;
 }
+/** @param {HTMLElement} host @param {unknown} value */
 export function updateMessageText(host, value) {
   renderMessageText(host, value);
 }
 
+/** @param {HTMLElement} article @param {Pick<SessionMessage, 'status' | 'role'>} message */
 export function updateMessageState(article, message) {
   const state = message.status || 'complete';
   const busy = state === 'working' || state === 'streaming';
   article.dataset.state = state;
   article.className = `msg ${message.role === 'user' ? 'msg--user' : 'msg--agent'} msg--${state}`;
   article.querySelector('.msg__parts')?.setAttribute('aria-busy', String(busy));
-  const progress = article.querySelector('.message-progress');
+  const progress = /** @type {HTMLElement | null} */ (article.querySelector('.message-progress'));
   if (progress) {
     progress.hidden = !busy;
-    progress.querySelector('span').textContent = state === 'working' ? '正在准备…' : '正在生成…';
+    const label = progress.querySelector('span');
+    if (label) label.textContent = state === 'working' ? '正在准备…' : '正在生成…';
   }
 }
 
+/** @param {Document} doc @param {MessageTool} tool @param {ToolCardContext} [context] */
 export function createToolCard(doc, tool, context = {}) {
+  // Version 1 history may contain a tool without an execution state.
+  if (tool.state == null) return element(doc, 'p', 'tool-output-message', `${tool.label || '工具'} · 状态未记录`);
   if (tool.kind === 'project') return createProjectToolCard(doc, tool, context);
   const imported = tool.provenance === 'imported' || context.provenance === 'imported';
   const view = imported ? { label: `历史记录：${getToolPresentation(tool.state).label} · 未核验`, tone: 'neutral' } : getToolPresentation(tool.state);
   const card = element(doc, 'details', 'tool-details');
   card.dataset.component = 'tool';
-  card.dataset.toolState = tool.state;
-  card.dataset.state = tool.state;
+  card.dataset.toolState = card.dataset.state = String(tool.state);
   applyToolPhase(card, tool.state);
   card.open = tool.state === 'fail';
   const header = element(doc, 'summary', 'tool-details__header');
@@ -85,8 +112,13 @@ export function createToolCard(doc, tool, context = {}) {
   output.setAttribute('aria-label', '工具结果');
   output.append(element(doc, 'strong', 'component-caption', '工具结果'));
   if (outputView.kind === 'result') {
-    const counts = context.result.counts;
-    output.append(element(doc, 'p', 'tool-output-message', tool.kind === 'guide' ? '清单已生成；工具成功不代表合规通过，仍需人工核对。' : `示例检查完成：${counts.warning} 项提醒，${counts.info} 项说明。未扫描真实项目。`));
+    let description = '清单已生成；工具成功不代表合规通过，仍需人工核对。';
+    if (tool.kind !== 'guide') {
+      // A result for a non-guide tool has passed validateDemoResult in the presentation helper.
+      const { counts } = /** @type {DemoResult} */ (context.result);
+      description = `示例检查完成：${counts.warning} 项提醒，${counts.info} 项说明。未扫描真实项目。`;
+    }
+    output.append(element(doc, 'p', 'tool-output-message', description));
     const resultPre = element(doc, 'pre', 'tool-result-json');
     resultPre.tabIndex = 0;
     resultPre.setAttribute('role', 'region');
@@ -112,11 +144,20 @@ export function createToolCard(doc, tool, context = {}) {
   return card;
 }
 
+/**
+ * @typedef {{
+ *   title: string; summary: string; itemCount: number; truncated: boolean; scopeComplete: boolean | null;
+ *   projectRevision: number; contextRevision: number; artifactId: string;
+ *   items: { ruleId: string; title: string; sourceUrl: string }[];
+ * }} ProjectToolSummary
+ */
+
+/** @param {Document} doc @param {MessageTool} tool @param {ToolCardContext} context */
 function createProjectToolCard(doc, tool, context) {
   const imported = tool.provenance === 'imported' || context.provenance === 'imported';
   const card = element(doc, 'details', 'tool-details');
   card.dataset.component = `project-tool-${tool.toolCallId}`;
-  card.dataset.toolState = tool.state; card.dataset.state = tool.state;
+  card.dataset.toolState = card.dataset.state = String(tool.state);
   applyToolPhase(card, tool.state);
   card.open = tool.state === 'fail';
   const header = element(doc, 'summary', 'tool-details__header');
@@ -124,8 +165,8 @@ function createProjectToolCard(doc, tool, context) {
   header.append(element(doc, 'span', 'tool-details__title', tool.label), badge(doc, imported ? { label: `历史记录：${getToolPresentation(tool.state).label} · 未核验`, tone: 'neutral' } : tool.state === 'running' ? { label: '请求本机执行', tone: 'neutral' } : getToolPresentation(tool.state)));
   const body = element(doc, 'div', 'tool-details__body');
   body.append(element(doc, 'p', 'tool-identity', imported ? '导入历史 · 尚未核验本机报告' : '项目只读工具 · 打开报告前将核验本机记录'));
-  const result = context.result;
-  if (tool.state === 'success' && validateAgentResult(result).ok) {
+  if (tool.state === 'success' && validateAgentResult(context.result).ok) {
+    const result = /** @type {ProjectToolSummary} */ (context.result);
     body.append(element(doc, 'strong', '', result.title), element(doc, 'p', 'tool-output-message', result.summary));
     body.append(element(doc, 'p', 'component-caption', `共 ${result.itemCount} 项${result.truncated ? ' · 当前展示部分摘要' : ''} · 项目版本 ${result.projectRevision} · 事实版本 ${result.contextRevision}`));
     if (result.scopeComplete === false) body.append(element(doc, 'p', 'component-caption', '本次扫描范围不完整，请在报告中核对限制。'));
@@ -146,8 +187,10 @@ function createProjectToolCard(doc, tool, context) {
   card.append(header, body); return card;
 }
 
-export function createResultCard(doc, result) {
-  if (!validateDemoResult(result).ok) throw new Error('Cannot render an invalid demo result');
+/** @param {Document} doc @param {unknown} value */
+export function createResultCard(doc, value) {
+  if (!validateDemoResult(value).ok) throw new Error('Cannot render an invalid demo result');
+  const result = /** @type {DemoResult} */ (value);
   const card = element(doc, 'section', 'structured-result');
   card.dataset.component = 'result';
   card.dataset.simulation = 'true';
@@ -169,56 +212,70 @@ export function createResultCard(doc, result) {
   return card;
 }
 
+/** @typedef {{ detail: HTMLDetailsElement; component: string; rows: { row: HTMLLIElement; text: string }[] }} GuideStageView */
+/** @typedef {{ query: string; stages: GuideStageView[]; baseline: Map<string, boolean>; total: number; input: HTMLInputElement; status: HTMLElement; empty: HTMLElement }} GuideView */
+/** @typedef {NonNullable<NonNullable<Session['viewState']>['guideResults']>[number]['state']} SavedGuideView */
+
+/** @type {WeakMap<Element, GuideView>} */
 const guideViews = new WeakMap();
+/** @param {Element} card */
 export function getGuideViewState(card) {
   const view = guideViews.get(card);
   if (!view) return null;
-  return { query: view.query, disclosures: view.stages.map(({ detail }) => ({ component: detail.dataset.component, open: view.query.trim() ? view.baseline.get(detail.dataset.component) === true : detail.open === true })) };
+  return { query: view.query, disclosures: view.stages.map(({ detail, component }) => ({ component, open: view.query.trim() ? view.baseline.get(component) === true : detail.open === true })) };
 }
+/** @param {Element} card @param {unknown} query */
 export function updateGuideFilter(card, query) {
   const view = guideViews.get(card);
   if (!view) return;
   const next = typeof query === 'string' ? query.slice(0, 200) : '';
-  if (!view.query.trim() && next.trim()) view.baseline = new Map(view.stages.map(({ detail }) => [detail.dataset.component, detail.open === true]));
+  if (!view.query.trim() && next.trim()) view.baseline = new Map(view.stages.map(({ detail, component }) => [component, detail.open === true]));
   const needle = next.trim().toLocaleLowerCase();
   let count = 0;
-  for (const { detail, rows } of view.stages) {
+  for (const { detail, component, rows } of view.stages) {
     let matches = 0;
     for (const { row, text } of rows) { row.hidden = Boolean(needle) && !text.includes(needle); if (!row.hidden) matches++; }
     detail.hidden = matches === 0;
     count += matches;
     if (needle) detail.open = matches > 0;
-    else if (view.query.trim()) detail.open = view.baseline.get(detail.dataset.component) === true;
+    else if (view.query.trim()) detail.open = view.baseline.get(component) === true;
   }
   view.query = next;
   if (view.input.value !== next) view.input.value = next;
   view.status.textContent = needle ? `找到 ${count} 项，共 ${view.total} 项` : `共 ${view.total} 项`;
   view.empty.hidden = count > 0;
 }
+/** @param {Element} card @param {SavedGuideView | null | undefined} saved */
 export function restoreGuideViewState(card, saved) {
   const view = guideViews.get(card);
   if (!view || !saved || typeof saved !== 'object') return;
   const disclosures = new Map((Array.isArray(saved.disclosures) ? saved.disclosures : []).filter(item => item && typeof item.component === 'string' && typeof item.open === 'boolean').map(item => [item.component, item.open]));
   view.query = '';
-  for (const { detail } of view.stages) detail.open = disclosures.get(detail.dataset.component) === true;
+  for (const { detail, component } of view.stages) detail.open = disclosures.get(component) === true;
   updateGuideFilter(card, saved.query);
 }
-export function createGuideResultCard(doc, result, context = {}) {
-  if (!validateGuideResult(result).ok) throw new Error('Cannot render an invalid guide result');
+
+/**
+ * Fields displayed from a validated guide item.
+ * @typedef {{
+ *   title: string; ruleId: string; stage: string; requires: string[];
+ *   why?: string | null; warn?: string | null; note?: string | null; source_quote?: string | null;
+ *   official_url?: string | null; last_verified?: string | null;
+ *   confidence?: 'high' | 'medium' | 'low';
+ *   action_categories?: ('code' | 'console' | 'materials' | 'manual_check')[];
+ * }} GuideItem
+ */
+/** @typedef {{ items: GuideItem[]; selfCheck: GuideItem[]; notes: string[] }} GuideContent */
+/** @typedef {Pick<ToolCardContext, 'messageId' | 'provenance'> & { input?: SessionMessage['guide'] }} GuideCardContext */
+
+/** @param {Document} doc @param {unknown} value @param {GuideCardContext} [context] */
+export function createGuideResultCard(doc, value, context = {}) {
+  if (!validateGuideResult(value).ok) throw new Error('Cannot render an invalid guide result');
+  const result = /** @type {GuideContent} */ (value);
   const card = element(doc, 'section', 'structured-result guide-result');
   card.dataset.component = 'guide-result';
   card.dataset.messageId = context.messageId || '';
-  /**
-   * @type {{
-   *   query: string;
-   *   stages: { detail: HTMLElement; rows: { row: HTMLElement; text: string }[] }[];
-   *   baseline: Map<any, any>;
-   *   total: number;
-   *   input: HTMLInputElement;
-   *   status: HTMLElement;
-   *   empty: HTMLElement;
-   * }}
-   */
+  /** @type {GuideView} */
   const view = {
     query: '',
     stages: [],
@@ -239,22 +296,25 @@ export function createGuideResultCard(doc, result, context = {}) {
   view.input.type = 'search'; view.input.maxLength = 200; view.input.value = ''; view.input.dataset.guideSearch = ''; view.input.dataset.messageId = context.messageId || ''; search.append(view.input);
   view.status.setAttribute('role', 'status'); view.status.setAttribute('aria-live', 'polite');
   card.append(toolbar, element(doc, 'p', 'component-caption', '搜索仅影响显示；复制和下载始终导出完整清单。'), search, view.status, view.empty);
-  for (const [label, items] of [['适用规则', result.items], ['条件待确认', result.selfCheck]]) {
+  for (const [label, items] of /** @type {const} */ ([['适用规则', result.items], ['条件待确认', result.selfCheck]])) {
     const section = element(doc, 'section', 'guide-result__section');
     section.append(element(doc, 'h4', '', `${label} · ${items.length} 项`));
     if (label === '条件待确认') section.append(element(doc, 'p', 'component-caption', '请先确认是否适用；这些条目不计为已确认阻断。'));
     if (!items.length) section.append(element(doc, 'p', 'component-caption', '此分组没有条目。'));
+    /** @type {Map<string, GuideItem[]>} */
     const stages = new Map();
     for (const item of items) {
-      if (!stages.has(item.stage)) stages.set(item.stage, []);
-      stages.get(item.stage).push(item);
+      const entries = stages.get(item.stage);
+      if (entries) entries.push(item);
+      else stages.set(item.stage, [item]);
     }
     for (const [stage, entries] of stages) {
       const detail = element(doc, 'details', 'guide-result__stage');
       const stageTitle = STAGES.find(entry => entry.id === stage)?.title || stage;
-      detail.dataset.component = `guide-${label === '适用规则' ? 'applicable' : 'conditional'}-${stage}`;
-      /** @type {{ detail: HTMLElement; rows: { row: HTMLElement; text: string }[] }} */
-      const stageView = { detail, rows: [] }; view.stages.push(stageView);
+      const component = `guide-${label === '适用规则' ? 'applicable' : 'conditional'}-${stage}`;
+      detail.dataset.component = component;
+      /** @type {GuideStageView} */
+      const stageView = { detail, component, rows: [] }; view.stages.push(stageView);
       detail.append(element(doc, 'summary', '', `${stageTitle} · ${entries.length} 项`));
       const list = element(doc, 'ul', 'guide-result__items');
       for (const item of entries) {
@@ -283,6 +343,7 @@ export function createGuideResultCard(doc, result, context = {}) {
   return card;
 }
 
+/** @param {Document} doc @param {NonNullable<SessionMessage['review']>} review */
 export function createApprovalCard(doc, review, { messageId = '' } = {}) {
   const view = getReviewPresentation(review.state);
   const card = element(doc, 'section', 'approval-card');
@@ -306,13 +367,17 @@ export function createApprovalCard(doc, review, { messageId = '' } = {}) {
 // private model reasoning is intentionally never published to the UI.
 const LIVE_RUN_STATES = new Set(['working', 'streaming']);
 const TOOL_STATES = new Set(['running', 'success', 'fail', 'canceled']);
-export function isLiveRun(state) { return LIVE_RUN_STATES.has(state); }
+/** @param {SessionMessage['status']} state */
+export function isLiveRun(state) { return state !== undefined && LIVE_RUN_STATES.has(state); }
+/** @param {Pick<SessionMessage, 'status' | 'parts' | 'tool' | 'text' | 'error'>} message */
 export function getTraceSteps(message) {
   const live = isLiveRun(message.status);
+  /** @type {NonNullable<SessionMessage['parts']>} */
   const parts = message.parts || (message.tool ? [{ type: 'tool', tool: message.tool }] : []);
+  /** @type {TraceStep[]} */
   const steps = [{ label: '已接收请求', phase: 'success' }];
   for (const part of parts) {
-    if (part.type !== 'tool' || !part.tool || !TOOL_STATES.has(part.tool.state)) continue;
+    if (part.type !== 'tool' || !part.tool?.state || !TOOL_STATES.has(part.tool.state)) continue;
     steps.push({ label: `${part.tool.label || '工具'} · ${getToolPresentation(part.tool.state).label}`, phase: getToolPhase(part.tool.state).phase });
   }
   const hasText = parts.some(part => part.type === 'text' && typeof part.text === 'string' && part.text.trim()) || Boolean(message.text?.trim());
@@ -322,6 +387,12 @@ export function getTraceSteps(message) {
   if (message.status === 'error' || message.error) steps.push({ label: '本次执行未完成', phase: 'error' });
   return steps;
 }
+/**
+ * @param {Document} doc
+ * @param {RunTrace} trace
+ * @param {LiveModel | null | undefined} live
+ * @param {TraceStep[]} [steps]
+ */
 export function createRunTrace(doc, trace, live, steps = [], imported = false) {
   const card = element(doc, 'details', 'run-trace');
   const running = isLiveRun(trace.state);
@@ -351,7 +422,14 @@ export function createRunTrace(doc, trace, live, steps = [], imported = false) {
   return card;
 }
 
+/**
+ * @param {Document} doc
+ * @param {Pick<SessionMessage, 'id' | 'role' | 'status'> & {
+ *   text?: string; guide?: unknown; record?: Pick<NonNullable<SessionMessage['record']>, 'kind'> | null;
+ * }} message
+ */
 export function createMessageActions(doc, message, { canRegenerate = false } = {}) {
+  /** @param {string} label @param {'copy' | 'edit' | 'regenerate'} name */
   function iconAction(label, name) {
     const control = action(doc, '', name, message.id);
     control.setAttribute('aria-label', label);
@@ -365,18 +443,20 @@ export function createMessageActions(doc, message, { canRegenerate = false } = {
   actions.setAttribute('aria-label', message.role === 'user' ? '用户消息操作' : '回复操作');
   if (message.text) actions.append(iconAction(message.record?.kind === 'report' ? '复制完整报告' : '复制', 'copy'));
   if (message.role === 'user' && !message.guide) actions.append(iconAction('编辑并分支', 'edit'));
-  if (!message.record && message.role === 'assistant' && ['complete', 'stopped'].includes(message.status) && canRegenerate) actions.append(iconAction(message.guide ? '重新生成上线清单' : '重新生成', 'regenerate'));
+  if (!message.record && message.role === 'assistant' && (message.status === 'complete' || message.status === 'stopped') && canRegenerate) actions.append(iconAction(message.guide ? '重新生成上线清单' : '重新生成', 'regenerate'));
   return actions;
 }
 
+/** @param {Document} doc @param {RenderMessage} message */
 export function createMessage(doc, message, { canRegenerate = false } = {}) {
   const article = element(doc, 'article', `msg ${message.role === 'user' ? 'msg--user' : 'msg--agent'} msg--${message.status || 'complete'}`);
   article.dataset.component = 'message';
   article.dataset.messageId = message.id;
   article.dataset.state = message.status || 'complete';
   const imported = message.provenance === 'imported';
-  const report = message.record?.kind === 'report';
-  const recordLabel = report ? message.record.label.replace(/^桌面工具 · /, '') : message.record?.label;
+  const record = message.record;
+  const report = record?.kind === 'report';
+  const recordLabel = report ? record.label.replace(/^桌面工具 · /, '') : record?.label;
   article.append(element(doc, 'div', 'msg__meta', imported ? '导入历史 · 内容与工具结果未在本机核验' : message.record ? (report ? `本机工具 · ${recordLabel}` : `你 · ${recordLabel}`) : message.role === 'user' ? '你' : message.guide ? '船友 · 本机规则工具' : message.live ? `真实模型 · ${message.live.providerId} · ${message.live.label || message.live.model}` : '船友 Agent · 本地演示'));
   if (message.branchNote) article.append(element(doc, 'p', 'branch-note', message.branchNote));
   if (report) article.append(createMessageActions(doc, message, { canRegenerate }));
@@ -393,11 +473,12 @@ export function createMessage(doc, message, { canRegenerate = false } = {}) {
     }
   }
   const parts = element(doc, 'div', 'msg__parts');
-  parts.setAttribute('aria-busy', String(['working', 'streaming'].includes(message.status)));
-  const content = message.parts || [
-    { type: 'text', text: message.text },
-    ...(message.tool ? [{ type: 'tool', tool: message.tool, result: message.structuredResult, error: message.error }] : []),
-  ];
+  parts.setAttribute('aria-busy', String(isLiveRun(message.status)));
+  let content = message.parts;
+  if (!content) {
+    content = [{ type: 'text', text: message.text }];
+    if (message.tool) content.push({ type: 'tool', tool: message.tool, result: message.structuredResult, error: message.error });
+  }
   content.forEach((part, index) => {
     let node;
     if (part.type === 'text') {
@@ -418,7 +499,7 @@ export function createMessage(doc, message, { canRegenerate = false } = {}) {
   if (message.role === 'assistant') {
     const progress = element(doc, 'div', 'message-progress');
     progress.setAttribute('aria-hidden', 'true');
-    progress.hidden = !['working', 'streaming'].includes(message.status);
+    progress.hidden = !isLiveRun(message.status);
     progress.append(element(doc, 'span', '', message.status === 'working' ? '正在准备…' : '正在生成…'));
     article.append(progress);
   }
