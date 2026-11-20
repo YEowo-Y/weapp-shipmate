@@ -1,3 +1,4 @@
+// @ts-check
 /* global navigator, window */
 import { AGENT_TOOL_NAME, validateAgentInput, validateAgentResult } from './agent-contract.js';
 import { createMessage, updateMessageText, updateMessageState, updateGuideFilter, getGuideViewState, restoreGuideViewState } from './components/message.js';
@@ -11,14 +12,60 @@ import { CONVERSATION_STATES, copyLive, createConversationController, createDemo
 
 export { CONVERSATION_STATES, createConversationController, createDemoPlan };
 
+/** @typedef {import('./session-store.js').SessionSnapshot['sessions'][number]} StoredSession */
+/** @typedef {import('./components/message.js').RenderMessage} RenderMessage */
+/** @typedef {ReturnType<typeof createConversationController>} Controller */
+/** @typedef {import('./conversation-controller.js').LiveRequest} LiveRequest */
+/** @typedef {import('./conversation-controller.js').ConversationControllerOptions} ControllerOptions */
+/** @typedef {import('./conversation-controller.js').ConversationState} ConversationState */
+/** @typedef {import('./conversation-controller.js').DemoPlanInput} DemoPlanInput */
+/** @typedef {import('./guide-contract.js').GuideInput} GuideInput */
+/** @typedef {import('./agent-contract.js').AgentResult} AgentResult */
+/** @typedef {Omit<RenderMessage, 'live'> & { live?: LiveRequest | null; sourceUserId?: string | null }} ConversationMessage */
+/** @typedef {Required<NonNullable<StoredSession['modelSelection']>>} ModelSelection */
+/** @typedef {{ providerId: string; model: string; label?: string }} ModelSelectionInput */
+/** @typedef {Pick<StoredSession, 'references' | 'pendingScenario'>} DraftContext */
+/** @typedef {NonNullable<StoredSession['edit']>} DraftEdit */
+/** @typedef {NonNullable<StoredSession['draftView']>} DraftView */
+/** @typedef {NonNullable<StoredSession['viewState']>} ViewState */
+/** @typedef {NonNullable<ViewState['readingAnchor']>} ReadingAnchor */
+/** @typedef {Pick<AgentResult, 'runId' | 'kind' | 'projectRevision' | 'contextRevision'>} ArtifactReference */
+/** @typedef {'pending' | 'success' | 'error'} CopyState */
+/** @typedef {{ source: string; guide: boolean; timer?: import('./conversation-controller.js').TimerHandle; announcement?: number }} CopyJob */
+/** @typedef {{ label: string | null; title: string; nodes: ChildNode[]; text: string | null }} CopyDefaults */
+/** @typedef {{ width: number; height: number; top: number; anchor?: { node: Element; top: number } }} Viewport */
+/** @typedef {{ input?: string; plan?: DemoPlanInput; live?: never; guide?: GuideInput | null; retry?: boolean; sourceUserId?: string; branchNote?: string }} SubmitOptions */
+/** @typedef {import('./conversation-controller.js').StartResult | { ok: true } | { ok: false; reason: 'destroyed' | 'model-required' | 'record-only' | 'missing-source' }} SubmitResult */
+/** @typedef {HTMLElementEventMap & { 'shipmate:model-select': CustomEvent<{ selection?: ModelSelectionInput | null }>; 'shipmate:guide-request': CustomEvent<{ input: unknown; accepted?: boolean }> }} ConversationEvents */
+/**
+ * @typedef {Omit<ControllerOptions, 'now'> & {
+ *   initialMessages?: readonly ConversationMessage[];
+ *   initialScroll?: 'top' | 'bottom';
+ *   requireModel?: boolean; recordOnly?: boolean; allowRecords?: boolean;
+ *   artifactDownloader?: ReturnType<typeof createArtifactDownloader>;
+ *   getSendShortcut?: () => string;
+ *   getDraftContext?: () => DraftContext;
+ *   setDraftContext?: (context: DraftContext) => void;
+ *   onDraftChange?: () => void;
+ *   onModelSelectionChange?: (selection: ModelSelection | null) => void;
+ *   onModelRequired?: () => void;
+ *   onMessagesChange?: (messages: ConversationMessage[]) => void;
+ *   onCopy?: (message: ConversationMessage, ok: boolean) => void;
+ *   onEdit?: (message: ConversationMessage) => void;
+ *   onOpenArtifact?: (artifactId: string, expected: ArtifactReference) => Promise<void> | void;
+ * }} ConversationOptions
+ */
+
 let messageSequence = 0;
 const fallbackMessagePrefix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
+/** @param {ConversationMessage['role']} role */
 function nextMessageId(role) {
   const id = globalThis.crypto?.randomUUID?.() || `${fallbackMessagePrefix}-${++messageSequence}`;
   return `${role}-${id}`;
 }
 
+/** @param {string} text */
 async function copyText(text) {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     try {
@@ -31,6 +78,12 @@ async function copyText(text) {
   return false;
 }
 
+/** @param {unknown} value @returns {value is GuideInput} */
+const isGuideInput = value => validateGuideInput(value).ok;
+/** @param {unknown} value @returns {value is AgentResult} */
+const isAgentResult = value => validateAgentResult(value).ok;
+
+/** @param {ConversationOptions & { input: HTMLTextAreaElement; sendButton: HTMLButtonElement; scroll: HTMLElement; list: HTMLElement; status: HTMLElement; jumpButton: HTMLElement }} options */
 export function mountConversation(options) {
   const { input, sendButton, scroll, list, status, jumpButton } = options;
   if (!input || !sendButton || !scroll || !list || !status || !jumpButton) {
@@ -46,31 +99,48 @@ export function mountConversation(options) {
   let composing = false;
   let followLatest = true;
   let readingDetails = false;
+  /** @type {ReadingAnchor | null} */
   let readingAnchor = null;
+  /** @type {string | null} */
   let activeAssistantId = null;
+  /** @type {string | null} */
   let activeSourceUserId = null;
+  /** @type {import('./conversation-controller.js').RunResult | null} */
   let lastPlan = null;
-  /** @type {{ messageId: string; originalDraft: string; originalContext?: any } | null} */
+  /** @type {DraftEdit | null} */
   let pendingEdit = null;
   let viewEpoch = 0;
   let destroyed = false;
+  /** @type {ModelSelection | null} */
   let modelSelection = null;
-  const composer = input.closest('.composer');
+  const composer = /** @type {HTMLElement | null} */ (input.closest('.composer'));
   if (composer) composer.dataset.liveChat = 'true';
+  /** @type {Viewport | null} */
   let viewport = null;
   let announcementVersion = 0;
+  /** @type {Map<string, CopyState>} */
   const copyStates = new Map();
+  /** @type {Map<string, CopyJob>} */
   const copyJobs = new Map();
+  /** @type {WeakMap<HTMLButtonElement, CopyDefaults>} */
   const copyDefaults = new WeakMap();
   const feedbackClock = documentRef.defaultView || globalThis;
 
+  // The list is owned by this view and contains the articles from renderMessage.
+  const messageArticles = () => [.../** @type {HTMLCollectionOf<HTMLElement>} */ (list.children)];
+  /** @param {string} messageId */
+  const findArticle = messageId => messageArticles().find(node => node.dataset.messageId === messageId);
+  /** @param {HTMLElement} container */
+  const actionControls = container => /** @type {NodeListOf<HTMLButtonElement>} */ (container.querySelectorAll('[data-action]'));
+
+  /** @param {string} key */
   function resetCopy(key) {
     const job = copyJobs.get(key);
     if (job?.timer !== undefined) feedbackClock.clearTimeout(job.timer);
     if (job?.announcement === announcementVersion) announce('');
     copyJobs.delete(key);
     copyStates.delete(key);
-    for (const control of list.querySelectorAll('[data-action]')) {
+    for (const control of actionControls(list)) {
       if (copyKey(control) !== key) continue;
       const original = copyDefaults.get(control);
       if (!original) continue;
@@ -92,7 +162,7 @@ export function mountConversation(options) {
 
   function invalidateChangedCopies() {
     if (!copyJobs.size) return;
-    for (const control of list.querySelectorAll('[data-action]')) {
+    for (const control of actionControls(list)) {
       const key = copyKey(control);
       const job = copyJobs.get(key);
       if (!job || job.guide || copyStates.get(key) === 'error') continue;
@@ -102,28 +172,33 @@ export function mountConversation(options) {
       if (source !== job.source) resetCopy(key);
     }
   }
+  /** @type {WeakMap<Element, unknown>} */
   const guideCardResults = new WeakMap();
+  /** @type {WeakSet<HTMLInputElement>} */
   const guideComposing = new WeakSet();
   const artifactDownloader = options.artifactDownloader || createArtifactDownloader({ documentRef });
-  const hint = input.closest('.composer')?.querySelector('.agent-composer__hint');
-  const editBar = input.closest('.composer')?.querySelector('.agent-composer__edit');
-  const copyContext = context => ({ ...context, references: [...(context?.references || [])] });
+  const hint = composer?.querySelector('.agent-composer__hint');
+  const editBar = /** @type {HTMLElement | null | undefined} */ (composer?.querySelector('.agent-composer__edit'));
+  /** @param {DraftContext} [context] @returns {DraftContext} */
+  const copyContext = context => ({ pendingScenario: 'normal', ...context, references: [...(context?.references || [])] });
   const cancelEditButton = editBar?.querySelector('.agent-composer__cancel-edit');
   const editAnnouncement = '正在编辑较早消息；发送后会保留原版本。';
 
+  /** @param {string} text */
   function announce(text, kind = 'action') {
     status.textContent = text;
     status.dataset.announcement = kind;
     return ++announcementVersion;
   }
 
+  /** @param {ModelSelectionInput | null} selection */
   function setModelSelection(selection) {
     if (destroyed || isConversationActive(controller.getSnapshot().state)) {
       announce('请先停止当前回复，再切换模型。');
       return false;
     }
     if (selection && (!Object.hasOwn(SUPPORTED_CHAT_PROVIDERS, selection.providerId) || typeof selection.model !== 'string' || !selection.model.trim())) return false;
-    modelSelection = selection ? { providerId: selection.providerId, model: selection.model, label: String(selection.label || selection.model) } : null;
+    modelSelection = selection ? { providerId: /** @type {ModelSelection['providerId']} */ (selection.providerId), model: selection.model, label: String(selection.label || selection.model) } : null;
     if (composer) {
       composer.dataset.modelProvider = modelSelection?.providerId || '';
       composer.dataset.modelId = modelSelection?.model || '';
@@ -141,11 +216,14 @@ export function mountConversation(options) {
     return true;
   }
 
+  /** @param {CustomEvent<{ selection?: ModelSelectionInput | null }>} event */
   function onModelSelect(event) { setModelSelection(event.detail?.selection || null); }
+  /** @param {unknown} guide */
   function runGuide(guide) {
-    if (!validateGuideInput(guide).ok) return { ok: false, reason: 'invalid-guide' };
+    if (!isGuideInput(guide)) return { ok: false, reason: /** @type {const} */ ('invalid-guide') };
     return submit({ input: `生成${GUIDE_SUBJECTS[guide.subject]}上线清单（敏感信息：${guide.sensitive ? '是' : '否'}；服务器域名：${guide.domain ? '是' : '否'}）`, guide });
   }
+  /** @param {CustomEvent<{ input: unknown; accepted?: boolean }>} event */
   function onGuideRequest(event) {
     if (!event.detail || event.detail.accepted) return;
     const result = runGuide(event.detail.input);
@@ -164,7 +242,7 @@ export function mountConversation(options) {
       anchor = [...list.children].find(node => node.getBoundingClientRect().bottom > top);
     }
     viewport = { width: scroll.clientWidth, height: scroll.clientHeight, top: scroll.scrollTop,
-      anchor, anchorTop: anchor?.getBoundingClientRect().top };
+      anchor: anchor && { node: anchor, top: anchor.getBoundingClientRect().top } };
   }
 
   function viewportResized() {
@@ -172,14 +250,14 @@ export function mountConversation(options) {
   }
 
   function compensateViewportResize() {
-    if (!viewportResized()) return;
+    if (!viewport || !viewportResized()) return;
     // A real upward scroll can arrive before the resize notification. Only a
     // browser clamp to the new scroll range is considered a layout movement.
     const clampedTop = Math.min(viewport.top, Math.max(0, scroll.scrollHeight - scroll.clientHeight));
     const movedUp = scroll.scrollTop < clampedTop - 1;
     if (movedUp) followLatest = false;
-    if (!movedUp && !followLatest && viewport.width !== scroll.clientWidth && viewport.anchor?.parentElement === list) {
-      scroll.scrollTop += viewport.anchor.getBoundingClientRect().top - viewport.anchorTop;
+    if (!movedUp && !followLatest && viewport.width !== scroll.clientWidth && viewport.anchor?.node.parentElement === list) {
+      scroll.scrollTop += viewport.anchor.node.getBoundingClientRect().top - viewport.anchor.top;
     }
   }
 
@@ -190,14 +268,16 @@ export function mountConversation(options) {
   }
 
   function captureReadingAnchor() {
-    if (!readingDetails || !readingAnchor) return null;
-    const article = [...list.children].find(node => node.dataset.messageId === readingAnchor.messageId);
-    const detail = readingAnchor.readingKey
-      ? [...(article?.querySelectorAll('[data-reading-key]') || [])].find(node => node.dataset.readingKey === readingAnchor.readingKey)
-      : [...(article?.querySelectorAll('[data-component]') || [])].find(node => node.dataset.component === readingAnchor.component);
+    const anchor = readingAnchor;
+    if (!readingDetails || !anchor) return null;
+    const article = findArticle(anchor.messageId);
+    const detail = anchor.readingKey
+      ? [...(/** @type {NodeListOf<HTMLElement> | undefined} */ (article?.querySelectorAll('[data-reading-key]')) || [])].find(node => node.dataset.readingKey === anchor.readingKey)
+      : [...(/** @type {NodeListOf<HTMLElement> | undefined} */ (article?.querySelectorAll('[data-component]')) || [])].find(node => node.dataset.component === anchor.component);
     return detail ? { detail, top: detail.getBoundingClientRect().top } : null;
   }
 
+  /** @param {ReturnType<typeof captureReadingAnchor>} previous */
   function restoreReadingAnchor(previous) {
     if (!previous) return;
     const current = captureReadingAnchor();
@@ -208,6 +288,7 @@ export function mountConversation(options) {
     options.onMessagesChange?.(messages.map((message) => ({ ...message })));
   }
 
+  /** @param {ConversationMessage} message */
   function sourceUserMessage(message) {
     // Legacy records have no source ID. Explicit IDs must never fall back to a different question.
     if (Object.hasOwn(message, 'sourceUserId')) {
@@ -216,14 +297,14 @@ export function mountConversation(options) {
     return messages.slice(0, messages.indexOf(message)).reverse().find(item => item.role === 'user');
   }
 
+  /** @param {ConversationMessage} message */
   function renderMessage(message) {
     const article = createMessage(documentRef, message, {
       canRegenerate: !options.recordOnly && Boolean(sourceUserMessage(message)),
     });
     const guideCard = article.querySelector('[data-component="guide-result"]');
     if (guideCard) guideCardResults.set(guideCard, message.structuredResult);
-    const actions = /** @type {NodeListOf<HTMLButtonElement>} */ (article.querySelectorAll('[data-action]'));
-    for (const control of actions) {
+    for (const control of actionControls(article)) {
       if (message.role === 'assistant' && message.guide && ['copy', 'copy-guide'].includes(control.dataset.action ?? '')) control.dataset.copyGuide = 'true';
       if (control.dataset.action === 'retry' || control.dataset.action === 'regenerate') {
         const source = sourceUserMessage(message);
@@ -237,10 +318,12 @@ export function mountConversation(options) {
     return article;
   }
 
+  /** @param {HTMLButtonElement} control */
   function copyKey(control) {
     return JSON.stringify([control.dataset.messageId, control.dataset.action, control.dataset.blockKey || '']);
   }
 
+  /** @param {HTMLButtonElement} control @param {CopyState} state */
   function showCopyState(control, state) {
     if (!copyDefaults.has(control)) copyDefaults.set(control, {
       label: control.getAttribute('aria-label'), title: control.title,
@@ -259,6 +342,7 @@ export function mountConversation(options) {
     control.replaceChildren(createIcon(documentRef, { pending: 'copy', success: 'check', error: 'circle-alert' }[state], 'message-action__icon'), feedback);
   }
 
+  /** @param {HTMLButtonElement} control @param {ConversationMessage} message */
   async function copyFromControl(control, message) {
     const key = copyKey(control);
     if (copyStates.get(key) === 'pending') return;
@@ -271,6 +355,7 @@ export function mountConversation(options) {
     if (typeof source !== 'string') return;
     const epoch = viewEpoch;
     resetCopy(key);
+    /** @type {CopyJob} */
     const job = { source, guide: isGuide };
     copyJobs.set(key, job);
     copyStates.set(key, 'pending');
@@ -281,19 +366,20 @@ export function mountConversation(options) {
     if (copyJobs.get(key) !== job) return;
     const state = ok ? 'success' : 'error';
     copyStates.set(key, state);
-    const currentControl = [...list.querySelectorAll('[data-action]')].find(item => copyKey(item) === key);
+    const currentControl = [...actionControls(list)].find(item => copyKey(item) === key);
     if (currentControl) showCopyState(currentControl, state);
     if (ok) {
       job.timer = feedbackClock.setTimeout(() => {
         if (epoch === viewEpoch && copyJobs.get(key) === job) resetCopy(key);
       }, 2500);
-      job.timer?.unref?.();
+      if (typeof job.timer === 'object') (/** @type {{ unref?: () => void }} */ (job.timer)).unref?.();
     }
     const announcement = announce(ok ? (isGuide ? '已复制完整清单，包含全部条目。' : isCode ? '已复制代码。' : '已复制消息。') : '当前环境无法复制，请重试或手动选择文本。');
     if (ok) job.announcement = announcement;
     if (!isCode) options.onCopy?.(message, ok);
   }
 
+  /** @param {ConversationMessage} message @param {'markdown' | 'json'} format */
   function guideArtifact(message, format) {
     if (message.role !== 'assistant' || message.status !== 'complete' || !validateGuideInput(message.guide).ok || !validateGuideResult(message.structuredResult).ok) {
       announce('仅能导出已完成且有效的上线清单。');
@@ -303,6 +389,7 @@ export function mountConversation(options) {
     catch { announce('清单导出失败，请重试。'); return null; }
   }
 
+  /** @param {ConversationMessage} message @param {'markdown' | 'json'} format */
   function downloadGuide(message, format) {
     const artifact = guideArtifact(message, format);
     if (!artifact) return;
@@ -344,22 +431,26 @@ export function mountConversation(options) {
     settleScroll(forceBottom);
   }
 
+  /** @param {ConversationMessage} message */
   function patchMessage(message) {
-    const article = [...list.children].find((node) => node.dataset.messageId === message.id);
+    const article = findArticle(message.id);
     if (!article) return;
     const anchor = captureReadingAnchor();
-    const focused = documentRef.activeElement;
-    const hadFocus = article.contains(focused);
-    const focusedAction = hadFocus ? focused.closest('[data-action]')?.dataset.action : null;
-    const focusedDisclosure = hadFocus && focused.matches('summary')
-      ? focused.parentElement.dataset.component
+    const activeElement = /** @type {HTMLElement | null} */ (documentRef.activeElement);
+    const focused = activeElement && article.contains(activeElement) ? activeElement : null;
+    const focusedControl = /** @type {HTMLButtonElement | null | undefined} */ (focused?.closest('[data-action]'));
+    const focusedAction = focusedControl?.dataset.action;
+    const focusedDisclosure = focused?.matches('summary')
+      ? focused.parentElement?.dataset.component
       : null;
-    const focusedLink = hadFocus && focused.matches('a') ? focused.getAttribute('href') : null;
-    const previousResult = article.querySelector('.tool-result-json');
-    const focusedResult = hadFocus && focused === previousResult;
+    const focusedLink = focused?.matches('a') ? focused.getAttribute('href') : null;
+    const previousResult = /** @type {HTMLElement | null} */ (article.querySelector('.tool-result-json'));
+    const focusedResult = focused === previousResult;
     const resultScroll = previousResult ? { top: previousResult.scrollTop, left: previousResult.scrollLeft } : null;
+    const readers = /** @type {NodeListOf<HTMLElement>} */ (article.querySelectorAll('[data-reading-key]'));
+    const readingPositions = Array.from(readers, node => ({ node, top: node.scrollTop, left: node.scrollLeft }));
     // Live process accordions are force-opened; never persist that as a reader choice.
-    const expanded = new Map([...article.querySelectorAll('details[data-component]')]
+    const expanded = new Map([.../** @type {NodeListOf<HTMLDetailsElement>} */ (article.querySelectorAll('details[data-component]'))]
       .filter(node => node.dataset.live !== 'true')
       .map(node => [node.dataset.component, node.open]));
     const replacement = renderMessage(message);
@@ -370,37 +461,37 @@ export function mountConversation(options) {
     // controls belong to the content, not to a tool/status update around it.
     const textParts = /** @type {NodeListOf<HTMLDivElement>} */ (replacement.querySelectorAll('.msg__text'));
     for (const nextText of textParts) {
-      const previousText = [...article.querySelectorAll('.msg__text')]
+      const previousText = [.../** @type {NodeListOf<HTMLDivElement>} */ (article.querySelectorAll('.msg__text'))]
         .find(node => node.dataset.partIndex === nextText.dataset.partIndex);
       if (!previousText) continue;
       const part = message.parts?.[Number(nextText.dataset.partIndex)];
-      updateMessageText(previousText, part ? part.text : message.text);
+      updateMessageText(previousText, part?.type === 'text' ? part.text : message.text);
       nextText.replaceWith(previousText);
     }
     const disclosures = /** @type {NodeListOf<HTMLDetailsElement>} */ (replacement.querySelectorAll('details[data-component]'));
     for (const disclosure of disclosures) {
-      if (expanded.has(disclosure.dataset.component)) disclosure.open = expanded.get(disclosure.dataset.component);
+      const open = expanded.get(disclosure.dataset.component);
+      if (open !== undefined) disclosure.open = open;
     }
     const details = /** @type {HTMLDetailsElement | null} */ (replacement.querySelector('.tool-details'));
     if (details && message.tool?.state === 'fail') details.open = true;
     const projects = /** @type {NodeListOf<HTMLDetailsElement>} */ (replacement.querySelectorAll('[data-component^="project-tool-"]'));
     for (const detail of projects) if (detail.dataset.toolState === 'fail') detail.open = true;
     article.replaceWith(replacement);
-    const nextResult = replacement.querySelector('.tool-result-json');
+    const nextResult = /** @type {HTMLElement | null} */ (replacement.querySelector('.tool-result-json'));
     if (resultScroll && nextResult) {
       nextResult.scrollTop = resultScroll.top;
       nextResult.scrollLeft = resultScroll.left;
     }
-    if (hadFocus) {
+    if (focused) {
       let nextFocus;
       if (replacement.contains(focused)) {
         nextFocus = focused;
       } else if (focusedAction) {
-        const actions = /** @type {NodeListOf<HTMLButtonElement>} */ (replacement.querySelectorAll('[data-action]'));
-        nextFocus = [...actions]
+        nextFocus = [...actionControls(replacement)]
           .find(control => control.dataset.action === focusedAction && control.dataset.blockKey === focused.dataset.blockKey && control.dataset.artifactId === focused.dataset.artifactId && !control.disabled);
       } else if (focusedDisclosure) {
-        nextFocus = [...replacement.querySelectorAll('details[data-component] > summary')]
+        nextFocus = [.../** @type {NodeListOf<HTMLElement>} */ (replacement.querySelectorAll('details[data-component] > summary'))]
           .find(summary => summary.parentElement?.dataset.component === focusedDisclosure);
       } else if (focusedLink) {
         nextFocus = [...replacement.querySelectorAll('a')]
@@ -415,11 +506,18 @@ export function mountConversation(options) {
       }
       nextFocus.focus({ preventScroll: true });
     }
+    // WebView2 clears the scroll offsets of retained code and table readers during reparenting.
+    for (const { node, top, left } of readingPositions) {
+      if (!replacement.contains(node)) continue;
+      node.scrollTop = top;
+      node.scrollLeft = left;
+    }
     invalidateChangedCopies();
     restoreReadingAnchor(anchor);
     settleScroll();
   }
 
+  /** @param {ConversationState} state */
   function updateHint(state) {
     if (!hint) return;
     const busy = isConversationActive(state), sendKey = options.getSendShortcut?.() === 'mod-enter' ? 'Ctrl / ⌘ + Enter' : 'Enter';
@@ -429,9 +527,13 @@ export function mountConversation(options) {
     if (options.recordOnly) hint.textContent = pendingEdit ? `${sendKey} 保存修改 · Esc 取消 · 原版本保留` : `${sendKey} 保存记录 · Shift + Enter 换行 · 不调用模型`;
   }
 
+  /** @param {ConversationState} state */
   function updateControls(state) {
     const busy = isConversationActive(state);
-    if (options.requireModel) { const picker = composer?.querySelector('.agent-composer__model'); if (picker) picker.disabled = busy; }
+    if (options.requireModel) {
+      const picker = /** @type {HTMLButtonElement | null | undefined} */ (composer?.querySelector('.agent-composer__model'));
+      if (picker) picker.disabled = busy;
+    }
     updateHint(state);
     const sendLabel = busy ? '停止生成' : options.recordOnly ? (pendingEdit ? '保存修改' : '保存记录') : pendingEdit ? '发送修改' : '发送消息';
     sendButton.dataset.mode = busy ? 'stop' : 'send';
@@ -439,8 +541,9 @@ export function mountConversation(options) {
     sendButton.title = sendLabel;
     sendButton.disabled = !busy && !input.value.trim();
     if (editBar) editBar.hidden = !pendingEdit;
-    list.querySelectorAll('[data-action="regenerate"], [data-action="retry"], [data-action="edit"]').forEach(control => { control.disabled = busy; });
-    input.closest('.composer')?.setAttribute('data-chat-state', state);
+    const controls = /** @type {NodeListOf<HTMLButtonElement>} */ (list.querySelectorAll('[data-action="regenerate"], [data-action="retry"], [data-action="edit"]'));
+    controls.forEach(control => { control.disabled = busy; });
+    composer?.setAttribute('data-chat-state', state);
     input.closest('.conversation-shell, .center')?.setAttribute('data-chat-state', state);
     status.setAttribute('aria-atomic', 'true');
     const announcement = getRunAnnouncement(state, assistantMessage());
@@ -463,7 +566,7 @@ export function mountConversation(options) {
       messages.push({ id: activeAssistantId, role: 'assistant', sourceUserId: activeSourceUserId, text: '', parts: [], status: event.state, tool: null,
         live: event.live,
         guide: event.guide,
-        trace: { runId: event.runId, state: event.state, elapsedMs: event.elapsedMs, ...(event.guide ? { kind: 'guide' } : {}) } });
+        trace: { runId: event.runId ?? undefined, state: event.state, elapsedMs: event.elapsedMs, ...(event.guide ? { kind: 'guide' } : {}) } });
       emitMessages();
       appendLatestMessage(true);
     }
@@ -471,12 +574,12 @@ export function mountConversation(options) {
     if (current?.trace && current.trace.runId === event.runId) {
       current.trace = { runId: event.runId, state: event.state, elapsedMs: event.elapsedMs, ...(event.guide ? { kind: 'guide' } : {}) };
       if (current.tool) current.tool.state = event.toolState;
-      const article = [...list.children].find(node => node.dataset.messageId === current.id);
+      const article = findArticle(current.id);
       const summary = article?.querySelector('.run-trace summary');
       if (summary) {
         const label = summary.querySelector?.('.run-trace__label');
         (label || summary).textContent = formatTraceLabel(current.trace);
-        const trace = summary.parentElement;
+        const trace = /** @type {HTMLDetailsElement} */ (summary.parentElement);
         trace.dataset.state = current.trace.state;
         trace.dataset.tone = getRunPresentation(current.trace.state).tone;
         // A settled run hands the accordion back to the reader, folded.
@@ -485,14 +588,14 @@ export function mountConversation(options) {
         trace.dataset.live = String(live);
       }
     }
-    if (current && event.type === 'agent-tool') {
+    if (current?.parts && event.type === 'agent-tool') {
       const value = event.toolEvent;
       let part = current.parts.find(part => part.type === 'tool' && part.tool.toolCallId === value.toolCallId);
       if (!part && ['tool-input-start', 'tool-input-available', 'tool-input-error'].includes(value.type)) {
         part = { type: 'tool', tool: { name: AGENT_TOOL_NAME, kind: 'project', toolCallId: value.toolCallId, state: 'running', label: '正在准备项目只读工具' } };
         current.parts.push(part);
       }
-      if (!part) return;
+      if (part?.type !== 'tool') return;
       if (value.type === 'tool-input-available' && validateAgentInput(value.input).ok) {
         part.tool.parameters = value.input;
         part.tool.label = { check: '检查当前项目', guide: '生成项目上线清单', explain: '查询项目规则' }[value.input.kind];
@@ -505,7 +608,7 @@ export function mountConversation(options) {
       }
       if (value.type !== 'tool-input-delta') { emitMessages(); patchMessage(current); }
     }
-    if (current && event.type === 'tool-start') {
+    if (current?.parts && event.type === 'tool-start') {
       current.tool = { ...event.tool, state: event.toolState };
       current.parts.push({ type: 'tool', tool: current.tool });
       emitMessages();
@@ -514,7 +617,7 @@ export function mountConversation(options) {
     }
     if (current && event.type === 'tool-result') {
       current.structuredResult = event.structuredResult;
-      const part = current.parts.find(part => part.type === 'tool');
+      const part = current.parts?.find(part => part.type === 'tool');
       if (part) part.result = event.structuredResult;
       emitMessages();
       patchMessage(current);
@@ -523,9 +626,9 @@ export function mountConversation(options) {
     if (event.type === 'chunk') {
       const anchor = captureReadingAnchor();
       const message = assistantMessage();
-      if (message) {
+      if (message?.parts) {
         message.text += event.chunk;
-        const article = [...list.children].find((node) => node.dataset.messageId === message.id);
+        const article = findArticle(message.id);
         let part = event.textId ? message.parts.find(part => part.type === 'text' && part.textId === event.textId) : message.parts.at(-1);
         if (!part || part.type !== 'text') {
           part = { type: 'text', text: '', ...(event.textId ? { textId: event.textId } : {}) };
@@ -534,7 +637,7 @@ export function mountConversation(options) {
         part.text += event.chunk;
         const partIndex = message.parts.indexOf(part);
         const parts = article?.querySelector('.msg__parts');
-        let text = parts?.querySelector(`[data-part-index="${partIndex}"]`);
+        let text = /** @type {HTMLDivElement | null | undefined} */ (parts?.querySelector(`[data-part-index="${partIndex}"]`));
         if (!text && parts) {
           text = documentRef.createElement('div');
           text.className = 'msg__text';
@@ -544,7 +647,7 @@ export function mountConversation(options) {
           parts.append(text);
         }
         if (text) updateMessageText(text, part.text);
-        const copy = article?.querySelector('[data-action="copy"]');
+        const copy = /** @type {HTMLButtonElement | null | undefined} */ (article?.querySelector('[data-action="copy"]'));
         if (copy) copy.disabled = !message.text;
       }
       emitMessages();
@@ -565,7 +668,7 @@ export function mountConversation(options) {
         message.fact = event.result?.fact;
         message.advice = event.result?.advice;
         message.structuredResult = event.result?.structuredResult;
-        message.review = event.result?.review ? { ...event.result.review, runId: event.runId } : null;
+        message.review = event.result?.review ? { ...event.result.review, runId: event.runId ?? undefined } : null;
       }
       emitMessages();
       if (message) patchMessage(message);
@@ -574,7 +677,7 @@ export function mountConversation(options) {
       const message = assistantMessage();
       if (message) {
         message.status = 'stopped';
-        for (const part of message.parts || []) if (part.tool?.state === 'running') part.tool.state = 'canceled';
+        for (const part of message.parts || []) if (part.type === 'tool' && part.tool.state === 'running') part.tool.state = 'canceled';
       }
       emitMessages();
       if (message) patchMessage(message);
@@ -584,7 +687,7 @@ export function mountConversation(options) {
       if (message) {
         message.status = 'error';
         message.error = event.error;
-        for (const item of message.parts || []) if (item.tool?.kind === 'project' && item.tool.state === 'running') { item.tool.state = 'fail'; item.error = event.error; }
+        for (const item of message.parts || []) if (item.type === 'tool' && item.tool.kind === 'project' && item.tool.state === 'running') { item.tool.state = 'fail'; item.error = event.error; }
         const part = message.parts?.find(part => part.type === 'tool');
         if (part && message.tool?.state === 'fail') part.error = event.error;
       }
@@ -595,7 +698,7 @@ export function mountConversation(options) {
       if (current) {
         current.status = event.state;
         if (event.error) current.error = event.error;
-        const article = [...list.children].find(node => node.dataset.messageId === current.id);
+        const article = findArticle(current.id);
         if (article) updateMessageState(article, current);
       }
       updateControls(event.state);
@@ -631,6 +734,7 @@ export function mountConversation(options) {
     options.onDraftChange?.();
   }
 
+  /** @param {SubmitOptions} [submitOptions] @returns {SubmitResult} */
   function submit(submitOptions = {}) {
     if (destroyed) return { ok: false, reason: 'destroyed' };
     const retry = Boolean(submitOptions.retry);
@@ -666,8 +770,11 @@ export function mountConversation(options) {
       return { ok: true };
     }
     if (!submitOptions.plan && submitOptions.guide && !validateGuideInput(submitOptions.guide).ok) return { ok: false, reason: 'invalid-guide' };
+    /** @type {DraftContext} */
     let requestContext = submitOptions.input === undefined ? copyContext(options.getDraftContext?.()) : { references: [], pendingScenario: 'normal' };
+    /** @type {LiveRequest | null} */
     let live = null;
+    /** @type {Readonly<GuideInput> | null} */
     let guide = !submitOptions.plan && submitOptions.guide ? Object.freeze({ ...submitOptions.guide }) : null;
     if (retry) {
       const sourceId = Object.hasOwn(submitOptions, 'sourceUserId') ? submitOptions.sourceUserId : activeSourceUserId;
@@ -676,8 +783,10 @@ export function mountConversation(options) {
       if (options.requireModel && !source.live) return { ok: false, reason: 'model-required' };
       activeSourceUserId = source.id;
       requestContext = { references: [...(source.references || [])], pendingScenario: 'normal' };
-      live = !submitOptions.plan ? source.live : null;
-      guide = !submitOptions.plan ? source.guide : null;
+      live = !submitOptions.plan ? source.live ?? null : null;
+      const savedGuide = !submitOptions.plan ? source.guide : null;
+      if (savedGuide && !isGuideInput(savedGuide)) return { ok: false, reason: 'invalid-guide' };
+      guide = savedGuide ?? null;
       if (!guide) setModelSelection(live || null);
     } else {
       // Explicit page actions are independent of the unsent composer draft.
@@ -721,6 +830,10 @@ export function mountConversation(options) {
     return result;
   }
 
+  /**
+   * @param {{ plan?: DemoPlanInput }} [retryOptions]
+   * @returns {ReturnType<Controller['retry']> | { ok: false; reason: 'destroyed' }}
+   */
   function retry(retryOptions = {}) {
     if (destroyed) return { ok: false, reason: 'destroyed' };
     if (controller.isBusy()) return { ok: false, reason: 'busy' };
@@ -740,6 +853,7 @@ export function mountConversation(options) {
     else submit();
   }
 
+  /** @param {KeyboardEvent} event */
   function onKeydown(event) {
     if (event.isComposing || event.keyCode === 229 || composing || event.defaultPrevented || input.getAttribute('aria-expanded') === 'true') return;
     if (event.key === 'Escape' && pendingEdit) {
@@ -757,25 +871,29 @@ export function mountConversation(options) {
     }
   }
 
+  /** @param {MouseEvent} event */
   function onActions(event) {
-    const control = event.target.closest('[data-action]');
+    const target = /** @type {Element | null} */ (event.target);
+    const control = /** @type {HTMLButtonElement | null | undefined} */ (target?.closest?.('[data-action]'));
     if (!control || control.disabled) return;
     const message = messages.find((item) => item.id === control.dataset.messageId);
     if (!message) return;
     if (control.dataset.action === 'open-artifact') {
-      const parts = message.parts || (message.tool ? [{ tool: message.tool, result: message.structuredResult }] : []);
-      const part = parts.find(item => item.tool?.kind === 'project' && item.result?.artifactId === control.dataset.artifactId);
-      if (part && validateAgentResult(part.result).ok) {
+      const parts = message.parts || (message.tool ? [{ type: /** @type {const} */ ('tool'), tool: message.tool, result: message.structuredResult }] : []);
+      const part = parts.find(item => item.type === 'tool' && item.tool.kind === 'project'
+        && item.result && typeof item.result === 'object' && 'artifactId' in item.result && item.result.artifactId === control.dataset.artifactId);
+      const result = part?.type === 'tool' ? part.result : undefined;
+      if (isAgentResult(result)) {
         announce('正在查找并核验本机报告…');
         Promise.resolve().then(() => {
           if (!options.onOpenArtifact) throw new Error('Artifact host unavailable');
-          return options.onOpenArtifact(part.result.artifactId, { runId: part.result.runId, kind: part.result.kind, projectRevision: part.result.projectRevision, contextRevision: part.result.contextRevision });
+          return options.onOpenArtifact(result.artifactId, { runId: result.runId, kind: result.kind, projectRevision: result.projectRevision, contextRevision: result.contextRevision });
         }).catch(() => {
           if (!destroyed) announce('无法打开本机报告，请从项目历史中重试。');
         });
       }
     }
-    if (['copy', 'copy-code', 'copy-guide'].includes(control.dataset.action)) void copyFromControl(control, message);
+    if (['copy', 'copy-code', 'copy-guide'].includes(control.dataset.action ?? '')) void copyFromControl(control, message);
     if (control.dataset.action === 'download-guide-markdown') downloadGuide(message, 'markdown');
     if (control.dataset.action === 'download-guide-json') downloadGuide(message, 'json');
     if (control.dataset.action === 'edit') {
@@ -802,61 +920,78 @@ export function mountConversation(options) {
   }
 
   // Keep the detail being read in place as streamed text above it grows.
+  /** @param {MouseEvent} event */
   function onDisclosureClick(event) {
-    const summary = event.target.closest('summary');
-    if (!summary || !list.contains(summary)) return;
+    const target = /** @type {Element | null} */ (event.target);
+    const summary = target?.closest?.('summary');
+    const detail = /** @type {HTMLDetailsElement | null | undefined} */ (summary?.parentElement);
+    const messageId = (/** @type {HTMLElement | null | undefined} */ (summary?.closest('[data-message-id]')))?.dataset.messageId;
+    if (!summary || !detail || !list.contains(summary) || messageId === undefined) return;
     // While a run is live its process accordion stays open (no viewport jumps).
-    if (summary.parentElement.dataset.live === 'true') { event.preventDefault?.(); return; }
-    readingDetails = !summary.parentElement.open;
+    if (detail.dataset.live === 'true') { event.preventDefault?.(); return; }
+    readingDetails = !detail.open;
     readingAnchor = readingDetails ? {
-      messageId: summary.closest('[data-message-id]').dataset.messageId,
-      component: summary.parentElement.dataset.component,
+      messageId,
+      component: detail.dataset.component,
     } : null;
     followLatest = !readingDetails && isNearBottom();
     jumpButton.hidden = followLatest;
     rememberViewport();
   }
+  /** @param {FocusEvent} event */
   function onReadingFocus(event) {
-    if (event.target.matches('[data-guide-search]')) { lockGuideReading(event.target); return; }
-    if (!event.target.matches('.tool-result-json, [data-reading-key]')) return;
+    const target = /** @type {HTMLElement | null} */ (event.target);
+    if (target?.matches?.('[data-guide-search]')) { lockGuideReading(target); return; }
+    if (!target?.matches?.('.tool-result-json, [data-reading-key]')) return;
+    const messageId = (/** @type {HTMLElement | null} */ (target.closest('[data-message-id]')))?.dataset.messageId;
+    if (messageId === undefined) return;
     readingDetails = true;
     readingAnchor = {
-      messageId: event.target.closest('[data-message-id]').dataset.messageId,
-      component: event.target.closest('details')?.dataset.component,
-      readingKey: event.target.dataset.readingKey,
+      messageId,
+      component: (/** @type {HTMLDetailsElement | null} */ (target.closest('details')))?.dataset.component,
+      readingKey: target.dataset.readingKey,
     };
     followLatest = false;
     jumpButton.hidden = false;
     rememberViewport();
   }
+  /** @param {HTMLElement | null} target */
   function guideSearchCard(target) {
-    if (!target?.matches('[data-guide-search]') || !list.contains(target)) return null;
-    const card = target.closest('[data-component="guide-result"]');
+    if (!target?.matches?.('[data-guide-search]') || !list.contains(target)) return null;
+    const card = /** @type {HTMLElement | null} */ (target.closest('[data-component="guide-result"]'));
     return card && card.dataset.messageId === target.dataset.messageId ? card : null;
   }
+  /** @param {HTMLElement} target */
   function lockGuideReading(target) {
-    if (!guideSearchCard(target)) return;
+    if (!guideSearchCard(target) || target.dataset.messageId === undefined) return;
     readingDetails = true;
     readingAnchor = { messageId: target.dataset.messageId, component: 'guide-result' };
     followLatest = false;
     jumpButton.hidden = false;
     rememberViewport();
   }
+  /** @param {{ target: EventTarget | null; isComposing?: boolean }} event */
   function onGuideSearch(event) {
-    const card = guideSearchCard(event.target);
-    if (!card || event.isComposing || guideComposing.has(event.target)) return;
-    lockGuideReading(event.target);
+    const target = /** @type {HTMLInputElement | null} */ (event.target);
+    const card = guideSearchCard(target);
+    if (!card || !target || event.isComposing || guideComposing.has(target)) return;
+    lockGuideReading(target);
     const top = scroll.scrollTop;
-    updateGuideFilter(card, event.target.value);
+    updateGuideFilter(card, target.value);
     scroll.scrollTop = top;
     rememberViewport();
   }
+  /** @param {CompositionEvent} event */
   function onGuideCompositionStart(event) {
-    if (guideSearchCard(event.target)) guideComposing.add(event.target);
+    const target = /** @type {HTMLInputElement | null} */ (event.target);
+    if (target && guideSearchCard(target)) guideComposing.add(target);
   }
+  /** @param {CompositionEvent} event */
   function onGuideCompositionEnd(event) {
-    guideComposing.delete(event.target);
-    onGuideSearch({ target: event.target });
+    const target = /** @type {HTMLInputElement | null} */ (event.target);
+    if (!target) return;
+    guideComposing.delete(target);
+    onGuideSearch({ target });
   }
   function onScroll() {
     if (settleViewportResize()) return;
@@ -872,28 +1007,48 @@ export function mountConversation(options) {
     rememberViewport();
   }
 
+  /** @returns {Required<ViewState>} */
   function getViewState() {
-    return { scrollTop: scroll.scrollTop, followLatest, readingDetails, readingAnchor: readingAnchor ? { ...readingAnchor } : null,
-      guideResults: [...list.children].flatMap(article => [...article.querySelectorAll('[data-component="guide-result"]')].map(card => ({ messageId: article.dataset.messageId, state: getGuideViewState(card) }))),
-      readingPositions: [...list.children].flatMap(article => [...article.querySelectorAll('.tool-result-json, [data-reading-key]')].map(node => ({ messageId: article.dataset.messageId, key: node.dataset.readingKey || 'tool-result-json', top: node.scrollTop, left: node.scrollLeft }))),
-      disclosures: [...list.children].flatMap(article => [...article.querySelectorAll('details[data-component]')].map(node => ({ messageId: article.dataset.messageId, component: node.dataset.component, open: Boolean(node.open) }))) };
+    /** @type {Required<Pick<ViewState, 'guideResults' | 'readingPositions' | 'disclosures'>>} */
+    const regions = { guideResults: [], readingPositions: [], disclosures: [] };
+    for (const article of messageArticles()) {
+      const { messageId } = article.dataset;
+      if (messageId === undefined) continue;
+      for (const card of article.querySelectorAll('[data-component="guide-result"]')) {
+        const state = getGuideViewState(card);
+        if (state) regions.guideResults.push({ messageId, state });
+      }
+      const readers = /** @type {NodeListOf<HTMLElement>} */ (article.querySelectorAll('.tool-result-json, [data-reading-key]'));
+      for (const node of readers) {
+        regions.readingPositions.push({ messageId, key: node.dataset.readingKey || 'tool-result-json', top: node.scrollTop, left: node.scrollLeft });
+      }
+      const details = /** @type {NodeListOf<HTMLDetailsElement>} */ (article.querySelectorAll('details[data-component]'));
+      for (const node of details) {
+        const { component } = node.dataset;
+        if (component !== undefined) regions.disclosures.push({ messageId, component, open: Boolean(node.open) });
+      }
+    }
+    return { scrollTop: scroll.scrollTop, followLatest, readingDetails, readingAnchor: readingAnchor ? { ...readingAnchor } : null, ...regions };
   }
+  /** @param {ViewState | null} [saved] */
   function restoreViewState(saved) {
     if (destroyed) return;
     for (const item of saved?.guideResults || []) {
-      const article = [...list.children].find(node => node.dataset.messageId === item.messageId);
+      const article = findArticle(item.messageId);
       const card = article?.querySelector('[data-component="guide-result"]');
       if (card) restoreGuideViewState(card, item.state);
     }
     // Filtering opens matching stages; restore the user's current folds after its baseline.
     for (const item of saved?.disclosures || []) {
-      const article = [...list.children].find(node => node.dataset.messageId === item.messageId);
-      const detail = [...(article?.querySelectorAll('details[data-component]') || [])].find(node => node.dataset.component === item.component);
+      const article = findArticle(item.messageId);
+      const details = /** @type {NodeListOf<HTMLDetailsElement> | undefined} */ (article?.querySelectorAll('details[data-component]'));
+      const detail = [...(details || [])].find(node => node.dataset.component === item.component);
       if (detail) detail.open = item.open;
     }
     for (const item of saved?.readingPositions || []) {
-      const article = [...list.children].find(node => node.dataset.messageId === item.messageId);
-      const region = [...(article?.querySelectorAll('.tool-result-json, [data-reading-key]') || [])].find(node => (node.dataset.readingKey || 'tool-result-json') === item.key);
+      const article = findArticle(item.messageId);
+      const readers = /** @type {NodeListOf<HTMLElement> | undefined} */ (article?.querySelectorAll('.tool-result-json, [data-reading-key]'));
+      const region = [...(readers || [])].find(node => (node.dataset.readingKey || 'tool-result-json') === item.key);
       if (region) { region.scrollTop = item.top; region.scrollLeft = item.left; }
     }
     readingDetails = Boolean(saved?.readingDetails);
@@ -907,39 +1062,52 @@ export function mountConversation(options) {
   function onInput() { autosize(); updateControls(controller.getSnapshot().state); }
   function onCompositionStart() { composing = true; }
   function onCompositionEnd() { composing = false; }
-  const bindings = [
-    [composer, 'shipmate:model-select', onModelSelect],
-    [composer, 'shipmate:guide-request', onGuideRequest],
-    [sendButton, 'click', onSend],
-    [cancelEditButton, 'click', cancelEdit],
-    [input, 'keydown', onKeydown],
-    [input, 'input', onInput],
-    [input, 'compositionstart', onCompositionStart],
-    [input, 'compositionend', onCompositionEnd],
-    [list, 'click', onActions],
-    [list, 'click', onDisclosureClick],
-    [list, 'focusin', onReadingFocus],
-    [list, 'input', onGuideSearch],
-    [list, 'compositionstart', onGuideCompositionStart],
-    [list, 'compositionend', onGuideCompositionEnd],
-    [scroll, 'scroll', onScroll],
-    [jumpButton, 'click', onJump],
-  ];
-  for (const [node, type, listener] of bindings) node?.addEventListener(type, listener);
+  /** @type {Array<() => void>} */
+  const unbind = [];
+  /**
+   * @template {keyof ConversationEvents} Type
+   * @param {Element | null | undefined} node
+   * @param {Type} type
+   * @param {(event: ConversationEvents[Type]) => void} handler
+   */
+  function bind(node, type, handler) {
+    if (!node) return;
+    const listener = /** @type {EventListener} */ (handler);
+    node.addEventListener(type, listener);
+    unbind.push(() => node.removeEventListener(type, listener));
+  }
+  bind(composer, 'shipmate:model-select', onModelSelect);
+  bind(composer, 'shipmate:guide-request', onGuideRequest);
+  bind(sendButton, 'click', onSend);
+  bind(cancelEditButton, 'click', cancelEdit);
+  bind(input, 'keydown', onKeydown);
+  bind(input, 'input', onInput);
+  bind(input, 'compositionstart', onCompositionStart);
+  bind(input, 'compositionend', onCompositionEnd);
+  bind(list, 'click', onActions);
+  bind(list, 'click', onDisclosureClick);
+  bind(list, 'focusin', onReadingFocus);
+  bind(list, 'input', onGuideSearch);
+  bind(list, 'compositionstart', onGuideCompositionStart);
+  bind(list, 'compositionend', onGuideCompositionEnd);
+  bind(scroll, 'scroll', onScroll);
+  bind(jumpButton, 'click', onJump);
   // Width changes rewrap text; ignore height notifications from autosize itself.
+  /** @type {number | undefined} */
   let observedWidth;
+  /** @type {number | null} */
   let resizeFrame = null;
   const view = documentRef.defaultView;
   const ResizeObserver = view?.ResizeObserver;
   const resizeObserver = ResizeObserver ? new ResizeObserver(entries => {
     if (destroyed) return;
-    const shell = scroll.closest('.conversation-shell');
+    const shell = /** @type {HTMLElement | null} */ (scroll.closest('.conversation-shell'));
     if (shell) {
       const offset = Math.ceil(shell.getBoundingClientRect().bottom - scroll.getBoundingClientRect().bottom + 14);
       shell.style.setProperty('--conversation-jump-offset', `${Math.max(14, offset)}px`);
     }
     const width = entries.find(entry => !entry.target || entry.target === input)?.contentRect.width;
-    if (Number.isFinite(width) && width > 0 && width !== observedWidth) {
+    if (width !== undefined && Number.isFinite(width) && width > 0 && width !== observedWidth) {
       observedWidth = width;
       // Resizing an observed textarea during delivery can resize its parent
       // reader again. Coalesce that write into the next frame; direct typing
@@ -967,16 +1135,21 @@ export function mountConversation(options) {
 
   return {
     controller,
-    /** @param {{ text?: string; label?: string }} [record] */
+    /**
+     * @param {{ text?: string; label?: string }} [record]
+     * @returns {{ ok: true } | { ok: false; reason: 'destroyed' | 'not-record-mode' | 'busy' | 'empty' }}
+     */
     appendRecord({ text, label } = {}) {
       if (destroyed) return { ok: false, reason: 'destroyed' };
       if (!options.recordOnly && !options.allowRecords) return { ok: false, reason: 'not-record-mode' };
       if (isConversationActive(controller.getSnapshot().state)) return { ok: false, reason: 'busy' };
       if (typeof text !== 'string' || !text.trim() || typeof label !== 'string' || !label.trim()) return { ok: false, reason: 'empty' };
-      messages.push({ id: nextMessageId('assistant'), role: 'assistant', text, status: 'complete',
-        branchNote: '本机执行报告 · 未调用模型；保存不会重新执行', record: { kind: 'report', label: label.trim() } });
+      /** @type {ConversationMessage} */
+      const message = { id: nextMessageId('assistant'), role: 'assistant', text, status: 'complete',
+        branchNote: '本机执行报告 · 未调用模型；保存不会重新执行', record: { kind: 'report', label: label.trim() } };
+      messages.push(message);
       emitMessages();
-      const article = renderMessage(messages.at(-1));
+      const article = renderMessage(message);
       list.append(article);
       readingDetails = false;
       readingAnchor = null;
@@ -993,7 +1166,9 @@ export function mountConversation(options) {
     submit,
     runGuide,
     retry,
+    /** @returns {ReturnType<Controller['stop']> | { ok: false; reason: 'destroyed' }} */
     stop: () => destroyed ? { ok: false, reason: 'destroyed' } : controller.stop(),
+    /** @param {readonly ConversationMessage[]} nextMessages */
     replaceMessages(nextMessages) {
       if (destroyed) return;
       viewEpoch++;
@@ -1014,13 +1189,12 @@ export function mountConversation(options) {
     },
     getViewState,
     restoreViewState,
-    /** @returns {any[]} */
     getMessages: () => messages.map((message) => ({ ...message })),
     getDraftState: () => ({ draft: input.value, draftView: { selectionStart: input.selectionStart, selectionEnd: input.selectionEnd, selectionDirection: input.selectionDirection, scrollTop: input.scrollTop }, edit: pendingEdit ? { ...pendingEdit, ...(pendingEdit.originalContext ? { originalContext: copyContext(pendingEdit.originalContext) } : {}) } : null }),
     /**
      * @param {string} text
-     * @param {any} [edit]
-     * @param {any} [draftView]
+     * @param {DraftEdit | null} [edit]
+     * @param {DraftView | null} [draftView]
      */
     setDraft(text, edit = null, draftView = null) {
       if (destroyed) return;
@@ -1030,23 +1204,25 @@ export function mountConversation(options) {
       input.value = text || '';
       autosize();
       const length = input.value.length;
-      const start = Number.isFinite(draftView?.selectionStart) ? Math.max(0, Math.min(length, Math.trunc(draftView.selectionStart))) : length;
-      const end = Number.isFinite(draftView?.selectionEnd) ? Math.max(start, Math.min(length, Math.trunc(draftView.selectionEnd))) : length;
-      const direction = ['forward', 'backward'].includes(draftView?.selectionDirection) ? draftView.selectionDirection : 'none';
+      const { selectionStart, selectionEnd, selectionDirection, scrollTop } = draftView ?? {};
+      const start = selectionStart !== undefined && Number.isFinite(selectionStart) ? Math.max(0, Math.min(length, Math.trunc(selectionStart))) : length;
+      const end = selectionEnd !== undefined && Number.isFinite(selectionEnd) ? Math.max(start, Math.min(length, Math.trunc(selectionEnd))) : length;
+      const direction = selectionDirection === 'forward' || selectionDirection === 'backward' ? selectionDirection : 'none';
       input.setSelectionRange?.(start, end, direction);
       // Selection and autosizing can scroll the textarea; apply its saved viewport last.
-      input.scrollTop = Number.isFinite(draftView?.scrollTop) ? Math.max(0, Math.min(draftView.scrollTop, input.scrollHeight - input.clientHeight)) : 0;
+      input.scrollTop = scrollTop !== undefined && Number.isFinite(scrollTop) ? Math.max(0, Math.min(scrollTop, input.scrollHeight - input.clientHeight)) : 0;
       updateControls(controller.getSnapshot().state);
       announce(pendingEdit ? editAnnouncement : getRunAnnouncement(controller.getSnapshot().state, assistantMessage()));
       options.onDraftChange?.();
     },
+    /** @param {NonNullable<ConversationMessage['review']>['state']} state @param {Partial<NonNullable<ConversationMessage['review']>>} [detail] */
     updateReviewState(state, detail = {}) {
       if (destroyed) return false;
       const reversed = [...messages].reverse();
       const message = detail.runId
         ? reversed.find((item) => item.review?.runId === detail.runId)
         : reversed.find(item => item.review);
-      if (!message) return false;
+      if (!message?.review) return false;
       message.review = { ...message.review, ...detail, state, summary: getReviewPresentation(state).summary };
       emitMessages();
       patchMessage(message);
@@ -1061,16 +1237,16 @@ export function mountConversation(options) {
       controller.dispose();
       resizeObserver?.disconnect();
       if (resizeFrame !== null) view?.cancelAnimationFrame?.(resizeFrame);
-      for (const [node, type, listener] of bindings) node?.removeEventListener(type, listener);
+      for (const remove of unbind) remove();
     },
   };
 }
 
 if (typeof window !== 'undefined') {
-  (/** @type {any} */ (window)).shipmateConversation = {
+  Object.assign(window, { shipmateConversation: {
     CONVERSATION_STATES,
     createConversationController,
     createDemoPlan,
     mountConversation,
-  };
+  } });
 }
