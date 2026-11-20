@@ -872,6 +872,8 @@ Windows WebView2 157.0.4341.60 用两个隔离项目实测，在 1240 px 和 780
 
 **本机实施验收。** CLI、项目工具和工作流覆盖 12 组主体和业务描述。两个适用主体各增加一条审核阶段条件自查，既有确定项、阻断项和类目候选匹配基线。6 组预检和拒因反查的输出与退出码逐字匹配基线。Windows 便携运行时的四种主体通过实际入口验证。定向 85 项、全量 1823 项通过，1 项因平台跳过。lint、71 条引文、coverage 和 accuracy 通过。
 
+**Windows 实机验收。** WebView2 157.0.4341.60 在 1240 px 和 780 px 使用三类主体的隔离项目打开右栏「上线」的审核阶段。个体工商户与企业可见完整年龄、服务场景和监护人同意说明，个人主体通过过滤。六组验证均通过，项目文件清单和成果库通过对账。
+
 ### 功能 8 · 交接给 Codex / Claude Code
 
 **目标与关口。** 用户在桌面「修复交接」里查看一份给外部编码助手的任务摘要，确认后复制，并在自己打开的 Codex 或 Claude Code 项目中粘贴。首版采用同一份纯文本，通过预览和剪贴板交付。沿用本机报告、已打包的规则来源目录和现有剪贴板能力。
@@ -920,3 +922,5 @@ T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://
 **功能 1（桌面预检发现项带证据）** 的公测首版已完成，Windows WebView2 验收通过。 [范围 #79](https://github.com/YEowo-Y/weapp-shipmate/pull/79) [已合并 #80](https://github.com/YEowo-Y/weapp-shipmate/pull/80)
 
 **功能 5（拟人化互动类目自查）** 的首批规则已实施并通过本机验收。 [范围 #81](https://github.com/YEowo-Y/weapp-shipmate/pull/81) [实施 #82](https://github.com/YEowo-Y/weapp-shipmate/pull/82)
+
+第二批监护人同意自查已通过 CLI、随包项目工具、工作流和 WebView2 实机验收。 [范围 #86](https://github.com/YEowo-Y/weapp-shipmate/pull/86) [实施 #87](https://github.com/YEowo-Y/weapp-shipmate/pull/87)
