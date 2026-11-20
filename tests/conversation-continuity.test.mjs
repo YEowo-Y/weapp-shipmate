@@ -962,7 +962,12 @@ for (const terminal of ['complete', 'stopped']) {
     app.view.submit({ input: 'Stream code' });
     while (!app.list.querySelector('pre')) assert.equal(app.step(), true);
     const pre = app.list.querySelector('pre');
+    const textPart = pre.closest('.msg__text');
+    const detach = textPart.remove.bind(textPart);
+    // WebView2 resets nested scrollers when their text subtree is detached.
+    textPart.remove = () => { detach(); pre.scrollLeft = 0; pre.scrollTop = 0; };
     pre.scrollLeft = 23;
+    pre.scrollTop = 17;
     pre.focus();
     app.list.dispatch('focusin', { target: pre });
     app.scroll.scrollTop = 40;
@@ -972,6 +977,7 @@ for (const terminal of ['complete', 'stopped']) {
     else app.view.stop();
     assert.equal(app.list.querySelector('pre'), pre);
     assert.equal(pre.scrollLeft, 23);
+    assert.equal(pre.scrollTop, 17);
     assert.match(pre.textContent, /const x = 1;/);
     assert.equal(app.list.ownerDocument.activeElement, pre);
     assert.equal(app.jumpButton.hidden, false);

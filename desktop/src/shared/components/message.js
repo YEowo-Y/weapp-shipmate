@@ -11,7 +11,9 @@ import { renderMessageText } from './message-markdown.js';
 /** @typedef {import('../session-store.js').SessionSnapshot['sessions'][number]} Session */
 /** @typedef {Session['messages'][number]} SessionMessage */
 /** @typedef {import('./presentation.js').LiveModel} LiveModel */
-/** @typedef {Omit<SessionMessage, 'live'> & { live?: LiveModel | null }} RenderMessage */
+/** @typedef {NonNullable<SessionMessage['parts']>[number]} SessionPart */
+/** @typedef {Extract<SessionPart, { type: 'text' }> | (Omit<Extract<SessionPart, { type: 'tool' }>, 'result'> & { result?: unknown })} RenderPart */
+/** @typedef {Omit<SessionMessage, 'live' | 'parts' | 'structuredResult' | 'sourceUserId'> & { live?: LiveModel | null; parts?: RenderPart[]; structuredResult?: unknown }} RenderMessage */
 /** @typedef {NonNullable<SessionMessage['tool']>} MessageTool */
 /** @typedef {ReturnType<typeof import('../demo-result.js').createDemoResult>} DemoResult */
 /** @typedef {import('../agent-contract.js').AgentResult} AgentResult */
@@ -353,10 +355,10 @@ const LIVE_RUN_STATES = new Set(['working', 'streaming']);
 const TOOL_STATES = new Set(['running', 'success', 'fail', 'canceled']);
 /** @param {SessionMessage['status']} state */
 export function isLiveRun(state) { return state !== undefined && LIVE_RUN_STATES.has(state); }
-/** @param {Pick<SessionMessage, 'status' | 'parts' | 'tool' | 'text' | 'error'>} message */
+/** @param {Pick<RenderMessage, 'status' | 'parts' | 'tool' | 'text' | 'error'>} message */
 export function getTraceSteps(message) {
   const live = isLiveRun(message.status);
-  /** @type {NonNullable<SessionMessage['parts']>} */
+  /** @type {RenderPart[]} */
   const parts = message.parts || (message.tool ? [{ type: 'tool', tool: message.tool }] : []);
   /** @type {TraceStep[]} */
   const steps = [{ label: '已接收请求', phase: 'success' }];
