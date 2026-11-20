@@ -2,8 +2,7 @@
 import { validateGuideResult } from '../guide-contract.js';
 import { validateDemoResult } from '../demo-result.js';
 
-/** @typedef {import('../session-store.js').SessionSnapshot['sessions'][number]['messages'][number]} SessionMessage */
-/** @typedef {Pick<NonNullable<SessionMessage['live']>, 'providerId' | 'model' | 'label'>} LiveModel */
+/** @typedef {Pick<import('../conversation-controller.js').LiveRequest, 'providerId' | 'model' | 'label'>} LiveModel */
 
 // Canonical presentation of the existing preview states. No transport protocol.
 const reviews = Object.freeze({
