@@ -1,8 +1,15 @@
+// @ts-check
 import { messageSearchText } from './components/message-markdown.js';
+
+/** @typedef {{ id: string; text?: string; role: string }} SearchMessage */
+/** @typedef {{ messages: SearchMessage[]; title: string; draft?: string }} SearchSession */
 
 // Retain only each live message object's latest rendering; streamed edits replace
 // their entry, and removed messages do not stay alive because of this cache.
+/** @type {WeakMap<SearchMessage, { source?: string; role: string; text: string }>} */
 const searchableMessages = new WeakMap();
+
+/** @param {SearchMessage} message */
 function searchableText(message) {
   const cached = searchableMessages.get(message);
   if (cached && cached.source === message.text && cached.role === message.role) return cached.text;
@@ -11,13 +18,18 @@ function searchableText(message) {
   return text;
 }
 
+/** @param {string} query */
 export function literalSessionQuery(query) {
   const term = query.trim();
   if (!term) return null;
   return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'iu');
 }
 
-/** Search saved titles and visible message text; drafts and tool internals stay private. */
+/**
+ * Search saved titles and visible message text; drafts and tool internals stay private.
+ * @param {SearchSession} session
+ * @param {string} query
+ */
 export function sessionMatch(session, query, pattern = literalSessionQuery(query)) {
   if (pattern) {
     for (const message of session.messages) {
@@ -39,8 +51,15 @@ export function sessionMatch(session, query, pattern = literalSessionQuery(query
     if (!pattern.test(session.title)) return { matched: false, snippet: '' };
   }
 
-  const lastRequest = session.messages.findLast(message => message.role === 'user' && message.text?.trim());
-  const summary = lastRequest?.text.replace(/\s+/g, ' ').trim() || '';
+  let lastRequest;
+  for (let index = session.messages.length - 1; index >= 0; index--) {
+    const message = session.messages[index];
+    if (message.role === 'user' && message.text?.trim()) {
+      lastRequest = message;
+      break;
+    }
+  }
+  const summary = lastRequest?.text?.replace(/\s+/g, ' ').trim() || '';
   const limit = 72;
   const characters = Array.from(summary.slice(0, limit * 2 + 1));
   const snippet = summary && summary !== session.title

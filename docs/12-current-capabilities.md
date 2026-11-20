@@ -72,7 +72,7 @@ CI 的 Ubuntu 和 Node.js 22 组合另外生成一份供参考的 V8 代码覆�
 | 微信开发者工具连接检测 | Windows 候选 | 右栏按需检测安装和运行状态。通过本机签名与监听归属校验后读取回环登录状态，遇到访问受限或响应不明可按提示手动核对。Windows 实测工具 2.01.2510290 已安装但未启动、已运行但未登录两种状态。已登录和鉴权受限由夹具覆盖 | [右栏](../desktop/src/shell/right-panel-changes-devtools.tsx)、[本机检测](../desktop/src-tauri/src/devtools_status.rs)、[验收](26-implementation-handoff.md#功能-7--公测前只读连接检测) |
 | 终端 / 第三方 MCP | 待实现 | 尚无真实 PTY 和可用第三方连接；不能从入口外观推断已获得执行权限 | [设置页面](../desktop/design-previews/settings.html)、[原生依赖](../desktop/src-tauri/Cargo.toml) |
 | 设置与导航 | 真实 / 部分 | 正式桌面仅一个常驻全局设置入口，按外观/通知/连接与数据独立分区；模型选择器与缺模型恢复定向进入连接分区，详情关闭恢复原始触发点。复用模型、会话数据、项目与维护界面；设备外观支持主题、正文大小、减少动效与独立重置，存储失败保留旧值、损坏可恢复。工程脚本检查、隐私策略和规则编辑仍未接入，不作为已生效配置展示 | [设置中心](../desktop/src/preferences.ts)、[正式入口](../desktop/src/main.ts)、[当前验收](../desktop/design-previews/research/settings-unification-20261023.md) |
-| 安装与权限边界 | 部分 | Windows x64 安装运行时仅使用随包 Node、规则和 broker。工具取消、限时与输出上限、CSP 和本地主窗口 ACL 已有实现。Windows 安装包处于 `0.2.0-rc.4` 候选阶段，公开下载和可信签名待交付。本机安装与卸载按候选版本留档，干净系统首装与真实用户试用待验证 | [运行时](../desktop/src-tauri/src/runtime.rs)、[执行器](../desktop/src-tauri/src/tool_runner.rs)、[打包配置](../desktop/src-tauri/tauri.conf.json)、[P1历史证据](../desktop/design-previews/research/p1-runtime-delivery-20261022.md)、[首跑](14-first-run-and-trial.md) |
+| 安装与权限边界 | 部分 | Windows x64 安装运行时仅使用随包 Node、规则和 broker。工具取消、限时与输出上限、CSP 和本地主窗口 ACL 已有实现。Windows 安装包处于候选阶段，公开下载和可信签名待交付。本机安装与卸载按候选版本留档，干净系统首装与真实用户试用待验证 | [运行时](../desktop/src-tauri/src/runtime.rs)、[执行器](../desktop/src-tauri/src/tool_runner.rs)、[打包配置](../desktop/src-tauri/tauri.conf.json)、[P1历史证据](../desktop/design-previews/research/p1-runtime-delivery-20261022.md)、[首跑](14-first-run-and-trial.md) |
 
 ## 统一术语与后续模型
 

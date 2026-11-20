@@ -50,7 +50,7 @@ Claude Desktop自带Node，可免用户单独安装，但仍须满足包和宿�
 
 ## 历史候选与本地安装器准备（2026-10-25）
 
-当前构建配置（`desktop/src-tauri/tauri.conf.json`）使用产品名 `weapp-shipmate-desktop` 和标识符 `com.weappshipmate.desktop`。桌面与随包 CLI 的版本均为 `0.2.0-rc.4`（与根目录 `package.json` 等十处版本载体保持一致）。Windows 安装包使用 NSIS，包含 `runtime/`；构建前执行 `npm run prepare:runtime && npm run build`。下方历史候选包的版本和哈希以各次实测记录为准。
+当前构建使用产品名 `weapp-shipmate-desktop` 和标识符 `com.weappshipmate.desktop`。桌面与随包 CLI 的版本由发布校验在十处版本字段对账。Windows 安装包使用 NSIS，包含 `runtime/`。构建前执行 `npm run prepare:runtime && npm run build`。下方历史候选包的版本和哈希以各次实测记录为准。 [桌面打包配置](../desktop/src-tauri/tauri.conf.json) [源码版本](../package.json)
 
 在依赖已按现有锁文件安装、Windows原生构建工具链可用且其他原生构建结束后，从仓库根目录执行候选命令：
 

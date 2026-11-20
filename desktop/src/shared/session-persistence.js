@@ -1,18 +1,24 @@
+// @ts-check
 // One transaction at a time; the store owns cloning and compare-and-swap checks.
+/** @typedef {{ state: 'saved' | 'saving' | 'error'; code?: string; revision: number; dirty: boolean }} SaveStatus */
+
 /**
+ * @template Snapshot
  * @param {{
- *   store: any;
+ *   store: { save: (snapshot: Snapshot, revision: number) => Promise<{ revision: number }> };
  *   revision?: number;
- *   getSnapshot: () => any;
- *   onStatus?: (state: { state: string; code?: string; revision: number; dirty: boolean }) => void;
+ *   getSnapshot: () => Snapshot;
+ *   onStatus?: (state: SaveStatus) => void;
  * }} options
  */
 export function createSessionPersistence({ store, revision = 0, getSnapshot, onStatus = () => {} }) {
   let generation = 0;
   let committed = 0;
+  /** @type {SaveStatus['state']} */
   let state = 'saved';
   /** @type {string | undefined} */
   let code;
+  /** @type {Promise<SaveStatus> | null} */
   let active = null;
   let disposed = false;
   let transferring = false;
@@ -42,7 +48,8 @@ export function createSessionPersistence({ store, revision = 0, getSnapshot, onS
       } catch (error) {
         if (!disposed) {
           state = 'error';
-          code = typeof error?.code === 'string' && error.code ? error.code : phase;
+          const caughtCode = /** @type {{ code?: unknown } | null | undefined} */ (error)?.code;
+          code = typeof caughtCode === 'string' && caughtCode ? caughtCode : phase;
         }
         break;
       }
@@ -79,7 +86,12 @@ export function createSessionPersistence({ store, revision = 0, getSnapshot, onS
 
   // The caller locks edits until this resolves. Lifecycle schedules are queued behind
   // the transaction, so they capture the newly applied state instead of the old one.
+  /**
+   * @param {Snapshot} snapshot
+   * @param {(snapshot: Snapshot) => void} apply
+   */
   async function commitSnapshot(snapshot, apply) {
+    /** @param {string} value */
     const failure = value => Object.assign(new Error('会话未能提交，请检查保存状态后重试。'), { code: value });
     if (transferring) throw failure('busy');
     if (typeof apply !== 'function') throw failure('invalid');
@@ -90,6 +102,7 @@ export function createSessionPersistence({ store, revision = 0, getSnapshot, onS
       if (disposed) throw failure('disposed');
       if (state === 'error') throw failure(code || 'save-failed');
       if (hasUnsavedChanges() || generation !== candidateGeneration) throw failure('changed');
+      /** @type {unknown} */
       let problem;
       snapshotPending = true; state = 'saving'; code = undefined;
       active = Promise.resolve().then(async () => {
@@ -103,9 +116,16 @@ export function createSessionPersistence({ store, revision = 0, getSnapshot, onS
           state = generation !== committed ? 'saving' : 'saved';
         } catch (error) {
           // Once saved, presentation errors must never enable a retry of stale UI data.
-          problem = phase === 'apply-failed' ? Object.assign(failure(phase), { cause: error })
-            : typeof error?.code === 'string' && error.code ? error : failure(phase);
-          state = 'error'; code = problem.code;
+          if (phase === 'apply-failed') {
+            code = phase;
+            problem = Object.assign(failure(phase), { cause: error });
+          } else {
+            const caughtCode = /** @type {{ code?: unknown } | null | undefined} */ (error)?.code;
+            const storeCode = typeof caughtCode === 'string' && caughtCode ? caughtCode : undefined;
+            code = storeCode ?? phase;
+            problem = storeCode ? error : failure(phase);
+          }
+          state = 'error';
         } finally {
           snapshotPending = false; active = null; publish();
         }
