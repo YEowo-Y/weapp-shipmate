@@ -129,6 +129,26 @@ import { normalizeSessionSnapshot } from '../desktop/design-previews/session-sto
 import { createMessage, createToolCard } from '../desktop/design-previews/components/message.js';
 import { createPreviewDocument } from './helpers/preview-dom.mjs';
 
+test('legacy tool records without a state keep the imported message readable', () => {
+  const source = snapshot();
+  const session = source.sessions[0];
+  delete session.edit; delete session.viewState;
+  session.messages = [
+    { id: 'a1', role: 'assistant', text: '保留的旧回复', tool: { label: '旧版工具' } },
+    { id: 'a2', role: 'assistant', text: '前后文字', parts: [
+      { type: 'text', text: '前文' },
+      { type: 'tool', tool: { kind: 'project', name: 'project_read', toolCallId: 't1', label: '旧项目工具', state: null } },
+      { type: 'text', text: '后文' },
+    ] },
+  ];
+  const imported = parseSessionBackup(JSON.stringify(source));
+  const doc = createPreviewDocument();
+  const [legacy, multipart] = imported.sessions[0].messages.map(message => createMessage(doc, message));
+  assert.match(legacy.textContent, /保留的旧回复.*旧版工具 · 状态未记录/s);
+  assert.match(multipart.textContent, /前文.*旧项目工具 · 状态未记录.*后文/s);
+  assert.doesNotMatch(multipart.textContent, /查找并核验本机报告|等待本机工具返回结果/);
+});
+
 test('imported guide cards and evidence identify external history instead of local rule execution', () => {
   const source = snapshot();
   source.sessions[0].messages = [{ id: 'g1', role: 'assistant', text: '历史清单', status: 'complete',
