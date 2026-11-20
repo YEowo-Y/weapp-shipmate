@@ -119,6 +119,23 @@ test('empty or excessive input is invalid and retry retains the submitted text',
   fail = false; await n.rjForm.fire('submit'); assert.equal(n.rjStatus.dataset.state, 'matched');
 });
 
+test('a query rejected without an error message returns to a retryable state', async () => {
+  let calls = 0;
+  const { nodes: n } = explainHarness(async ({ query }) => {
+    if (++calls === 1) return Promise.reject(null);
+    return runExplain(query);
+  });
+  n.rjInput.value = '隐私';
+  await n.rjForm.fire('submit');
+  assert.equal(n.rjStatus.dataset.state, 'error');
+  assert.equal(n.rjStatus.textContent, '查询失败，请重试。');
+  assert.equal(n.rjInput.value, '隐私');
+  assert.equal(n.rjBtn.disabled, false);
+  assert.equal(n.rjStop.hidden, true);
+  await n.rjForm.fire('submit');
+  assert.equal(n.rjStatus.dataset.state, 'matched');
+});
+
 test('duplicate submit is ignored and editing or stopping discards late results without moving focus', async () => {
   for (const action of ['edit', 'stop', 'pagehide']) {
     let finish, signal, calls = 0;
