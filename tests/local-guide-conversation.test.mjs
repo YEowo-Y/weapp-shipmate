@@ -46,6 +46,29 @@ test('stopping guide aborts transport and rejects late output, including after r
   resolve(result()); await flush(); assert.equal(controller.getSnapshot().state, 'idle');
 });
 
+for (const stopAt of ['tool-result', 'chunk']) {
+  test(`stopping during the guide ${stopAt} event prevents completion`, async () => {
+    const events = [];
+    const controller = createConversationController({
+      guideTransport: async ({ input, onToolStart }) => {
+        onToolStart({ toolCallId: 'g', input }); return result();
+      },
+      onEvent(event) {
+        events.push(event);
+        if (event.type === stopAt) controller.stop();
+      },
+    });
+    controller.start({ input: '清单', guide: input() });
+    await flush();
+    const stopped = controller.getSnapshot();
+    assert.equal(stopped.state, 'stopped');
+    assert.equal(stopped.toolState, 'success');
+    assert.equal(Boolean(stopped.output), stopAt === 'chunk');
+    assert.equal(events.some(event => event.type === 'complete'), false);
+    assert.equal(events.filter(event => event.type === 'chunk').length, stopAt === 'chunk' ? 1 : 0);
+  });
+}
+
 test('invalid guide output cannot become success', async () => {
   const controller = createConversationController({ guideTransport: async ({ input, onToolStart }) => { onToolStart({ toolCallId: 'g', input }); return { invalid: true }; } });
   controller.start({ input: '清单', guide: input() }); await flush();
