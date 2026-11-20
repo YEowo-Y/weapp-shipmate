@@ -40,8 +40,9 @@ export function createSessionDataPanel(options) {
 }
 
 /**
+ * @template {boolean} Embedded
  * @param {SessionDataOptions} options
- * @param {boolean} embedded
+ * @param {Embedded} embedded
  */
 function createSessionDataSurface({ document: doc, trigger, capture, prepare, commit,
   onBusyChange = () => {}, isDisposed = () => false, isReloadRequired = () => false, onClose = () => {} }, embedded) {
@@ -62,7 +63,9 @@ function createSessionDataSurface({ document: doc, trigger, capture, prepare, co
     const control = createActionButton(doc, label, options); control.dataset.action = name; return control;
   };
   const dialog = embedded ? null : element('dialog', 'session-workspace-dialog');
-  const node = dialog ?? element('section', 'session-workspace-data-panel');
+  const node = /** @type {Embedded extends false ? HTMLDialogElement : HTMLElement} */ (
+    dialog ?? element('section', 'session-workspace-data-panel')
+  );
   node.dataset.kind = 'data'; node.setAttribute('aria-label', '数据与会话备份'); node.hidden = true;
   const header = element('div', 'session-workspace-dialog__header');
   const dismiss = action('', 'close', { appearance: 'plain', className: 'ui-action-icon' });
