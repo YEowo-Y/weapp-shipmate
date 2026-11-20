@@ -26,6 +26,27 @@ test('stop aborts real transport and ignores late deltas and completion', async 
   assert.equal(controller.getSnapshot().state, 'stopped');
   assert.equal(controller.getSnapshot().output, 'partial');
 });
+test('stopping from the streaming state event suppresses the current and later deltas', async () => {
+  const events = [];
+  let transportSignal;
+  const controller = createConversationController({
+    transport({ onDelta, signal }) {
+      transportSignal = signal;
+      onDelta('first');
+      onDelta('late');
+    },
+    onEvent(event) {
+      events.push(event);
+      if (event.type === 'state' && event.state === 'streaming') controller.stop();
+    },
+  });
+  controller.start(request());
+  await tick();
+  assert.equal(transportSignal?.aborted, true);
+  assert.equal(controller.getSnapshot().state, 'stopped');
+  assert.equal(controller.getSnapshot().output, '');
+  assert.deepEqual(events.filter(event => ['chunk', 'complete'].includes(event.type)), []);
+});
 test('retry freezes original model and history; failure preserves partial output', async () => {
   const requests = [];
   const controller = createConversationController({ transport: async options => { requests.push(options); options.onDelta('part'); throw new Error('连接中断，请重试。'); } });
