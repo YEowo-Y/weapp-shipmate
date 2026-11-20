@@ -1,10 +1,34 @@
+// @ts-check
 /* global TextDecoder */
+/** @param {unknown} value @returns {value is string} */
+export function isStreamId(value) { return typeof value === 'string' && value.length > 0 && value.length <= 256; }
+
+/**
+ * @param {string} payload
+ * @param {() => never} malformed
+ * @returns {Record<string, unknown>}
+ */
+export function parseUIMessagePayload(payload, malformed) {
+  /** @type {unknown} */
+  let value;
+  try { value = JSON.parse(payload); } catch { return malformed(); }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return malformed();
+  return /** @type {Record<string, unknown>} */ (value);
+}
+
 // Bounded SSE framing shared by the supported AI SDK UI Message Stream subsets.
 // Consumers validate event order and payloads; true from onData closes the stream.
+/**
+ * @param {ReadableStream<Uint8Array>} body
+ * @param {{ signal: AbortSignal; onData: (payload: string) => boolean | void; fail: (message: string) => never;
+ *   checkAbort: (signal: AbortSignal) => void; label?: string }} options
+ */
 export async function readUIMessageStream(body, { signal, onData, fail, checkAbort, label = '回复' }) {
   const reader = body.getReader();
   const decoder = new TextDecoder('utf-8', { fatal: true });
-  let buffer = '', data = [], dataSize = 0, bytes = 0, done = false;
+  /** @type {string[]} */
+  let data = [];
+  let buffer = '', dataSize = 0, bytes = 0, done = false;
   const malformed = () => fail(`${label}流格式不受支持，请重试。`);
   const cancel = () => { void reader.cancel().catch(() => {}); };
   signal.addEventListener('abort', cancel, { once: true });
