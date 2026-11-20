@@ -1,391 +1,22 @@
-/* global CustomEvent, navigator, window */
-// Shared lifecycle: deterministic demo by default, explicit model selection for text transport.
+/* global navigator, window */
 import { AGENT_TOOL_NAME, validateAgentInput, validateAgentResult } from './agent-contract.js';
-import { createDemoResult, validateDemoResult } from './demo-result.js';
 import { createMessage, updateMessageText, updateMessageState, updateGuideFilter, getGuideViewState, restoreGuideViewState } from './components/message.js';
 import { getReviewPresentation, getRunAnnouncement, getRunPresentation, formatTraceLabel } from './components/presentation.js';
 import { createIcon } from './components/icons.js';
-import { GUIDE_TOOL_NAME, GUIDE_SUBJECTS, validateGuideInput, validateGuideResult } from './guide-contract.js';
+import { GUIDE_SUBJECTS, validateGuideInput, validateGuideResult } from './guide-contract.js';
 import { createGuideArtifact } from './guide-artifact.js';
 import { createArtifactDownloader } from './artifact-download.js';
-import { streamChat, SUPPORTED_CHAT_PROVIDERS } from './chat-transport.js';
+import { SUPPORTED_CHAT_PROVIDERS } from './chat-transport.js';
+import { CONVERSATION_STATES, copyLive, createConversationController, createDemoPlan, isConversationActive, normalizePlan } from './conversation-controller.js';
 
-export const CONVERSATION_STATES = Object.freeze({
-  IDLE: 'idle',
-  WORKING: 'working',
-  STREAMING: 'streaming',
-  COMPLETE: 'complete',
-  STOPPED: 'stopped',
-  ERROR: 'error',
-});
-
-/** @type {Set<string>} */
-const ACTIVE_STATES = new Set([
-  CONVERSATION_STATES.WORKING,
-  CONVERSATION_STATES.STREAMING,
-]);
+export { CONVERSATION_STATES, createConversationController, createDemoPlan };
 
 let messageSequence = 0;
 const fallbackMessagePrefix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
-function copyLive(request) {
-  return request ? Object.freeze({ providerId: request.providerId, model: request.model, label: request.label,
-    messages: Object.freeze(request.messages.map(({ role, content }) => Object.freeze({ role, content }))) }) : null;
-}
-
 function nextMessageId(role) {
   const id = globalThis.crypto?.randomUUID?.() || `${fallbackMessagePrefix}-${++messageSequence}`;
   return `${role}-${id}`;
-}
-
-function normalizePlan(plan = {}) {
-  return {
-    workingDelayMs: Math.max(0, Number(plan.workingDelayMs) || 0),
-    chunkDelayMs: Math.max(0, Number(plan.chunkDelayMs) || 0),
-    chunks: Array.isArray(plan.chunks) ? plan.chunks.map(String) : [],
-    failAt: Number.isInteger(plan.failAt) ? plan.failAt : null,
-    failure: plan.failure || null,
-    tool: plan.tool || null,
-    toolStartAt: Math.max(0, Number.isInteger(plan.toolStartAt) ? plan.toolStartAt : 0),
-    toolDelayMs: Math.max(0, Number(plan.toolDelayMs) || 0),
-    toolFailure: plan.toolFailure || null,
-    fact: plan.fact || null,
-    advice: plan.advice || null,
-    review: plan.review || null,
-    structuredResult: plan.structuredResult ?? null,
-  };
-}
-
-export function createDemoPlan(input, options = {}) {
-  const scenario = options.scenario || 'normal';
-  const recovery = Boolean(options.recovery);
-  const failure = scenario === 'timeout'
-    ? { code: 'demo_timeout', message: '演示工具等待超时；没有文件被读取或修改。', retryable: true }
-    : { code: 'demo_tool_failure', message: '演示工具返回失败；没有文件被读取或修改。', retryable: true };
-
-  return normalizePlan({
-    workingDelayMs: options.workingDelayMs ?? 420,
-    chunkDelayMs: options.chunkDelayMs ?? 210,
-    chunks: recovery
-      ? [
-          '已重新执行本次请求。',
-          '本地演示没有持久化检查点，',
-          '这次从固定示例重新开始。\n\n',
-          '公开执行摘要已更新，',
-          '没有读取真实项目文件，',
-          '也没有连接模型服务。\n\n',
-          '本次演示已经完成。',
-          '请查看下方规则示例与 AI 建议，',
-          '再决定是否批准本地演示改动。',
-        ]
-      : [
-          '先检查隐私声明与代码调用是否一致，',
-          '再确认接口用途说明是否清楚。\n\n',
-          '### 示例发现\n\n这个固定示例中，**位置能力需要声明**。',
-          '对应差异会放到右侧供你审阅。\n\n',
-          '规则示例只说明检查方式，',
-          '不能代替对真实项目的扫描结果。\n\n',
-          '### 需要你确认\n\n1. 核对差异是否符合实际业务用途。\n',
-          '2. 用途相符时，可以批准这项本地修改建议。\n',
-          '3. 如果用途不符，应先调整说明或拒绝。\n\n',
-          '备案、提审和发布属于官方后台动作，',
-          '仍需由你本人核对并完成。\n\n',
-          '**下一步：**查看规则示例、AI 建议和差异。',
-        ],
-    toolStartAt: recovery ? 3 : 2,
-    toolDelayMs: options.toolDelayMs ?? 900,
-    toolFailure: scenario === 'normal' ? null : failure,
-    failure,
-    tool: {
-      name: 'demo_preflight',
-      parameters: { subject: 'personal', source: 'fixed-example', readOnly: true },
-      label: recovery ? '重新运行本地规则演示' : '运行本地规则演示',
-      summary: [
-        '使用固定示例输入，未连接模型服务',
-        '未读取、写入或上传任何真实项目文件',
-        `请求摘要：${String(input).trim().slice(0, 80)}`,
-      ],
-    },
-    structuredResult: createDemoResult(),
-    fact: {
-      label: '规则示例 · 非项目核验',
-      text: 'requiredPrivateInfos 应与代码实际调用的隐私接口保持一致。',
-    },
-    advice: {
-      text: '先审阅差异与用途说明，再决定是否批准本地修改。',
-    },
-    review: {
-      state: 'pending',
-      kind: 'local-demo-change',
-      files: ['app.json'],
-      summary: '示例差异等待审批，尚未写入文件。',
-    },
-  });
-}
-
-export function createConversationController(options = {}) {
-  const schedule = options.schedule || ((callback, delay) => setTimeout(callback, delay));
-  const cancelSchedule = options.cancelSchedule || ((handle) => clearTimeout(handle));
-  const planFactory = options.planFactory || createDemoPlan;
-  const now = options.now || Date.now;
-  const onEvent = typeof options.onEvent === 'function' ? options.onEvent : () => {};
-  const eventTarget = options.eventTarget || (typeof window !== 'undefined' ? window : null);
-  /** @type {string} */
-  let state = CONVERSATION_STATES.IDLE;
-  let runSequence = 0;
-  let activeRun = null;
-  let lastRun = null;
-  let lastRequest = null;
-  const timers = new Set();
-
-  function snapshot(extra = {}) {
-    const run = activeRun || lastRun;
-    return {
-      state,
-      runId: run?.id ?? null,
-      input: activeRun?.input ?? lastRequest?.input ?? '',
-      output: run?.output ?? '',
-      retry: Boolean(run?.retry),
-      startedAt: run?.startedAt ?? null,
-      elapsedMs: run ? Math.max(0, (run.endedAt ?? now()) - run.startedAt) : 0,
-      toolState: run?.toolState ?? null,
-      live: run?.live ?? null,
-      guide: run?.guide ?? null,
-      ...extra,
-    };
-  }
-
-  function emit(type, extra = {}) {
-    const event = snapshot({ type, ...extra });
-    onEvent(event);
-    if (eventTarget?.dispatchEvent && typeof CustomEvent === 'function') {
-      eventTarget.dispatchEvent(new CustomEvent('shipmate:conversation', { detail: event }));
-    }
-    return event;
-  }
-
-  function setState(nextState, extra = {}) {
-    const previousState = state;
-    state = nextState;
-    emit('state', { previousState, ...extra });
-  }
-
-  function clearTimers() {
-    for (const handle of timers) cancelSchedule(handle);
-    timers.clear();
-  }
-
-  function later(runId, callback, delay) {
-    const handle = schedule(() => {
-      timers.delete(handle);
-      if (!activeRun || activeRun.id !== runId) return;
-      callback();
-    }, delay);
-    timers.add(handle);
-  }
-
-  function finishError(run, failure) {
-    if (!activeRun || activeRun.id !== run.id) return;
-    clearTimers();
-    run.endedAt = now();
-    if (run.toolState === 'running') run.toolState = 'fail';
-    const error = {
-      code: failure?.code || 'demo_error',
-      message: failure?.message || '本地演示运行失败。',
-      retryable: failure?.retryable !== false,
-    };
-    setState(CONVERSATION_STATES.ERROR, { error });
-    emit('error', { error });
-    activeRun = null;
-  }
-
-  function streamNext(run, index) {
-    if (!activeRun || activeRun.id !== run.id) return;
-    if (run.plan.failAt === index) {
-      finishError(run, run.plan.failure);
-      return;
-    }
-    // This is a fixed local demo step, not a provider/tool transport protocol.
-    // Keep its position and result explicit so the view never parses prose.
-    if (run.plan.tool && run.toolState === null && index >= Math.min(run.plan.toolStartAt, run.plan.chunks.length)) {
-      run.toolState = 'running';
-      emit('tool-start', { tool: run.plan.tool });
-      later(run.id, () => {
-        if (run.plan.toolFailure) {
-          finishError(run, run.plan.toolFailure);
-          return;
-        }
-        const validation = validateDemoResult(run.plan.structuredResult);
-        if (!validation.ok) {
-          finishError(run, { code: 'invalid_demo_result', message: validation.error, retryable: true });
-          return;
-        }
-        run.toolState = 'success';
-        emit('tool-result', { tool: run.plan.tool, structuredResult: run.plan.structuredResult });
-        streamNext(run, index);
-      }, run.plan.toolDelayMs);
-      return;
-    }
-    if (index >= run.plan.chunks.length) {
-      if (run.plan.tool || run.plan.structuredResult !== null) {
-        const validation = validateDemoResult(run.plan.structuredResult);
-        if (!validation.ok) {
-          finishError(run, { code: 'invalid_demo_result', message: validation.error, retryable: true });
-          return;
-        }
-      }
-      run.endedAt = now();
-      setState(CONVERSATION_STATES.COMPLETE, { result: run.plan });
-      emit('complete', { result: run.plan });
-      activeRun = null;
-      return;
-    }
-    const chunk = run.plan.chunks[index];
-    run.output += chunk;
-    emit('chunk', { chunk, chunkIndex: index });
-    later(run.id, () => streamNext(run, index + 1), run.plan.chunkDelayMs);
-  }
-
-  function start(request = {}) {
-    const input = String(request.input ?? '').trim();
-    if (!input) return { ok: false, reason: 'empty' };
-    if (ACTIVE_STATES.has(state)) return { ok: false, reason: 'busy' };
-    if (!request.plan && request.guide && request.live) return { ok: false, reason: 'ambiguous-source' };
-    if (!request.plan && request.guide && !validateGuideInput(request.guide).ok) return { ok: false, reason: 'invalid-guide' };
-
-    clearTimers();
-    const retry = Boolean(request.retry);
-    const live = !request.plan && request.live ? copyLive(request.live) : null;
-    const guide = !request.plan && request.guide ? Object.freeze({ ...request.guide }) : null;
-    let plan;
-    let planError;
-    try {
-      plan = live || guide ? {} : normalizePlan(request.plan || planFactory(input, request));
-    } catch (cause) {
-      planError = { code: 'plan_error', message: cause?.message || '无法创建演示计划。', retryable: true };
-      plan = normalizePlan();
-    }
-
-    const abort = live || guide ? new AbortController() : null;
-    const run = {
-      id: ++runSequence,
-      input,
-      output: '',
-      retry,
-      plan,
-      startedAt: now(),
-      endedAt: /** @type {number | null} */ (null),
-      toolState: /** @type {string | null} */ (null),
-      live,
-      guide,
-      abort,
-    };
-    activeRun = run;
-    lastRun = run;
-    lastRequest = { input, plan: live || guide || planError ? undefined : plan, live, guide };
-    const previousState = state;
-    state = CONVERSATION_STATES.WORKING;
-    emit('run-start', { previousState, result: planError ? null : plan });
-    emit('state', { previousState, phase: 'run-start', result: planError ? null : plan });
-    if (planError) {
-      finishError(run, planError);
-      return { ok: false, reason: 'plan-error', error: planError, runId: run.id };
-    }
-    if (guide && abort) {
-      const transport = options.guideTransport || (args => import('./guide-transport.js').then(module => module.streamGuide(args)));
-      let tool;
-      Promise.resolve().then(() => {
-        if (activeRun !== run) return;
-        return transport({ input: guide, signal: abort.signal, onToolStart({ toolCallId }) {
-          if (activeRun !== run || abort.signal.aborted || tool) return;
-          tool = { name: GUIDE_TOOL_NAME, kind: 'guide', toolCallId, parameters: guide, label: '生成本机上线清单' };
-          run.toolState = 'running';
-          emit('tool-start', { tool });
-        } });
-      }).then(result => {
-        if (activeRun !== run) return;
-        if (!tool || !validateGuideResult(result).ok) throw new Error('上线清单结果无效，请重试。');
-        run.toolState = 'success';
-        emit('tool-result', { tool, structuredResult: result });
-        const chunk = `已根据本机收录规则生成${GUIDE_SUBJECTS[guide.subject]}上线清单。请核对适用项和条件自查项；这不表示项目已通过审核。`;
-        run.output = chunk;
-        emit('chunk', { chunk });
-        run.endedAt = now();
-        setState(CONVERSATION_STATES.COMPLETE, { result: { structuredResult: result } });
-        emit('complete', { result: { structuredResult: result } });
-        activeRun = null;
-      }).catch(error => {
-        if (activeRun !== run) return;
-        finishError(run, { code: 'guide_error', message: error?.message || '上线清单生成失败，请重试。', retryable: true });
-      });
-      return { ok: true, runId: run.id };
-    }
-    if (live && abort) {
-      const transport = options.transport || streamChat;
-      Promise.resolve().then(() => {
-        if (activeRun !== run) return;
-        return transport({ ...live, signal: abort.signal, onToolEvent(event) {
-          if (activeRun !== run || abort.signal.aborted) return;
-          emit('agent-tool', { toolEvent: event });
-        }, onDelta(chunk, metadata) {
-          if (activeRun !== run || abort.signal.aborted) return;
-          if (state !== CONVERSATION_STATES.STREAMING) setState(CONVERSATION_STATES.STREAMING);
-          run.output += chunk;
-          emit('chunk', { chunk, textId: metadata?.textId });
-        } });
-      }).then(() => {
-        if (activeRun !== run) return;
-        run.endedAt = now();
-        setState(CONVERSATION_STATES.COMPLETE, { result: {} });
-        emit('complete', { result: {} });
-        activeRun = null;
-      }).catch(error => {
-        if (activeRun !== run) return;
-        finishError(run, { code: 'model_error', message: error?.message || '模型连接失败，请重试。', retryable: true });
-      });
-      return { ok: true, runId: run.id };
-    }
-    later(run.id, () => {
-      setState(CONVERSATION_STATES.STREAMING, { result: plan });
-      streamNext(run, 0);
-    }, plan.workingDelayMs);
-    return { ok: true, runId: run.id };
-  }
-
-  function retry(overrides = {}) {
-    if (!lastRequest) return { ok: false, reason: 'no-request' };
-    return start({
-      input: lastRequest.input,
-      live: lastRequest.live,
-      guide: lastRequest.guide,
-      plan: overrides.plan || lastRequest.plan,
-      retry: true,
-    });
-  }
-
-  function stop(reason = 'user') {
-    if (!activeRun || !ACTIVE_STATES.has(state)) return { ok: false, reason: 'not-running' };
-    const stoppedRun = activeRun;
-    stoppedRun.abort?.abort();
-    stoppedRun.endedAt = now();
-    if (stoppedRun.toolState === 'running') stoppedRun.toolState = 'canceled';
-    clearTimers();
-    setState(CONVERSATION_STATES.STOPPED, { reason });
-    emit('stopped', { reason, output: stoppedRun.output });
-    activeRun = null;
-    return { ok: true, runId: stoppedRun.id, output: stoppedRun.output };
-  }
-
-  function dispose() {
-    activeRun?.abort?.abort();
-    clearTimers();
-    activeRun = null;
-    lastRequest = null;
-    lastRun = null;
-    state = CONVERSATION_STATES.IDLE;
-  }
-
-  return { start, retry, stop, getSnapshot: () => snapshot(), dispose };
 }
 
 async function copyText(text) {
@@ -487,7 +118,7 @@ export function mountConversation(options) {
   }
 
   function setModelSelection(selection) {
-    if (destroyed || ACTIVE_STATES.has(controller.getSnapshot().state)) {
+    if (destroyed || isConversationActive(controller.getSnapshot().state)) {
       announce('请先停止当前回复，再切换模型。');
       return false;
     }
@@ -791,7 +422,7 @@ export function mountConversation(options) {
 
   function updateHint(state) {
     if (!hint) return;
-    const busy = ACTIVE_STATES.has(state), sendKey = options.getSendShortcut?.() === 'mod-enter' ? 'Ctrl / ⌘ + Enter' : 'Enter';
+    const busy = isConversationActive(state), sendKey = options.getSendShortcut?.() === 'mod-enter' ? 'Ctrl / ⌘ + Enter' : 'Enter';
     hint.textContent = busy ? '可继续写草稿，回复完成后发送 · Shift + Enter 换行' : pendingEdit ? `${sendKey} 发送修改 · Esc 取消 · 原版本保留` : `${sendKey} 发送 · Shift + Enter 换行`;
     if (modelSelection) hint.textContent += ` · ${modelSelection.label} · 仅发送本会话真实文本，不发送引用文件`;
     if (busy && assistantMessage()?.guide) hint.textContent = '正在本机生成上线清单 · 不调用模型 · 草稿和模型选择保持不变';
@@ -799,7 +430,7 @@ export function mountConversation(options) {
   }
 
   function updateControls(state) {
-    const busy = ACTIVE_STATES.has(state);
+    const busy = isConversationActive(state);
     if (options.requireModel) { const picker = composer?.querySelector('.agent-composer__model'); if (picker) picker.disabled = busy; }
     updateHint(state);
     const sendLabel = busy ? '停止生成' : options.recordOnly ? (pendingEdit ? '保存修改' : '保存记录') : pendingEdit ? '发送修改' : '发送消息';
@@ -821,6 +452,7 @@ export function mountConversation(options) {
     return messages.find((message) => message.id === activeAssistantId);
   }
 
+  /** @param {import('./conversation-controller.js').ConversationEvent} event */
   function handleEvent(event) {
     if (destroyed) return;
     options.onEvent?.(event);
@@ -868,7 +500,7 @@ export function mountConversation(options) {
       if (value.type === 'tool-output-available' && validateAgentResult(value.output).ok) {
         part.tool.state = 'success'; part.result = value.output;
       }
-      if (['tool-input-error', 'tool-output-error'].includes(value.type)) {
+      if (value.type === 'tool-input-error' || value.type === 'tool-output-error') {
         part.tool.state = 'fail'; part.error = { code: 'project_tool_error', message: value.errorText, retryable: false };
       }
       if (value.type !== 'tool-input-delta') { emitMessages(); patchMessage(current); }
@@ -1007,7 +639,7 @@ export function mountConversation(options) {
       updateControls(controller.getSnapshot().state);
       return { ok: false, reason: 'empty' };
     }
-    if (ACTIVE_STATES.has(controller.getSnapshot().state)) return { ok: false, reason: 'busy' };
+    if (controller.isBusy()) return { ok: false, reason: 'busy' };
     if (options.requireModel && !modelSelection && !retry) {
       announce('请先连接并选择模型。草稿已保留。', 'model-required');
       options.onModelRequired?.();
@@ -1091,7 +723,7 @@ export function mountConversation(options) {
 
   function retry(retryOptions = {}) {
     if (destroyed) return { ok: false, reason: 'destroyed' };
-    if (ACTIVE_STATES.has(controller.getSnapshot().state)) return { ok: false, reason: 'busy' };
+    if (controller.isBusy()) return { ok: false, reason: 'busy' };
     const plan = retryOptions.plan || (!controller.getSnapshot().live && !controller.getSnapshot().guide && lastPlan ? normalizePlan({ ...lastPlan, failAt: null }) : undefined);
     if (!controller.getSnapshot().guide || plan) setModelSelection(plan ? null : controller.getSnapshot().live);
     const result = controller.retry({ plan });
@@ -1101,7 +733,7 @@ export function mountConversation(options) {
   }
 
   function onSend() {
-    if (ACTIVE_STATES.has(controller.getSnapshot().state)) {
+    if (isConversationActive(controller.getSnapshot().state)) {
       controller.stop();
       input.focus();
     }
@@ -1118,7 +750,7 @@ export function mountConversation(options) {
     if (event.key !== 'Enter' || event.shiftKey || event.altKey) return;
     if (options.getSendShortcut?.() === 'mod-enter' && !event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
-    if (!ACTIVE_STATES.has(controller.getSnapshot().state)) submit();
+    if (!isConversationActive(controller.getSnapshot().state)) submit();
     else {
       announce(input.value.trim() ? '草稿已保留，尚未发送；回复完成或停止后可发送。' : '正在生成回复；可继续写草稿，完成后发送。');
       if (hint) hint.textContent = input.value.trim() ? '草稿已保留，尚未发送；回复完成后可发送。' : '正在生成回复；可继续写草稿，完成后发送。';
@@ -1147,7 +779,7 @@ export function mountConversation(options) {
     if (control.dataset.action === 'download-guide-markdown') downloadGuide(message, 'markdown');
     if (control.dataset.action === 'download-guide-json') downloadGuide(message, 'json');
     if (control.dataset.action === 'edit') {
-      if (message.role !== 'user' || message.guide || ACTIVE_STATES.has(controller.getSnapshot().state)) return;
+      if (message.role !== 'user' || message.guide || isConversationActive(controller.getSnapshot().state)) return;
       pendingEdit = { messageId: message.id, originalDraft: pendingEdit?.originalDraft ?? input.value,
         ...(options.getDraftContext ? { originalContext: copyContext(pendingEdit?.originalContext || options.getDraftContext()) } : {}) };
       options.setDraftContext?.({ references: [...(message.references || [])], pendingScenario: 'normal' });
@@ -1339,7 +971,7 @@ export function mountConversation(options) {
     appendRecord({ text, label } = {}) {
       if (destroyed) return { ok: false, reason: 'destroyed' };
       if (!options.recordOnly && !options.allowRecords) return { ok: false, reason: 'not-record-mode' };
-      if (ACTIVE_STATES.has(controller.getSnapshot().state)) return { ok: false, reason: 'busy' };
+      if (isConversationActive(controller.getSnapshot().state)) return { ok: false, reason: 'busy' };
       if (typeof text !== 'string' || !text.trim() || typeof label !== 'string' || !label.trim()) return { ok: false, reason: 'empty' };
       messages.push({ id: nextMessageId('assistant'), role: 'assistant', text, status: 'complete',
         branchNote: '本机执行报告 · 未调用模型；保存不会重新执行', record: { kind: 'report', label: label.trim() } });
@@ -1367,7 +999,7 @@ export function mountConversation(options) {
       viewEpoch++;
       clearCopyFeedback();
       artifactDownloader.dispose();
-      if (ACTIVE_STATES.has(controller.getSnapshot().state)) controller.stop('session-switch');
+      if (isConversationActive(controller.getSnapshot().state)) controller.stop('session-switch');
       controller.dispose();
       messages = nextMessages.map((message) => ({ ...message }));
       activeAssistantId = null;

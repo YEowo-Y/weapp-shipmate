@@ -200,6 +200,63 @@ test('stale callbacks from a stopped run cannot mutate the next run', () => {
   assert.equal(controller.getSnapshot().state, CONVERSATION_STATES.COMPLETE);
 });
 
+for (const terminal of ['stopped', 'complete', 'error']) {
+  test(`finishes publishing ${terminal} before accepting a reentrant start`, () => {
+    const clock = manualScheduler();
+    const attempts = [];
+    const events = [];
+    const controller = createConversationController({
+      ...clock,
+      planFactory: () => plan(),
+      onEvent(event) {
+        events.push(event);
+        if (event.runId === 1 && (event.type === terminal || (event.type === 'state' && event.state === terminal))) {
+          attempts.push(controller.start({ input: '回调里的请求' }));
+        }
+      },
+    });
+    controller.start({ input: '第一条请求', ...(terminal === 'error' ? { plan: plan({ failAt: 0 }) } : {}) });
+    if (terminal === 'stopped') controller.stop();
+    clock.flushAll();
+    assert.deepEqual(attempts, [{ ok: false, reason: 'busy' }, { ok: false, reason: 'busy' }]);
+    assert.equal(events.at(-1).type, terminal);
+    assert.equal(events.at(-1).runId, 1);
+    assert.deepEqual(controller.start({ input: '第二条请求' }), { ok: true, runId: 2 });
+    clock.flushAll();
+    assert.equal(controller.getSnapshot().state, 'complete');
+    assert.equal(controller.getSnapshot().output, '第一块第二块');
+  });
+}
+
+for (const terminate of ['stop', 'dispose']) {
+  test(`${terminate} leaves a replacement started by the transport abort listener intact`, async () => {
+    const clock = manualScheduler();
+    let signal, replacement;
+    const controller = createConversationController({
+      ...clock,
+      transport(request) {
+        signal = request.signal;
+        signal.addEventListener('abort', () => {
+          if (terminate === 'stop') controller.dispose();
+          replacement = controller.start({ input: '新运行', plan: plan({ chunks: ['新结果'] }) });
+        }, { once: true });
+        return new Promise(() => {});
+      },
+    });
+    controller.start({ input: '旧运行', live: { providerId: 'openai', model: 'fixture', messages: [] } });
+    await Promise.resolve();
+    assert.ok(signal);
+    controller[terminate]();
+    assert.equal(signal.aborted, true);
+    assert.deepEqual(replacement, { ok: true, runId: 2 });
+    assert.equal(controller.getSnapshot().state, 'working');
+    assert.equal(clock.pending(), 1);
+    clock.flushAll();
+    assert.equal(controller.getSnapshot().state, 'complete');
+    assert.equal(controller.getSnapshot().output, '新结果');
+  });
+}
+
 test('tool execution is ordered between text parts and stops independently after success', () => {
   const clock = manualScheduler();
   const events = [];

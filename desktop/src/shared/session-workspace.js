@@ -11,8 +11,7 @@ export { sessionMatch };
 /** @typedef {import('./session-store.js').SessionSnapshot} SessionSnapshot */
 /** @typedef {SessionSnapshot['sessions'][number]} Session */
 /** @typedef {Pick<Session, 'references' | 'pendingScenario'>} DraftContext */
-/** @typedef {typeof import('./conversation.js').CONVERSATION_STATES} ConversationStates */
-/** @typedef {{ type: string; state: ConversationStates[keyof ConversationStates]; toolEvent?: import('./chat-transport.js').AgentToolEvent; [name: string]: unknown }} ConversationEvent */
+/** @typedef {import('./conversation-controller.js').ConversationEvent} ConversationEvent */
 /** @typedef {{ runId: string; kind: (typeof import('./agent-contract.js').AGENT_KINDS)[number]; projectRevision: number; contextRevision: number }} ArtifactReference */
 /** @typedef {HTMLElementTagNameMap & { 'wa-dropdown': HTMLElement; 'wa-dropdown-item': HTMLElement & { disabled: boolean } }} WorkspaceElements */
 /** @typedef {HTMLElementEventMap & DocumentEventMap & WindowEventMap} WorkspaceEvents */

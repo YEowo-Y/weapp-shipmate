@@ -599,6 +599,21 @@ const turns = () => [
   { id: 'assistant-b', role: 'assistant', text: 'Answer B', status: 'complete' },
 ];
 
+test('a submit rejected during terminal notification keeps the composer draft and history', () => {
+  let attempted;
+  const app = harness([], { onEvent(event) {
+    if (event.type === 'state' && event.state === 'complete') attempted = app.view.submit();
+  } });
+  app.view.submit({ input: 'Original request' });
+  app.input.value = 'New unsent draft';
+  app.drain();
+  assert.deepEqual(attempted, { ok: false, reason: 'busy' });
+  assert.equal(app.input.value, 'New unsent draft');
+  assert.deepEqual(app.view.getMessages().map(message => message.text), ['Original request', 'A local reply']);
+  assert.equal(app.view.submit().ok, true);
+  app.view.destroy();
+});
+
 test('review updates preserve nested raw data, evidence expansion, scroll and focused summary', () => {
   const app = harness([
     { id: 'user-a', role: 'user', text: 'Check' },
