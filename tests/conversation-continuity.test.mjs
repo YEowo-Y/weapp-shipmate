@@ -477,6 +477,11 @@ function documentStub() {
           this.children.push(child);
         }
       },
+      insertBefore(child, reference) {
+        child.remove();
+        child.parentElement = this;
+        this.children.splice(this.children.indexOf(reference), 0, child);
+      },
       replaceChildren(...nodes) {
         this.children.forEach(child => { child.parentElement = null; });
         this.children = [];
@@ -598,6 +603,133 @@ const turns = () => [
   { id: 'user-b', role: 'user', text: 'Question B', status: 'complete' },
   { id: 'assistant-b', role: 'assistant', text: 'Answer B', status: 'complete' },
 ];
+
+const longConversation = () => Array.from({ length: 201 }, (_, index) => ({
+  id: `message-${index}`,
+  role: index % 2 ? 'assistant' : 'user',
+  status: 'complete',
+  text: index % 2 ? ['Reply ' + index, '```js\nconst value = ' + index + ';\n```'].join('\n\n') : 'Question ' + index,
+}));
+
+test('long history mounts one page, keeps all messages, and moves keyboard focus between pages', () => {
+  const messages = longConversation();
+  const app = harness(messages);
+  const articles = () => app.list.children.filter(node => node.dataset.messageId);
+  const turnPage = action => {
+    const control = app.list.querySelectorAll('[data-action]').find(node => node.dataset.action === action);
+    assert.ok(control);
+    app.list.dispatch('click', { target: control });
+  };
+  assert.equal(articles().length, 80);
+  assert.equal(articles()[0].dataset.messageId, 'message-0');
+  assert.equal(app.view.getMessages().length, 201);
+  assert.equal(app.view.getViewState().followLatest, false);
+  turnPage('later-messages');
+  assert.equal(articles().length, 80);
+  assert.equal(app.list.ownerDocument.activeElement.dataset.messageId, 'message-80');
+  turnPage('earlier-messages');
+  assert.equal(articles().length, 80);
+  assert.equal(app.list.ownerDocument.activeElement.dataset.messageId, 'message-79');
+  app.jumpButton.dispatch('click');
+  assert.equal(articles().length, 80);
+  assert.equal(articles().at(-1).dataset.messageId, 'message-200');
+  assert.equal(app.jumpButton.hidden, true);
+  assert.equal(app.list.ownerDocument.activeElement, app.input);
+  app.view.destroy();
+});
+
+test('locating an unmounted message preserves draft and off-page reading state across restore', () => {
+  const messages = longConversation();
+  const app = harness(messages);
+  app.view.setDraft('Unsent text');
+  const firstCode = app.list.querySelector('pre');
+  firstCode.scrollTop = 17;
+  firstCode.scrollLeft = 24;
+  assert.equal(app.view.focusMessage('missing'), false);
+  assert.equal(app.view.focusMessage('message-163'), true);
+  assert.equal(app.list.ownerDocument.activeElement.dataset.messageId, 'message-163');
+  assert.equal(app.input.value, 'Unsent text');
+  const target = app.list.ownerDocument.activeElement;
+  target.getBoundingClientRect = () => ({ top: 180 });
+  app.scroll.getBoundingClientRect = () => ({ top: 20 });
+  app.scroll.scrollTop = 40;
+  app.scroll.scrollHeight = 2000;
+  assert.equal(app.view.focusMessage('message-163'), true);
+  assert.equal(app.scroll.scrollTop, 184);
+
+  const saved = app.view.getViewState();
+  assert.deepEqual(saved.messageWindow, { start: 160, end: 201 });
+  assert.ok(saved.readingPositions.some(item => item.messageId === 'message-1' && item.top === 17 && item.left === 24));
+  const restored = harness([]);
+  restored.view.replaceMessages(messages, saved);
+  assert.equal(restored.scroll.scrollTop, 184);
+  assert.equal(restored.list.children.filter(node => node.dataset.messageId).length, 41);
+  assert.equal(restored.view.focusMessage('message-1'), true);
+  assert.equal(restored.list.querySelector('pre').scrollTop, 17);
+  assert.equal(restored.list.querySelector('pre').scrollLeft, 24);
+  restored.view.replaceMessages(messages, { messageWindow: { start: 0, end: 200 }, scrollTop: 120, followLatest: false });
+  assert.equal(restored.list.children.filter(node => node.dataset.messageId).length, 80);
+  assert.equal(restored.scroll.scrollTop, 120);
+  restored.view.replaceMessages(messages, { scrollTop: 640, followLatest: false });
+  assert.equal(restored.list.children.filter(node => node.dataset.messageId).length, 201);
+  assert.equal(restored.scroll.scrollTop, 640);
+  app.view.destroy();
+  restored.view.destroy();
+});
+
+test('sending from older history returns to the latest page and streaming continues while browsing', () => {
+  const app = harness(longConversation());
+  assert.equal(app.view.submit({ input: 'Continue the conversation' }).ok, true);
+  assert.equal(app.list.children.filter(node => node.dataset.messageId).length, 80);
+  assert.match(app.list.children.at(-2).textContent, /Continue the conversation/);
+  assert.equal(app.step(), true);
+  assert.equal(app.list.querySelector('.run-trace').open, true);
+  assert.equal(app.view.focusMessage('message-1'), true);
+  app.drain();
+  const reply = app.view.getMessages().at(-1);
+  assert.equal(reply.status, 'complete');
+  assert.equal(reply.text, 'A local reply');
+  assert.equal(app.list.ownerDocument.activeElement.dataset.messageId, 'message-1');
+  app.jumpButton.dispatch('click');
+  assert.equal(app.list.children.at(-1).dataset.messageId, reply.id);
+  assert.match(app.list.children.at(-1).textContent, /A local reply/);
+  assert.equal(app.list.children.at(-1).querySelector('.run-trace').open, false);
+  app.view.destroy();
+});
+
+test('adding a local report from older history mounts the latest page with the report', () => {
+  const app = harness(longConversation(), { allowRecords: true });
+  assert.equal(app.view.appendRecord({ text: 'Local report', label: 'Preflight' }).ok, true);
+  assert.equal(app.view.getMessages().length, 202);
+  assert.equal(app.list.children.filter(node => node.dataset.messageId).length, 80);
+  assert.equal(app.list.querySelector('[data-action="later-messages"]'), null);
+  assert.deepEqual(app.view.getViewState().messageWindow, { start: 122, end: 202 });
+  assert.match(app.list.children.at(-1).textContent, /Local report/);
+  assert.equal(app.view.appendRecord({ text: 'Another report', label: 'Preflight' }).ok, true);
+  assert.deepEqual(app.view.getViewState().messageWindow, { start: 123, end: 203 });
+  app.view.destroy();
+});
+
+test('a full latest page retires only one article and retains its reading state', () => {
+  const messages = longConversation().slice(1, 81);
+  const app = harness(messages, { allowRecords: true, initialScroll: 'bottom' });
+  const oldest = app.list.children[0];
+  const code = oldest.querySelector('pre');
+  code.scrollTop = 21;
+  code.scrollLeft = 34;
+  code.focus();
+  const retained = app.list.children[1];
+  assert.equal(app.view.appendRecord({ text: 'New report', label: 'Preflight' }).ok, true);
+  const articles = app.list.children.filter(node => node.dataset.messageId);
+  assert.equal(articles.length, 80);
+  assert.equal(articles[0], retained);
+  assert.equal(app.list.children[0].dataset.action, 'earlier-messages');
+  assert.equal(app.list.ownerDocument.activeElement, app.input);
+  assert.equal(app.view.focusMessage('message-1'), true);
+  assert.equal(app.list.querySelector('pre').scrollTop, 21);
+  assert.equal(app.list.querySelector('pre').scrollLeft, 34);
+  app.view.destroy();
+});
 
 test('a submit rejected during terminal notification keeps the composer draft and history', () => {
   let attempted;

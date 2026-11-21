@@ -43,7 +43,9 @@ test('imported memory-like metadata cannot become persistent project memory or a
 
 test('append remaps colliding identities and every continuity reference without touching current work', () => {
   const current = snapshot(), before = structuredClone(current);
-  const imported = parseSessionBackup(JSON.stringify(snapshot()));
+  const backup = snapshot();
+  backup.sessions[0].viewState.messageWindow = { start: 1, end: 2 };
+  const imported = parseSessionBackup(JSON.stringify(backup));
   const { snapshot: merged, importedCount, messageCount } = mergeSessionBackup(current, imported);
   assert.equal(importedCount, 1); assert.equal(messageCount, 2);
   assert.equal(merged.currentSessionId, current.currentSessionId);
@@ -59,6 +61,7 @@ test('append remaps colliding identities and every continuity reference without 
   assert.equal(assistant.review.sessionId, added.id); assert.equal(assistant.review.state, 'stale');
   for (const item of [added.viewState.readingAnchor, ...added.viewState.disclosures,
     ...added.viewState.readingPositions, ...added.viewState.guideResults]) assert.equal(item.messageId, assistant.id);
+  assert.deepEqual(added.viewState.messageWindow, { start: 1, end: 2 });
   assert.equal(added.archived, true);
   const again = mergeSessionBackup(merged, imported).snapshot;
   assert.equal(new Set(again.sessions.flatMap(item => item.messages.map(message => message.id))).size, 6);

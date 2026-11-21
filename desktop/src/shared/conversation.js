@@ -28,6 +28,7 @@ export { CONVERSATION_STATES, createConversationController, createDemoPlan };
 /** @typedef {NonNullable<StoredSession['edit']>} DraftEdit */
 /** @typedef {NonNullable<StoredSession['draftView']>} DraftView */
 /** @typedef {NonNullable<StoredSession['viewState']>} ViewState */
+/** @typedef {NonNullable<ViewState['messageWindow']>} MessageWindow */
 /** @typedef {NonNullable<ViewState['readingAnchor']>} ReadingAnchor */
 /** @typedef {Pick<AgentResult, 'runId' | 'kind' | 'projectRevision' | 'contextRevision'>} ArtifactReference */
 /** @typedef {'pending' | 'success' | 'error'} CopyState */
@@ -57,6 +58,7 @@ export { CONVERSATION_STATES, createConversationController, createDemoPlan };
  */
 
 let messageSequence = 0;
+const MESSAGES_PER_PAGE = 80;
 const fallbackMessagePrefix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
 /** @param {ConversationMessage['role']} role */
@@ -97,6 +99,11 @@ export function mountConversation(options) {
   jumpButton.setAttribute('aria-label', '回到最新消息');
   jumpButton.title = '回到最新消息';
   let messages = (options.initialMessages || []).map((message) => ({ ...message }));
+  let messageWindow = initialMessageWindow();
+  /** @type {ViewState | null | undefined} */
+  let savedMessageView = null;
+  const earlierPage = pageButton('上一页消息', 'earlier-messages');
+  const laterPage = pageButton('下一页消息', 'later-messages');
   let composing = false;
   let followLatest = true;
   let readingDetails = false;
@@ -131,8 +138,9 @@ export function mountConversation(options) {
   const copyDefaults = new WeakMap();
   const feedbackClock = documentRef.defaultView || globalThis;
 
-  // The list is owned by this view and contains the articles from renderMessage.
-  const messageArticles = () => [.../** @type {HTMLCollectionOf<HTMLElement>} */ (list.children)];
+  // The list contains mounted articles and the available paging controls.
+  const messageArticles = () => [.../** @type {HTMLCollectionOf<HTMLElement>} */ (list.children)]
+    .filter(node => node !== earlierPage && node !== laterPage);
   /** @param {string} messageId */
   const findArticle = messageId => messageArticles().find(node => node.dataset.messageId === messageId);
   /** @param {HTMLElement} container */
@@ -236,8 +244,34 @@ export function mountConversation(options) {
     if (!result.ok) announce(result.reason === 'busy' ? '请先停止当前回复，再生成上线清单。' : '清单参数无效，请检查后重试。');
   }
 
+  /** @param {string} label @param {string} action */
+  function pageButton(label, action) {
+    const button = documentRef.createElement('button');
+    button.type = 'button';
+    button.className = 'conversation-history-page';
+    button.dataset.action = action;
+    button.textContent = label;
+    return button;
+  }
+
+  function latestMessageWindow() {
+    return { start: Math.max(0, messages.length - MESSAGES_PER_PAGE), end: messages.length };
+  }
+
+  /** @param {ViewState | null} [saved] @returns {MessageWindow} */
+  function initialMessageWindow(saved) {
+    if (saved ? saved.followLatest : options.initialScroll === 'bottom') return latestMessageWindow();
+    const previous = saved?.messageWindow;
+    if (previous && previous.start < previous.end && previous.end <= messages.length) {
+      return { start: previous.start, end: Math.min(previous.end, previous.start + MESSAGES_PER_PAGE) };
+    }
+    // Pixel offsets from older backups refer to the full conversation.
+    if (saved?.scrollTop || saved?.readingDetails) return { start: 0, end: messages.length };
+    return { start: 0, end: Math.min(messages.length, MESSAGES_PER_PAGE) };
+  }
+
   function isNearBottom() {
-    return scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 88;
+    return messageWindow.end === messages.length && scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 88;
   }
 
   function rememberViewport() {
@@ -408,7 +442,10 @@ export function mountConversation(options) {
   function render({ forceBottom = false } = {}) {
     const shouldFollow = forceBottom || (!readingDetails && (followLatest || isNearBottom()));
     if (forceBottom) readingDetails = false;
-    list.replaceChildren(...messages.map(renderMessage));
+    const nodes = messages.slice(messageWindow.start, messageWindow.end).map(renderMessage);
+    if (messageWindow.start > 0) nodes.unshift(earlierPage);
+    if (messageWindow.end < messages.length) nodes.push(laterPage);
+    list.replaceChildren(...nodes);
     if (shouldFollow) {
       scroll.scrollTop = messages.length ? scroll.scrollHeight : 0;
       followLatest = true;
@@ -434,8 +471,70 @@ export function mountConversation(options) {
 
   function appendLatestMessage(forceBottom = false) {
     const message = messages.at(-1);
-    if (message) list.append(renderMessage(message));
+    if (!message) return;
+    const mountedCount = messageWindow.end - messageWindow.start;
+    if (messageWindow.end < messages.length - 1 || mountedCount > MESSAGES_PER_PAGE) {
+      showMessagePage(latestMessageWindow());
+      settleScroll(forceBottom);
+      return findArticle(message.id);
+    }
+    if (mountedCount === MESSAGES_PER_PAGE) {
+      const oldest = messageArticles()[0];
+      savedMessageView = collectMessageViewState([oldest]);
+      if (messageWindow.start === 0) list.insertBefore(earlierPage, oldest);
+      if (oldest.contains(documentRef.activeElement)) input.focus({ preventScroll: true });
+      oldest.remove();
+      messageWindow.start++;
+    }
+    messageWindow.end = messages.length;
+    const article = renderMessage(message);
+    list.append(article);
     settleScroll(forceBottom);
+    return article;
+  }
+
+  /** @param {MessageWindow} range */
+  function showMessagePage(range) {
+    const saved = getViewState();
+    cancelStreamFrame();
+    clearCopyFeedback();
+    messageWindow = range;
+    render();
+    restoreMessageViewState(saved);
+  }
+
+  /** @param {string} messageId */
+  function focusMessage(messageId) {
+    if (destroyed) return false;
+    const index = messages.findIndex(message => message.id === messageId);
+    if (index < 0) return false;
+    if (index < messageWindow.start || index >= messageWindow.end) {
+      const start = Math.floor(index / MESSAGES_PER_PAGE) * MESSAGES_PER_PAGE;
+      showMessagePage({ start, end: Math.min(messages.length, start + MESSAGES_PER_PAGE) });
+    }
+    const article = findArticle(messageId);
+    if (!article) return false;
+    const top = scroll.scrollTop + article.getBoundingClientRect().top - scroll.getBoundingClientRect().top - 16;
+    readingDetails = false;
+    readingAnchor = null;
+    scroll.scrollTop = Math.max(0, top);
+    followLatest = isNearBottom();
+    jumpButton.hidden = followLatest;
+    rememberViewport();
+    article.tabIndex = -1;
+    article.focus({ preventScroll: true });
+    return true;
+  }
+
+  /** @param {boolean} earlier */
+  function turnMessagePage(earlier) {
+    const { start, end } = messageWindow;
+    const range = earlier
+      ? { start: Math.max(0, start - MESSAGES_PER_PAGE), end: start }
+      : { start: end, end: Math.min(messages.length, end + MESSAGES_PER_PAGE) };
+    if (range.start === range.end) return;
+    showMessagePage(range);
+    focusMessage(messages[earlier ? range.end - 1 : range.start].id);
   }
 
   function cancelStreamFrame() {
@@ -917,6 +1016,10 @@ export function mountConversation(options) {
     const target = /** @type {Element | null} */ (event.target);
     const control = /** @type {HTMLButtonElement | null | undefined} */ (target?.closest?.('[data-action]'));
     if (!control || control.disabled) return;
+    if (control === earlierPage || control === laterPage) {
+      turnMessagePage(control === earlierPage);
+      return;
+    }
     const message = messages.find((item) => item.id === control.dataset.messageId);
     if (!message) return;
     if (control.dataset.action === 'open-artifact') {
@@ -1041,6 +1144,10 @@ export function mountConversation(options) {
     rememberViewport();
   }
   function onJump() {
+    if (messageWindow.end < messages.length) {
+      showMessagePage(latestMessageWindow());
+      input.focus({ preventScroll: true });
+    }
     readingDetails = false;
     followLatest = true;
     scroll.scrollTop = scroll.scrollHeight;
@@ -1048,11 +1155,15 @@ export function mountConversation(options) {
     rememberViewport();
   }
 
-  /** @returns {Required<ViewState>} */
-  function getViewState() {
-    /** @type {Required<Pick<ViewState, 'guideResults' | 'readingPositions' | 'disclosures'>>} */
-    const regions = { guideResults: [], readingPositions: [], disclosures: [] };
-    for (const article of messageArticles()) {
+  /** @param {HTMLElement[]} articles */
+  function collectMessageViewState(articles) {
+    const mountedIds = new Set(articles.map(article => article.dataset.messageId));
+    const regions = {
+      guideResults: (savedMessageView?.guideResults || []).filter(item => !mountedIds.has(item.messageId)),
+      readingPositions: (savedMessageView?.readingPositions || []).filter(item => !mountedIds.has(item.messageId)),
+      disclosures: (savedMessageView?.disclosures || []).filter(item => !mountedIds.has(item.messageId)),
+    };
+    for (const article of articles) {
       const { messageId } = article.dataset;
       if (messageId === undefined) continue;
       for (const card of article.querySelectorAll('[data-component="guide-result"]')) {
@@ -1066,32 +1177,46 @@ export function mountConversation(options) {
       const details = /** @type {NodeListOf<HTMLDetailsElement>} */ (article.querySelectorAll('details[data-component]'));
       for (const node of details) {
         const { component } = node.dataset;
-        if (component !== undefined) regions.disclosures.push({ messageId, component, open: Boolean(node.open) });
+        if (component !== undefined && node.dataset.live !== 'true') regions.disclosures.push({ messageId, component, open: Boolean(node.open) });
       }
     }
-    return { scrollTop: scroll.scrollTop, followLatest, readingDetails, readingAnchor: readingAnchor ? { ...readingAnchor } : null, ...regions };
+    return regions;
+  }
+
+  /** @returns {Required<Omit<ViewState, 'messageWindow'>> & Pick<ViewState, 'messageWindow'>} */
+  function getViewState() {
+    const partial = messageWindow.start > 0 || messageWindow.end < messages.length;
+    return { scrollTop: scroll.scrollTop, followLatest, readingDetails, readingAnchor: readingAnchor ? { ...readingAnchor } : null,
+      ...(partial ? { messageWindow: { ...messageWindow } } : {}), ...collectMessageViewState(messageArticles()) };
   }
   /** @param {ViewState | null} [saved] */
-  function restoreViewState(saved) {
-    if (destroyed) return;
+  function restoreMessageViewState(saved) {
+    savedMessageView = saved;
+    const byId = new Map(messageArticles().map(article => [article.dataset.messageId, article]));
     for (const item of saved?.guideResults || []) {
-      const article = findArticle(item.messageId);
+      const article = byId.get(item.messageId);
       const card = article?.querySelector('[data-component="guide-result"]');
       if (card) restoreGuideViewState(card, item.state);
     }
     // Filtering opens matching stages; restore the user's current folds after its baseline.
     for (const item of saved?.disclosures || []) {
-      const article = findArticle(item.messageId);
+      const article = byId.get(item.messageId);
       const details = /** @type {NodeListOf<HTMLDetailsElement> | undefined} */ (article?.querySelectorAll('details[data-component]'));
       const detail = [...(details || [])].find(node => node.dataset.component === item.component);
-      if (detail) detail.open = item.open;
+      if (detail && detail.dataset.live !== 'true') detail.open = item.open;
     }
     for (const item of saved?.readingPositions || []) {
-      const article = findArticle(item.messageId);
+      const article = byId.get(item.messageId);
       const readers = /** @type {NodeListOf<HTMLElement> | undefined} */ (article?.querySelectorAll('.tool-result-json, [data-reading-key]'));
       const region = [...(readers || [])].find(node => (node.dataset.readingKey || 'tool-result-json') === item.key);
       if (region) { region.scrollTop = item.top; region.scrollLeft = item.left; }
     }
+  }
+
+  /** @param {ViewState | null} [saved] */
+  function restoreViewState(saved) {
+    if (destroyed) return;
+    restoreMessageViewState(saved);
     readingDetails = Boolean(saved?.readingDetails);
     readingAnchor = saved?.readingAnchor ? { ...saved.readingAnchor } : null;
     followLatest = saved ? Boolean(saved.followLatest) : options.initialScroll === 'bottom';
@@ -1189,11 +1314,10 @@ export function mountConversation(options) {
         branchNote: '本机执行报告 · 未调用模型；保存不会重新执行', record: { kind: 'report', label: label.trim() } };
       messages.push(message);
       emitMessages();
-      const article = renderMessage(message);
-      list.append(article);
+      const article = appendLatestMessage();
       readingDetails = false;
       readingAnchor = null;
-      scroll.scrollTop += article.getBoundingClientRect().top - scroll.getBoundingClientRect().top;
+      if (article) scroll.scrollTop += article.getBoundingClientRect().top - scroll.getBoundingClientRect().top;
       followLatest = isNearBottom();
       jumpButton.hidden = followLatest;
       rememberViewport();
@@ -1208,8 +1332,8 @@ export function mountConversation(options) {
     retry,
     /** @returns {ReturnType<Controller['stop']> | { ok: false; reason: 'destroyed' }} */
     stop: () => destroyed ? { ok: false, reason: 'destroyed' } : controller.stop(),
-    /** @param {readonly ConversationMessage[]} nextMessages */
-    replaceMessages(nextMessages) {
+    /** @param {readonly ConversationMessage[]} nextMessages @param {ViewState | null} [saved] */
+    replaceMessages(nextMessages, saved) {
       if (destroyed) return;
       viewEpoch++;
       cancelStreamFrame();
@@ -1218,18 +1342,20 @@ export function mountConversation(options) {
       if (isConversationActive(controller.getSnapshot().state)) controller.stop('session-switch');
       controller.dispose();
       messages = nextMessages.map((message) => ({ ...message }));
+      messageWindow = initialMessageWindow(saved);
       activeAssistantId = null;
       activeSourceUserId = null;
       lastPlan = null;
       pendingEdit = null;
       announce('');
       render({ forceBottom: true });
-      restoreViewState();
+      restoreViewState(saved);
       updateControls(CONVERSATION_STATES.IDLE);
       emitMessages();
     },
     getViewState,
     restoreViewState,
+    focusMessage,
     getMessages: () => messages.map((message) => ({ ...message })),
     getDraftState: () => ({ draft: input.value, draftView: { selectionStart: input.selectionStart, selectionEnd: input.selectionEnd, selectionDirection: input.selectionDirection, scrollTop: input.scrollTop }, edit: pendingEdit ? { ...pendingEdit, ...(pendingEdit.originalContext ? { originalContext: copyContext(pendingEdit.originalContext) } : {}) } : null }),
     /**
