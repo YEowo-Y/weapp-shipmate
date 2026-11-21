@@ -350,7 +350,7 @@ export function createRightPanelController(container: HTMLElement, options: Righ
           })
       : undefined,
     onExportWorkflow: basis => {
-      const exported = createWorkflowArtifact(basis as never);
+      const exported = createWorkflowArtifact(basis);
       if (options.onDownloadArtifact) return options.onDownloadArtifact(exported);
       return Boolean(downloader?.download(exported));
     },
