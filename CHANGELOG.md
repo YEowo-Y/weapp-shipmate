@@ -1,9 +1,35 @@
 # Changelog
 
 本项目变更记录。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
-版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。当前仓库发布候选版本为 `0.2.0-rc.5`，最新公开版为 `v0.1.0`；后续改动记录在 Unreleased，尚未发布到 npm registry。
+版本遵循 [语义化版本](https://semver.org/lang/zh-CN/)。当前仓库发布候选版本为 `0.2.0-rc.6`，最新公开版为 `v0.1.0`；后续改动记录在 Unreleased，尚未发布到 npm registry。
 
 ## [Unreleased]
+
+## [0.2.0-rc.6] - 2026-11-21
+
+### Features
+
+* **desktop:** add a scoped workflow draft store ([2d5a361](https://github.com/YEowo-Y/weapp-shipmate/commit/2d5a3619c5b0ea43fcaeb53e4e05c2f5c7c80d98))
+* **rules:** add the guardian consent self-check ([382950b](https://github.com/YEowo-Y/weapp-shipmate/commit/382950b52a2b956f8f390bba3e9cadd0dc17bcc3))
+* **sessions:** persist the optional conversation page window ([566f10b](https://github.com/YEowo-Y/weapp-shipmate/commit/566f10bc5646c2a3b04787338ba3a40adfe4ef0c))
+
+
+### Bug Fixes
+
+* **desktop:** acknowledge saved drafts with the refreshed project ([825e620](https://github.com/YEowo-Y/weapp-shipmate/commit/825e620031da72f599d5065a89122dc60980e9d5))
+* **desktop:** narrow the model authorization result before opening it ([89376c4](https://github.com/YEowo-Y/weapp-shipmate/commit/89376c4990d7f740b16088dd8f1d3ee437146b9f))
+* **desktop:** restore typed session view after host layout changes ([f3b7681](https://github.com/YEowo-Y/weapp-shipmate/commit/f3b76815aa8bf6446b8f2c487485515c44519166))
+* **desktop:** type conversation runs and protect terminal ownership ([a823398](https://github.com/YEowo-Y/weapp-shipmate/commit/a82339811abb234abaafd2cc774a26b12fb2c384))
+* **desktop:** type messages and render incomplete legacy tool records ([ba37b44](https://github.com/YEowo-Y/weapp-shipmate/commit/ba37b441f2c9e052e5366eea64ed6b55afbe6082))
+* **desktop:** type rejection lookup UI and recover from unknown failures ([2e01e71](https://github.com/YEowo-Y/weapp-shipmate/commit/2e01e71a3f8477e68c9dadd31dff8475cb0512d2))
+* **sessions:** locate history matches through the message renderer ([bb33469](https://github.com/YEowo-Y/weapp-shipmate/commit/bb33469029a199e1a5d12208542e4a499ee9bd4a))
+* **types:** declare hidden markdown tokens ([7f6f39f](https://github.com/YEowo-Y/weapp-shipmate/commit/7f6f39f72b26137bcc55196b6adbab57e704a48c))
+
+
+### Performance Improvements
+
+* **desktop:** batch streamed Markdown rendering by frame ([7bb94de](https://github.com/YEowo-Y/weapp-shipmate/commit/7bb94debc21f5867401dc609d6390c6e9252685c))
+* **desktop:** mount long conversations in bounded pages ([75e2d16](https://github.com/YEowo-Y/weapp-shipmate/commit/75e2d16628c0b1e9a51da4a25ce7c11c06395b96))
 
 ## [0.2.0-rc.5] - 2026-11-19
 
