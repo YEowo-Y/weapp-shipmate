@@ -7,7 +7,6 @@ import { validatePreflightItem } from '../shared/guide-contract.js';
 import { createHandoff } from '../shared/repair-handoff.js';
 import { createWorkflowArtifact } from '../shared/workflow-artifact.js';
 import type { Artifact, Project } from '../projects';
-import type { WorkflowResult } from '../shared';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { TooltipProvider } from '../components/ui/tooltip';
 import { LucideSvg } from './lucide-svg';
@@ -399,7 +398,7 @@ export function createRightPanelController(container: HTMLElement, options: Righ
           if (wfBasis?.project?.id !== project.id) {
             throw new Error('返回的项目与当前选择不符，请重新加载。');
           }
-          const model = deriveWorkflow(wfBasis as never) as WorkflowResult;
+          const model = deriveWorkflow(wfBasis);
           snapshot.project = wfBasis.project;
           snapshot.rulesVersion = wfBasis.rulesVersion;
           const completedCount = model.stages.filter(s => s.status === 'confirmed' || s.status === 'not_applicable').length;
