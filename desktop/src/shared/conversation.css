@@ -167,6 +167,23 @@
   margin-inline: auto;
 }
 
+.conversation-history-page {
+  display: block;
+  min-block-size: 36px;
+  margin: var(--ds-space-4) auto;
+  padding-inline: var(--ds-space-3);
+  border: 1px solid var(--ds-hairline-strong);
+  border-radius: var(--ds-radius-md);
+  background: transparent;
+  color: var(--ds-ink-2);
+  font: inherit;
+  font-size: var(--ds-text-meta);
+  cursor: pointer;
+}
+
+.conversation-history-page:hover { color: var(--ds-ink-1); }
+.conversation-history-page:focus-visible { outline: 2px solid var(--ds-ink-2); outline-offset: 2px; }
+
 /* Public process status, never hidden model reasoning. */
 .conversation-status,
 .turn-status {
