@@ -11,9 +11,9 @@
 .desktop-action [data-icon], .desktop-primary-navigation .app-icon, #desktop-actions [slot="icon"] { display:inline-flex; align-items:center; flex:none; }
 #desktopComposer .agent-composer__hint { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 .desktop-conversation { height:auto; min-height:0; }
-.desktop-conversation .conversation-scroll { flex:1; min-height:0; overflow:auto; scrollbar-gutter:stable both-edges; padding:20px var(--conversation-gutter) 24px; }
+.desktop-conversation .conversation-scroll { flex:1; min-height:0; overflow:auto; scrollbar-gutter:stable both-edges; padding:var(--ds-space-5) var(--conversation-gutter) var(--ds-space-6); }
 #desktopMessages:empty { display:none; }
-#desktopComposer { flex:0 0 auto; padding:8px var(--conversation-gutter) 0; }
+#desktopComposer { flex:0 0 auto; padding:var(--ds-space-2) var(--conversation-gutter) 0; }
 /* Open Claude UI source geometry, adapted to the existing runtime and theme. */
 #desktopComposer .agent-composer {
   --composer-bg:var(--cds-surface-2);

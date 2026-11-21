@@ -71,7 +71,7 @@
 
 .desktop-sidebar-top {
   flex: none;
-  padding: 10px 10px 4px;
+  padding: 10px 10px var(--ds-space-1);
 }
 
 .desktop-brand-bar {
@@ -107,7 +107,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 12px 10px 16px;
+  padding: var(--ds-space-3) 10px var(--ds-space-4);
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: var(--ds-scrollbar) transparent;
@@ -116,7 +116,7 @@
 .desktop-sidebar-footer {
   flex: none;
   margin: 0;
-  padding: 8px 10px 10px;
+  padding: var(--ds-space-2) 10px 10px;
   border-top: 1px solid var(--ds-hairline);
 }
 
@@ -389,7 +389,7 @@
 }
 
 .ui-dropdown__label {
-  padding: 6px 10px 4px;
+  padding: 6px 10px var(--ds-space-1);
   color: var(--ds-ink-3);
   font-size: var(--ds-text-caption);
   font-weight: var(--ds-weight-medium);
@@ -398,7 +398,7 @@
 .desktop-popover-menu__group > hr,
 .ui-dropdown__separator {
   height: 1px;
-  margin: 4px;
+  margin: var(--ds-space-1);
   border: 0;
   background: var(--ds-hairline);
 }
@@ -671,7 +671,7 @@
   justify-content: center;
   gap: 6px;
   min-height: var(--ds-control-sm);
-  padding: 0 12px;
+  padding: 0 var(--ds-space-3);
   border: 0;
   border-radius: var(--ds-radius-md);
   background: var(--ds-raised);
@@ -726,7 +726,7 @@
 .shell-link-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--ds-space-1);
   padding: 2px 6px;
   border: 0;
   border-radius: var(--ds-radius-sm);
@@ -745,8 +745,8 @@
 .shell-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
+  gap: var(--ds-space-1);
+  padding: 1px var(--ds-space-2);
   border-radius: var(--ds-radius-pill);
   background: var(--ds-accent-soft);
   color: var(--ds-ink-2);
@@ -798,7 +798,7 @@
   align-items: center;
   gap: var(--ds-space-3);
   margin-top: var(--ds-space-4);
-  padding: 12px 14px;
+  padding: var(--ds-space-3) 14px;
 }
 
 .shell-next-card__copy {
@@ -836,7 +836,7 @@
 }
 
 .shell-steps {
-  margin: 4px 0 0;
+  margin: var(--ds-space-1) 0 0;
   padding: 0;
   list-style: none;
 }
@@ -847,7 +847,7 @@
   gap: 10px;
   width: 100%;
   min-height: var(--ds-control-md);
-  padding: 0 8px;
+  padding: 0 var(--ds-space-2);
   border: 0;
   border-radius: var(--ds-radius-md);
   background: transparent;
@@ -889,7 +889,7 @@
 .shell-kv {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px 16px;
+  gap: 6px var(--ds-space-4);
   margin-top: 6px;
   font-size: var(--ds-text-ui);
 }
@@ -906,7 +906,7 @@
 /* F02 Interactive Workflow in Right Panel (`上线` tab) */
 .shell-wf-status {
   margin: var(--ds-space-3) 0 0;
-  padding: 8px 12px;
+  padding: var(--ds-space-2) var(--ds-space-3);
   border-radius: var(--ds-radius-md);
   background: var(--ds-sunken);
   color: var(--ds-ink-2);
@@ -927,7 +927,7 @@
   display: flex;
   align-items: center;
   gap: var(--ds-space-2);
-  margin-top: 4px;
+  margin-top: var(--ds-space-1);
 }
 
 .shell-wf-subject__row > .shell-wf-select {
@@ -969,8 +969,8 @@
 }
 
 .shell-wf-textarea {
-  margin-top: 4px;
-  padding: 8px 10px;
+  margin-top: var(--ds-space-1);
+  padding: var(--ds-space-2) 10px;
   line-height: 1.5;
   resize: vertical;
 }
@@ -1006,9 +1006,9 @@
 .shell-wf-facts__summary {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ds-space-2);
   min-block-size: 36px;
-  padding: 6px 12px;
+  padding: 6px var(--ds-space-3);
   border-radius: var(--ds-radius-lg);
   list-style: none;
   color: var(--ds-ink-1);
@@ -1054,12 +1054,12 @@ details[open] > summary > .shell-wf-chevron {
 .shell-wf-form {
   display: grid;
   gap: var(--ds-space-3);
-  padding: 4px 12px 12px;
+  padding: var(--ds-space-1) var(--ds-space-3) var(--ds-space-3);
 }
 
 .shell-wf-field {
   display: grid;
-  gap: 4px;
+  gap: var(--ds-space-1);
 }
 
 .shell-wf-grid {
@@ -1077,7 +1077,7 @@ details[open] > summary > .shell-wf-chevron {
 .shell-wf-conflict {
   display: grid;
   gap: var(--ds-space-2);
-  padding: 10px 12px;
+  padding: 10px var(--ds-space-3);
   border-radius: var(--ds-radius-md);
   background: var(--ds-warning-soft);
   color: var(--ds-ink-1);
@@ -1097,7 +1097,7 @@ details[open] > summary > .shell-wf-chevron {
 
 .shell-stage-list {
   display: grid;
-  gap: 4px;
+  gap: var(--ds-space-1);
   margin-top: 6px;
 }
 
@@ -1114,9 +1114,9 @@ details[open] > summary > .shell-wf-chevron {
 .shell-stage__summary {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ds-space-2);
   min-block-size: var(--ds-control-md);
-  padding: 4px 8px;
+  padding: var(--ds-space-1) var(--ds-space-2);
   border-radius: var(--ds-radius-md);
   list-style: none;
   color: var(--ds-ink-2);
@@ -1174,7 +1174,7 @@ details[open] > summary > .shell-wf-chevron {
 .shell-stage__body {
   display: grid;
   gap: var(--ds-space-3);
-  padding: 6px 12px 12px;
+  padding: 6px var(--ds-space-3) var(--ds-space-3);
   border-block-start: 1px solid var(--ds-hairline);
 }
 
@@ -1195,8 +1195,8 @@ details[open] > summary > .shell-wf-chevron {
 
 .shell-stage__item {
   display: grid;
-  gap: 4px;
-  padding: 8px 10px;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-2) 10px;
   border-radius: var(--ds-radius-md);
   background: var(--ds-sunken);
   font-size: var(--ds-text-meta);
@@ -1216,7 +1216,7 @@ details[open] > summary > .shell-wf-chevron {
 
 .shell-stage__sources {
   display: grid;
-  gap: 4px;
+  gap: var(--ds-space-1);
 }
 
 .shell-wf-clues {
@@ -1228,7 +1228,7 @@ details[open] > summary > .shell-wf-chevron {
 .shell-wf-clue {
   display: grid;
   gap: 6px;
-  padding: 10px 12px;
+  padding: 10px var(--ds-space-3);
 }
 
 .shell-wf-clue__title {
@@ -1321,7 +1321,7 @@ details[open] > summary > .shell-wf-chevron {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--ds-space-2);
   margin-top: 10px;
   color: var(--ds-ink-3);
   font-size: var(--ds-text-meta);
@@ -1338,7 +1338,7 @@ details[open] > summary > .shell-wf-chevron {
 }
 
 .shell-todo-list {
-  margin: 4px 0 0;
+  margin: var(--ds-space-1) 0 0;
   padding: 0;
   list-style: none;
 }
@@ -1375,13 +1375,13 @@ details[open] > summary > .shell-wf-chevron {
 }
 
 .shell-op-card {
-  padding: 10px 12px;
+  padding: 10px var(--ds-space-3);
 }
 
 .shell-op-card__row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--ds-space-2);
 }
 
 .shell-op-card__file {
@@ -1408,7 +1408,7 @@ details[open] > summary > .shell-wf-chevron {
   display: flex;
   align-items: center;
   gap: var(--ds-space-3);
-  padding: 12px 14px;
+  padding: var(--ds-space-3) 14px;
 }
 
 .shell-dot {
@@ -1440,7 +1440,7 @@ details[open] > summary > .shell-wf-chevron {
 /* Loading / Error / Empty states */
 .shell-state-card {
   margin-top: var(--ds-space-2);
-  padding: 16px;
+  padding: var(--ds-space-4);
   border-radius: var(--ds-radius-lg);
   background: var(--ds-raised);
   box-shadow: var(--ds-shadow-card);
@@ -1461,7 +1461,7 @@ details[open] > summary > .shell-wf-chevron {
 }
 
 .shell-state-card__title {
-  margin: 0 0 4px;
+  margin: 0 0 var(--ds-space-1);
   color: var(--ds-ink-1);
   font-size: var(--ds-text-ui-strong);
   font-weight: var(--ds-weight-medium);
@@ -1494,7 +1494,7 @@ details[open] > summary > .shell-wf-chevron {
 
 .shell-skel {
   height: 10px;
-  margin-top: 8px;
+  margin-top: var(--ds-space-2);
   border-radius: var(--ds-radius-xs);
   background: linear-gradient(90deg, var(--ds-selected) 25%, var(--ds-hover) 50%, var(--ds-selected) 75%);
   background-size: 200% 100%;
