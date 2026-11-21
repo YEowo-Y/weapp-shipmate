@@ -176,6 +176,7 @@ async function mountWorkflowPanelHarness(initialProjectOverrides = {}, hooks = {
         },
         onProjectMutated: async () => {
           mutations.push(project.revision);
+          await hooks.onProjectMutated?.(project);
         },
         onGenerateGuide: async projectId => {
           assert.equal(projectId, project.id);
@@ -549,4 +550,152 @@ test('F02 draft conflict guards, cross-project isolation, write lock canClose(),
   });
   assert.equal(focusedOk, true);
   assert.equal(document.activeElement?.id, 'panel-workflow-hasServerDomain');
+});
+
+test('a delayed facts save does not erase a newer draft after returning to the project', async () => {
+  let finishWrite;
+  const write = new Promise(resolve => { finishWrite = resolve; });
+  const h = await mountWorkflowPanelHarness({}, {
+    async onInvoke(command) {
+      if (command === 'project_facts_save') await write;
+    },
+  });
+  const originalProject = h.getProject();
+  const input = () => h.document.getElementById('panel-workflow-businessType');
+  const editFacts = async value => {
+    await act(async () => {
+      setNativeValue(input(), value);
+      input().dispatchEvent(new h.window.Event('input', { bubbles: true }));
+      await flushAsync();
+    });
+  };
+  const switchProject = async project => {
+    h.setProjectExternal(project);
+    await act(async () => {
+      h.panel.syncProject(project, null);
+      await flushAsync();
+    });
+  };
+  try {
+    await editFacts('先提交的业务事实');
+    await act(async () => {
+      h.document.getElementById('panel-workflow-facts-form')
+        .dispatchEvent(new h.window.Event('submit', { bubbles: true, cancelable: true }));
+      await flushAsync();
+    });
+    assert.equal(h.panel.canClose(), false);
+    await switchProject({ ...originalProject, id: 'proj-b', name: '其他项目' });
+    await switchProject(originalProject);
+    await editFacts('请求未返回时填写的新草稿');
+  } finally {
+    await act(async () => { finishWrite(); await flushAsync(); });
+  }
+  assert.equal(h.getProject().facts.businessType, '先提交的业务事实');
+  assert.equal(input().value, '请求未返回时填写的新草稿');
+  assert.equal(h.document.getElementById('panel-workflow-facts-conflict').hidden, false);
+  assert.equal(h.panel.canClose(), true);
+});
+
+test('draft snapshots change only for the project and fields actually edited', () => {
+  const { createWorkflowDraftStore } = loadDesktopModule('src/shell/workflow-drafts.ts');
+  const store = createWorkflowDraftStore();
+  let notifications = 0;
+  const unsubscribe = store.subscribe('proj-a', () => { notifications++; });
+  const empty = store.getSnapshot('proj-a');
+  store.dispatch('proj-b', { type: 'facts-open', open: true });
+  assert.equal(store.getSnapshot('proj-a'), empty);
+  assert.equal(notifications, 0);
+
+  const edit = { type: 'edit-facts', facts: { hasPayment: false }, basis: 'saved-facts' };
+  store.dispatch('proj-a', edit);
+  const edited = store.getSnapshot('proj-a');
+  assert.notEqual(edited, empty);
+  assert.deepEqual(empty.facts, {});
+  store.dispatch('proj-a', edit);
+  assert.equal(store.getSnapshot('proj-a'), edited);
+  assert.equal(notifications, 1);
+
+  store.dispatch('proj-a', { type: 'require-note', stageId: 'privacy' });
+  assert.equal(store.getSnapshot('proj-a').facts, edited.facts);
+  assert.equal(edited.notes.has('privacy'), false);
+  unsubscribe();
+  store.dispatch('proj-a', { type: 'discard-note', stageId: 'privacy' });
+  assert.equal(notifications, 2);
+});
+
+test('the submitted subject remains visible while the saved workflow snapshot reloads', async () => {
+  let holdRefresh = false;
+  let heldReads = 0;
+  let finishRefresh;
+  let finishReplacement;
+  const refresh = new Promise(resolve => { finishRefresh = resolve; });
+  const replacement = new Promise(resolve => { finishReplacement = resolve; });
+  const h = await mountWorkflowPanelHarness({}, {
+    async onInvoke(command) {
+      if (command === 'project_workflow' && holdRefresh) {
+        heldReads++;
+        await (heldReads === 1 ? refresh : replacement);
+      }
+    },
+  });
+  const subject = h.document.getElementById('panel-workflow-subject');
+  try {
+    await act(async () => {
+      subject.value = 'enterprise';
+      subject.dispatchEvent(new h.window.Event('change', { bubbles: true }));
+      await flushAsync();
+    });
+    holdRefresh = true;
+    await act(async () => {
+      h.document.getElementById('panel-workflow-subject-save').click();
+      await flushAsync();
+    });
+    assert.equal(h.getProject().subject, 'enterprise');
+    assert.equal(subject.value, 'enterprise');
+    assert.equal(subject.disabled, true);
+    await act(async () => {
+      h.panel.syncProject(h.getProject(), null);
+      await flushAsync();
+    });
+    assert.equal(heldReads, 2);
+    await act(async () => { finishRefresh(); await flushAsync(); });
+    assert.equal(subject.value, 'enterprise');
+  } finally {
+    await act(async () => { finishRefresh(); finishReplacement(); await flushAsync(); });
+  }
+  assert.equal(subject.value, 'enterprise');
+  assert.equal(subject.disabled, false);
+  assert.equal(h.document.getElementById('panel-workflow-subject-save').disabled, true);
+});
+
+test('a saved draft is cleared when the first fresh project snapshot is rendered', async () => {
+  let finishRefresh;
+  const refresh = new Promise(resolve => { finishRefresh = resolve; });
+  const h = await mountWorkflowPanelHarness({}, { onProjectMutated: () => refresh });
+  const { document } = h;
+  try {
+    await act(async () => {
+      const input = document.getElementById('panel-workflow-businessType');
+      setNativeValue(input, '本次保存的业务事实');
+      input.dispatchEvent(new h.window.Event('input', { bubbles: true }));
+      await flushAsync();
+    });
+    await act(async () => {
+      document.getElementById('panel-workflow-facts-form')
+        .dispatchEvent(new h.window.Event('submit', { bubbles: true, cancelable: true }));
+      await flushAsync();
+    });
+    assert.equal(h.getProject().facts.businessType, '本次保存的业务事实');
+    assert.equal(h.panel.canClose(), false);
+    await act(async () => {
+      h.panel.syncProject(h.getProject(), null);
+      await flushAsync();
+    });
+    assert.equal(document.getElementById('panel-workflow-businessType').value, '本次保存的业务事实');
+    assert.equal(document.getElementById('panel-workflow-facts-conflict').hidden, true);
+    assert.doesNotMatch(document.getElementById('panel-workflow-facts-summary').textContent, /未保存|草稿待核对/u);
+  } finally {
+    await act(async () => { finishRefresh(); await flushAsync(); });
+  }
+  assert.equal(h.panel.canClose(), true);
 });

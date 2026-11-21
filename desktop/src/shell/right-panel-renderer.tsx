@@ -12,7 +12,7 @@ import { TooltipProvider } from '../components/ui/tooltip';
 import { LucideSvg } from './lucide-svg';
 import { ChangesTabBody, DevtoolsTabBody } from './right-panel-changes-devtools';
 import { EvidenceTabBody, ReleaseTabBody } from './right-panel-release-evidence';
-import type { ProjectWorkflowDraft } from './right-panel-workflow';
+import { createWorkflowDraftStore, type WorkflowDraftStore } from './workflow-drafts';
 import {
   DEVTOOLS_CONNECTION_STATUSES,
   STAGE_LABELS,
@@ -124,7 +124,7 @@ function RightPanelView({
   callbacks,
 }: {
   snapshot: RightPanelSnapshot;
-  draftsStore: Map<string, ProjectWorkflowDraft>;
+  draftsStore: WorkflowDraftStore;
   callbacks: RightPanelCallbacks;
 }) {
   const changeCount = snapshot.changesState.status === 'ready' ? snapshot.changesState.operations.length : 0;
@@ -205,12 +205,14 @@ function RightPanelView({
 
 export function createRightPanelController(container: HTMLElement, options: RightPanelHostOptions = {}) {
   const root = createRoot(container);
-  const workflowDrafts = new Map<string, ProjectWorkflowDraft>();
+  const workflowDrafts = createWorkflowDraftStore();
+  const pendingDraftClears = new Set<{ projectId: string; afterEpoch: number; clear: () => void }>();
   const downloader = options.onDownloadArtifact
     ? null
     : createArtifactDownloader({ documentRef: container.ownerDocument });
   let disposed = false;
   let syncEpoch = 0;
+  let latestWorkflowRead: { state: RightPanelSnapshot['releaseState']; projectId: string; epoch: number } | undefined;
   let inFlightWrites = 0;
   let lastCheckMemo: string | null | undefined = null;
 
@@ -221,6 +223,32 @@ export function createRightPanelController(container: HTMLElement, options: Righ
     } finally {
       inFlightWrites = Math.max(0, inFlightWrites - 1);
     }
+  }
+
+  async function refreshAfterWrite(
+    projectId: string,
+    clear: () => void,
+    refreshProject?: RightPanelHostOptions['onProjectMutated'],
+  ) {
+    // A host refresh can publish the saved basis while this operation is awaiting other work.
+    const pending = { projectId, afterEpoch: syncEpoch, clear };
+    const settle = () => {
+      if (pendingDraftClears.delete(pending)) clear();
+    };
+    pendingDraftClears.add(pending);
+    try {
+      if (refreshProject) await refreshProject();
+      if (!disposed && snapshot.project?.id === projectId) {
+        const waitsForNativeRead = hasNativeBridge();
+        await loadProjectData(snapshot.project, lastCheckMemo);
+        // A superseding read takes over publication of the acknowledged draft.
+        if (waitsForNativeRead) return;
+      }
+    } catch (error) {
+      settle();
+      throw error;
+    }
+    settle();
   }
 
   const snapshot: RightPanelSnapshot = {
@@ -295,48 +323,41 @@ export function createRightPanelController(container: HTMLElement, options: Righ
     onSaveSubject: options.onSaveSubject
       ? (projectId, value) =>
           withWriteLock(async () => {
+            const submitted = workflowDrafts.getSnapshot(projectId).subject;
             const ok = await options.onSaveSubject!(projectId, value);
-            if (ok) {
-              const draft = workflowDrafts.get(projectId);
-              if (draft) delete draft.subject;
-              if (!disposed && snapshot.project?.id === projectId) {
-                await loadProjectData(snapshot.project, lastCheckMemo);
+            if (!ok) return false;
+            await refreshAfterWrite(projectId, () => {
+              if (workflowDrafts.getSnapshot(projectId).subject === submitted) {
+                workflowDrafts.dispatch(projectId, { type: 'subject' });
               }
-            }
-            return ok;
+            });
+            return true;
           })
       : undefined,
     onSaveFacts: options.invoke
       ? (projectId, expectedRevision, facts) =>
           withWriteLock(async () => {
             if (!hasNativeBridge()) throw new Error('此操作需要在桌面应用中运行。');
+            const submitted = workflowDrafts.getSnapshot(projectId).facts;
             await options.invoke!('project_facts_save', { projectId, expectedRevision, facts });
-            const draft = workflowDrafts.get(projectId);
-            if (draft) {
-              draft.facts = {};
-              delete draft.factsBasis;
-            }
-            await options.onProjectMutated?.();
-            if (!disposed && snapshot.project?.id === projectId) {
-              await loadProjectData(snapshot.project, lastCheckMemo);
-            }
+            await refreshAfterWrite(projectId, () => {
+              if (workflowDrafts.getSnapshot(projectId).facts === submitted) {
+                workflowDrafts.dispatch(projectId, { type: 'discard-facts' });
+              }
+            }, () => options.onProjectMutated?.());
           })
       : undefined,
     onConfirmStage: options.invoke
       ? payload =>
           withWriteLock(async () => {
             if (!hasNativeBridge()) throw new Error('此操作需要在桌面应用中运行。');
+            const submitted = workflowDrafts.getSnapshot(payload.projectId).notes.get(payload.stageId);
             await options.invoke!('project_stage_confirm', payload);
-            const draft = workflowDrafts.get(payload.projectId);
-            if (draft) {
-              draft.notes.delete(payload.stageId);
-              draft.noteBases.delete(payload.stageId);
-              draft.invalidNotes.delete(payload.stageId);
-            }
-            await options.onProjectMutated?.();
-            if (!disposed && snapshot.project?.id === payload.projectId) {
-              await loadProjectData(snapshot.project, lastCheckMemo);
-            }
+            await refreshAfterWrite(payload.projectId, () => {
+              if (workflowDrafts.getSnapshot(payload.projectId).notes.get(payload.stageId) === submitted) {
+                workflowDrafts.dispatch(payload.projectId, { type: 'discard-note', stageId: payload.stageId });
+              }
+            }, () => options.onProjectMutated?.());
           })
       : undefined,
     onGenerateGuide: options.onGenerateGuide
@@ -358,6 +379,14 @@ export function createRightPanelController(container: HTMLElement, options: Righ
   function render() {
     if (disposed) return;
     flushSync(() => {
+      const read = latestWorkflowRead;
+      for (const pending of pendingDraftClears) {
+        const fresh = read?.state === snapshot.releaseState
+          && read.projectId === pending.projectId && pending.afterEpoch < read.epoch;
+        if (snapshot.project?.id === pending.projectId && !fresh) continue;
+        pendingDraftClears.delete(pending);
+        pending.clear();
+      }
       root.render(createElement(RightPanelView, { snapshot: { ...snapshot }, draftsStore: workflowDrafts, callbacks }));
     });
   }
@@ -428,6 +457,7 @@ export function createRightPanelController(container: HTMLElement, options: Righ
             onRetry: () => { if (snapshot.project) void loadProjectData(snapshot.project, lastCheckSummary); },
           };
         }
+        latestWorkflowRead = { state: snapshot.releaseState, projectId: project.id, epoch: token };
       })(),
       (async () => {
         try {
@@ -519,18 +549,7 @@ export function createRightPanelController(container: HTMLElement, options: Righ
       if (snapshot.releaseState.status !== 'ready' || snapshot.releaseState.workflowBasis?.project.id !== projectId) {
         return false;
       }
-      let draft = workflowDrafts.get(projectId);
-      if (!draft) {
-        draft = {
-          facts: {},
-          notes: new Map(),
-          noteBases: new Map(),
-          invalidNotes: new Set(),
-          expanded: new Set(),
-        };
-        workflowDrafts.set(projectId, draft);
-      }
-      draft.factsOpen = true;
+      workflowDrafts.dispatch(projectId, { type: 'facts-open', open: true });
       snapshot.activeTab = 'release';
       render();
       const factsDetails = container.querySelector<HTMLDetailsElement>('#panel-workflow-facts');
@@ -546,8 +565,9 @@ export function createRightPanelController(container: HTMLElement, options: Righ
       disposed = true;
       syncEpoch++;
       downloader?.dispose();
-      workflowDrafts.clear();
       root.unmount();
+      workflowDrafts.clear();
+      pendingDraftClears.clear();
     },
   };
 }

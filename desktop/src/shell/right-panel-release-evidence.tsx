@@ -9,7 +9,8 @@ import {
   type RightPanelCallbacks,
   type RightPanelSnapshot,
 } from './right-panel-types';
-import { InteractiveWorkflowBody, type ProjectWorkflowDraft } from './right-panel-workflow';
+import { InteractiveWorkflowBody } from './right-panel-workflow';
+import type { WorkflowDraftStore } from './workflow-drafts';
 
 const SEVERITY_META = {
   blocker: { label: '阻断', tone: 'shell-pill--bad' },
@@ -31,7 +32,7 @@ export function ReleaseTabBody({
   artifact?: RightPanelSnapshot['artifact'];
   isBusy?: boolean;
   state: ReleasePanelState;
-  draftsStore?: Map<string, ProjectWorkflowDraft>;
+  draftsStore: WorkflowDraftStore;
   callbacks: RightPanelCallbacks;
 }) {
   if (state.status === 'loading') return <PanelSkeleton label="正在读取上线阶段" />;
