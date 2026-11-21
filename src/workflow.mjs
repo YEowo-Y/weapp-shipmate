@@ -1,4 +1,16 @@
 // Pure projection of trusted catalog + user facts. No scan can confirm an official stage.
+/**
+ * @typedef {{
+ *   stageId: string;
+ *   state: string;
+ *   note: string;
+ *   recordedAt: number;
+ *   contextRevision: number;
+ *   rulesVersion: string;
+ *   provenance?: 'imported';
+ *   sourceState?: string;
+ * }} WorkflowConfirmation
+ */
 const SUBJECTS = ["personal", "individual_business", "enterprise"];
 const terminal = state => state === "confirmed" || state === "not_applicable";
 const contentDependent = rule => Boolean(rule.signal?.length || Object.keys(rule.match || {}).length);
@@ -21,7 +33,7 @@ function condition(expression, context) {
   return alternatives.includes(true) ? true : alternatives.includes(null) ? null : false;
 }
 
-export function deriveWorkflow({ project, catalog, rulesVersion, confirmations = [] }) {
+export function deriveWorkflow({ project, catalog, rulesVersion, confirmations = /** @type {readonly WorkflowConfirmation[]} */ ([]) }) {
   if (!project) throw new Error("请先选择项目");
   if (catalog?.schemaVersion !== 1 || !Array.isArray(catalog.stages) || !catalog.stages.length || !Array.isArray(catalog.rules))
     throw new Error("上线流程资料不可用，请重试或修复安装");
@@ -52,7 +64,7 @@ export function deriveWorkflow({ project, catalog, rulesVersion, confirmations =
     const id = stage.stage;
     const rules = catalog.rules.filter(rule => rule.stage === id && applicable(rule, project.subject) && ["navigation", "both"].includes(rule.kind));
     const latest = confirmations.filter(record => record.stageId === id)
-      .reduce((last, record) => !last || record.recordedAt >= last.recordedAt ? record : last, null);
+      .reduce((last, record) => !last || record.recordedAt >= last.recordedAt ? record : last, /** @type {WorkflowConfirmation | null} */ (null));
     const applies = condition(stage.applies_when, context);
     const stale = latest && latest.state !== "pending" && (latest.contextRevision !== (project.contextRevision ?? 0) || latest.rulesVersion !== rulesVersion);
     const status = stale ? "stale" : latest && terminal(latest.state) ? latest.state : applies === null ? "unknown" : "pending";
