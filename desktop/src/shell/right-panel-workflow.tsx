@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { flushSync } from 'react-dom';
 import type { Project, ProjectFacts } from '../projects';
 import type { WorkflowResult, WorkflowStage } from '../shared';
 import { LucideSvg } from './lucide-svg';
 import { InfoHint } from './right-panel-states';
+import type { WorkflowDraftAction, WorkflowDraftStore } from './workflow-drafts';
 import {
   isSafeHttpsUrl,
   STAGE_LABELS,
@@ -13,17 +14,6 @@ import {
   type RightPanelSnapshot,
   type WorkflowBasisSnapshot,
 } from './right-panel-types';
-
-export type ProjectWorkflowDraft = {
-  subject?: string;
-  facts: Partial<ProjectFacts>;
-  factsBasis?: string;
-  notes: Map<string, string>;
-  noteBases: Map<string, string>;
-  invalidNotes: Set<string>;
-  expanded: Set<string>;
-  factsOpen?: boolean;
-};
 
 function computeFactsBasis(project: Project): string {
   return JSON.stringify([
@@ -63,14 +53,11 @@ export function InteractiveWorkflowBody({
   state: Extract<ReleasePanelState, { status: 'ready' }>;
   workflowBasis: WorkflowBasisSnapshot;
   workflowModel: WorkflowResult;
-  draftsStore?: Map<string, ProjectWorkflowDraft>;
+  draftsStore: WorkflowDraftStore;
   callbacks: RightPanelCallbacks;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const mountedRef = useRef(true);
-  const fallbackDraftsRef = useRef<Map<string, ProjectWorkflowDraft>>(new Map());
-  const draftsMap = draftsStore ?? fallbackDraftsRef.current;
-  const [, bumpRender] = useState(0);
   const [pendingOp, setPendingOp] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; tone: 'neutral' | 'error' }>({
     text: '',
@@ -84,30 +71,16 @@ export function InteractiveWorkflowBody({
     };
   }, []);
 
-  const forceRender = () => {
-    if (mountedRef.current) bumpRender(v => v + 1);
-  };
-
-  const getDraft = (projectId: string): ProjectWorkflowDraft => {
-    let draft = draftsMap.get(projectId);
-    if (!draft) {
-      draft = {
-        facts: {},
-        notes: new Map(),
-        noteBases: new Map(),
-        invalidNotes: new Set(),
-        expanded: new Set(),
-      };
-      draftsMap.set(projectId, draft);
-    }
-    return draft;
-  };
-
   const activeProject = workflowBasis.project.id === project.id ? workflowBasis.project : project;
-  const latestProjectIdRef = useRef(activeProject.id);
-  latestProjectIdRef.current = activeProject.id;
+  const projectId = activeProject.id;
+  const latestProjectIdRef = useRef(projectId);
+  latestProjectIdRef.current = projectId;
 
-  const draft = getDraft(activeProject.id);
+  const draft = useSyncExternalStore(
+    useCallback((listener: () => void) => draftsStore.subscribe(projectId, listener), [draftsStore, projectId]),
+    useCallback(() => draftsStore.getSnapshot(projectId), [draftsStore, projectId]),
+  );
+  const updateDraft = (action: WorkflowDraftAction) => draftsStore.dispatch(projectId, action);
   const blocked = Boolean(isBusy || pendingOp || workflowBasis.project.id !== project.id);
 
   const currentFactsBasis = computeFactsBasis(activeProject);
@@ -155,10 +128,7 @@ export function InteractiveWorkflowBody({
   const handleNextStepClick = () => {
     if (!nextAction || blocked) return;
     if (nextNeedsFact) {
-      flushSync(() => {
-        draft.factsOpen = true;
-        forceRender();
-      });
+      flushSync(() => updateDraft({ type: 'facts-open', open: true }));
       const factsDetails = rootRef.current?.ownerDocument.getElementById(
         'panel-workflow-facts',
       ) as HTMLDetailsElement | null;
@@ -174,10 +144,7 @@ export function InteractiveWorkflowBody({
       target?.scrollIntoView?.({ block: 'nearest' });
       return;
     }
-    flushSync(() => {
-      draft.expanded.add(nextAction.stageId);
-      forceRender();
-    });
+    flushSync(() => updateDraft({ type: 'stage-open', stageId: nextAction.stageId, open: true }));
     const stageDetails = rootRef.current?.querySelector<HTMLDetailsElement>(
       `details.shell-stage[data-stage="${nextAction.stageId}"]`,
     );
@@ -195,7 +162,6 @@ export function InteractiveWorkflowBody({
     void runOperation(async isStillActive => {
       const ok = await callbacks.onSaveSubject!(savingProjectId, targetSubject);
       if (ok) {
-        delete draft.subject;
         if (isStillActive()) {
           setStatusMessage({ text: '项目主体已保存，阶段要求与类目线索已按新主体更新。', tone: 'neutral' });
         }
@@ -213,13 +179,10 @@ export function InteractiveWorkflowBody({
     rawValue: string,
   ) => {
     if (blocked) return;
-    draft.factsBasis ??= currentFactsBasis;
-    if (key === 'businessType') {
-      draft.facts.businessType = rawValue;
-    } else {
-      draft.facts[key] = rawValue === 'unknown' ? null : rawValue === 'true';
-    }
-    forceRender();
+    const facts = key === 'businessType'
+      ? { businessType: rawValue }
+      : { [key]: rawValue === 'unknown' ? null : rawValue === 'true' };
+    updateDraft({ type: 'edit-facts', facts, basis: currentFactsBasis });
   };
 
   const handleFactsSubmit = (event: React.FormEvent) => {
@@ -244,8 +207,6 @@ export function InteractiveWorkflowBody({
     const savingProjectId = activeProject.id;
     void runOperation(async isStillActive => {
       await callbacks.onSaveFacts!(savingProjectId, expectedRevision, nextFacts);
-      draft.facts = {};
-      delete draft.factsBasis;
       if (isStillActive()) {
         setStatusMessage({
           text: '项目事实已保存。可更新上线清单，历史报告仍保留原有内容。',
@@ -257,10 +218,8 @@ export function InteractiveWorkflowBody({
 
   const handleFactsDiscard = () => {
     if (blocked) return;
-    draft.facts = {};
-    delete draft.factsBasis;
+    updateDraft({ type: 'discard-facts' });
     setStatusMessage({ text: '已放弃事实草稿，显示当前已保存事实。', tone: 'neutral' });
-    forceRender();
     rootRef.current?.ownerDocument.getElementById('panel-workflow-businessType')?.focus({ preventScroll: true });
   };
 
@@ -297,7 +256,8 @@ export function InteractiveWorkflowBody({
 
   const handleStageAction = (stage: WorkflowStage, nextState: 'confirmed' | 'not_applicable' | 'pending') => {
     if (blocked || !callbacks.onConfirmStage) return;
-    const savedNoteBasis = draft.noteBases.get(stage.id);
+    const note = draft.notes.get(stage.id);
+    const savedNoteBasis = note?.basis;
     const staleNote =
       savedNoteBasis !== undefined && savedNoteBasis !== computeNoteBasis(workflowBasis, stage);
     if (staleNote) {
@@ -314,13 +274,11 @@ export function InteractiveWorkflowBody({
       });
       return;
     }
-    const noteText = (draft.notes.get(stage.id) ?? '').trim();
+    const noteText = (note?.text ?? '').trim();
     if (nextState === 'not_applicable' && !noteText) {
       flushSync(() => {
-        draft.expanded.add(stage.id);
-        draft.invalidNotes.add(stage.id);
+        updateDraft({ type: 'require-note', stageId: stage.id });
         setStatusMessage({ text: '请填写不适用原因，再标记不适用。', tone: 'error' });
-        forceRender();
       });
       const stageDetails = rootRef.current?.querySelector<HTMLDetailsElement>(
         `details.shell-stage[data-stage="${stage.id}"]`,
@@ -342,9 +300,6 @@ export function InteractiveWorkflowBody({
         state: nextState,
         note: noteText,
       });
-      draft.notes.delete(stage.id);
-      draft.noteBases.delete(stage.id);
-      draft.invalidNotes.delete(stage.id);
       if (isStillActive()) {
         setStatusMessage({ text: '已保存。人工标记仅用于本项目本机准备记录。', tone: 'neutral' });
       }
@@ -423,10 +378,7 @@ export function InteractiveWorkflowBody({
             className="shell-wf-select"
             value={selectedSubject}
             disabled={blocked || !callbacks.onSaveSubject}
-            onChange={e => {
-              draft.subject = e.target.value;
-              forceRender();
-            }}
+            onChange={e => updateDraft({ type: 'subject', value: e.target.value })}
           >
             <option value="personal">个人</option>
             <option value="individual_business">个体工商户</option>
@@ -448,13 +400,7 @@ export function InteractiveWorkflowBody({
         id="panel-workflow-facts"
         className="shell-wf-facts"
         open={isFactsOpen}
-        onToggle={e => {
-          const nextOpen = (e.currentTarget as HTMLDetailsElement).open;
-          if (draft.factsOpen !== nextOpen) {
-            draft.factsOpen = nextOpen;
-            forceRender();
-          }
-        }}
+        onToggle={e => updateDraft({ type: 'facts-open', open: e.currentTarget.open })}
       >
         <summary className="shell-wf-facts__summary">
           <LucideSvg name="chevron-right" size="sm" className="shell-wf-chevron" />
@@ -631,11 +577,12 @@ export function InteractiveWorkflowBody({
                   ? 'circle-dashed'
                   : 'circle';
             const isOpen = draft.expanded.has(stage.id);
-            const noteValue = draft.notes.get(stage.id) ?? '';
-            const savedNoteBasis = draft.noteBases.get(stage.id);
+            const note = draft.notes.get(stage.id);
+            const noteValue = note?.text ?? '';
+            const savedNoteBasis = note?.basis;
             const staleNote =
               savedNoteBasis !== undefined && savedNoteBasis !== computeNoteBasis(workflowBasis, stage);
-            const isNoteInvalid = draft.invalidNotes.has(stage.id);
+            const isNoteInvalid = Boolean(note?.invalid);
             const noteHintId = `panel-stage-note-hint-${stage.id}`;
             const noteErrorId = `panel-stage-error-${stage.id}`;
 
@@ -653,14 +600,7 @@ export function InteractiveWorkflowBody({
                 data-stage={stage.id}
                 data-state={stage.status}
                 open={isOpen}
-                onToggle={e => {
-                  const nextOpen = (e.currentTarget as HTMLDetailsElement).open;
-                  if (draft.expanded.has(stage.id) !== nextOpen) {
-                    if (nextOpen) draft.expanded.add(stage.id);
-                    else draft.expanded.delete(stage.id);
-                    forceRender();
-                  }
-                }}
+                onToggle={e => updateDraft({ type: 'stage-open', stageId: stage.id, open: e.currentTarget.open })}
               >
                 <summary
                   id={`panel-stage-summary-${stage.id}`}
@@ -751,21 +691,10 @@ export function InteractiveWorkflowBody({
                       disabled={blocked}
                       onChange={e => {
                         const nextVal = e.target.value;
-                        if (!staleNote && nextVal === '') {
-                          draft.notes.delete(stage.id);
-                          draft.noteBases.delete(stage.id);
-                        } else {
-                          if (!draft.noteBases.has(stage.id)) {
-                            draft.noteBases.set(stage.id, computeNoteBasis(workflowBasis, stage));
-                          }
-                          draft.notes.set(stage.id, nextVal);
+                        updateDraft({ type: 'edit-note', stageId: stage.id, text: nextVal, basis: computeNoteBasis(workflowBasis, stage) });
+                        if (nextVal.trim() && isNoteInvalid && statusMessage.tone === 'error') {
+                          setStatusMessage({ text: '', tone: 'neutral' });
                         }
-                        if (nextVal.trim() && draft.invalidNotes.delete(stage.id)) {
-                          if (statusMessage.tone === 'error') {
-                            setStatusMessage({ text: '', tone: 'neutral' });
-                          }
-                        }
-                        forceRender();
                       }}
                     />
                     {isNoteInvalid ? (
@@ -787,13 +716,10 @@ export function InteractiveWorkflowBody({
                       className="shell-btn"
                       disabled={blocked}
                       onClick={() => {
-                        draft.notes.delete(stage.id);
-                        draft.noteBases.delete(stage.id);
-                        draft.invalidNotes.delete(stage.id);
+                        updateDraft({ type: 'discard-note', stageId: stage.id });
                         if (statusMessage.tone === 'error') {
                           setStatusMessage({ text: '', tone: 'neutral' });
                         }
-                        forceRender();
                         rootRef.current?.ownerDocument
                           .getElementById(`panel-stage-note-${stage.id}`)
                           ?.focus({ preventScroll: true });
