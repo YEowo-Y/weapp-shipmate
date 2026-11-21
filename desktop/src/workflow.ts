@@ -4,12 +4,12 @@ import { deriveWorkflow } from '../../src/workflow.mjs';
 import { createIcon } from './shared/components/icons.js';
 import type { Project, ProjectFacts } from './projects';
 import type { WorkflowResult } from './shared';
+import type { WorkflowBasisSnapshot as Snapshot } from './shell/right-panel-types';
 import { createWorkflowArtifact } from './shared/workflow-artifact.js';
 import { createArtifactDownloader } from './shared/artifact-download.js';
 import './workflow.css';
 
-type Snapshot = { project: Project; catalog: unknown; rulesVersion: string; confirmations: unknown[] };
-const projectWorkflow = (basis: Snapshot): WorkflowResult => deriveWorkflow(basis as never) as WorkflowResult;
+const projectWorkflow = (basis: Snapshot): WorkflowResult => deriveWorkflow(basis);
 export type MissingFact = 'collectsSensitive' | 'hasServerDomain';
 type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getProject(): Project | null; isBusy(): boolean; onProjectChanged(): Promise<void>; onGenerateGuide?(projectId: string): Promise<void>; onReadGuide?(trigger: HTMLElement): void };
 const labels: Record<string, string> = { confirmed: '人工已确认', not_applicable: '人工不适用', pending: '待确认', unknown: '事实待补充', stale: '待重检' };

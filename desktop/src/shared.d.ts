@@ -4,7 +4,7 @@ export type WorkflowConfirmation = import('../../src/workflow.mjs').WorkflowConf
 export type WorkflowStage = {
   id: string;
   title: string;
-  status: string;
+  status: 'confirmed' | 'not_applicable' | 'pending' | 'unknown' | 'stale';
   action: string;
   blockedBy: string[];
   applicability: boolean | null;
