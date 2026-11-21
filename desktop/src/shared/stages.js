@@ -1,7 +1,23 @@
+// @ts-check
 import { iconMarkup } from './components/icons.js';
+
+/**
+ * @typedef {{
+ *   id: string;
+ *   title: string;
+ *   status: 'done' | 'cur' | 'todo';
+ *   lede: string;
+ *   steps: string[];
+ *   action?: [href: string, label: string];
+ *   condition?: string;
+ *   source?: string;
+ *   sourceTitle?: string;
+ * }} Stage
+ */
 
 // Display-only catalog. IDs and ordering follow flow.yaml; statuses are a fixed
 // sample and do not represent a scan, platform approval, or persisted progress.
+/** @type {Stage[]} */
 export const STAGES = [
   { id: 'registration', title: '注册小程序账号', status: 'done',
     lede: '在微信公众平台注册小程序账号，保管好登录邮箱和管理员信息。',
@@ -41,18 +57,22 @@ export const STAGES = [
     action: ['health-dashboard.html?from=stage-workspace.html%3Fstage%3Drelease', '查看上线后检查示例'] }
 ];
 
+/** @param {unknown} id */
 export function getStage(id) {
   return STAGES.find(stage => stage.id === id) || STAGES.find(stage => stage.id === 'filing') || STAGES[0];
 }
 
+/** @param {unknown} id */
 export function stageHref(id) {
   return `stage-workspace.html?stage=${getStage(id).id}`;
 }
 
+/** @param {Pick<Stage, 'status'>} stage */
 export function stageStatusLabel(stage) {
   return { done: '示例已完成', cur: '示例当前阶段', todo: '示例待处理' }[stage.status];
 }
 
+/** @param {unknown} selectedId */
 export function renderStageLinks(selectedId) {
   const selected = getStage(selectedId);
   return STAGES.map(stage => `<li class="stg ${stage.status === 'done' ? 'stg--done' : ''} ${stage.id === selected.id ? 'stg--cur' : ''}">
@@ -63,6 +83,7 @@ export function renderStageLinks(selectedId) {
     </a></li>`).join('');
 }
 
+/** @param {unknown} id */
 export function stageNavigationMarkup(id) {
   const index = STAGES.indexOf(getStage(id));
   return `<nav class="work__meta" aria-label="阶段导航" style="margin-top:24px;flex-wrap:wrap">
@@ -72,6 +93,7 @@ export function stageNavigationMarkup(id) {
   </nav>`;
 }
 
+/** @param {unknown} id */
 export function stageOverviewMarkup(id) {
   const stage = getStage(id);
   const index = STAGES.indexOf(stage);
