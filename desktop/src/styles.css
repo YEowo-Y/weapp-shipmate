@@ -164,7 +164,7 @@
 .desktop-model-dialog [hidden] { display:none !important; }
 .desktop-model-dialog :focus-visible { outline:2px solid var(--text-2); outline-offset:2px; }
 /* Anchored daily model selection; account setup remains a separate dialog. */
-.desktop-model-picker { position:fixed; inset:auto; width:340px; max-width:calc(100vw - 24px); max-height:min(420px,calc(100dvh - 24px)); margin:0; padding:6px; border:1px solid var(--border-2); border-radius:14px; background:var(--surface); color:var(--text); box-shadow:0 12px 36px #0002; font-size:var(--ds-text-ui); overflow:hidden; }
+.desktop-model-picker { position:fixed; inset:auto; width:340px; max-width:calc(100vw - 24px); max-height:min(420px,calc(100dvh - 24px)); margin:0; padding:6px; border:1px solid var(--border-2); border-radius:14px; background:var(--surface); color:var(--text); font-size:var(--ds-text-ui); overflow:hidden; }
 .desktop-model-picker:popover-open { display:flex; flex-direction:column; }
 .desktop-picker-search { display:flex; align-items:center; flex:0 0 auto; gap:var(--ds-space-2); padding:var(--ds-space-2) 9px var(--ds-space-3); border-bottom:1px solid var(--border); color:var(--text-3); }
 .desktop-picker-search .app-icon { width:16px; height:16px; flex-shrink:0; }
