@@ -1,3 +1,4 @@
+// @ts-check
 /* global document, MutationObserver */
 import './vendor/web-awesome/web-awesome.js';
 
@@ -9,16 +10,19 @@ const syncTheme = () => {
 syncTheme();
 new MutationObserver(syncTheme).observe(document.body, { attributes: true, attributeFilter: ['data-theme'] });
 
+/** @typedef {HTMLElement & { disabled: boolean; type: string; appearance?: string; variant?: string; updateComplete?: Promise<boolean> }} ActionButton */
+/** @typedef {{ value: string }} ActionMenuItem */
+
 // Keep action semantics in one place; upstream owns disabled, focus and forms.
 // Navigation and selectable result rows remain native semantic controls.
 /**
- * @param {Document | any} doc
+ * @param {Document} doc
  * @param {string} label
  * @param {{ className?: string; appearance?: string; variant?: string; type?: string }} [options]
- * @returns {HTMLElement & { disabled: boolean; type: string; appearance?: string; variant?: string; updateComplete?: Promise<boolean> }}
+ * @returns {ActionButton}
  */
 export function createActionButton(doc, label, { className = '', appearance = 'outlined', variant = 'neutral', type = 'button' } = {}) {
-  const button = /** @type {any} */ (doc.createElement('wa-button'));
+  const button = /** @type {ActionButton} */ (doc.createElement('wa-button'));
   button.className = className;
   button.textContent = label;
   button.type = type;
@@ -32,15 +36,20 @@ export function createActionButton(doc, label, { className = '', appearance = 'o
 // Web Awesome restores trigger focus after wa-select. Open dialogs only after
 // that lifecycle has completed, so focus remains inside the new dialog.
 /**
- * @param {HTMLElement | any} menu
- * @param {(value: string, item: any) => void} handler
+ * @param {HTMLElement} menu
+ * @param {(value: string, item: ActionMenuItem) => void} handler
  */
 export function bindActionMenu(menu, handler) {
+  /** @type {ActionMenuItem | null} */
   let pending = null;
+  /** @param {Event} event */
   const select = event => {
-    if (event.target !== menu || !event.detail?.item) return;
-    pending = event.detail.item;
+    if (event.target !== menu) return;
+    const selection = /** @type {Event & { detail?: { item?: ActionMenuItem } }} */ (event);
+    const item = selection.detail?.item;
+    if (typeof item?.value === 'string') pending = item;
   };
+  /** @param {Event} event */
   const hidden = event => {
     if (event.target !== menu || !pending) return;
     const item = pending;
