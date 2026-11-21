@@ -30,6 +30,7 @@ function harness({ loaded = null, loadError = false, saveError = false, layout, 
   Object.assign(doc, node(doc)); doc.body = node(doc);
   const win = node(doc); win.location = { reload() { win.reloaded = true; } }; doc.defaultView = win;
   const host = node(doc), input = node(doc), scroll = node(doc), writes = [], lifecycle = [], hooks = [], dataDialogs = [], dataPanels = [];
+  const restoredViews = [];
   const store = { async load() { if (loadError) throw new Error('offline'); return { revision: 3, snapshot: loaded }; },
     async save(snapshot, revision) { if (typeof saveError === 'function' ? saveError() : saveError) throw Object.assign(new Error('Conflict'), { code: 'conflict' }); writes.push(JSON.parse(JSON.stringify(snapshot))); return { revision: revision + 1 }; }, close() {} };
   const context = vm.createContext({ createSessionStore: () => store, createSessionPersistence, literalSessionQuery, sessionMatch,
@@ -46,9 +47,14 @@ function harness({ loaded = null, loadError = false, saveError = false, layout, 
       return { stop() { lifecycle.push('stop'); }, destroy() { lifecycle.push('destroy'); },
         getMessages: () => messages, getDraftState: () => ({ draft: input.value, edit }), getViewState: () => view,
         getModelSelection: () => model, setModelSelection(value) { model = value; options.onModelSelectionChange?.(value); },
-        replaceMessages(value) { messages = value; options.onMessagesChange?.(value); },
+        replaceMessages(value, saved) { messages = value; restoredViews.push(saved); options.onMessagesChange?.(value); },
         setDraft(value, editing) { input.value = value; edit = editing || null; options.onDraftChange?.(); },
         restoreViewState(value) { view = value || null; scroll.scrollTop = value?.scrollTop ?? 0; },
+        focusMessage(messageId) {
+          const article = options.list.children.find(child => child.dataset.messageId === messageId);
+          article?.focus();
+          return Boolean(article);
+        },
       };
     },
   });
@@ -56,7 +62,7 @@ function harness({ loaded = null, loadError = false, saveError = false, layout, 
   const args = { host, input, layout, projectScoped, onOpenDataSettings, sendButton: node(doc), scroll, list: node(doc), status: node(doc), jumpButton: node(doc),
     onSessionChange(session) { lifecycle.push(session.id); onSessionChange?.(session, scroll); } };
   const mounting = context.mountSessionWorkspace(args);
-  return { mounting, context, host, doc, win, args, hooks, writes, lifecycle, dataDialogs, dataPanels, setLoadError(value) { loadError = value; }, setSaveError(value) { saveError = value; } };
+  return { mounting, context, host, doc, win, args, hooks, writes, lifecycle, dataDialogs, dataPanels, restoredViews, setLoadError(value) { loadError = value; }, setSaveError(value) { saveError = value; } };
 }
 const tick = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
 const find = (root, action) => [root, ...root.children.flatMap(child => flatten(child))].find(item => item.dataset.action === action);
@@ -75,7 +81,8 @@ test('returning from an empty conversation restores reading position after the h
     layout: 'sidebar',
     loaded: { version: 1, currentSessionId: 'session-2', sessionSequence: 2, sessions: [
       { id: 'session-2', title: 'Empty', draft: '', messages: [] },
-      { id: 'session-1', title: 'Reading', draft: '', messages: [{ id: 'message-1', role: 'user', text: 'Saved message' }], viewState: { scrollTop: 708 } },
+      { id: 'session-1', title: 'Reading', draft: '', messages: [{ id: 'message-1', role: 'user', text: 'Saved message' }],
+        viewState: { scrollTop: 708, messageWindow: { start: 0, end: 1 } } },
     ] },
     onSessionChange(session, viewport) {
       // Removing the host's empty state can adjust an already-restored scroll offset.
@@ -86,6 +93,7 @@ test('returning from an empty conversation restores reading position after the h
   const reading = flatten(app.host).find(item => item.dataset.action === 'recent-session' && item.dataset.sessionId === 'session-1');
   reading.click();
   assert.equal(app.args.scroll.scrollTop, 708);
+  assert.deepEqual(JSON.parse(JSON.stringify(app.restoredViews.at(-1))), { scrollTop: 708, messageWindow: { start: 0, end: 1 } });
   workspace.destroy();
 });
 
@@ -391,27 +399,22 @@ test('current conversation find locates the first result with Enter without inte
   }] };
   const app = harness({ loaded }), workspace = await app.mounting;
   const original = node(app.doc, 'article'); original.dataset.messageId = 'first';
-  original.getBoundingClientRect = () => ({ top: 180 });
-  app.args.scroll.getBoundingClientRect = () => ({ top: 20 }); app.args.scroll.scrollTop = 40;
   app.args.list.append(original);
   workspace.openFind(node(app.doc, 'button'));
   const dialog = app.doc.body.children.at(-1), search = flatten(dialog).find(item => item.tag === 'input');
   search.value = '隐私'; search.fire('input'); dialog.fire('keydown', { key: 'Enter' }); await tick();
   assert.equal(dialog.open, false);
   assert.equal(app.doc.activeElement, original);
-  assert.equal(workspace.conversation.getViewState().scrollTop, 184);
-  assert.equal(workspace.conversation.getViewState().followLatest, false);
   assert.equal(app.args.input.value, '继续编辑');
   assert.equal(app.lifecycle.includes('stop'), false);
   assert.equal(app.args.status.textContent, '已定位到匹配消息。');
   const second = node(app.doc, 'article'); second.dataset.messageId = 'second';
-  second.getBoundingClientRect = () => ({ top: 280 - (app.args.scroll.scrollTop - 40) }); app.args.list.append(second);
+  app.args.list.append(second);
   workspace.openFind();
   const nextDialog = app.doc.body.children.at(-1), nextSearch = flatten(nextDialog).find(item => item.tag === 'input');
   nextSearch.value = '隐私'; nextSearch.fire('input');
   flatten(nextDialog).find(item => item.dataset.messageId === 'second').click(); await tick();
   assert.equal(app.doc.activeElement, second);
-  assert.equal(workspace.conversation.getViewState().scrollTop, 284);
   assert.equal(app.args.input.value, '继续编辑');
   await workspace.flush();
   assert.equal(app.writes.at(-1).sessions[0].draft, '继续编辑');
@@ -483,8 +486,6 @@ test('Enter on a title and message match focuses the original message and keeps 
   }] };
   const app = harness({ loaded }); const workspace = await app.mounting;
   const original = node(app.doc, 'article'); original.dataset.messageId = 'first';
-  original.getBoundingClientRect = () => ({ top: 80 });
-  app.args.scroll.getBoundingClientRect = () => ({ top: 0 }); app.args.scroll.scrollTop = 0;
   app.args.list.append(original);
   workspace.openHistory();
   const dialog = app.doc.body.children.at(-1), search = flatten(dialog).find(n => n.tag === 'input');
