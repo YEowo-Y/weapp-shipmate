@@ -73,9 +73,13 @@ test('workflow export escapes user text and ignores unsafe source links', () => 
 
 test('workflow export rejects missing project/catalog and represents sparse coverage honestly', () => {
   assert.throws(() => createWorkflowArtifact({}));
-  const input = snapshot(); input.catalog.rules = []; input.project.subject = null;
-  const text = createWorkflowArtifact(input, now).text;
-  assert.match(text, /主体：尚未确认/);
-  assert.match(text, /暂无细化规则/);
-  assert.match(text, /暂无匹配线索/);
+  const input = snapshot();
+  input.catalog.rules = [];
+  for (const subject of [null, 'unknown', 'constructor']) {
+    input.project.subject = subject;
+    const text = createWorkflowArtifact(input, now).text;
+    assert.match(text, /主体：尚未确认/);
+    assert.match(text, /暂无细化规则/);
+    assert.match(text, /暂无匹配线索/);
+  }
 });
