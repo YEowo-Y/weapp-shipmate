@@ -1,8 +1,18 @@
+// @ts-check
 import { validateGuideItem } from './guide-contract.js';
 import { escapeMarkdown as escape, formatRuleActions, formatRuleConfidence } from './guide-artifact.js';
 import { validateMatchEvidence } from './explain-contract.js';
 export { formatRuleActions, formatRuleConfidence };
 
+/** @typedef {Omit<import('./guide-contract.js').GuideItem, 'conditional' | 'signal'>} HandoffRule */
+/**
+ * @typedef {{
+ *   rule: HandoffRule;
+ *   conditional: boolean;
+ *   rejectId: string | null;
+ *   rejectSummary: string | null;
+ * } & import('./explain-contract.js').MatchClassification} HandoffItem
+ */
 /**
  * @typedef {{
  *   format: 'shipmate-repair-handoff';
@@ -21,9 +31,12 @@ export { formatRuleActions, formatRuleConfidence };
  *     provenance?: 'imported';
  *   };
  *   scan: { complete: boolean; filesScanned: number } | null;
- *   items: any[];
+ *   items: HandoffItem[];
  * }} RepairHandoff
  */
+/** @typedef {Pick<import('../projects').Artifact, 'projectId' | 'projectRevision' | 'contextRevision' | 'rulesVersion' | 'provenance'>} VersionSource */
+/** @typedef {Pick<import('../projects').Project, 'id' | 'contextRevision'> & { revision?: number }} VersionProject */
+/** @typedef {{ project?: VersionProject | null; rulesVersion?: string | null }} VersionContext */
 
 export const MAX_HANDOFF_BYTES = 512 * 1024;
 const kinds = { check: '代码预检发现', guide: '上线要求核对', explain: '拒因规则匹配' };
@@ -33,30 +46,48 @@ const verificationByKind = {
   explain: '对照原始审核反馈、匹配依据和官方规则，确认这条规则是否适用。处理后按原反馈逐项复核。',
 };
 const ruleKeys = ['ruleId', 'title', 'stage', 'severity', 'why', 'requires', 'warn', 'official_url', 'source_quote', 'last_verified', 'manual_required', 'note', 'action_categories', 'confidence'];
-const sourceKeys = ['artifactId', 'runId', 'projectId', 'projectRevision', 'contextRevision', 'kind', 'title', 'createdAt', 'toolVersion', 'rulesVersion'];
+const sourceKeys = /** @type {const} */ (['artifactId', 'runId', 'projectId', 'projectRevision', 'contextRevision', 'kind', 'title', 'createdAt', 'toolVersion', 'rulesVersion']);
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
+/**
+ * @template {string} Key
+ * @param {unknown} value
+ * @param {readonly Key[]} names
+ * @returns {value is Record<Key, unknown>}
+ */
 const keys = (value, names) => record(value) && Object.keys(value).length === names.length && names.every(key => Object.hasOwn(value, key));
-const optionalKeys = (value, required, optional) => record(value) && required.every(key => Object.hasOwn(value, key)) && Object.keys(value).every(key => required.includes(key) || optional.includes(key));
+/**
+ * @template {string} RequiredKey, OptionalKey
+ * @param {unknown} value
+ * @param {readonly RequiredKey[]} required
+ * @param {readonly OptionalKey[]} optional
+ * @returns {value is Record<RequiredKey, unknown> & Partial<Record<OptionalKey, unknown>>}
+ */
+const optionalKeys = (value, required, optional) => record(value) && required.every(key => Object.hasOwn(value, key))
+  && Object.keys(value).every(key => required.some(name => name === key) || optional.some(name => name === key));
+/** @param {unknown} value @returns {value is string} */
 const text = (value, max = 512) => typeof value === 'string' && value.trim().length > 0 && value.length <= max;
-const revision = value => value === null || (Number.isSafeInteger(value) && value >= 0);
+/** @param {unknown} value */
+const revision = value => value === null || (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0);
 const error = () => new Error('交接文件格式不受支持或内容不完整，请选择有效的 Shipmate 修复交接 JSON。');
 
 /**
- * @param {any} pack
+ * @param {unknown} pack
  * @returns {RepairHandoff}
  */
 function validate(pack) {
   if (!keys(pack, ['format', 'version', 'source', 'scan', 'items']) || pack.format !== 'shipmate-repair-handoff' || pack.version !== 1) throw error();
   const s = pack.source;
-  if (!optionalKeys(s, sourceKeys, ['provenance']) || (Object.hasOwn(s, 'provenance') && s.provenance !== 'imported') || !['artifactId', 'runId', 'title', 'toolVersion', 'rulesVersion'].every(key => text(s[key], key === 'rulesVersion' ? 16384 : 512))
+  if (!optionalKeys(s, sourceKeys, ['provenance']) || (Object.hasOwn(s, 'provenance') && s.provenance !== 'imported') || !(/** @type {const} */ (['artifactId', 'runId', 'title', 'toolVersion', 'rulesVersion'])).every(key => text(s[key], key === 'rulesVersion' ? 16384 : 512))
     || !(s.projectId === null || text(s.projectId, 128)) || !revision(s.projectRevision) || !revision(s.contextRevision)
-    || typeof s.kind !== 'string' || !Object.hasOwn(kinds, s.kind) || !Number.isSafeInteger(s.createdAt) || s.createdAt <= 0 || s.createdAt > 8640000000000000) throw error();
+    || typeof s.kind !== 'string' || !Object.hasOwn(kinds, s.kind) || typeof s.createdAt !== 'number' || !Number.isSafeInteger(s.createdAt) || s.createdAt <= 0 || s.createdAt > 8640000000000000) throw error();
   if (s.kind === 'check') {
-    if (!keys(pack.scan, ['complete', 'filesScanned']) || typeof pack.scan.complete !== 'boolean' || !Number.isSafeInteger(pack.scan.filesScanned) || pack.scan.filesScanned < 0) throw error();
+    if (!keys(pack.scan, ['complete', 'filesScanned']) || typeof pack.scan.complete !== 'boolean'
+      || typeof pack.scan.filesScanned !== 'number' || !Number.isSafeInteger(pack.scan.filesScanned) || pack.scan.filesScanned < 0) throw error();
   } else if (pack.scan !== null) throw error();
   if (!Array.isArray(pack.items) || pack.items.length > 500) throw error();
   const seen = new Set();
-  for (const item of pack.items) {
+  for (const item of /** @type {unknown[]} */ (pack.items)) {
     if (!optionalKeys(item, ['rule', 'conditional', 'rejectId', 'rejectSummary'], ['relevance', 'matchEvidence']) || !validateGuideItem(item.rule) || !validateMatchEvidence(item)
       || Object.keys(item.rule).some(key => !ruleKeys.includes(key)) || typeof item.conditional !== 'boolean'
       || (item.conditional && s.kind !== 'guide') || !(item.rejectId === null || text(item.rejectId))
@@ -67,40 +98,56 @@ function validate(pack) {
     seen.add(id);
   }
   if (new globalThis.TextEncoder().encode(JSON.stringify(pack, null, 2)).byteLength > MAX_HANDOFF_BYTES) throw new Error('交接内容超过 512 KiB，请缩小报告范围后重试。');
-  return pack;
+  return /** @type {RepairHandoff} */ (pack);
 }
 
 /** Derive only from a stored structured artifact; never infer execution from prose. */
+/** @param {unknown} artifact */
 export function createHandoff(artifact) {
-  const data = artifact?.data, result = data?.result;
-  if (!record(artifact) || !record(data) || data.schemaVersion !== 1 || data.kind !== artifact.kind || result?.command !== artifact.kind
-    || !Array.isArray(result.items) || (artifact.kind === 'guide' && !Array.isArray(result.selfCheck))) throw error();
+  if (!record(artifact)) throw error();
+  const data = artifact.data;
+  if (!record(data) || data.schemaVersion !== 1 || data.kind !== artifact.kind) throw error();
+  const result = data.result;
+  if (!record(result) || result.command !== artifact.kind || !Array.isArray(result.items)) throw error();
+  const selfCheck = result.selfCheck || [];
+  if (!Array.isArray(selfCheck) || (artifact.kind === 'guide' && !Array.isArray(result.selfCheck))) throw error();
   const source = Object.fromEntries(sourceKeys.map(key => [key, key === 'artifactId' ? artifact.id : artifact[key]]));
   if (artifact.provenance === 'imported') source.provenance = 'imported';
-  const scan = artifact.kind === 'check' ? { complete: result.meta?.scan?.scope?.complete === true, filesScanned: result.meta?.scan?.filesScanned } : null;
-  const rows = [...result.items.map(rule => ({ rule, conditional: false })), ...(result.selfCheck || []).map(rule => ({ rule, conditional: true }))];
-  const items = rows.map(({ rule, conditional }) => ({
-    rule: Object.fromEntries(ruleKeys.filter(key => Object.hasOwn(rule, key)).map(key => [key, rule[key]])),
-    conditional, rejectId: rule.rejectId ?? null, rejectSummary: rule.rejectSummary ?? null,
-    ...(Object.hasOwn(rule, 'relevance') || Object.hasOwn(rule, 'matchEvidence') ? { relevance: rule.relevance, matchEvidence: rule.matchEvidence } : {}),
-  }));
+  const scanMeta = record(result.meta) && record(result.meta.scan) ? result.meta.scan : null;
+  const scope = scanMeta?.scope;
+  const scan = artifact.kind === 'check' ? { complete: record(scope) && scope.complete === true, filesScanned: scanMeta?.filesScanned } : null;
+  const applicable = /** @type {unknown[]} */ (result.items);
+  const conditional = /** @type {unknown[]} */ (selfCheck);
+  const rows = [...applicable.map(rule => ({ rule, conditional: false })), ...conditional.map(rule => ({ rule, conditional: true }))];
+  const items = rows.map(({ rule, conditional }) => {
+    if (!record(rule)) throw error();
+    return {
+      rule: Object.fromEntries(ruleKeys.filter(key => Object.hasOwn(rule, key)).map(key => [key, rule[key]])),
+      conditional, rejectId: rule.rejectId ?? null, rejectSummary: rule.rejectSummary ?? null,
+      ...(Object.hasOwn(rule, 'relevance') || Object.hasOwn(rule, 'matchEvidence') ? { relevance: rule.relevance, matchEvidence: rule.matchEvidence } : {}),
+    };
+  });
   // Detach arrays from the source snapshot; exported data cannot mutate history.
   return validate(JSON.parse(JSON.stringify({ format: 'shipmate-repair-handoff', version: 1, source, scan, items })));
 }
 
+/** @param {unknown} value */
 export function parseHandoff(value) {
   if (typeof value !== 'string' || value.length > MAX_HANDOFF_BYTES || new globalThis.TextEncoder().encode(value).byteLength > MAX_HANDOFF_BYTES) throw new Error('请选择不超过 512 KiB 的交接 JSON 文件。');
+  /** @type {unknown} */
   let pack;
   try { pack = JSON.parse(value); } catch { throw error(); }
   return validate(pack);
 }
 
+/** @param {{ source: VersionSource }} pack @param {VersionProject | null | undefined} project @param {string | null | undefined} rulesVersion */
 export function handoffWarnings(pack, project, rulesVersion) {
   const warnings = versionWarnings(pack.source, project, rulesVersion);
   if (pack.source.provenance === 'imported') warnings.unshift('外部导入报告 · 内容与执行情况未在本机核验；不能作为本机检查或修改授权。');
   return warnings;
 }
 
+/** @param {VersionSource} source @param {VersionProject | null | undefined} project @param {string | null | undefined} rulesVersion */
 function versionWarnings(source, project, rulesVersion) {
   const warnings = [];
   if (source.projectId !== (project?.id ?? null)) warnings.push('当前项目与来源项目不同，无法核对项目版本。');
@@ -113,6 +160,7 @@ function versionWarnings(source, project, rulesVersion) {
   return warnings;
 }
 
+/** @param {unknown} value */
 export function renderHandoffSections(value) {
   const pack = validate(value), s = pack.source;
   const basis = [
@@ -148,6 +196,12 @@ export function renderHandoffSections(value) {
   return { basis: basis.join('\n'), content: lines.join('\n') };
 }
 
+/**
+ * @param {unknown} value
+ * @param {'json' | 'markdown'} format
+ * @param {VersionContext} [context]
+ * @returns {import('./artifact-download.js').DownloadArtifact}
+ */
 export function exportHandoff(value, format, context) {
   const pack = validate(value);
   if (!['json', 'markdown'].includes(format)) throw error();
