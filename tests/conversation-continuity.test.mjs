@@ -987,6 +987,80 @@ for (const terminal of ['complete', 'stopped']) {
   });
 }
 
+function frameClock() {
+  let sequence = 0;
+  const frames = new Map();
+  return {
+    frames,
+    documentView: {
+      requestAnimationFrame(callback) { const id = ++sequence; frames.set(id, callback); return id; },
+      cancelAnimationFrame(id) { frames.delete(id); },
+    },
+    draw() {
+      const callbacks = [...frames.values()];
+      frames.clear();
+      for (const callback of callbacks) callback();
+    },
+  };
+}
+
+for (const terminal of ['complete', 'stopped']) {
+  test(`stream chunks share a frame and ${terminal} paints the last chunk synchronously`, () => {
+    const clock = frameClock();
+    const received = [];
+    const app = harness([], {
+      documentView: clock.documentView,
+      planFactory: () => ({ chunks: ['First', ' second', ' third'], workingDelayMs: 1, chunkDelayMs: 1 }),
+      onMessagesChange(messages) { received.push(messages.at(-1)?.text); },
+    });
+    const reply = () => app.list.querySelector('.msg--agent').querySelector('.msg__text')?.textContent;
+    app.view.submit({ input: 'Stream a reply' });
+    assert.equal(app.step(), true);
+    assert.equal(app.step(), true);
+    assert.deepEqual(received.slice(-2), ['First', 'First second']);
+    assert.equal(clock.frames.size, 1);
+    assert.equal(reply(), undefined);
+    clock.draw();
+    assert.equal(reply(), 'First second');
+
+    assert.equal(app.step(), true);
+    assert.equal(app.view.getMessages().at(-1).text, 'First second third');
+    assert.equal(reply(), 'First second');
+    assert.equal(clock.frames.size, 1);
+    if (terminal === 'complete') app.drain();
+    else assert.equal(app.view.stop().ok, true);
+
+    assert.equal(app.view.getMessages().at(-1).status, terminal);
+    assert.equal(reply(), 'First second third');
+    assert.equal(clock.frames.size, 0);
+    app.view.destroy();
+  });
+}
+
+test('switching sessions and destroying the view discard queued stream frames', () => {
+  const clock = frameClock();
+  const app = harness([], { documentView: clock.documentView });
+  app.view.submit({ input: 'Old session' });
+  assert.equal(app.step(), true);
+  assert.equal(clock.frames.size, 1);
+  const oldDraw = [...clock.frames.values()][0];
+  app.view.replaceMessages(turns());
+  assert.equal(clock.frames.size, 0);
+
+  app.view.submit({ input: 'New session' });
+  assert.equal(app.step(), true);
+  assert.equal(clock.frames.size, 1);
+  const reply = () => app.list.querySelectorAll('.msg--agent').at(-1).querySelector('.msg__text')?.textContent;
+  oldDraw();
+  assert.equal(reply(), undefined);
+  assert.equal(clock.frames.size, 1);
+
+  const pendingDraw = [...clock.frames.values()][0];
+  app.view.destroy();
+  assert.equal(clock.frames.size, 0);
+  pendingDraw();
+  assert.equal(reply(), undefined);
+});
 
 test('destroy removes every mounted listener and makes public mutations inert', () => {
   const app = harness(turns());
@@ -1259,6 +1333,33 @@ test('stream updates reconcile pending width reflow before replacing the saved r
   assert.equal(app.scroll.scrollTop, 800);
 });
 
+test('stopping before the next stream frame compensates width reflow on the active article', () => {
+  const clock = frameClock();
+  const app = harness([], { documentView: clock.documentView,
+    planFactory: () => ({ chunks: ['one', 'two', 'three'], workingDelayMs: 1, chunkDelayMs: 1 }) });
+  app.scroll.scrollHeight = 2400;
+  app.scroll.clientWidth = 700;
+  clampReader(app.scroll);
+  app.view.submit({ input: 'Reflow during streaming' });
+  assert.equal(app.step(), true);
+  clock.draw();
+  const article = app.list.querySelector('.msg--agent');
+  let documentTop = 660;
+  article.getBoundingClientRect = () => ({ top: documentTop - app.scroll.scrollTop, bottom: documentTop + 300 - app.scroll.scrollTop });
+  app.scroll.scrollTop = 700;
+  app.scroll.dispatch('scroll');
+
+  app.scroll.clientWidth = 500;
+  documentTop = 760;
+  assert.equal(app.step(), true);
+  assert.equal(clock.frames.size, 1);
+  assert.equal(app.view.stop().ok, true);
+  assert.equal(app.scroll.scrollTop, 800);
+  assert.equal(app.jumpButton.hidden, false);
+  assert.equal(clock.frames.size, 0);
+  app.view.destroy();
+});
+
 test('bottom-following stream chunks do not measure historical message rectangles', () => {
   const app = harness(turns(), { planFactory: () => ({ chunks: ['one', 'two', 'three'], workingDelayMs: 1, chunkDelayMs: 1 }) });
   app.scroll.scrollHeight = 2400;
@@ -1451,6 +1552,27 @@ for (const pending of [false, true]) {
   });
 }
 
+test('a pending stream frame cannot announce a successful copy of outdated code', async () => {
+  const clock = frameClock();
+  let resolve;
+  await withClipboard(() => new Promise(done => { resolve = done; }), async () => {
+    const app = harness([], { documentView: clock.documentView,
+      planFactory: () => ({ chunks: ['```js\nconst x =', ' 1;\n```'], workingDelayMs: 1, chunkDelayMs: 1 }) });
+    app.view.submit({ input: 'code' });
+    assert.equal(app.step(), true);
+    clock.draw();
+    app.action('copy-code', app.view.getMessages().at(-1).id);
+    assert.equal(app.step(), true);
+    assert.equal(clock.frames.size, 1);
+
+    resolve();
+    await flushCopy();
+    assert.equal(app.list.querySelector('[data-action="copy-code"]').dataset.copyState, undefined);
+    assert.doesNotMatch(app.status.textContent, /已复制/);
+    app.view.destroy();
+  });
+});
+
 for (const action of ['copy', 'copy-guide']) {
   test(`guide ${action} success restores its full original semantics`, async () => {
     const clock = feedbackClock();
@@ -1578,17 +1700,27 @@ test('stream source changes clear their own successful copy announcement immedia
 });
 
 test('project agent preserves ordered multi-tool facts and text, opens local artifact, and stops only pending tools', async () => {
+  const clock = frameClock();
   let active;
   const opened = [];
-  const app = harness([], { requireModel: true, onOpenArtifact: id => opened.push(id), transport: args => { active = args; return new Promise(() => {}); } });
+  const app = harness([], { documentView: clock.documentView, requireModel: true, onOpenArtifact: id => opened.push(id),
+    transport: args => { active = args; return new Promise(() => {}); } });
   app.view.setModelSelection({ providerId: 'openai', model: 'test', label: 'Test' });
   app.view.setDraft('检查项目'); app.view.submit(); await flushLive();
   const result = { schemaVersion: 1, kind: 'check', runId: 'run-1', artifactId: 'artifact-1', title: '检查报告', summary: '请核对范围', itemCount: 0, items: [], truncated: false, scopeComplete: true, projectRevision: 1, contextRevision: 1 };
+  const visibleParts = () => app.list.querySelector('.msg--agent').querySelectorAll('.msg__text').map(node => node.textContent);
   active.onDelta('先检查', { textId: 't1' });
+  assert.equal(clock.frames.size, 1);
   active.onToolEvent({ type: 'tool-input-start', toolCallId: 'one', toolName: 'project_read' });
+  assert.equal(clock.frames.size, 0);
+  assert.deepEqual(visibleParts(), ['先检查']);
   active.onToolEvent({ type: 'tool-input-available', toolCallId: 'one', toolName: 'project_read', input: { kind: 'check', query: '' } });
   active.onToolEvent({ type: 'tool-output-available', toolCallId: 'one', output: result });
   active.onDelta('再说明', { textId: 't2' });
+  active.onDelta('。', { textId: 't1' });
+  assert.equal(clock.frames.size, 1);
+  clock.draw();
+  assert.deepEqual(visibleParts(), ['先检查。', '再说明']);
   active.onToolEvent({ type: 'tool-input-start', toolCallId: 'two', toolName: 'project_read' });
   active.onDelta('补充', { textId: 't2' });
   const message = app.view.getMessages().at(-1);
