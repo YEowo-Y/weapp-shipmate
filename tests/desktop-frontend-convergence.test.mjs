@@ -97,6 +97,8 @@ test("desktop 类型检查启用 checkJs 并淘汰已迁入模块的通配遮蔽
   const tsconfig = JSON.parse(stripCodeComments(rawTsconfig));
   assert.equal(tsconfig.compilerOptions?.allowJs, true, "desktop/tsconfig.json 必须开启 allowJs");
   assert.equal(tsconfig.compilerOptions?.checkJs, true, "desktop/tsconfig.json 必须开启 checkJs");
+  assert.equal(tsconfig.compilerOptions?.noImplicitAny, true, "desktop/tsconfig.json 必须默认禁止隐式 any");
+  assert.equal(tsconfig.compilerOptions?.useUnknownInCatchVariables, true, "desktop/tsconfig.json 的 catch 变量必须默认为 unknown");
 
   const tsStrict = JSON.parse(stripCodeComments(readFileSync(join(ROOT, "desktop/tsconfig.ts.json"), "utf8")));
   assert.equal(tsStrict.compilerOptions?.noImplicitAny, true, "desktop/tsconfig.ts.json 必须对 TS/TSX 保持 noImplicitAny: true");
