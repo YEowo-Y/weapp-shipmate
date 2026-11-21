@@ -90,6 +90,7 @@ export function mountConversation(options) {
     throw new Error('mountConversation requires input, sendButton, scroll, list, status, and jumpButton.');
   }
   const documentRef = list.ownerDocument;
+  const view = documentRef.defaultView;
   const jumpLabel = documentRef.createElement('span');
   jumpLabel.textContent = '回到最新';
   jumpButton.replaceChildren(jumpLabel, createIcon(documentRef, 'arrow-down'));
@@ -103,6 +104,10 @@ export function mountConversation(options) {
   let readingAnchor = null;
   /** @type {string | null} */
   let activeAssistantId = null;
+  /** @type {Set<number>} */
+  const dirtyTextParts = new Set();
+  /** @type {number | null} */
+  let streamFrame = null;
   /** @type {string | null} */
   let activeSourceUserId = null;
   /** @type {import('./conversation-controller.js').RunResult | null} */
@@ -362,7 +367,9 @@ export function mountConversation(options) {
     showCopyState(control, 'pending');
     const ok = await copyText(source);
     if (epoch !== viewEpoch || copyJobs.get(key) !== job) return;
-    invalidateChangedCopies();
+    // Code copy compares against rendered text, which may still have a frame queued.
+    if (isCode && message.id === activeAssistantId && dirtyTextParts.size) drawStreamText(message);
+    else invalidateChangedCopies();
     if (copyJobs.get(key) !== job) return;
     const state = ok ? 'success' : 'error';
     copyStates.set(key, state);
@@ -431,8 +438,49 @@ export function mountConversation(options) {
     settleScroll(forceBottom);
   }
 
+  function cancelStreamFrame() {
+    if (streamFrame !== null) view?.cancelAnimationFrame?.(streamFrame);
+    streamFrame = null;
+    dirtyTextParts.clear();
+  }
+
+  /** @param {ConversationMessage} message */
+  function drawStreamText(message) {
+    if (!dirtyTextParts.size) return;
+    const anchor = captureReadingAnchor();
+    const article = findArticle(message.id);
+    const parts = article?.querySelector('.msg__parts');
+    if (parts) {
+      for (const partIndex of dirtyTextParts) {
+        const part = message.parts?.[partIndex];
+        if (part?.type !== 'text') continue;
+        let text = /** @type {HTMLDivElement | null} */ (parts.querySelector(`[data-part-index="${partIndex}"]`));
+        if (!text) {
+          text = documentRef.createElement('div');
+          text.className = 'msg__text';
+          text.dataset.partIndex = String(partIndex);
+          text.dataset.messageId = message.id;
+          text.dataset.role = message.role;
+          parts.append(text);
+        }
+        updateMessageText(text, part.text);
+      }
+    }
+    dirtyTextParts.clear();
+    const copy = /** @type {HTMLButtonElement | null | undefined} */ (article?.querySelector('[data-action="copy"]'));
+    if (copy) copy.disabled = !message.text;
+    invalidateChangedCopies();
+    restoreReadingAnchor(anchor);
+    settleScroll();
+  }
+
   /** @param {ConversationMessage} message */
   function patchMessage(message) {
+    if (message.id === activeAssistantId && streamFrame !== null) {
+      // Settle any reflow while the article can still anchor the viewport.
+      settleViewportResize();
+      cancelStreamFrame();
+    }
     const article = findArticle(message.id);
     if (!article) return;
     const anchor = captureReadingAnchor();
@@ -624,36 +672,29 @@ export function mountConversation(options) {
       announce(event.guide ? '本机上线清单已生成。' : '工具演示已完成，正在生成说明…');
     }
     if (event.type === 'chunk') {
-      const anchor = captureReadingAnchor();
       const message = assistantMessage();
       if (message?.parts) {
         message.text += event.chunk;
-        const article = findArticle(message.id);
         let part = event.textId ? message.parts.find(part => part.type === 'text' && part.textId === event.textId) : message.parts.at(-1);
         if (!part || part.type !== 'text') {
           part = { type: 'text', text: '', ...(event.textId ? { textId: event.textId } : {}) };
           message.parts.push(part);
         }
         part.text += event.chunk;
-        const partIndex = message.parts.indexOf(part);
-        const parts = article?.querySelector('.msg__parts');
-        let text = /** @type {HTMLDivElement | null | undefined} */ (parts?.querySelector(`[data-part-index="${partIndex}"]`));
-        if (!text && parts) {
-          text = documentRef.createElement('div');
-          text.className = 'msg__text';
-          text.dataset.partIndex = String(partIndex);
-          text.dataset.messageId = message.id;
-          text.dataset.role = message.role;
-          parts.append(text);
+        // Keep the message current for persistence, and paint each dirty part once per frame.
+        dirtyTextParts.add(message.parts.indexOf(part));
+        if (!view?.requestAnimationFrame || !isConversationActive(message.status ?? CONVERSATION_STATES.IDLE)) {
+          drawStreamText(message);
+        } else if (streamFrame === null) {
+          const frame = view.requestAnimationFrame(() => {
+            if (streamFrame !== frame) return;
+            streamFrame = null;
+            drawStreamText(message);
+          });
+          streamFrame = frame;
         }
-        if (text) updateMessageText(text, part.text);
-        const copy = /** @type {HTMLButtonElement | null | undefined} */ (article?.querySelector('[data-action="copy"]'));
-        if (copy) copy.disabled = !message.text;
       }
       emitMessages();
-      invalidateChangedCopies();
-      restoreReadingAnchor(anchor);
-      settleScroll();
     }
     if (event.type === 'complete') {
       const message = assistantMessage();
@@ -1097,7 +1138,6 @@ export function mountConversation(options) {
   let observedWidth;
   /** @type {number | null} */
   let resizeFrame = null;
-  const view = documentRef.defaultView;
   const ResizeObserver = view?.ResizeObserver;
   const resizeObserver = ResizeObserver ? new ResizeObserver(entries => {
     if (destroyed) return;
@@ -1172,6 +1212,7 @@ export function mountConversation(options) {
     replaceMessages(nextMessages) {
       if (destroyed) return;
       viewEpoch++;
+      cancelStreamFrame();
       clearCopyFeedback();
       artifactDownloader.dispose();
       if (isConversationActive(controller.getSnapshot().state)) controller.stop('session-switch');
@@ -1232,6 +1273,7 @@ export function mountConversation(options) {
       if (destroyed) return;
       destroyed = true;
       viewEpoch++;
+      cancelStreamFrame();
       clearCopyFeedback();
       artifactDownloader.dispose();
       controller.dispose();
