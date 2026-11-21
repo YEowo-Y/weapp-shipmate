@@ -44,6 +44,21 @@ test('unavailable or malformed service cannot enable credential entry', async ()
     assert.equal(client.ready, false);
   }
 });
+
+test('malformed optional connection details are rejected before reaching the settings view', async () => {
+  const healthy = { providerId: 'custom', status: 'disconnected', models: [],
+    authMethod: null, credentialStorage: null, endpoint: null, error: null, inference: null };
+  const client = createConnectionClient(async () => response({ ...snapshot(), connections: [healthy] }));
+  assert.deepEqual((await client.load()).connections, [healthy]);
+  for (const details of [{ error: { code: 42 } }, { inference: { status: 'verified', model: [] } },
+    { endpoint: { baseUrl: 'https://example.test', allowLocalHttp: 'yes' } }]) {
+    const malformed = createConnectionClient(async () => response({ ...snapshot(), connections: [{ ...healthy, ...details }] }));
+    await assert.rejects(malformed.load(), /本地连接服务/);
+    assert.equal(malformed.ready, false);
+    assert.equal(malformed.snapshot, null);
+  }
+});
+
 test('late snapshots cannot overwrite more recent results and disposal aborts requests', async () => {
   const pending = [];
   const client = createConnectionClient((_url, options) => new Promise(resolve => pending.push({ resolve, options })));
