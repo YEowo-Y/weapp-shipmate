@@ -1,3 +1,4 @@
+// @ts-check
 import { createIcon } from './icons.js';
 
 /**
@@ -21,6 +22,12 @@ export function mountComposer(host, {
   hint = 'Enter 发送 · Shift + Enter 换行',
 }) {
   const doc = host.ownerDocument;
+  /**
+   * @template {keyof HTMLElementTagNameMap} Tag
+   * @param {Tag} tag
+   * @param {string} className
+   * @param {string} [text]
+   */
   const element = (tag, className, text) => {
     const node = doc.createElement(tag);
     node.className = className;

@@ -1,9 +1,11 @@
+// @ts-check
 import { createIcon } from './icons.js';
 
 // Vendored, pinned assets only. Provider data cannot supply markup or URLs.
 const BRANDS = new Set(['openai', 'anthropic', 'google', 'deepseek', 'glm', 'kimi', 'ollama', 'openrouter']);
 const LOCAL_ICONS = Object.freeze({ 'local-demo': 'bot', custom: 'sliders-horizontal' });
 
+/** @param {Document} document @param {string} providerId */
 export function createProviderIcon(document, providerId) {
   const icon = document.createElement('span');
   icon.className = 'provider-brand';
@@ -20,7 +22,7 @@ export function createProviderIcon(document, providerId) {
       icon.append(image);
     }
   } else if (Object.hasOwn(LOCAL_ICONS, providerId)) {
-    icon.append(createIcon(document, LOCAL_ICONS[providerId]));
+    icon.append(createIcon(document, LOCAL_ICONS[/** @type {keyof typeof LOCAL_ICONS} */ (providerId)]));
   } else {
     throw new Error('Unknown provider icon');
   }

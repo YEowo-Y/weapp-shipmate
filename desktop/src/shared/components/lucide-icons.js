@@ -1,4 +1,7 @@
+// @ts-check
 // Lucide SVG geometry, pinned upstream; see LUCIDE-LICENSE and LUCIDE-SOURCE.md.
+/** @typedef {readonly [tag: keyof SVGElementTagNameMap, attrs: Readonly<Record<string, string>>]} IconNode */
+/** @satisfies {Readonly<Record<string, readonly IconNode[]>>} */
 export const iconNodes = {
   "bell": [
     ["path", { "d": "M10.268 21a2 2 0 0 0 3.464 0" }],
