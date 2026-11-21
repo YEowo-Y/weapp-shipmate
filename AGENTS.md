@@ -24,7 +24,7 @@
 ## 容易踩的坑
 
 - **两次安装**：`npm ci` 之后还要 `npm ci --prefix desktop`。桌面 server 的测试放在根目录 `tests/`，但从 `desktop/node_modules` 解析依赖。
-- **桌面静态与类型检查（T14 后）**：`npm run lint` 已覆盖 `desktop/**/*.{js,mjs,ts,tsx}`（解析器惰性复用 `desktop/node_modules/@babel/parser`，运行前须已执行 `npm ci --prefix desktop`），并禁止正式桌面模块导入 `design-previews`；`npm --prefix desktop run typecheck` 检查三套 `tsconfig`（含 `desktop/src/shared/` 的 `checkJs`、TS/TSX `noImplicitAny` 以及 `desktop/{server,scripts}` 的 `// @ts-check`），已接入 `ci.yml`、`release-rehearsal.yml` 与 `release.yml`。
+- **桌面静态与类型检查（T14 后）**：`npm run lint` 已覆盖 `desktop/**/*.{js,mjs,ts,tsx}`（解析器惰性复用 `desktop/node_modules/@babel/parser`，运行前须已执行 `npm ci --prefix desktop`），并禁止正式桌面模块导入 `design-previews`；`npm --prefix desktop run typecheck` 检查三套 `tsconfig`。桌面前端与共享 JS 默认禁止隐式 `any`，`catch` 变量默认为 `unknown`。`desktop/{server,scripts}` 的 JavaScript 以 `// @ts-check` 纳入检查。此命令已接入 `ci.yml`、`release-rehearsal.yml` 与 `release.yml`。
 - **桌面 Vite 打包和 Rust 在 PR 的 `glib-backport` 里跑**，`cargo test` 只在它的 Windows job 里。`tests/desktop-*.test.mjs` 随 `npm test` 在 `validate-rules` 里跑。本机跑 Rust 要 1.94.1：`cargo +1.94.1 test --manifest-path desktop/src-tauri/Cargo.toml --locked`。
 - **新增运行时依赖要登记**：`desktop/scripts/prepare-runtime.mjs` 用显式白名单复制依赖，未登记的会抛 `Unreviewed runtime dependency`；`tests/desktop-runtime-package.test.mjs` 钉着目录列表和版本。新增生产依赖本身要维护者批准。
 - **运行时复制白名单**：`prepare-runtime.mjs` 从 `bin`、`src`、`desktop/server` 复制 `.mjs`，另显式复制 `src/private-files.json`，从 `rules` 只复制 YAML。往这些目录加别的类型的文件，要同步改复制规则。
