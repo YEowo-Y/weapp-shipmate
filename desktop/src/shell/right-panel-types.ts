@@ -1,5 +1,5 @@
 import type { Artifact, Project, ProjectFacts } from '../projects';
-import type { WorkflowResult } from '../shared';
+import type { WorkflowConfirmation, WorkflowResult } from '../shared';
 
 export type RightPanelTabId = 'release' | 'evidence' | 'changes' | 'devtools';
 
@@ -38,7 +38,7 @@ export type WorkflowBasisSnapshot = {
   project: Project;
   catalog: unknown;
   rulesVersion: string;
-  confirmations: unknown[];
+  confirmations: WorkflowConfirmation[];
 };
 
 export type ReleasePanelState =

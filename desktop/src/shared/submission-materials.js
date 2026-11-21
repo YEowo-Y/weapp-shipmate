@@ -1,7 +1,15 @@
+// @ts-check
 import { deriveWorkflow } from '../../../src/workflow.mjs';
 import { escapeMarkdown as escape } from './guide-artifact.js';
 import { GUIDE_SUBJECTS } from './guide-contract.js';
 import { createHandoff, handoffWarnings } from './repair-handoff.js';
+
+/** @typedef {Pick<import('../projects').Project, 'id' | 'name' | 'subject' | 'contextRevision'> & { revision?: number; facts?: Partial<import('../projects').ProjectFacts> | null }} MaterialsProject */
+/** @typedef {Omit<import('../projects').Artifact, 'markdown' | 'inputSummary'>} MaterialsArtifact */
+/** @typedef {{ official_url?: unknown; source_quote?: unknown; last_verified?: unknown }} CatalogSource */
+/** @typedef {CatalogSource & { id: string; stage: string; title: string; draft?: unknown; subject_type: unknown[] }} CatalogRule */
+/** @typedef {CatalogSource & { stage: string; title: string }} CatalogStage */
+/** @typedef {{ rules: CatalogRule[]; stages: CatalogStage[] }} MaterialsCatalog */
 
 /**
  * @typedef {{
@@ -105,7 +113,7 @@ function shareableProjectText(value) {
 }
 
 /**
- * @param {Map<string, any>} ruleMap
+ * @param {Map<string, CatalogRule>} ruleMap
  * @param {string} subject
  * @param {string[]} ruleIds
  * @returns {MaterialSourceRef[]}
@@ -129,7 +137,7 @@ function pickRuleSources(ruleMap, subject, ruleIds) {
 }
 
 /**
- * @param {any[]} stages
+ * @param {CatalogStage[]} stages
  * @param {string} stageId
  * @returns {MaterialSourceRef[]}
  */
@@ -157,11 +165,11 @@ function pickStageSource(stages, stageId) {
  * never collects credentials or claims compliance/approval guarantees.
  *
  * @param {{
- *   project: any;
- *   catalog: any;
+ *   project: MaterialsProject;
+ *   catalog: unknown;
  *   rulesVersion?: string | null;
- *   confirmations?: any[];
- *   artifact?: any | null;
+ *   confirmations?: readonly import('../shared').WorkflowConfirmation[];
+ *   artifact?: MaterialsArtifact | null;
  *   generatedAt?: number;
  * }} input
  * @returns {SubmissionMaterialsPack}
@@ -180,7 +188,8 @@ export function createSubmissionMaterials(input) {
   ) {
     throw new Error('生成提审材料包需要有效的已保存项目。');
   }
-  if (!catalog || !Array.isArray(catalog.stages) || !Array.isArray(catalog.rules)) {
+  if (!catalog || typeof catalog !== 'object' || !('stages' in catalog) || !Array.isArray(catalog.stages)
+    || !('rules' in catalog) || !Array.isArray(catalog.rules)) {
     throw new Error('生成提审材料包需要有效的规则目录。');
   }
 
@@ -196,18 +205,22 @@ export function createSubmissionMaterials(input) {
   const businessType = shareableProjectText(facts.businessType);
   const projectName = shareableProjectText(project.name) || '当前项目';
 
+  /** @type {import('../shared').WorkflowResult} */
   const model = deriveWorkflow({
     project: { ...project, facts: { ...facts, businessType } },
     catalog,
     rulesVersion: rulesVersion ?? '',
-    confirmations: /** @type {never} */ (confirmations),
+    confirmations,
   });
 
-  const ruleMap = new Map(catalog.rules.map((/** @type {any} */ r) => [r.id, r]));
-  const stageMap = new Map(model.stages.map((/** @type {any} */ s) => [s.id, s]));
+  // deriveWorkflow checks the catalog's stages, rule IDs, titles and subject arrays.
+  const { rules, stages } = /** @type {MaterialsCatalog} */ (catalog);
+  const ruleMap = new Map(rules.map(rule => [rule.id, rule]));
+  const stageMap = new Map(model.stages.map(stage => [stage.id, stage]));
 
   /** @type {string[]} */
   const warnings = [];
+  /** @type {Set<string>} */
   const hitIds = new Set();
   /** @type {string | null} */
   let artifactId = null;
@@ -235,7 +248,7 @@ export function createSubmissionMaterials(input) {
     }
   }
 
-  const artifactRules = catalog.rules.filter((/** @type {any} */ rule) =>
+  const artifactRules = rules.filter(rule =>
     hitIds.has(rule.id) && !rule.draft && rule.subject_type.includes(subject),
   );
   const privacyHits = artifactRules.filter(r => r.stage === 'privacy');
@@ -251,7 +264,7 @@ export function createSubmissionMaterials(input) {
   const privacyStage = stageMap.get('privacy');
   const domainStage = stageMap.get('domain');
 
-  const categoryTitles = model.categoryCandidates.map((/** @type {any} */ c) => String(c.title));
+  const categoryTitles = model.categoryCandidates.map(candidate => String(candidate.title));
 
   /** @type {SubmissionFieldMapping[]} */
   const fieldMappings = [
@@ -268,7 +281,7 @@ export function createSubmissionMaterials(input) {
       id: 'category',
       consoleField: '服务类目',
       consolePath: '微信公众平台 → 设置 → 基本设置 → 服务类目',
-      currentStatus: STAGE_STATUS_LABELS[categoryStage?.status] || '待确认',
+      currentStatus: STAGE_STATUS_LABELS[categoryStage?.status ?? ''] || '待确认',
       mappedValue: categoryTitles.length
         ? `${subjectLabel} · 候选线索：${categoryTitles.join('、')}`
         : `${subjectLabel} · 尚未匹配到具体类目线索，请按实际提供的服务对照官方类目表选择`,
@@ -282,8 +295,8 @@ export function createSubmissionMaterials(input) {
       id: 'filing',
       consoleField: '小程序 ICP 备案',
       consolePath: '微信公众平台 → 设置 → 基本设置 → 小程序备案',
-      currentStatus: STAGE_STATUS_LABELS[filingStage?.status] || '待确认',
-      mappedValue: `主体类型：${subjectLabel} · 当前阶段状态：${STAGE_STATUS_LABELS[filingStage?.status] || '待确认'}`,
+      currentStatus: STAGE_STATUS_LABELS[filingStage?.status ?? ''] || '待确认',
+      mappedValue: `主体类型：${subjectLabel} · 当前阶段状态：${STAGE_STATUS_LABELS[filingStage?.status ?? ''] || '待确认'}`,
       notes:
         subject === 'personal'
           ? '上线前须在后台完成备案五个环节；个人备案需核对有效身份证件清晰度及有效期大于 1 个月。'
@@ -301,14 +314,14 @@ export function createSubmissionMaterials(input) {
       currentStatus:
         facts.collectsSensitive == null
           ? '事实待补充'
-          : STAGE_STATUS_LABELS[privacyStage?.status] || '待确认',
+          : STAGE_STATUS_LABELS[privacyStage?.status ?? ''] || '待确认',
       mappedValue: `收集敏感信息：${formatBoolFact(facts.collectsSensitive)}${
         privacyHits.length ? ` · 预检命中 ${privacyHits.length} 项隐私核对线索（${privacyHits.map(r => r.title).slice(0, 3).join('、')}）` : ''
       }`,
       notes: '须按代码实际调用的隐私接口在后台逐项声明处理目的与方式，并确保先告知同意再调用。',
       sources: [
-        ...pickStageSource(catalog.stages, 'privacy'),
-        ...pickRuleSources(ruleMap, subject, privacyHits.map((/** @type {any} */ r) => r.id)),
+        ...pickStageSource(stages, 'privacy'),
+        ...pickRuleSources(ruleMap, subject, privacyHits.map(rule => rule.id)),
       ],
     },
     {
@@ -318,7 +331,7 @@ export function createSubmissionMaterials(input) {
       currentStatus:
         facts.hasServerDomain == null
           ? '事实待补充'
-          : STAGE_STATUS_LABELS[domainStage?.status] || '待确认',
+          : STAGE_STATUS_LABELS[domainStage?.status ?? ''] || '待确认',
       mappedValue: `使用服务器域名：${formatBoolFact(facts.hasServerDomain)}${
         domainHits.length ? ` · 预检命中 ${domainHits.length} 项域名核对线索` : ''
       }`,
@@ -387,7 +400,7 @@ export function createSubmissionMaterials(input) {
     `【待人工核对草稿 · 隐私保护指引核对清单】`,
     `- 已保存事实「收集敏感信息」：${formatBoolFact(facts.collectsSensitive)}`,
     privacyHits.length
-      ? `- 最近预检识别到的隐私核对项：\n${privacyHits.map((/** @type {any} */ r) => `  · ${r.title}（${r.id}）`).join('\n')}`
+      ? `- 最近预检识别到的隐私核对项：\n${privacyHits.map(rule => `  · ${rule.title}（${rule.id}）`).join('\n')}`
       : `- 最近预检隐私线索：[尚未加载代码预检命中项，建议先运行本机代码预检核对 wx.* 隐私接口调用]`,
     `- 后台核对动作：[登录微信公众平台「设置 → 服务内容声明 → 用户隐私保护指引」，逐项比对实际调用接口与弹窗授权时机，以官方后台表单为准]`,
   ].join('\n');
@@ -423,7 +436,7 @@ export function createSubmissionMaterials(input) {
       statusNote: '须结合最新代码实际调用接口在微信后台逐项核实声明',
       draftText: privacyDraftText,
       placeholders: privacyPlaceholders,
-      sources: pickStageSource(catalog.stages, 'privacy'),
+      sources: pickStageSource(stages, 'privacy'),
     },
   ];
 
@@ -497,7 +510,7 @@ export function createSubmissionMaterials(input) {
       title: '用户隐私保护指引已与代码实际调用接口逐项对齐',
       detail: '核对后台《用户隐私保护指引》已声明所有实际调用的隐私接口，并在调用前完成用户知情同意交互。',
       manualOnly: true,
-      sources: pickStageSource(catalog.stages, 'privacy'),
+      sources: pickStageSource(stages, 'privacy'),
     });
   }
 
@@ -529,8 +542,8 @@ export function createSubmissionMaterials(input) {
       projectName,
       subject,
       subjectLabel,
-      projectRevision: Number.isSafeInteger(project.revision) ? project.revision : 0,
-      contextRevision: Number.isSafeInteger(project.contextRevision) ? project.contextRevision : 0,
+      projectRevision: typeof project.revision === 'number' && Number.isSafeInteger(project.revision) ? project.revision : 0,
+      contextRevision: typeof project.contextRevision === 'number' && Number.isSafeInteger(project.contextRevision) ? project.contextRevision : 0,
       rulesVersion,
       artifactId,
       artifactKind,

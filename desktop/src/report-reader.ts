@@ -8,8 +8,6 @@ import type { MissingFact } from './workflow';
 import './context.css';
 import './report-reader.css';
 
-// createHandoff validates these fields before this presentation-only narrowing.
-type ReadingItem = { conditional: boolean; rejectSummary: string | null; relevance?: 'direct' | 'possible'; matchEvidence?: { aliases: string[]; codes: string[]; partialAliases: string[] }; rule: { ruleId: string; title: string; stage?: string; severity: 'blocker' | 'warning' | 'info'; why?: string | null; requires: string[]; official_url?: string | null; source_quote?: string | null; last_verified?: string | null; manual_required: boolean; warn?: string | null; note?: string | null; action_categories?: string[]; confidence?: 'high' | 'medium' | 'low' } };
 type Options = { openPage?(dialog: HTMLDialogElement, trigger: HTMLElement | null): boolean; getArtifact(): Artifact | null; getProject(): Project | null; getRulesVersion(): string | null; onHandoff?(anchor: HTMLElement): void; onRepair?(anchor: HTMLElement): void; onEditFact?(projectId: string, field: MissingFact, anchor: HTMLElement): boolean; onOpenSource?(url: string): Promise<unknown>; mountQuoteChecks?(rulesVersion: string, rows: QuoteRow[], onChange: (completed?: QuoteRow) => void): () => void; returnFocus?(): HTMLElement | null };
 
 // The export contract intentionally omits run notes and business signals. Validate
@@ -103,7 +101,7 @@ export function mountReportReader(options: Options) {
       warning.textContent += ' 此报告的范围说明或业务线索未能完整验证，以下摘要仅涵盖已验证条目；完整原报告已展开，请同时阅读其中的限制。';
       original.open = true;
     }
-    const items = pack.items as ReadingItem[];
+    const { items } = pack;
     const labels = { blocker: '阻断', warning: '警告', info: '提示' };
     const rows: { category: keyof typeof labels | 'conditional'; article: HTMLElement; entry: HTMLLIElement; heading: HTMLHeadingElement; evidence: HTMLDetailsElement; evidenceTitle: HTMLElement }[] = [];
     handoff.hidden = !options.onHandoff;
