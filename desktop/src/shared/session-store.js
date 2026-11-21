@@ -153,6 +153,7 @@ function sessionSchema(exporting) {
   /** @param {unknown} value */
   const view = value => fields(value, {
     scrollTop: number, followLatest: boolean, readingDetails: boolean,
+    messageWindow: value => fields(value, { start: integer, end: integer }, ['start', 'end']),
     readingAnchor: nullable(value => fields(value, { messageId: id, component: id, readingKey: id }, ['messageId'])),
     disclosures: value => list(value, item => ({ ...fields(item, { messageId: id }, ['messageId']), ...disclosure(item) }), 20000),
     readingPositions: value => list(value, item => fields(item, { messageId: id, key: id, top: number, left: value => number(value, -1e9) }, ['messageId', 'key', 'top', 'left']), 20000),
