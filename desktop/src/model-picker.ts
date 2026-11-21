@@ -1,11 +1,11 @@
-import { isUsableModelConnection } from './shared/model-connection-client.js';
+import { isUsableModelConnection, type ProviderConnection } from './shared/model-connection-client.js';
 import { createProviderIcon } from './shared/components/provider-icons.js';
 import { createIcon } from './shared/components/icons.js';
 import { attachFloatingSurface } from './shared/components/floating-surface.js';
 import { createActionButton } from './shared/components/ui-kit.js';
 
 type Selection = { providerId: string; model: string; label: string };
-type Connection = { providerId: string; status: string; hasCredential?: boolean; catalogSource?: string; inference?: { status: string; model: string | null }; models: { id: string; name: string }[] };
+type Connection = Pick<ProviderConnection, 'providerId' | 'status' | 'hasCredential' | 'catalogSource' | 'inference' | 'models'>;
 
 /** A read-only view of the connection client's catalog; credentials stay in settings. */
 export function mountModelPicker({ anchor, providers, connections, load, select, getSelection, isBusy, manage }: {
