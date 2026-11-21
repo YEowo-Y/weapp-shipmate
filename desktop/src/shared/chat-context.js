@@ -1,10 +1,17 @@
+// @ts-check
 /* global TextEncoder */
-/** Same explicit provenance is displayed in preview and included in transport. */
+/** @typedef {Pick<import('./session-workspace.js').Session, 'id' | 'projectId'>} SessionScope */
+
+/**
+ * Same explicit provenance is displayed in preview and included in transport.
+ * @param {Pick<ChatContextItem, 'kind' | 'createdAt' | 'contextRevision'>} item
+ */
 export function contextMetadata(item) {
   if (!['report', 'memory'].includes(item.kind)) return '';
-  const saved = Number.isSafeInteger(item.createdAt) && item.createdAt > 0 && item.createdAt <= 8640000000000000
-    ? new Date(item.createdAt).toLocaleString('zh-CN', { hour12: false, timeZoneName: 'short' }) : '时间未记录';
-  const revision = Number.isSafeInteger(item.contextRevision) && item.contextRevision >= 0 ? item.contextRevision : '未记录';
+  const { createdAt = 0, contextRevision = -1 } = item;
+  const saved = Number.isSafeInteger(createdAt) && createdAt > 0 && createdAt <= 8640000000000000
+    ? new Date(createdAt).toLocaleString('zh-CN', { hour12: false, timeZoneName: 'short' }) : '时间未记录';
+  const revision = Number.isSafeInteger(contextRevision) && contextRevision >= 0 ? contextRevision : '未记录';
   return item.kind === 'memory' ? `用户保存的项目记忆 · ${saved} · 记忆版本 ${revision}` : `已保存报告 · ${saved} · 事实版本 ${revision}`;
 }
 /**
@@ -24,25 +31,30 @@ export function createChatContext() {
   const scopes = new Map();
   /** @type {string | null} */
   let scope = null;
+  /** @param {string} value */
   const size = value => new TextEncoder().encode(value).length;
-  const key = session => session?.id ? JSON.stringify([session.projectId ?? null, session.id]) : null;
   /** @returns {ChatContextItem[]} */
   const items = () => (scope && scopes.get(scope)) || [];
-  const valid = item => item && ['file', 'report', 'memory'].includes(item.kind) && typeof item.id === 'string' && typeof item.title === 'string' && typeof item.text === 'string' && item.text.trim();
+  /** @param {ChatContextItem | null | undefined} item @returns {item is ChatContextItem} */
+  const valid = item => Boolean(item && ['file', 'report', 'memory'].includes(item.kind) && typeof item.id === 'string' && typeof item.title === 'string' && typeof item.text === 'string' && item.text.trim());
+  /** @param {readonly ChatContextItem[]} values */
   const checkBudget = values => { if (values.length > 8 || values.reduce((sum, value) => sum + size(value.text), 0) > 24576) throw Error('上下文最多 8 项、24 KiB，请移除部分内容。'); };
   return {
-    select(session) { scope = key(session); },
+    /** @param {SessionScope | null} [session] */
+    select(session) { scope = session?.id ? JSON.stringify([session.projectId ?? null, session.id]) : null; },
     list() { return items().map(item => ({ ...item })); },
+    /** @param {ChatContextItem | null | undefined} item */
     add(item) {
       if (!scope || !valid(item)) throw Error('上下文格式无效。');
       const next = [...items().filter(value => value.id !== item.id), { ...item }];
       checkBudget(next);
       scopes.set(scope, next);
     },
+    /** @param {string} id */
     remove(id) { if (scope) scopes.set(scope, items().filter(item => item.id !== id)); },
     /**
      * @param {import('./chat-transport.js').ChatArgs} request
-     * @param {ChatContextItem[]} [freshMemory]
+     * @param {readonly ChatContextItem[]} [freshMemory]
      */
     prepare(request, freshMemory = []) {
       const selected = items(), memory = selected.filter(item => item.kind === 'memory');

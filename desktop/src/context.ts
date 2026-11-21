@@ -2,14 +2,14 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { createActionButton } from './shared/components/ui-kit.js';
 import { createIcon } from './shared/components/icons.js';
-import { createChatContext, contextMetadata } from './shared/chat-context.js';
+import { createChatContext, contextMetadata, type ChatContextItem } from './shared/chat-context.js';
 import type { ProjectSnapshot } from './projects';
 import { mountProjectMemory, type MemorySnapshot } from './project-memory';
 import type { ChatArgs } from './shared/chat-transport.js';
 import './context.css';
 
 type Session = { id: string; projectId?: string | null };
-export type ContextItem = { id: string; kind: 'file' | 'report' | 'memory'; title: string; text: string; bytes: number; createdAt?: number; contextRevision?: number };
+export type ContextItem = ChatContextItem;
 export function mountChatContext(host: HTMLElement, button: HTMLButtonElement, isBusy: () => boolean) {
   const state = createChatContext();
   let current: Session | null = null, revision = 0, disposed = false, pending = false;
