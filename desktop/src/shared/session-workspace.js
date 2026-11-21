@@ -281,7 +281,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     if (activeDialog?.dataset.kind === 'find' && activeDialog.dataset.sessionId !== currentSessionId) activeDialog.close();
     restoring = true;
     const session = current();
-    conversation.replaceMessages(session.messages);
+    conversation.replaceMessages(session.messages, session.viewState);
     conversation.setModelSelection(session.modelSelection || null);
     conversation.setDraft(session.draft, session.edit, session.draftView);
     restoring = false; renderTitle(); notifySession();
@@ -290,7 +290,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
   }
   input.disabled = sendButton.disabled = false;
   conversation = mountConversation({ ...conversationOptions, input, sendButton, scroll, list, status, jumpButton,
-    initialMessages: current().messages,
+    initialMessages: [],
     getDraftContext: () => ({ references: [...(current().references || [])], pendingScenario: current().pendingScenario || 'normal' }),
     setDraftContext(context) {
       Object.assign(current(), context, { references: [...(context.references || [])] });
@@ -338,13 +338,8 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     if (id !== currentSessionId) { conversation.stop(); capture(); currentSessionId = id; restore(); }
     onSessionOpen?.(session);
     if (match?.messageId) {
-      // The conversation renderer owns the list's HTML message elements.
-      const article = /** @type {HTMLElement[]} */ ([...list.children]).find(node => node.dataset.messageId === match.messageId);
-      if (article) {
-        const top = scroll.scrollTop + article.getBoundingClientRect().top - scroll.getBoundingClientRect().top - 16;
-        conversation.restoreViewState({ ...conversation.getViewState(), scrollTop: Math.max(0, top), followLatest: false, readingDetails: false, readingAnchor: null });
-        article.tabIndex = -1; article.focus({ preventScroll: true }); status.textContent = '已定位到匹配消息。';
-      } else input.focus();
+      if (conversation.focusMessage(match.messageId)) status.textContent = '已定位到匹配消息。';
+      else input.focus();
     } else input.focus();
     schedule();
   }
