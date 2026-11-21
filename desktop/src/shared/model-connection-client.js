@@ -1,50 +1,57 @@
+// @ts-check
 const BASE = '/api/model-connections';
+const OAUTH_START = '/openrouter/oauth/start';
 const UNAVAILABLE = '本地连接服务不可用。请重新启动应用或连接服务后重试。';
 const PROVIDERS = new Set(['openai', 'anthropic', 'google', 'deepseek', 'glm', 'kimi', 'openrouter', 'ollama', 'custom']);
 /**
  * @typedef {{ id: string; name: string }} ModelInfo
+ * @typedef {{ code?: string | null; message?: string | null }} ConnectionFailure
+ * @typedef {{ status: string; model?: string | null; error?: ConnectionFailure | null }} InferenceStatus
+ * @typedef {{ mode: 'callback' | 'manual'; flowId: string; authorizationUrl: string; expiresAt: string }} Authorization
+ * @typedef {{ status?: string | null; mode?: string | null; flowId?: string | null; authorizationUrl?: string | null; expiresAt?: string | null; message?: string | null }} AuthorizationStatus
  * @typedef {{
  *   providerId: string;
  *   status: string;
- *   catalogSource?: string;
- *   hasCredential?: boolean;
- *   credentialStorage?: string;
- *   authMethod?: string;
+ *   catalogSource?: string | null;
+ *   hasCredential?: boolean | null;
+ *   credentialStorage?: string | null;
+ *   authMethod?: string | null;
  *   models: ModelInfo[];
- *   endpoint?: { baseUrl: string; allowLocalHttp: boolean };
- *   error?: { code?: string; message?: string };
- *   inference?: { status: string; model: string | null; error?: { message?: string } };
+ *   endpoint?: { baseUrl: string; allowLocalHttp: boolean } | null;
+ *   error?: ConnectionFailure | null;
+ *   inference?: InferenceStatus | null;
  * }} ProviderConnection
  * @typedef {{
  *   storage: 'memory' | 'system';
  *   csrfToken: string;
  *   connections: ProviderConnection[];
- *   oauth?: {
- *     status?: string;
- *     mode?: string;
- *     flowId?: string;
- *     authorizationUrl?: string;
- *     expiresAt?: string;
- *     message?: string;
- *   };
+ *   oauth?: AuthorizationStatus | null;
  * }} ConnectionSnapshot
  */
 
 // A GLM preset is selectable without claiming that its credential or catalog
 // was verified remotely. Other providers still require live discovery.
 /**
- * @param {ProviderConnection | undefined | any} connection
- * @returns {connection is ProviderConnection}
+ * @param {unknown} connection
+ * @returns {connection is Record<string, unknown> & ({ status: 'connected' } | { providerId: 'glm'; status: 'configured'; catalogSource: 'preset'; hasCredential: true })}
  */
 export function isUsableModelConnection(connection) {
-  return connection?.status === 'connected' || (connection?.providerId === 'glm'
-    && connection.status === 'configured' && connection.catalogSource === 'preset' && connection.hasCredential === true);
+  return record(connection) && (connection.status === 'connected' || (connection.providerId === 'glm'
+    && connection.status === 'configured' && connection.catalogSource === 'preset' && connection.hasCredential === true));
 }
+
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+/** @param {unknown} value @returns {value is string | null | undefined} */
+const optionalText = value => value == null || typeof value === 'string';
 const TOKEN = /^[A-Za-z0-9_-]{43}$/u;
+/** @param {unknown} value @returns {value is Authorization} */
 function isAuthorization(value) {
   try {
-    if (!['callback', 'manual'].includes(value?.mode) || !TOKEN.test(value.flowId)
-      || typeof value.expiresAt !== 'string' || !Number.isFinite(Date.parse(value.expiresAt))) return false;
+    if (!record(value) || (value.mode !== 'callback' && value.mode !== 'manual')
+      || typeof value.flowId !== 'string' || !TOKEN.test(value.flowId)
+      || typeof value.expiresAt !== 'string' || !Number.isFinite(Date.parse(value.expiresAt))
+      || typeof value.authorizationUrl !== 'string') return false;
     const url = new URL(value.authorizationUrl);
     if (url.origin !== 'https://openrouter.ai' || url.pathname !== '/auth' || url.username || url.password || url.hash) return false;
     const params = url.searchParams;
@@ -62,17 +69,39 @@ function isAuthorization(value) {
       && callback.pathname === `${BASE}/oauth/callback/${value.flowId}` && TOKEN.test(state);
   } catch { return false; }
 }
+
+/** @param {unknown} value */
+function isConnectionFailure(value) {
+  return value == null || (record(value) && optionalText(value.code) && optionalText(value.message));
+}
+/** @param {unknown} value @returns {value is ProviderConnection} */
+function isConnection(value) {
+  if (!record(value) || typeof value.providerId !== 'string' || !PROVIDERS.has(value.providerId)
+    || typeof value.status !== 'string' || !(['disconnected', 'connecting', 'connected', 'error'].includes(value.status)
+      || value.status === 'configured' && isUsableModelConnection(value))
+    || !Array.isArray(value.models)
+    || !(/** @type {unknown[]} */ (value.models)).every(model => record(model) && typeof model.id === 'string' && typeof model.name === 'string')) return false;
+  const { endpoint, inference } = value;
+  return optionalText(value.catalogSource) && optionalText(value.authMethod) && optionalText(value.credentialStorage)
+    && (value.hasCredential == null || typeof value.hasCredential === 'boolean') && isConnectionFailure(value.error)
+    && (endpoint == null || (record(endpoint) && typeof endpoint.baseUrl === 'string' && typeof endpoint.allowLocalHttp === 'boolean'))
+    && (inference == null || (record(inference) && typeof inference.status === 'string'
+      && optionalText(inference.model) && isConnectionFailure(inference.error)));
+}
+/** @param {unknown} value */
+function isAuthorizationStatus(value) {
+  return value == null || (record(value)
+    && [value.status, value.mode, value.flowId, value.authorizationUrl, value.expiresAt, value.message].every(optionalText)
+    && (!value.authorizationUrl || (value.status === 'waiting' && isAuthorization(value))));
+}
 /**
- * @param {any} value
+ * @param {unknown} value
  * @returns {value is ConnectionSnapshot}
  */
 function isSnapshot(value) {
-  return ['memory', 'system'].includes(value?.storage) && typeof value.csrfToken === 'string' && value.csrfToken.length > 0
-    && (!value.oauth?.authorizationUrl || value.oauth.status === 'waiting' && isAuthorization(value.oauth))
-    && Array.isArray(value.connections) && value.connections.every(connection => PROVIDERS.has(connection.providerId)
-      && (['disconnected', 'connecting', 'connected', 'error'].includes(connection.status)
-        || connection.status === 'configured' && isUsableModelConnection(connection))
-      && Array.isArray(connection.models) && connection.models.every(model => typeof model.id === 'string' && typeof model.name === 'string'));
+  return record(value) && (value.storage === 'memory' || value.storage === 'system')
+    && typeof value.csrfToken === 'string' && value.csrfToken.length > 0 && isAuthorizationStatus(value.oauth)
+    && Array.isArray(value.connections) && value.connections.every(isConnection);
 }
 /**
  * @param {typeof fetch} [fetcher]
@@ -83,17 +112,26 @@ export function createConnectionClient(fetcher = fetch, { timeoutMs = 20000, set
   let snapshot = null;
   let revision = 0;
   let disposed = false;
+  /** @type {Map<AbortController, () => void>} */
   const requests = new Map();
-  async function request(path, payload) {
+  /**
+   * @template Result
+   * @param {string} path
+   * @param {Record<string, unknown> | undefined} payload
+   * @param {(value: unknown) => value is Result} validate
+   * @returns {Promise<Result>}
+   */
+  async function request(path, payload, validate) {
     if (disposed) throw new Error(UNAVAILABLE);
     if (payload !== undefined && !snapshot) throw new Error(UNAVAILABLE);
     const csrfToken = snapshot?.csrfToken ?? '';
     const version = ++revision;
     const controller = new AbortController();
+    /** @type {ReturnType<typeof setTimer> | undefined} */
     let timer;
     let failure = '';
     try {
-      const value = await Promise.race([(async () => {
+      const pending = (async () => {
         const response = await fetcher(BASE + path, {
           method: payload === undefined ? 'GET' : 'POST', credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
           headers: payload === undefined ? {} : { 'Content-Type': 'application/json', 'X-Shipmate-CSRF': csrfToken },
@@ -105,15 +143,16 @@ export function createConnectionClient(fetcher = fetch, { timeoutMs = 20000, set
           throw new Error(failure);
         }
         if (!response.ok) throw new Error(UNAVAILABLE);
-        const value = await response.json();
-        if (path === '/openrouter/oauth/start') {
-          if (!isAuthorization(value)) throw new Error(UNAVAILABLE);
-        } else if (!isSnapshot(value)) throw new Error(UNAVAILABLE);
+        const value = /** @type {unknown} */ (await response.json());
+        if (!validate(value)) throw new Error(UNAVAILABLE);
         return value;
-      })(), new Promise((_resolve, reject) => {
+      })();
+      /** @type {Promise<never>} */
+      const interrupted = new Promise((_resolve, reject) => {
         requests.set(controller, () => { clearTimer(timer); controller.abort(); reject(new Error(UNAVAILABLE)); });
         timer = setTimer(() => { failure = '本地连接服务响应超时，请重试。'; controller.abort(); reject(new Error(failure)); }, timeoutMs);
-      })]);
+      });
+      const value = await Promise.race([pending, interrupted]);
       if (!disposed && version === revision && isSnapshot(value)) snapshot = value;
       return value;
     } catch {
@@ -121,13 +160,17 @@ export function createConnectionClient(fetcher = fetch, { timeoutMs = 20000, set
       throw new Error(failure || (payload === undefined ? UNAVAILABLE : '连接操作未完成。请检查本地服务与凭据后重试；请勿自动重复提交。'));
     } finally { clearTimer(timer); requests.delete(controller); }
   }
+  /** @overload @param {typeof OAUTH_START} path @param {Record<string, unknown>} [payload] @returns {Promise<Authorization>} */
+  /** @overload @param {string} path @param {Record<string, unknown>} [payload] @returns {Promise<ConnectionSnapshot | Authorization>} */
+  /** @param {string} path @param {Record<string, unknown>} [payload] */
+  function mutate(path, payload = {}) {
+    return path === OAUTH_START ? request(path, payload, isAuthorization) : request(path, payload, isSnapshot);
+  }
   return {
     get ready() { return !disposed && snapshot !== null; },
     get snapshot() { return snapshot; },
-    /** @returns {Promise<ConnectionSnapshot>} */
-    load: () => request('', undefined),
-    /** @returns {Promise<any>} */
-    mutate: (path, payload = {}) => request(path, payload),
+    load: () => request('', undefined, isSnapshot),
+    mutate,
     dispose() { disposed = true; revision++; snapshot = null; requests.forEach(cancel => cancel()); requests.clear(); },
   };
 }
