@@ -258,7 +258,11 @@ export function mountModelConnections({ button, picker, select, isBusy, getSelec
     try {
       const result = await client.mutate(`/${selected}/${action}`, payload);
       if (action === 'oauth/start' && payload.mode !== 'manual') {
-        try { await openUrl(result.authorizationUrl); } catch { error = '未能打开系统浏览器。请点击“在浏览器中打开授权页面”重试，或取消授权。'; } finally { await client.load(); loadError = ''; }
+        try {
+          if (!('authorizationUrl' in result) || typeof result.authorizationUrl !== 'string') throw new Error('授权链接不可用。');
+          await openUrl(result.authorizationUrl);
+        } catch { error = '未能打开系统浏览器。请点击“在浏览器中打开授权页面”重试，或取消授权。'; }
+        finally { await client.load(); loadError = ''; }
       } else { await client.load(); loadError = ''; }
     } catch {
       if (action !== 'oauth/start') {
