@@ -71,6 +71,9 @@ test("unknown facts preserve stages; explicit false needs manual not-applicable 
   assert.equal(falseFact.stages.find(s => s.id === "privacy").applicability, false);
   assert.equal(unknown.nextAction.stageId, "registration");
   assert.ok(unknown.stages.find(s => s.id === "review").blockedBy.includes("filing"));
+  const unknownField = derive({ catalog: { ...catalog, stages: catalog.stages.map(stage =>
+    stage.stage === "privacy" ? { ...stage, applies_when: "constructor != true" } : stage) } });
+  assert.equal(unknownField.stages.find(s => s.id === "privacy").applicability, null);
 });
 
 test("all file read/stat and nested directory failures invalidate scope, not just config errors", t => {
@@ -136,6 +139,8 @@ test("missing or invalid workflow catalog fails closed instead of reporting all 
     { ...catalog, stages: [{ stage: "registration" }] },
     { ...catalog, stages: [catalog.stages[0], catalog.stages[0]] },
     { ...catalog, rules: [{ id: "bad", stage: "not-a-stage" }] },
+    { ...catalog, rules: [{ ...catalog.rules.find(rule => rule.id === "privacy.getLocation"), match: { api: "wx.getLocation" } }] },
+    { ...catalog, rules: [{ ...catalog.rules.find(rule => rule.id === "privacy.getLocation"), match: { config_key: [false] } }] },
     { ...catalog, stages: catalog.stages.map(stage => stage.stage === "registration" ? { ...stage, requires_stage: ["review"] } : stage) }])
     assert.throws(() => derive({ catalog: invalid }), /资料|循环/);
   const confirmations = catalog.stages.map(stage => ({ stageId: stage.stage, state: "confirmed", contextRevision: 0, rulesVersion: "rules-a", recordedAt: 1 }));
