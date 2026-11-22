@@ -19,7 +19,7 @@ function run(command, args, cwd, input, expectedStatus = 0) {
   return result.stdout;
 }
 
-test("npm tarball and staged MCPB/plugins ship the versioned CLI schema and compatible MCP", () => {
+test("npm tarball and staged MCPB/plugins ship versioned CLI JSON, SARIF, and compatible MCP", () => {
   const temp = mkdtempSync(join(tmpdir(), "shipmate cli packages "));
   try {
     const stage = join(temp, "mcpb");
@@ -92,6 +92,28 @@ test("npm tarball and staged MCPB/plugins ship the versioned CLI schema and comp
       assert.deepEqual(compared.meta.baseline.counts, { incomparableRules: 0, currentOnly: 1, common: 1, previousOnly: 0 });
       assert.deepEqual(compared.items[0].baseline.currentOnlyLocationIndexes, [1]);
 
+      const sarifText = run(process.execPath, [cli, "check", baselineProject, "--sarif", "--fail-on", "warning"], temp, undefined, 2);
+      assert.equal(sarifText.slice(-2), "}\n", runtime);
+      const sarif = JSON.parse(sarifText);
+      assert.equal(sarif.version, "2.1.0", runtime);
+      assert.equal(sarif.runs.length, 1, runtime);
+      const [sarifRun] = sarif.runs;
+      assert.equal(sarifRun.results.length, 1, runtime);
+      const [finding] = sarifRun.results;
+      assert.equal(finding.ruleId, "privacy.choosePhotoVideo", runtime);
+      assert.equal(finding.level, "warning", runtime);
+      assert.equal(sarifRun.tool.driver.rules[finding.ruleIndex].id, finding.ruleId, runtime);
+      const artifactLocation = { uri: "app.js", uriBaseId: "%SRCROOT%" };
+      assert.deepEqual(finding.locations, [{
+        physicalLocation: { artifactLocation, region: { startLine: 1, startColumn: 1 } },
+      }], runtime);
+      assert.deepEqual(finding.relatedLocations, [{
+        id: 1,
+        physicalLocation: { artifactLocation, region: { startLine: 1, startColumn: 19 } },
+      }], runtime);
+      assert.equal(sarifRun.invocations[0].executionSuccessful, true, runtime);
+      assert.equal(sarifRun.invocations[0].exitCode, 2, runtime);
+
       if (runtime === unpacked) {
         const rulesPath = join(runtime, "rules", "privacy-apis.yaml");
         const original = readFileSync(rulesPath, "utf8");
@@ -156,21 +178,29 @@ test("synthetic preflight fixtures exercise info and explicit draft thresholds",
     mkdirSync(project);
     const entry = join(project, "index.js");
     const bin = join(runtime, "bin", "weapp-shipmate.mjs");
-    for (const [source, flags, code, count] of [
-      ["wx.infoProbe();", ["--fail-on", "info"], 2, 1],
-      ["wx.infoProbe();", ["--fail-on", "warning"], 0, 0],
-      ["wx.blockerProbe();", ["--fail-on", "blocker"], 0, 0],
-      ["wx.blockerProbe();", ["--fail-on", "blocker", "--include-drafts"], 2, 1],
+    for (const [source, flags, code, count, sarifLevels] of [
+      ["wx.infoProbe();", [], 0, 0, ["note"]],
+      ["wx.infoProbe();", ["--fail-on", "info"], 2, 1, ["note"]],
+      ["wx.infoProbe();", ["--fail-on", "warning"], 0, 0, ["note"]],
+      ["wx.blockerProbe();", ["--fail-on", "blocker"], 0, 0, []],
+      ["wx.blockerProbe();", ["--fail-on", "blocker", "--include-drafts"], 2, 1, ["error"]],
       ["wx.infoProbe(); wx.warningProbe(); wx.blockerProbe();",
-        ["--fail-on", "info", "--include-drafts", "--blockers-only"], 2, 3],
+        ["--fail-on", "info", "--include-drafts", "--blockers-only"], 2, 3, ["error"]],
     ]) {
       writeFileSync(entry, source);
-      const child = spawnSync(process.execPath, [bin, "check", project, "--json", ...flags], { cwd: temp, encoding: "utf8", timeout: 15000 });
-      assert.ifError(child.error);
-      assert.equal(child.status, code, flags.join(" "));
-      assert.equal(child.stderr, count ? `--fail-on ${flags[1]} 命中 ${count} 项。\n` : "");
-      const output = JSON.parse(child.stdout);
-      if (flags.includes("--blockers-only")) assert.deepEqual(output.items.map(item => item.severity), ["blocker"]);
+      for (const format of ["--json", "--sarif"]) {
+        const args = [format, ...flags];
+        const child = spawnSync(process.execPath, [bin, "check", project, ...args], { cwd: temp, encoding: "utf8", timeout: 15000 });
+        assert.ifError(child.error);
+        assert.equal(child.status, code, args.join(" "));
+        assert.equal(child.stderr, count ? `--fail-on ${flags[1]} 命中 ${count} 项。\n` : "");
+        const output = JSON.parse(child.stdout);
+        if (format === "--sarif") {
+          assert.deepEqual(output.runs[0].results.map(result => result.level), sarifLevels, args.join(" "));
+        } else if (flags.includes("--blockers-only")) {
+          assert.deepEqual(output.items.map(item => item.severity), ["blocker"]);
+        }
+      }
     }
   } finally {
     rmSync(temp, { recursive: true, force: true });
