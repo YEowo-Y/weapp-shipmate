@@ -324,6 +324,8 @@ Windows WebView2 中确认右栏异步载入 React 与 Base UI 并能切换标�
 
 补审 §6.1 的焦点路径已在 Windows WebView2 157.0.4341.60、1240 px 与 780 px 复核。规则来源筛选有结果和无结果时，以及修复交接预览展开前后，均可用 Tab 和 Shift+Tab 在首尾循环。预览区能用键盘进入，Escape 归还焦点至原触发控件。右栏 `PanelEmpty` 的四处调用点均提供有效动作标识。实机取证见本机 `.omx/artifacts/readiness-closeout/run-20261119T174025Z/native-evidence.json`。
 
+§6.1 的两项加固已落实。规则来源与修复交接共用 Tab 首尾计算，按当前可聚焦控件的顺序回环，弹窗内的其余按键交给浏览器处理。在 Windows WebView2 157.0.4341.60 的 1240 px 和 780 px 窗口中临时增删首尾控件，32 次 Tab／Shift+Tab 的焦点偏差由 18 次降为 0。规则来源筛选、交接预览及 Escape 归还焦点均已复核。`PanelEmpty` 用字面量联合类型登记现有五个动作标识，编译验证会拒绝空字符串与未登记的标识。修复前后实机记录见本机 `.omx/artifacts/review-dialog-focus/` 下 `before` 和 `after` 的 `native-evidence.json`。
+
 ## 8. Claude 前端快审收口（2026-11-22）
 
 本节对照 2026-11-18 的 Claude 前端快审。编号沿用该次快审。生产就绪评审的严格类型配置已通过 [#102](https://github.com/YEowo-Y/weapp-shipmate/pull/102) 固化，日常检查和 CI 默认启用两个严格选项。

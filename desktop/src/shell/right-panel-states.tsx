@@ -59,7 +59,7 @@ export function PanelEmpty({
   description: string;
   actionLabel: string;
   actionIcon?: string;
-  actionId: string;
+  actionId: 'manage-project' | 'changes-manage-project' | 'open-report' | 'run-check' | 'open-repair-history';
   onAction: () => void;
 }) {
   return (

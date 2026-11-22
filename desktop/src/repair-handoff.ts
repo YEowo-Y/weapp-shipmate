@@ -5,6 +5,7 @@ import { createIcon } from './shared/components/icons.js';
 import { renderMessageText } from './shared/components/message-markdown.js';
 import type { Artifact, Project } from './projects';
 import { createAgentHandoffSummary } from './handoff-summary';
+import { wrapDialogTab } from './dialog-focus';
 import './context.css';
 import './repair-handoff.css';
 
@@ -205,11 +206,7 @@ export function mountRepairHandoff(options: { getArtifact(): Artifact | null; ge
     trigger?.setAttribute('aria-expanded', 'false');
     if (!disposed && trigger?.isConnected) trigger.focus();
   });
-  dialog.addEventListener('keydown', event => {
-    if (event.key !== 'Tab' || event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey) return;
-    const target = event.shiftKey && document.activeElement === dismiss ? done : !event.shiftKey && document.activeElement === done ? dismiss : null;
-    if (target) { event.preventDefault(); target.focus(); }
-  });
+  dialog.addEventListener('keydown', event => wrapDialogTab(dialog, event));
   content.textContent = '尚未打开交接内容。JSON 文件可以重新打开，Markdown 文件适合阅读和分享。'; refresh();
   return {
     open(anchor: HTMLElement, fromReport = false) {
