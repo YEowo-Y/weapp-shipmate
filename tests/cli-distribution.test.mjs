@@ -10,12 +10,12 @@ import { stageMcpRuntime } from "../scripts/stage-mcp-runtime.mjs";
 import { buildPlugins } from "../scripts/build-plugins.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-function run(command, args, cwd, input) {
+function run(command, args, cwd, input, expectedStatus = 0) {
   const env = { ...process.env };
   delete env.NODE_PATH;
   const result = spawnSync(command, args, { cwd, env, input, encoding: "utf8", timeout: 30000 });
   assert.ifError(result.error);
-  assert.equal(result.status, 0, result.stderr + result.stdout);
+  assert.equal(result.status, expectedStatus, result.stderr + result.stdout);
   return result.stdout;
 }
 
@@ -38,6 +38,11 @@ test("npm tarball and staged MCPB/plugins ship the versioned CLI schema and comp
     cpSync(join(stage, "node_modules"), join(unpacked, "node_modules"), { recursive: true });
     const fixture = join(temp, "project");
     cpSync(join(root, "fixtures", "sample-app"), fixture, { recursive: true });
+    const baselineProject = join(temp, "baseline-app");
+    mkdirSync(baselineProject);
+    const baselineFile = join(temp, "baseline.json");
+    const source = join(baselineProject, "app.js");
+    const media = "wx.chooseMedia();\n";
     const runtimes = [unpacked, stage, ...Object.values(markets).map(market => join(market, "plugins", "weapp-shipmate"))];
     for (const runtime of runtimes) {
       const schemaText = readFileSync(join(runtime, "schemas", "cli-report-v1.schema.json"), "utf8");
@@ -70,6 +75,43 @@ test("npm tarball and staged MCPB/plugins ship the versioned CLI schema and comp
       assert.ok(validate(evidenceReport), JSON.stringify(validate.errors));
       assert.ok(evidenceReport.items.some(item => item.evidence.locations.length));
       assert.deepEqual(evidenceReport.meta.evidence, { schemaVersion: 1, truncated: false });
+      const cli = join(runtime, "bin", "weapp-shipmate.mjs");
+      const baselineArgs = [cli, "check", baselineProject, "--evidence", "--json", "--json-version", "1", "--fail-on", "warning"];
+      writeFileSync(source, media);
+      const snapshotText = run(process.execPath, [...baselineArgs, "--baseline-snapshot"], temp, undefined, 2);
+      const snapshot = JSON.parse(snapshotText);
+      assert.ok(validate(snapshot), JSON.stringify(validate.errors));
+      assert.equal(snapshot.meta.baseline.mode, "snapshot");
+      writeFileSync(baselineFile, snapshotText);
+
+      writeFileSync(source, media.trimEnd() + " " + media);
+      const compare = [...baselineArgs, "--baseline", baselineFile];
+      const compared = JSON.parse(run(process.execPath, compare, temp, undefined, 2));
+      assert.ok(validate(compared), JSON.stringify(validate.errors));
+      assert.equal(compared.meta.baseline.status, "compared");
+      assert.deepEqual(compared.meta.baseline.counts, { incomparableRules: 0, currentOnly: 1, common: 1, previousOnly: 0 });
+      assert.deepEqual(compared.items[0].baseline.currentOnlyLocationIndexes, [1]);
+
+      if (runtime === unpacked) {
+        const rulesPath = join(runtime, "rules", "privacy-apis.yaml");
+        const original = readFileSync(rulesPath, "utf8");
+        const updated = original.replace('title: "照片/视频隐私声明"', 'title: "本地规则版本对照"');
+        assert.notEqual(updated, original);
+        writeFileSync(rulesPath, updated);
+        try {
+          const changed = JSON.parse(run(process.execPath, compare, temp, undefined, 2));
+          assert.ok(validate(changed), JSON.stringify(validate.errors));
+          assert.equal(changed.meta.baseline.cliVersion, snapshot.meta.baseline.cliVersion);
+          assert.deepEqual(changed.meta.baseline.reasonCodes, ["rules-changed"]);
+        } finally {
+          writeFileSync(rulesPath, original);
+        }
+      }
+      writeFileSync(source, "const ready = true;\n");
+      const removed = JSON.parse(run(process.execPath, compare, temp));
+      assert.ok(validate(removed), JSON.stringify(validate.errors));
+      assert.deepEqual(removed.meta.baseline.counts, { incomparableRules: 0, currentOnly: 0, common: 0, previousOnly: 1 });
+
       const requests = [
         { id: 1, method: "initialize", params: {} },
         { id: 2, method: "tools/call", params: { name: "weapp_shipmate_guide", arguments: { format: "json" } } },
