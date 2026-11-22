@@ -323,3 +323,21 @@ Windows WebView2 中确认右栏异步载入 React 与 Base UI 并能切换标�
 | P2-9 关闭竞态 | 规则来源和提审材料包的待执行打开可被关闭撤销，重开及焦点归还已实测。 [#68](https://github.com/YEowo-Y/weapp-shipmate/pull/68) [#69](https://github.com/YEowo-Y/weapp-shipmate/pull/69) |
 
 补审 §6.1 的焦点路径已在 Windows WebView2 157.0.4341.60、1240 px 与 780 px 复核。规则来源筛选有结果和无结果时，以及修复交接预览展开前后，均可用 Tab 和 Shift+Tab 在首尾循环。预览区能用键盘进入，Escape 归还焦点至原触发控件。右栏 `PanelEmpty` 的四处调用点均提供有效动作标识。实机取证见本机 `.omx/artifacts/readiness-closeout/run-20261119T174025Z/native-evidence.json`。
+
+## 8. Claude 前端快审收口（2026-11-22）
+
+本节对照 2026-11-18 的 Claude 前端快审。编号沿用该次快审。生产就绪评审的严格类型配置已通过 [#102](https://github.com/YEowo-Y/weapp-shipmate/pull/102) 固化，日常检查和 CI 默认启用两个严格选项。
+
+| 快审项 | 验收结果 |
+|---|---|
+| P1-1 设计令牌 | 正式入口的主色作用域已实测，语义别名汇入设计系统，旧预览有对应取值。[#70](https://github.com/YEowo-Y/weapp-shipmate/pull/70) · [#73](https://github.com/YEowo-Y/weapp-shipmate/pull/73) |
+| P1-2 流式 Markdown | 同一帧合并绘制。三轮相同长度回复的文本更新由每轮 216 次降到 12 次。[#103](https://github.com/YEowo-Y/weapp-shipmate/pull/103) |
+| P2-1 长会话 | 1,200 条合成消息的打开与切换各只挂载 80 条，旧版绝对坐标保留既有恢复路径。[#104](https://github.com/YEowo-Y/weapp-shipmate/pull/104) |
+| P2-2 右栏草稿 | 草稿按项目订阅，延迟保存回执与对应项目快照一同呈现。跨项目和保存后恢复已实测。[#105](https://github.com/YEowo-Y/weapp-shipmate/pull/105) |
+| P2-3 聊天输入区颜色 | 审计范围 26 处固定色值清零，浅色与深色共 40 项计算样式与基线一致。[#106](https://github.com/YEowo-Y/weapp-shipmate/pull/106) |
+| P3-1 间距 | 四个样式文件的 252 个间距值改用等值令牌，30 组实机样本的计算样式和尺寸与基线一致。[#107](https://github.com/YEowo-Y/weapp-shipmate/pull/107) |
+| P3-2 启动包预算 | 本轮构建为 732,573 B，gzip 为 240,117 B。既有启动门禁继续校验体积和分包边界。 |
+
+**工具卡片的实机补验。** Windows WebView2 157.0.4341.60 中复现执行中标签的文字消失。共享渐变的透明字形仍生效，桌面状态标签已用实色背景覆盖渐变。桌面样式现在用主题前景色绘制标签。新增回归先失败，实际字形颜色为 `rgba(0, 0, 0, 0)`，修复后浅色 1240 px 和深色 780 px 都与主题前景色一致。
+
+使用本地 OpenAI Responses 协议替身和隔离项目，走实际 WebView2、Rust、broker 和 SQLite 链路。19 项原生检查通过，覆盖成功后打开本机报告、执行中转失败并保留焦点、取消后确认子进程退出、重启后逐项恢复卡片及报告 ID，以及导入历史的来源核验。失败与取消由隔离运行时中的受控子进程触发。实机截图和结果位于 `.omx/artifacts/desktop-model-native/run-2026-11-22T01-58-54-421Z/`。

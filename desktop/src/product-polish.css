@@ -478,7 +478,12 @@
   animation: ds-tool-sweep 1.4s var(--ds-ease-standard) infinite;
 }
 @keyframes ds-tool-sweep { to { background-position: 160% 100%; } }
-.desktop-app .tool-details[data-tool-phase="running"] .component-status { background: var(--ds-accent-soft); color: var(--ds-accent-hover); }
+.desktop-app .tool-details[data-tool-phase="running"] .component-status {
+  background: var(--ds-accent-soft);
+  color: var(--ds-accent-hover);
+  /* The solid badge background replaces the shared text shimmer. */
+  -webkit-text-fill-color: currentColor;
+}
 /* success */
 .desktop-app .tool-details[data-tool-phase="success"] { border-color: color-mix(in srgb, var(--ds-success) 40%, var(--ds-hairline)); }
 .desktop-app .tool-details[data-tool-phase="success"] .tool-details__icon { color: var(--ds-success); }
