@@ -105,6 +105,26 @@
 
     { "project": "fixtures/dynamic-url",   "ruleId": "domain.request-whitelist",         "expect": "hit",    "note": "A1：请求 API 命中锚点（夹具含三动态形态 + 一条静态反例域名；命中来自 match.api 事实提取）。dynamicRequest/dynamic_note 契约由 scanner.test 的 A1 系列与 check.test 锁定，本锚点不锁动态判定本身" },
     { "project": "fixtures/dynamic-url",   "ruleId": "security.insecure-request",        "expect": "no_hit", "note": "FP-guard：wss:// 是加密协议，'wss://' + host 拼接形态不得误判明文请求" },
-    { "project": "fixtures/dynamic-url",   "ruleId": "domain.ip-or-localhost",           "expect": "no_hit", "note": "FP-guard：占位 host（\\${BASE_HOST} 等）不得被当成真实域名进入 IP/localhost 核验" }
+    { "project": "fixtures/dynamic-url",   "ruleId": "domain.ip-or-localhost",           "expect": "no_hit", "note": "FP-guard：占位 host（\\${BASE_HOST} 等）不得被当成真实域名进入 IP/localhost 核验" },
+
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.record", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.getRecorderManager 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.writePhotosAlbum", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.saveImageToPhotosAlbum 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.choosePhotoVideo", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.chooseMedia 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.chooseLocation", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.chooseLocation 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.chooseInvoice", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.chooseInvoiceTitle 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.bluetooth", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.openBluetoothAdapter 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.addPhoneContact", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.addPhoneContact 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.addPhoneCalendar", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.addPhoneCalendar 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.chooseFile", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.chooseMessageFile 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.chooseLicensePlate", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.chooseLicensePlate 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.werun", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.getWeRunData 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.accelerometer", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.startAccelerometer 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.compass", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.startCompass 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.deviceMotion", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.startDeviceMotionListening 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/edge-cases", "ruleId": "privacy.gyroscope", "expect": "no_hit", "note": "pages/index/index.js 中的 wx.startGyroscope 调用示例只存在于 apiExamples 字符串中" },
+    { "project": "fixtures/fp-guards", "ruleId": "privacy.camera", "expect": "no_hit", "note": "pages/index/index.wxml 中的 camera 标签位于注释内" },
+    { "project": "fixtures/fp-guards", "ruleId": "domain.web-view-business", "expect": "no_hit", "note": "pages/index/index.wxml 中的 web-view 标签位于注释内" },
+    { "project": "fixtures/loopback-request", "ruleId": "domain.ip-or-localhost", "expect": "hit", "note": "pages/index/index.js 的 wx.request 直接使用带端口的 localhost" },
+    { "project": "fixtures/loopback-request", "ruleId": "security.insecure-request", "expect": "no_hit", "note": "pages/index/index.js 的唯一请求使用 HTTPS" }
   ]
 }

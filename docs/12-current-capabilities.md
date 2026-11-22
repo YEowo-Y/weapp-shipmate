@@ -8,7 +8,7 @@
 
 当前有 66 条默认数据规则、5 条跨项核验规则、2 条草稿规则和 24 条拒因记录。13 份规则文件按 `code / console / materials / manual_check` 标注处理动作，拒因记录按 `direct / possible` 标注相关性。AppSecret 暴露、不安全 HTTP 调用等本机代码项属于 `code`，域名配置也可能涉及 `console`。分类用于提示人工处理动作。
 
-2026-11-19 实测 `npm run coverage` 和 `npm run accuracy`。15 个夹具共有 89 条人工标注。在 66 条默认数据规则和 5 项交叉核验中，有 30 个规则 ID 具备标注锚点。按这组标注计算，precision 和 recall 均为 1.000（TP55、FP0、FN0），分母分别是 TP + FP 和 TP + FN。 [规则覆盖率脚本](../scripts/coverage.mjs) [标注语料](../corpus/labels.json)
+2026-11-22 实测 `npm run coverage` 和 `npm run accuracy`。16 个夹具共有 108 条经源码复核的标注。66 条默认数据规则和 5 项交叉核验中，30 个自动检查规则 ID 各有至少一个命中和一个未命中案例，另有 41 条导航和人工核对规则。按这组标注计算，precision 和 recall 均为 1.000（TP56、FP0、FN0），分母分别是 TP + FP 和 TP + FN。 [规则覆盖率脚本](../scripts/coverage.mjs) [标注语料](../corpus/labels.json)
 
 CI 的 Ubuntu 和 Node.js 22 组合另外生成一份供参考的 V8 代码覆盖率报告，统计测试执行到的 `bin/`、`src/` 和 `desktop/server/` 中的 `.mjs` 模块。
 

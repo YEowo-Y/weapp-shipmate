@@ -12,25 +12,33 @@ const BACKLOG_TOTAL = 72; // docs/08 §15.1：去重后官方上线/合规要求
 const STAGES = ["registration", "certification", "filing", "category", "privacy", "domain", "review", "release"];
 const f3 = (x) => (Math.round(x * 1000) / 1000).toFixed(3);
 
-export function computeCoverage() {
+export function computeCoverage({ labels, subjectDefault } = loadLabels()) {
   const def = loadData({}).rules; // 默认集（非 draft）
   const all = loadData({ includeDrafts: true }).rules;
   const verbatim = def.filter((r) => r.official_url && r.source_quote && r.last_verified).length;
   const byStage = {};
   for (const r of def) byStage[r.stage] = (byStage[r.stage] || 0) + 1;
   const lv = def.map((r) => r.last_verified).filter(Boolean).sort();
-  const { labels, subjectDefault } = loadLabels();
   const { global } = computeAccuracy(labels, { subjectDefault });
-  // 精度和召回按标注的项目、主体和规则组合计算。
-  const activeIds = new Set([...def.map((rule) => rule.id), ...CROSSCHECK_RULE_IDS]);
-  const anchoredIds = new Set(labels.filter((label) =>
-    activeIds.has(label.ruleId) && (label.expect === "hit" || label.expect === "no_hit")
-  ).map((label) => label.ruleId));
+  const checkRuleIds = new Set([
+    ...def.filter(rule => rule.kind === "preflight" || rule.kind === "both").map(rule => rule.id),
+    ...CROSSCHECK_RULE_IDS,
+  ]);
+  const hits = new Set();
+  const noHits = new Set();
+  for (const { ruleId, expect } of labels) {
+    if (!checkRuleIds.has(ruleId)) continue;
+    if (expect === "hit") hits.add(ruleId);
+    if (expect === "no_hit") noHits.add(ruleId);
+  }
   return {
     rules: def.length,
     drafts: all.length - def.length,
     crosscheck: CROSSCHECK_RULE_IDS.length,
-    anchored: anchoredIds.size,
+    anchored: new Set([...hits, ...noHits]).size,
+    checkRules: checkRuleIds.size,
+    paired: [...hits].filter(id => noHits.has(id)).length,
+    navigationRules: def.length + CROSSCHECK_RULE_IDS.length - checkRuleIds.size,
     labelCount: labels.length,
     verbatim,
     precision: global.precision,
@@ -48,6 +56,8 @@ function main() {
   console.log(`  规则库：${c.rules} 条默认数据规则 + ${c.crosscheck} 项交叉核验 | draft ${c.drafts}`);
   console.log(`  引文凭据（official_url + source_quote + last_verified）：${c.verbatim} / ${c.rules}`);
   console.log(`  标注锚定：${c.anchored} / ${c.rules + c.crosscheck} 个默认或交叉核验规则 ID 在 labels.json 有 hit/no_hit 标注`);
+  console.log(`  预检正反例：${c.paired} / ${c.checkRules} 个自动检查规则 ID 同时有 hit 和 no_hit 标注`);
+  console.log(`  导航和人工核对规则：${c.navigationRules} 条`);
   console.log(`  precision：${f3(c.precision)}（recall ${f3(c.recall)} · TP${c.matrix.tp}/FP${c.matrix.fp}/FN${c.matrix.fn} · 基于 ${c.labelCount} 条标注）`);
   console.log(`\n对照 §15.1 官方要求条目 ${BACKLOG_TOTAL}（去重）：默认规则覆盖其一部分，缺口见 docs/08 §15.2 backlog（T0/T1/T2）。`);
   console.log(`新鲜度：last_verified 最早 ${c.freshness.earliest} / 最近 ${c.freshness.latest}（以官方实时文档为准 · rot 监控保鲜）`);
