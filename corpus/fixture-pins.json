@@ -86,6 +86,22 @@
       ]
     },
     {
+      "fixture": "loopback-request",
+      "subject": "personal",
+      "rules": [
+        "domain.ip-or-localhost",
+        "domain.request-whitelist"
+      ]
+    },
+    {
+      "fixture": "loopback-request",
+      "subject": "none",
+      "rules": [
+        "domain.ip-or-localhost",
+        "domain.request-whitelist"
+      ]
+    },
+    {
       "fixture": "missing-privacy-decl",
       "subject": "personal",
       "rules": [
