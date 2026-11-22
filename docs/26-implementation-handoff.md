@@ -570,9 +570,9 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 本机实施验收（2026-11-18）：显式 CLI 证据、原始位置映射、发现项关联和 schema 已实现。全部仓库夹具开关证据前后事实相同；300 组混合文本的 1,500 次转换与旧实现一致；每份源码仅读取一次。重复引用、模板/配置来源、五类交叉核验、上限截断、脱敏、15 组旧 CLI 字节基线及真实 npm/MCPB/双插件入口通过。冷读复审发现的 CR/Unicode 换行定位问题已修复并复核通过。冻结源码后四项门禁全绿，全量 1755/1755、69 条引文、coverage TP55/FP0/FN0。
 
-##### T11C2 · CLI 本地证据基线（范围待确认）
+##### T11C2 · CLI 本地证据基线（已批准）
 
-**目标与关口。** 让 CLI 调用方在同一项目目录对照两次预检的证据位置。首版只比较报告中观测到的位置，所有发现项仍由当前扫描给出，`--fail-on` 继续按当前全部发现项判定。按 §3、§6 先确认公共 CLI 契约，再实施。后续若要按新增问题阻断 CI，须另行确认稳定身份与覆盖面契约。
+**目标与关口。** 让 CLI 调用方在同一项目目录对照两次预检的证据位置。首版只比较报告中观测到的位置，所有发现项仍由当前扫描给出，`--fail-on` 继续按当前全部发现项判定。维护者已按 §3、§6 批准在 [#115](https://github.com/YEowo-Y/weapp-shipmate/pull/115) 确认的范围内实施。后续若要按新增问题阻断 CI，须另行确认稳定身份与覆盖面契约。
 
 **Windows 实测基线。** 在 `main@65e30b7` 用 Node 24.14.0 和合成项目运行真实 CLI。同行第二处 `wx.chooseMedia` 出现在第 31 列，规则 ID 集合和 `scope.filesHash` 都没变。首处调用的 `count` 从 1 改为 2 时，两份报告逐字相同。Taro 同一导入语句中同一个 API 新增不同的别名，也只留下原来的一条导入位置。插入空行会移动位置。101 处命中时只展示 100 处并标记截断。损坏 `app.json` 会使扫描范围不完整并跳过位置隐私一致性核验。对仅有 warning 的报告启用 `--blockers-only` 后，发现列表为空，`--fail-on warning` 仍返回 2。指定个人主体与省略主体也可能产生逐字相同的报告。探测记录见 `.omx/artifacts/t11c2-baseline-scope/probe-result.json`。
 
@@ -583,6 +583,8 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 5. **验收。** 先固定现有 15 组 CLI 字节基线，并记录不带新参数的证据报告。用真实子进程和合成夹具核对往返、同行新增、行移动或文件改名、仅旧发现、同坐标改写、Taro 导入合并和扫描文件集合增删。覆盖配置和显式主体解析一致，规则包及其内容有变、工具版本、扫描策略、主体、草稿开关、根目录不一致，扫描错误、全局或单项截断和单项缺失。核对阈值 0/2 和 stderr，覆盖冲突、旧报告、错版本、畸形文件、非 UTF-8、5 MiB 边界、链接、Windows 路径别名及合成敏感标记脱敏。覆盖自洽的不完整快照、扫描状态字段矛盾、Linux 合法但不满足位置 schema 的文件名，以及保存到扫描目录外的完整往返。用 schema 校验两种新输出，在 Windows 和 Linux 的实际 CLI、npm tarball、MCPB 与两端插件暂存入口完成往返和原 MCP 冒烟。四项仓库门禁、独立冷读复审与全部 PR CI 通过后交付。
 
 **允许变更的文件。** CLI 适配及有界本地 JSON 读取模块、CLI 基线模块、`src/check.mjs` 中获取实际规则版本所需的可选路径、CLI 报告 schema、CLI 与分发回归测试及合成夹具、README、本文和 `progress.txt`。
+
+**本机实施验收（2026-11-22）。** Windows Node 24.14.0 下，真实 CLI 完成快照与比对，同行新增位置时报告计为当前独有 1、两次均有 1，保存和对照均按 warning 阈值退出 2。另核对移动、改名、同坐标改写、Taro 导入、规则与扫描上下文变更、不完整证据、5 MiB 读写边界和相对路径。独立冷读指出应先校验祖先目录，Windows junction 回归先红后绿，确认拒绝链接前未查找其下文件。15 组旧命令和不带新选项的证据报告保持原有字节与退出码。实际 npm tarball 和 MCPB、Codex、Claude 插件暂存入口通过，另解包实际 .mcpb 验证同一版本的 CLI 往返和原 MCP 预检。lint、全量测试 1,869 项通过（2 项按平台跳过）、71 条引文核验、coverage 及桌面三套严格类型检查通过。MCPB 实测记录见 `.omx/artifacts/t11c2-cli-baseline/mcpb-result.json`。
 
 ### T12 · 桌面分发
 
@@ -927,7 +929,7 @@ Windows 和右栏夹具覆盖安装目录、残留端口文件、未启动、服
 
 ## 7. 当前推进入口
 
-T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并；T11C1 CLI 显式证据已按 [#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47) 批准范围实施并合入 [#49](https://github.com/YEowo-Y/weapp-shipmate/pull/49)，baseline 契约待定。通用基线和验证命令见 §2。
+T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并；T11C1 CLI 显式证据已按 [#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47) 批准范围实施并合入 [#49](https://github.com/YEowo-Y/weapp-shipmate/pull/49)。T11C2 已按 [#115](https://github.com/YEowo-Y/weapp-shipmate/pull/115) 批准范围实施并通过本机验收，SARIF 按 CLI 公共接口另定范围。通用基线和验证命令见 §2。
 
 桌面与工程底座工作线的 T12A（[#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48)）、T13A（[#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51)）、T13B（[#52](https://github.com/YEowo-Y/weapp-shipmate/pull/52)）、T14（[#54](https://github.com/YEowo-Y/weapp-shipmate/pull/54)）、**功能 0 · 新外壳**（[#55](https://github.com/YEowo-Y/weapp-shipmate/pull/55)、[#56](https://github.com/YEowo-Y/weapp-shipmate/pull/56)）、**功能 2 · 上线进度进右侧面板**（[#57](https://github.com/YEowo-Y/weapp-shipmate/pull/57)、[#58](https://github.com/YEowo-Y/weapp-shipmate/pull/58)）和 **功能 3 · 提审材料包**（[#59](https://github.com/YEowo-Y/weapp-shipmate/pull/59)、[#60](https://github.com/YEowo-Y/weapp-shipmate/pull/60)）已合并并通过云端验收。**功能 4 · 被拒处理闭环**已按 [#61](https://github.com/YEowo-Y/weapp-shipmate/pull/61) 范围实施，并随 [#62](https://github.com/YEowo-Y/weapp-shipmate/pull/62) 合入。**功能 8 · 交接给 Codex / Claude Code** 已按 [#75](https://github.com/YEowo-Y/weapp-shipmate/pull/75) 范围实施并随 [#76](https://github.com/YEowo-Y/weapp-shipmate/pull/76) 合入。
 
