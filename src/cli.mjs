@@ -10,6 +10,7 @@ import { interviewGuide } from "./guide-interview.mjs";
 import { render } from "./report.mjs";
 import { readCliConfig } from "./cli-config.mjs";
 import { assertBaselineOutputSize, hashBaselineRules, readCliBaseline, withCliBaseline } from "./cli-baseline.mjs";
+import { toSarif } from "./cli-sarif.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8")).version;
@@ -25,6 +26,7 @@ const HELP = `weapp-shipmate · 你写代码，我陪你上线
   --subject <personal|individual_business|enterprise>   主体类型（也支持：个人 / 个体户 / 个体工商户 / 企业）
   --config <file>       仅 check/guide：显式加载 JSON v1 配置，命令行值优先
   --evidence            仅 check：与 --json --json-version 1 同用，附来源位置与证据状态
+  --sarif               仅 check：输出含证据位置的 SARIF 2.1.0 JSON
   --baseline-snapshot   仅 check：与 --evidence --json --json-version 1 同用，输出基线快照
   --baseline <file>     仅 check：与 --evidence --json --json-version 1 同用，比对本地快照
   --json                输出 JSON（默认 Markdown）
@@ -67,7 +69,7 @@ const FAIL_LEVELS = {
   info: ["blocker", "warning", "info"],
   none: [],
 };
-const BOOL_FLAGS = new Set(["evidence", "baseline-snapshot", "json", "checklist", "include-drafts", "blockers-only", "help", "version"]);
+const BOOL_FLAGS = new Set(["evidence", "baseline-snapshot", "sarif", "json", "checklist", "include-drafts", "blockers-only", "help", "version"]);
 
 // FX-16：未知/拼错选项必须报错——静默忽略会让 `--subjcet personal` 这类笔误
 // 产出主体维度错误却看起来正常的报告，比报错更糟。同时支持 --key=value 写法（CLI 常见习惯）。
@@ -106,7 +108,7 @@ export function parseFlags(args) {
       continue;
     }
     if (BOOL_FLAGS.has(key) && eq === -1) {
-      if (["evidence", "baseline-snapshot"].includes(key) && Object.hasOwn(f, key)) (f._duplicates ??= []).push(key);
+      if (["evidence", "baseline-snapshot", "sarif"].includes(key) && Object.hasOwn(f, key)) (f._duplicates ??= []).push(key);
       f[key] = true; continue;
     }
     (f._unknown ??= []).push(a); // 含布尔开关误带 =值 的写法
@@ -171,6 +173,11 @@ function executeMain(argv, out, err, context) {
   }
   if (flags._duplicates?.length) {
     err.write(`选项不能重复：${[...new Set(flags._duplicates)].map(key => "--" + key).join("、")}\n`);
+    return 1;
+  }
+  if (flags.sarif && (cmd !== "check" ||
+      ["json", "json-version", "checklist", "evidence", "baseline", "baseline-snapshot"].some(key => Object.hasOwn(flags, key)))) {
+    err.write("--sarif 仅用于 check，不能与 --json、--json-version、--checklist、--evidence 或基线选项同用。\n");
     return 1;
   }
   const failOn = flags["fail-on"];
@@ -262,21 +269,30 @@ function executeMain(argv, out, err, context) {
       const dir = flags._[0] || ".";
       const previous = hasBaseline ? readCliBaseline(flags.baseline) : undefined;
       let rulesHash;
+      let sarifReport;
       const result = runCheck(dir, {
         subjectType: flags.subject,
         includeDrafts,
         evidence: !!flags.evidence,
+        onEvidence: flags.sarif ? report => { sarifReport = report; } : undefined,
         onRules: baselineRequested ? rules => { rulesHash = hashBaselineRules(rules); } : undefined,
       });
       const levels = FAIL_LEVELS[failOn ?? "blocker"];
       const failures = result.items.filter(item => levels.includes(item.severity)).length;
-      const report = baselineRequested
-        ? withCliBaseline(result, { cliVersion: VERSION, subject: flags.subject ?? null, includeDrafts, rulesHash }, previous)
-        : result;
-      writeReport(focus(report));
+      const exitCode = failures ? 2 : 0;
+      if (flags.sarif) {
+        const visible = focus(sarifReport);
+        const output = toSarif(visible, { version: VERSION, exitCode, hiddenNonBlockerCount });
+        out.write(JSON.stringify(output, null, 2) + "\n");
+      } else {
+        const report = baselineRequested
+          ? withCliBaseline(result, { cliVersion: VERSION, subject: flags.subject ?? null, includeDrafts, rulesHash }, previous)
+          : result;
+        writeReport(focus(report));
+      }
       if (failOn !== undefined && failures)
         err.write(`--fail-on ${failOn} 命中 ${failures} 项。\n`);
-      return failures ? 2 : 0;
+      return exitCode;
     }
     if (cmd === "guide") {
       // V5：guide 无位置参数语义；静默忽略会让 `guide personal`（漏写 --subject）看似生效。
