@@ -109,7 +109,35 @@ node bin/weapp-shipmate.mjs check ./my-app --evidence --json --json-version 1
 
 `located` 表示该项本次关联的已检出信号都有位置；`partial` 表示包含文件级证据、缺失定位、动态域名提示或截断；`unavailable` 表示无可关联来源。定位状态与扫描完整性独立，仍需查看 `meta.scan.scope` 和 notes。`meta.evidence` 声明证据版本及是否截断：全局最多保存 20,000 个位置，每项最多展示 100 个；截断有明确注记，扫描与退出阈值照常计算。
 
-`--evidence` 仅用于 `check`，必须与 `--json --json-version 1` 同用，不能重复或与 `--checklist` 同用；可搭配配置、阈值、草稿和聚焦参数。未指定时输出不变，MCP/桌面不自动启用。证据不提供稳定问题指纹，也不豁免任何发现项；baseline 另行实现。
+`--evidence` 仅用于 `check`，必须与 `--json --json-version 1` 同用，不能重复或与 `--checklist` 同用；可搭配配置、阈值、草稿和聚焦参数。未指定时输出不变，MCP/桌面不自动启用。
+
+#### 本地证据基线
+
+在仓库根目录保存 `my-app` 的快照并在修改后再次预检。示例将 `baseline.json` 存在扫描目录外，两个相对路径均从命令的工作目录解析。
+
+```bash
+node bin/weapp-shipmate.mjs check ./my-app --evidence --json --json-version 1 --baseline-snapshot > ./baseline.json
+node bin/weapp-shipmate.mjs check ./my-app --evidence --json --json-version 1 --baseline ./baseline.json
+```
+
+在 PowerShell 中，可以显式以 UTF-8 保存快照，再运行上面的对照命令。
+
+```powershell
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+node bin/weapp-shipmate.mjs check ./my-app --evidence --json --json-version 1 --baseline-snapshot |
+  Set-Content -LiteralPath ./baseline.json -Encoding utf8
+$snapshotExit = $LASTEXITCODE
+```
+
+两种模式都要求 `check --evidence --json --json-version 1`，支持配置、主体、草稿和阈值参数。`--baseline-snapshot` 与 `--baseline <file>` 互斥，`--baseline=<file>` 也是有效写法。重复指定或搭配 `--blockers-only`、`--checklist` 会退出 1。
+
+只读取明确指定且由 `--baseline-snapshot` 保存的快照。快照是最多 5 MiB 的本地 UTF-8 JSON 普通文件，沿用配置的私有文件、链接与 Windows 路径限制。读取或格式错误以及超量均退出 1，stdout 为空。
+
+两次扫描的项目根路径、扫描策略、CLI 版本、规则包散列、主体和草稿开关一致，且扫描完整、证据未截断时，按规则 ID 和证据位置比对。根路径按报告中的本地绝对路径精确比较。文件集合可以变化。移动或改名会产生新增位置和仅旧位置，同一位置的调用变动可能没有位置差异。
+
+对照结果写入 `meta.baseline`。`compared` 表示已比较，`partial` 表示有规则缺少完整位置证据，`incomparable` 表示整份报告不可比，详见 `reasonCodes`。可比的位置汇总为 `counts.currentOnly`、`counts.common` 和 `counts.previousOnly`，不可比规则数见 `counts.incomparableRules`。每项的 `baseline.currentOnlyLocationIndexes` 按升序指出 `evidence.locations` 中新增位置的从 0 起算索引。
+
+门禁和 stderr 诊断继续按当前全部发现项计算。保存命令退出 2 时，快照仍可作为后续对照输入。调用方应分别保留快照和命令退出码。
 
 规则报告的可选 `confidence` 字段保留规则库的 `high` / `medium` / `low`，Markdown 与可勾选清单显示为高/中/低。这是规则维护者对规则准确性的把握，不是命中概率或过审保证，也不改变严重度。流程导航项、合成检查及缺少字段的历史报告不补造评级；低置信规则仍只通过显式包含草案显示。
 
