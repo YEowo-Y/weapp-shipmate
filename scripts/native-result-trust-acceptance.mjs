@@ -41,8 +41,10 @@ export async function checkResultTrust({ run, checked, click, fill, find, inspec
     structuredResult: runGuide({ subject_type: 'personal', collects_sensitive: false, has_server_domain: false }),
   }] });
   const selectHistory = async (title, card = '[data-component^="project-tool-"]') => {
-    await click('.session-workspace [data-action="history"]');
-    await fill('[aria-label="搜索会话"]', title);
+    await click('#desktop-search-open');
+    const search = 'dialog[data-kind="history"][open] [aria-label="搜索会话"]';
+    await until(() => find(search), 'history search opened');
+    await fill(search, title);
     const selector = await until(() => inspect(`const n=[...document.querySelectorAll('.session-workspace__results [data-action="session"]')].find(n=>n.textContent.includes(arguments[0]));return n ? '.session-workspace__results [data-action="session"][data-session-id="'+n.dataset.sessionId+'"]' : null;`, [title]), `history row ${title}`);
     await click(selector);
     await until(async () => (await text('#session-title')).trim() === title, `history selected ${title}`);
