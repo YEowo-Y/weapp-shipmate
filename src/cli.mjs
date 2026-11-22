@@ -9,6 +9,7 @@ import { runExplain } from "./explain.mjs";
 import { interviewGuide } from "./guide-interview.mjs";
 import { render } from "./report.mjs";
 import { readCliConfig } from "./cli-config.mjs";
+import { assertBaselineOutputSize, hashBaselineRules, readCliBaseline, withCliBaseline } from "./cli-baseline.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8")).version;
@@ -24,6 +25,8 @@ const HELP = `weapp-shipmate · 你写代码，我陪你上线
   --subject <personal|individual_business|enterprise>   主体类型（也支持：个人 / 个体户 / 个体工商户 / 企业）
   --config <file>       仅 check/guide：显式加载 JSON v1 配置，命令行值优先
   --evidence            仅 check：与 --json --json-version 1 同用，附来源位置与证据状态
+  --baseline-snapshot   仅 check：与 --evidence --json --json-version 1 同用，输出基线快照
+  --baseline <file>     仅 check：与 --evidence --json --json-version 1 同用，比对本地快照
   --json                输出 JSON（默认 Markdown）
   --json-version 1      与 --json 同用，增加 schemaVersion: 1；不能与 --checklist 同用
   --fail-on <level>     仅 check：blocker | warning | info | none；按展示过滤前的发现项判定
@@ -57,14 +60,14 @@ guide 额外输入（未提供 = 未知；正向开关 = 是，--no- 开关 = �
 const SUBJECT_ALIASES = new Map([["个人", "personal"], ["个体户", "individual_business"], ["个体工商户", "individual_business"], ["企业", "enterprise"]]);
 const TOGGLE_FLAGS = new Set(["payment", "sensitive", "domain", "interactive"]);
 
-const VALUE_FLAGS = new Set(["subject", "business", "fail-on", "json-version", "config"]);
+const VALUE_FLAGS = new Set(["subject", "business", "fail-on", "json-version", "config", "baseline"]);
 const FAIL_LEVELS = {
   blocker: ["blocker"],
   warning: ["blocker", "warning"],
   info: ["blocker", "warning", "info"],
   none: [],
 };
-const BOOL_FLAGS = new Set(["evidence", "json", "checklist", "include-drafts", "blockers-only", "help", "version"]);
+const BOOL_FLAGS = new Set(["evidence", "baseline-snapshot", "json", "checklist", "include-drafts", "blockers-only", "help", "version"]);
 
 // FX-16：未知/拼错选项必须报错——静默忽略会让 `--subjcet personal` 这类笔误
 // 产出主体维度错误却看起来正常的报告，比报错更糟。同时支持 --key=value 写法（CLI 常见习惯）。
@@ -87,7 +90,7 @@ export function parseFlags(args) {
     const eq = a.indexOf("=");
     const key = eq === -1 ? a.slice(2) : a.slice(2, eq);
     if (VALUE_FLAGS.has(key)) {
-      if (["fail-on", "json-version", "config"].includes(key) && Object.hasOwn(f, key))
+      if (["fail-on", "json-version", "config", "baseline"].includes(key) && Object.hasOwn(f, key))
         (f._duplicates ??= []).push(key);
       if (eq !== -1) f[key] = a.slice(eq + 1);
       else if (args[i + 1] !== undefined && !args[i + 1].startsWith("--")) f[key] = args[++i];
@@ -103,7 +106,7 @@ export function parseFlags(args) {
       continue;
     }
     if (BOOL_FLAGS.has(key) && eq === -1) {
-      if (key === "evidence" && Object.hasOwn(f, key)) (f._duplicates ??= []).push(key);
+      if (["evidence", "baseline-snapshot"].includes(key) && Object.hasOwn(f, key)) (f._duplicates ??= []).push(key);
       f[key] = true; continue;
     }
     (f._unknown ??= []).push(a); // 含布尔开关误带 =值 的写法
@@ -184,13 +187,32 @@ function executeMain(argv, out, err, context) {
     err.write("--evidence 仅用于 check，必须与 --json --json-version 1 同用，且不能与 --checklist 同用。\n");
     return 1;
   }
+  const hasBaseline = Object.hasOwn(flags, "baseline");
+  const baselineSnapshot = flags["baseline-snapshot"] === true;
+  const baselineRequested = hasBaseline || baselineSnapshot;
+  if (baselineRequested) {
+    if (hasBaseline && !flags.baseline?.trim()) {
+      err.write("--baseline 缺少文件路径。\n");
+      return 1;
+    }
+    if (hasBaseline && baselineSnapshot) {
+      err.write("--baseline 与 --baseline-snapshot 不能同时使用。\n");
+      return 1;
+    }
+    if (cmd !== "check" || !flags.evidence || flags["blockers-only"]) {
+      err.write("基线选项仅用于 check --evidence --json --json-version 1，不能与 --blockers-only 或 --checklist 同用。\n");
+      return 1;
+    }
+  }
   const format = flags.json ? "json" : flags.checklist ? "checklist" : "markdown";
   const includeDrafts = !!flags["include-drafts"];
   const blockersOnly = !!flags["blockers-only"];
   let hiddenNonBlockerCount = 0;
   const writeReport = (result) => {
     const output = flags["json-version"] === "1" ? { ...result, schemaVersion: 1 } : result;
-    out.write(render(output, format, { hiddenNonBlockerCount }) + "\n");
+    const rendered = render(output, format, { hiddenNonBlockerCount }) + "\n";
+    if (baselineSnapshot) assertBaselineOutputSize(rendered);
+    out.write(rendered);
   };
   // 聚焦模式覆盖所有可渲染规则集合；摘要/派生备注也必须使用过滤后的计数，
   // 否则 JSON 会一边只展示 blocker，一边声称命中了已隐藏的 warning/info。
@@ -238,10 +260,20 @@ function executeMain(argv, out, err, context) {
         return 1;
       }
       const dir = flags._[0] || ".";
-      const result = runCheck(dir, { subjectType: flags.subject, includeDrafts, evidence: !!flags.evidence });
+      const previous = hasBaseline ? readCliBaseline(flags.baseline) : undefined;
+      let rulesHash;
+      const result = runCheck(dir, {
+        subjectType: flags.subject,
+        includeDrafts,
+        evidence: !!flags.evidence,
+        onRules: baselineRequested ? rules => { rulesHash = hashBaselineRules(rules); } : undefined,
+      });
       const levels = FAIL_LEVELS[failOn ?? "blocker"];
       const failures = result.items.filter(item => levels.includes(item.severity)).length;
-      writeReport(focus(result));
+      const report = baselineRequested
+        ? withCliBaseline(result, { cliVersion: VERSION, subject: flags.subject ?? null, includeDrafts, rulesHash }, previous)
+        : result;
+      writeReport(focus(report));
       if (failOn !== undefined && failures)
         err.write(`--fail-on ${failOn} 命中 ${failures} 项。\n`);
       return failures ? 2 : 0;
