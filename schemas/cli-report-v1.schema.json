@@ -9,6 +9,12 @@
     "command": { "type": "string", "enum": ["check", "guide", "explain"] },
     "meta": {
       "type": "object",
+      "dependencies": {
+        "baseline": {
+          "required": ["evidence", "scan"],
+          "properties": { "scan": { "$ref": "#/definitions/baselineScan" } }
+        }
+      },
       "properties": {
         "evidence": {
           "type": "object",
@@ -18,14 +24,18 @@
             "schemaVersion": { "type": "integer", "const": 1 },
             "truncated": { "type": "boolean" }
           }
-        }
+        },
+        "baseline": { "$ref": "#/definitions/baselineMeta" }
       }
     },
     "items": {
       "type": "array",
       "items": {
         "type": "object",
-        "properties": { "evidence": { "$ref": "#/definitions/evidence" } }
+        "properties": {
+          "evidence": { "$ref": "#/definitions/evidence" },
+          "baseline": { "$ref": "#/definitions/itemBaseline" }
+        }
       }
     },
     "notes": { "type": "array", "items": { "type": "string" } },
@@ -48,6 +58,43 @@
     {
       "if": { "properties": { "items": { "type": "array", "contains": { "type": "object", "required": ["evidence"] } } } },
       "then": { "properties": { "meta": { "type": "object", "required": ["evidence"] } } }
+    },
+    {
+      "if": { "properties": { "meta": { "type": "object", "required": ["baseline"] } } },
+      "then": {
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["ruleId"],
+              "properties": { "ruleId": { "type": "string", "minLength": 1 } }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "meta": {
+            "type": "object",
+            "required": ["baseline"],
+            "properties": {
+              "baseline": {
+                "type": "object",
+                "required": ["mode", "status"],
+                "properties": {
+                  "mode": { "const": "compare" },
+                  "status": { "enum": ["compared", "partial"] }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": { "properties": { "items": { "type": "array", "items": { "type": "object", "required": ["baseline"] } } } },
+      "else": { "properties": { "items": { "type": "array", "items": { "type": "object", "properties": { "baseline": false } } } } }
     }
   ],
   "definitions": {
@@ -101,6 +148,103 @@
           "then": { "properties": { "locations": { "type": "array", "maxItems": 0 } } }
         }
       ]
+    },
+    "baselineScan": {
+      "type": "object",
+      "required": ["scope", "filesScanned", "readErrors", "skippedLinks", "skippedDirs", "skippedLargeFiles", "truncated", "configErrors"],
+      "properties": {
+        "scope": {
+          "type": "object",
+          "required": ["root", "policyVersion", "filesHash", "complete"],
+          "properties": {
+            "root": { "type": "string", "minLength": 1 },
+            "policyVersion": { "type": "string", "minLength": 1 },
+            "filesHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "complete": { "type": "boolean" }
+          }
+        },
+        "filesScanned": { "type": "integer", "minimum": 0 },
+        "readErrors": { "type": "integer", "minimum": 0 },
+        "skippedLinks": { "type": "integer", "minimum": 0 },
+        "skippedDirs": { "type": "integer", "minimum": 0 },
+        "skippedLargeFiles": { "type": "integer", "minimum": 0 },
+        "truncated": { "type": "boolean" },
+        "configErrors": { "type": "array" }
+      }
+    },
+    "baselineMeta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "mode", "cliVersion", "subject", "includeDrafts", "rulesHash"],
+      "properties": {
+        "schemaVersion": { "type": "integer", "const": 1 },
+        "mode": { "enum": ["snapshot", "compare"] },
+        "cliVersion": { "type": "string", "minLength": 1 },
+        "subject": { "enum": [null, "personal", "individual_business", "enterprise"] },
+        "includeDrafts": { "type": "boolean" },
+        "rulesHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "status": { "enum": ["compared", "partial", "incomparable"] },
+        "reasonCodes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "project-root-changed", "scan-policy-changed", "cli-version-changed", "rules-changed",
+              "subject-changed", "drafts-changed", "incomplete-scan", "truncated-evidence"
+            ]
+          }
+        },
+        "counts": { "$ref": "#/definitions/baselineCounts" }
+      },
+      "oneOf": [
+        {
+          "properties": { "mode": { "const": "snapshot" }, "status": false, "reasonCodes": false, "counts": false }
+        },
+        {
+          "required": ["status", "reasonCodes"],
+          "properties": { "mode": { "const": "compare" }, "status": { "const": "incomparable" }, "counts": false }
+        },
+        {
+          "required": ["status", "counts"],
+          "properties": { "mode": { "const": "compare" }, "status": { "enum": ["compared", "partial"] }, "reasonCodes": false },
+          "if": { "properties": { "status": { "const": "compared" } } },
+          "then": { "properties": { "counts": { "type": "object", "required": ["currentOnly", "common", "previousOnly"] } } }
+        }
+      ]
+    },
+    "baselineCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["incomparableRules"],
+      "properties": {
+        "incomparableRules": { "type": "integer", "minimum": 0 },
+        "currentOnly": { "type": "integer", "minimum": 0 },
+        "common": { "type": "integer", "minimum": 0 },
+        "previousOnly": { "type": "integer", "minimum": 0 }
+      },
+      "dependencies": {
+        "currentOnly": ["common", "previousOnly"],
+        "common": ["currentOnly", "previousOnly"],
+        "previousOnly": ["currentOnly", "common"]
+      }
+    },
+    "itemBaseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["compared", "incomparable"] },
+        "currentOnlyLocationIndexes": {
+          "description": "Ascending zero-based indexes into the current item's evidence.locations.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 0, "maximum": 99 }
+        }
+      },
+      "if": { "properties": { "status": { "const": "compared" } } },
+      "then": { "required": ["currentOnlyLocationIndexes"] },
+      "else": { "properties": { "currentOnlyLocationIndexes": false } }
     }
   }
 }
