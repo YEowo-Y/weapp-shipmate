@@ -19,3 +19,18 @@ test("coverage.mjs 可安全 import 且红线三数自洽", () => {
   );
   assert.ok(c.freshness.earliest && c.freshness.latest, "新鲜度区间应存在");
 });
+
+test("预检正反例计数排除单侧标注和纯导航标注", () => {
+  const { labels, subjectDefault } = loadLabels();
+  const selected = labels.filter(label =>
+    (label.ruleId === "privacy.getLocation" && ["fixtures/sample-app", "fixtures/leaky-app"].includes(label.project)) ||
+    (label.ruleId === "privacy.clipboard" && label.project === "fixtures/sample-app"));
+  assert.equal(selected.length, 3);
+  const c = computeCoverage({ labels: [...selected,
+    { project: "fixtures/sample-app", ruleId: "minor.protect", expect: "no_hit" },
+  ], subjectDefault });
+  assert.equal(c.anchored, 2);
+  assert.equal(c.paired, 1);
+  assert.ok(c.checkRules > c.anchored);
+  assert.equal(c.checkRules + c.navigationRules, c.rules + c.crosscheck);
+});
