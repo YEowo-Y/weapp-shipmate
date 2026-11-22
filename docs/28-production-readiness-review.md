@@ -328,17 +328,17 @@ Windows WebView2 中确认右栏异步载入 React 与 Base UI 并能切换标�
 
 ## 8. Claude 前端快审收口（2026-11-22）
 
-本节对照 2026-11-18 的 Claude 前端快审。编号沿用该次快审。生产就绪评审的严格类型配置已通过 [#102](https://github.com/YEowo-Y/weapp-shipmate/pull/102) 固化，日常检查和 CI 默认启用两个严格选项。
+本节对照 Claude Code 会话中 2026-11-18 的前端快审原文和后续交接日志。编号沿用该次快审。生产就绪评审的严格类型配置已通过 [#102](https://github.com/YEowo-Y/weapp-shipmate/pull/102) 固化，日常检查和 CI 默认启用两个严格选项。交接中的模型端点隔离与 Windows tar 归因已随 [#66](https://github.com/YEowo-Y/weapp-shipmate/pull/66) 修复。
 
 | 快审项 | 验收结果 |
 |---|---|
-| P1-1 设计令牌 | 正式入口的主色作用域已实测，语义别名汇入设计系统，旧预览有对应取值。[#70](https://github.com/YEowo-Y/weapp-shipmate/pull/70) · [#73](https://github.com/YEowo-Y/weapp-shipmate/pull/73) |
-| P1-2 流式 Markdown | 同一帧合并绘制。三轮相同长度回复的文本更新由每轮 216 次降到 12 次。[#103](https://github.com/YEowo-Y/weapp-shipmate/pull/103) |
+| P1-1 设计令牌 | 共享 `app.css` 的 53 处固定色值清零，生产别名集中在 `design-system.css`，独立预览从自身入口加载原配色。Windows WebView2 157.0.4341.60 在浅深色、1240 px 与 780 px 的首页、设置、提审材料包、拒因反查及规则来源共 20 组采样，2,712 项计算值逐项一致。另用预览样式夹具核对 268 项计算值。本机证据见 `.omx/artifacts/claude-theme-aliases/comparison.json`。 [#70](https://github.com/YEowo-Y/weapp-shipmate/pull/70) · [#73](https://github.com/YEowo-Y/weapp-shipmate/pull/73) |
+| P1-2 流式 Markdown | 同一帧合并绘制。三轮 12,217 B 回复的文本更新由每轮 216 次降到 12 次，实机记录到的主线程长任务从 2 次降到 0 次。 [#103](https://github.com/YEowo-Y/weapp-shipmate/pull/103) |
 | P2-1 长会话 | 1,200 条合成消息的打开与切换各只挂载 80 条，旧版绝对坐标保留既有恢复路径。[#104](https://github.com/YEowo-Y/weapp-shipmate/pull/104) |
 | P2-2 右栏草稿 | 草稿按项目订阅，延迟保存回执与对应项目快照一同呈现。跨项目和保存后恢复已实测。[#105](https://github.com/YEowo-Y/weapp-shipmate/pull/105) |
 | P2-3 聊天输入区颜色 | 审计范围 26 处固定色值清零，浅色与深色共 40 项计算样式与基线一致。[#106](https://github.com/YEowo-Y/weapp-shipmate/pull/106) |
 | P3-1 间距 | 四个样式文件的 252 个间距值改用等值令牌，30 组实机样本的计算样式和尺寸与基线一致。[#107](https://github.com/YEowo-Y/weapp-shipmate/pull/107) |
-| P3-2 启动包预算 | 本轮构建为 732,573 B，gzip 为 240,117 B。既有启动门禁继续校验体积和分包边界。 |
+| P3-2 启动包预算 | 令牌收敛后的构建为 732,724 B，gzip 为 240,184 B。既有启动门禁继续校验体积和分包边界。 |
 
 **工具卡片的实机补验。** Windows WebView2 157.0.4341.60 中复现执行中标签的文字消失。共享渐变的透明字形仍生效，桌面状态标签已用实色背景覆盖渐变。桌面样式现在用主题前景色绘制标签。新增回归先失败，实际字形颜色为 `rgba(0, 0, 0, 0)`，修复后浅色 1240 px 和深色 780 px 都与主题前景色一致。
 
