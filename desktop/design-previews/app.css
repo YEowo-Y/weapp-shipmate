@@ -1,17 +1,46 @@
 @import '../src/shared/app.css';
 
-/* Preview defaults for aliases owned by design-system.css in the desktop app. */
+/* Standalone preview palette and legacy aliases. */
 :root {
   --font-ui: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", "Consolas", "Microsoft YaHei UI", monospace;
   --ease: cubic-bezier(.2, .6, .2, 1);
+  --r-xs: 5px; --r-sm: 6px; --r: 8px; --r-lg: 10px; --r-xl: 14px;
+  --r-panel: 12px; --r-dialog: 16px;
+  --shadow-dialog: 0 16px 48px -12px rgb(0 0 0 / .18), 0 2px 8px rgb(0 0 0 / .04);
+  --backdrop-dialog: rgb(10 10 10 / .38);
+  --ds-success-ink: #fff;
 }
 
 body[data-theme="light"] {
   --bg: #fcfcfb;
   --text: #262624;
+  --stage-bg: #f5f5f4;
+  --surface: #ffffff; --surface-2: #f3f3f1; --surface-3: #e8e8e5;
+  --border: #e9e9e6; --border-2: #d5d5d1;
+  --text-2: #62625f; --text-3: #70706c;
+  --accent: #b45a3b; --accent-2: #9f492e; --accent-soft: #f6e9e1; --accent-ink: #fff;
+  --ok: #27774a; --ok-soft: #e8f2ec; --warn: #8a6200; --warn-soft: #f7efd6;
+  --block: #bd3a2c; --block-soft: #fae9e5; --purple: #6a645c; --purple-soft: #ece9e4;
+  --shadow: 0 8px 28px rgb(0 0 0 / .06);
 }
 
 body[data-theme="dark"] {
   --bg: #1b1b1b;
   --text: #ededed;
+  --stage-bg: #141414;
+  --surface: #222222; --surface-2: #262626; --surface-3: #343434;
+  --border: #303030; --border-2: #454545;
+  --text-2: #b8b8b8; --text-3: #a0a0a0;
+  --accent: #e07a52; --accent-2: #ec8b66; --accent-soft: #39231a; --accent-ink: #1a120c;
+  --ok: #5cba84; --ok-soft: #16271c; --warn: #e0b54a; --warn-soft: #29220f;
+  --block: #e8705f; --block-soft: #2d1612; --purple: #aaa39a; --purple-soft: #292620;
+  --shadow: 0 8px 28px rgb(0 0 0 / .16);
 }
+
+body[data-theme="dark"] .win { border-color: rgb(255 255 255 / .07); }
+.dots i:nth-child(1) { background: #ff5f57; }
+.dots i:nth-child(2) { background: #febc2e; }
+.dots i:nth-child(3) { background: #28c840; }
+.idx__head h1 { font-size: 24px; font-weight: 500; margin: 0 0 6px; letter-spacing: -.02em; color: #f0ede6; }
+.idx__head p { font-size: var(--ds-text-ui, 13px); color: #9a9486; margin: 0; line-height: 1.6; }

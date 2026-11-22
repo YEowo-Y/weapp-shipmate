@@ -1,46 +1,15 @@
 /* ============================================================
-   上线船友 · 桌面 agent — 设计系统 (engineered calm · docs/08 §8)
-   Shared across all design-preview screens. No CDN: local fonts + inline SVG.
+   Shared desktop and preview styles. Each entry point supplies its palette.
    ============================================================ */
 
-:root {
-  --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", "Consolas", "Microsoft YaHei UI", monospace;
-  --r-xs: 5px; --r-sm: 6px; --r: 8px; --r-lg: 10px; --r-xl: 14px;
-  --r-panel: 12px; --r-dialog: 16px;
-  --shadow-dialog: 0 16px 48px -12px rgb(0 0 0 / .18), 0 2px 8px rgb(0 0 0 / .04);
-  --backdrop-dialog: rgb(10 10 10 / .38);
-}
-
-body[data-theme="light"] {
-  color-scheme: light;
-  --stage-bg:#f5f5f4;
-  --surface:#ffffff; --surface-2:#f3f3f1; --surface-3:#e8e8e5;
-  --border:#e9e9e6; --border-2:#d5d5d1;
-  --text-2:#62625f; --text-3:#70706c;
-  --accent:#b45a3b; --accent-2:#9f492e; --accent-soft:#f6e9e1; --accent-ink:#fff;
-  --ok:#27774a; --ok-soft:#e8f2ec; --warn:#8a6200; --warn-soft:#f7efd6;
-  --block:#bd3a2c; --block-soft:#fae9e5; --purple:#6a645c; --purple-soft:#ece9e4;
-  --shadow:0 8px 28px rgb(0 0 0 / .06);
-}
-body[data-theme="dark"] {
-  color-scheme: dark;
-  --stage-bg:#141414;
-  --surface:#222222; --surface-2:#262626; --surface-3:#343434;
-  --border:#303030; --border-2:#454545;
-  --text-2:#b8b8b8; --text-3:#a0a0a0;
-  --accent:#e07a52; --accent-2:#ec8b66; --accent-soft:#39231a; --accent-ink:#1a120c;
-  --ok:#5cba84; --ok-soft:#16271c; --warn:#e0b54a; --warn-soft:#29220f;
-  --block:#e8705f; --block-soft:#2d1612; --purple:#aaa39a; --purple-soft:#292620;
-  --shadow:0 8px 28px rgb(0 0 0 / .16);
-}
-
-
+body[data-theme="light"] { color-scheme: light; }
+body[data-theme="dark"] { color-scheme: dark; }
 
 * , *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { margin: 0; padding: 0; }
 body {
-  font-family: var(--font-ui); background: var(--stage-bg); color: var(--text);
+  font-family: var(--font-ui); background: var(--stage-bg, var(--bg)); color: var(--text);
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
   font-feature-settings: "cv05" 1, "ss01" 1; min-height: 100dvh;
   overflow-x: hidden;
@@ -88,12 +57,10 @@ svg { display: block; }
 
 .stage-wrap { padding: 24px 24px 64px; display: flex; justify-content: center; }
 .win { width: 100%; max-width: 1140px; border-radius: var(--r-xl); overflow: hidden; background: var(--bg); box-shadow: var(--shadow); border: 1px solid var(--border-2); }
-body[data-theme="dark"] .win { border-color: rgba(255,255,255,.07); }
 
 /* ---------- titlebar + topbar ---------- */
 .titlebar { display: flex; align-items: center; gap: 8px; padding: 11px 15px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
 .dots { display: flex; gap: 7px; } .dots i { width: 12px; height: 12px; border-radius: 50%; }
-.dots i:nth-child(1){ background:#ff5f57 } .dots i:nth-child(2){ background:#febc2e } .dots i:nth-child(3){ background:#28c840 }
 .titlebar .tt { font-size: var(--ds-text-meta, 12px); color: var(--text-2); margin: 0 auto; letter-spacing: -.01em; }
 
 .topbar { display: flex; align-items: center; gap: 12px; padding: 10px 18px; background: var(--surface); border-bottom: 1px solid var(--border); }
@@ -125,7 +92,7 @@ body.annot .region { outline: 1.5px dashed var(--accent); outline-offset: -2px; 
 .stg__row { text-decoration: none; display: flex; align-items: center; gap: 11px; padding: 7px 8px 7px 0; font-size: 12.5px; width: 100%; background: none; border: 0; cursor: pointer; text-align: left; color: inherit; font-family: inherit; border-radius: var(--r-sm); transition: background .12s var(--ease); }
 .stg__row:hover { background: var(--surface); }
 .stg__dot { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--text-3); background: var(--surface-2); flex-shrink: 0; display: flex; align-items: center; justify-content: center; z-index: 1; }
-.stg__dot svg { width: 8px; height: 8px; color: #fff; }
+.stg__dot svg { width: 8px; height: 8px; color: var(--ds-success-ink); }
 .stg--done .stg__dot { background: var(--ok); border-color: var(--ok); }
 .stg--cur .stg__dot { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .stg__t { color: var(--text-2); flex: 1; letter-spacing: -.01em; }
@@ -254,7 +221,7 @@ body.annot .region { outline: 1.5px dashed var(--accent); outline-offset: -2px; 
 .tl li { position: relative; padding: 0 0 18px 40px; }
 .tl li:last-child { padding-bottom: 0; }
 .tl__num { position: absolute; left: 0; top: 0; width: 27px; height: 27px; border-radius: 50%; background: var(--surface); border: 1.5px solid var(--border-2); color: var(--text-2); font-size: var(--ds-text-meta, 12px); font-weight: 500; display: flex; align-items: center; justify-content: center; z-index: 1; }
-.tl li.done .tl__num { background: var(--ok); border-color: var(--ok); color: #fff; }
+.tl li.done .tl__num { background: var(--ok); border-color: var(--ok); color: var(--ds-success-ink); }
 .tl li.cur .tl__num { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 0 0 3px var(--accent-soft); }
 .tl__t { font-size: var(--ds-text-ui-strong, 14px); font-weight: 500; color: var(--text); margin: 3px 0 4px; letter-spacing: -.01em; }
 .tl__d { font-size: 12.5px; color: var(--text-2); line-height: 1.6; margin: 0 0 7px; }
@@ -532,8 +499,6 @@ body.annot .region { outline: 1.5px dashed var(--accent); outline-offset: -2px; 
 /* index launcher */
 .idx { padding: 32px 26px 54px; max-width: 960px; margin: 0 auto; }
 .idx__head { margin-bottom: 24px; }
-.idx__head h1 { font-size: 24px; font-weight: 500; margin: 0 0 6px; letter-spacing: -.02em; color: #f0ede6; }
-.idx__head p { font-size: var(--ds-text-ui, 13px); color: #9a9486; margin: 0; line-height: 1.6; }
 .idxgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
 .idxcard { display: block; text-decoration: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; transition: border-color .14s var(--ease), transform .14s var(--ease); }
 .idxcard:hover { border-color: var(--accent); transform: translateY(-2px); }
