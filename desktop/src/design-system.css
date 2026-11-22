@@ -53,6 +53,7 @@
   --ds-ease-out: cubic-bezier(.16, 1, .3, 1);
   --ds-ease-standard: cubic-bezier(.2, .6, .2, 1);
   --ds-dur-tap: 70ms; --ds-dur-state: 140ms; --ds-dur-surface: 240ms;
+  --ds-success-ink: #fff;
 }
 
 .desktop-app[data-theme="light"] {
@@ -60,6 +61,7 @@
   --ds-sidebar: #f6f5f2;
   --ds-raised: #ffffff;
   --ds-sunken: #f4f3f0;
+  --ds-surface-strong: #e8e8e5;
   --ds-hover: hsla(30, 10%, 10%, .045);
   --ds-selected: hsla(30, 10%, 10%, .075);
   --ds-hairline: hsla(30, 8%, 10%, .09);
@@ -74,6 +76,7 @@
   --ds-success: #237047; --ds-success-soft: #e7f2ea;
   --ds-warning: #835c00; --ds-warning-soft: #f8f0d9;
   --ds-danger: #b8382a;  --ds-danger-soft: #fbeae6;
+  --ds-neutral: #6a645c; --ds-neutral-soft: #ece9e4;
   --ds-info: #2f5f8f;    --ds-info-soft: #e8f0f8;
   --ds-shadow-card: 0 1px 2px rgb(20 16 10 / .04), 0 0 0 1px var(--ds-hairline);
   --ds-shadow-card-hover: 0 4px 14px rgb(20 16 10 / .06), 0 0 0 1px var(--ds-hairline-strong);
@@ -90,6 +93,7 @@
   --ds-sidebar: #111110;
   --ds-raised: #1d1d1c;
   --ds-sunken: #1a1a19;
+  --ds-surface-strong: #2a2a28;
   --ds-hover: rgb(255 255 255 / .05);
   --ds-selected: rgb(255 255 255 / .085);
   --ds-hairline: rgb(255 255 255 / .085);
@@ -104,6 +108,7 @@
   --ds-success: #62bd88; --ds-success-soft: #15271c;
   --ds-warning: #e1b851; --ds-warning-soft: #2a220f;
   --ds-danger: #ec7764;  --ds-danger-soft: #2e1713;
+  --ds-neutral: #aaa39a; --ds-neutral-soft: #292620;
   --ds-info: #86b4e3;    --ds-info-soft: #16222f;
   --ds-shadow-card: 0 0 0 1px var(--ds-hairline);
   --ds-shadow-card-hover: 0 6px 18px rgb(0 0 0 / .32), 0 0 0 1px var(--ds-hairline-strong);
@@ -122,6 +127,7 @@
   --bg: var(--ds-canvas);
   --surface: var(--ds-raised);
   --surface-2: var(--ds-sunken);
+  --surface-3: var(--ds-surface-strong);
   --border: var(--ds-hairline);
   --border-2: var(--ds-hairline-strong);
   --text: var(--ds-ink-1);
@@ -134,6 +140,7 @@
   --ok: var(--ds-success); --ok-soft: var(--ds-success-soft);
   --warn: var(--ds-warning); --warn-soft: var(--ds-warning-soft);
   --block: var(--ds-danger); --block-soft: var(--ds-danger-soft);
+  --purple: var(--ds-neutral); --purple-soft: var(--ds-neutral-soft);
   --r-xs: var(--ds-radius-xs); --r-sm: var(--ds-radius-sm); --r: var(--ds-radius-md);
   --r-lg: 10px; --r-xl: 14px; --r-panel: var(--ds-radius-lg); --r-dialog: var(--ds-radius-xl);
   --shadow: var(--ds-shadow-popover);
@@ -143,5 +150,3 @@
   --conversation-reading-width: var(--ds-measure);
   --wa-color-focus: var(--ds-accent);
 }
-
-.desktop-app[data-theme="dark"] { --surface-3: #2a2a28; }
