@@ -670,12 +670,147 @@ test('locating an unmounted message preserves draft and off-page reading state a
   restored.view.replaceMessages(messages, { messageWindow: { start: 0, end: 200 }, scrollTop: 120, followLatest: false });
   assert.equal(restored.list.children.filter(node => node.dataset.messageId).length, 80);
   assert.equal(restored.scroll.scrollTop, 120);
-  restored.view.replaceMessages(messages, { scrollTop: 640, followLatest: false });
-  assert.equal(restored.list.children.filter(node => node.dataset.messageId).length, 201);
-  assert.equal(restored.scroll.scrollTop, 640);
   app.view.destroy();
   restored.view.destroy();
 });
+
+function simulateMessageLayout(app, messages) {
+  function boxes(nodes) {
+    let end = 32;
+    return nodes.map((node, index) => {
+      const id = node.dataset.messageId;
+      const previousMessage = nodes[index - 1]?.dataset.messageId;
+      const top = end + (previousMessage && id ? 24 : 8);
+      const height = id ? 68 + 13 * (Number(id.split('-').at(-1)) % 7) : 36;
+      end = top + height;
+      return { id, top, bottom: end };
+    });
+  }
+  const mounted = () => boxes(app.list.children);
+  const legacy = boxes(messages.map(message => ({ dataset: { messageId: message.id } })));
+  const height = rows => (rows.at(-1)?.bottom ?? 32) + 20;
+  const mountedCounts = [];
+  const replace = app.list.replaceChildren.bind(app.list);
+  app.list.replaceChildren = (...nodes) => {
+    replace(...nodes);
+    mountedCounts.push(nodes.filter(node => node.dataset.messageId).length);
+    nodes.forEach(node => {
+      node.getBoundingClientRect = () => {
+        const row = mounted()[app.list.children.indexOf(node)];
+        return row ? { top: row.top - app.scroll.scrollTop, bottom: row.bottom - app.scroll.scrollTop } : { top: 0, bottom: 0 };
+      };
+    });
+  };
+  app.scroll.clientWidth = 700;
+  let top = 0;
+  Object.defineProperties(app.scroll, {
+    scrollHeight: { get: () => Math.max(app.scroll.clientHeight, height(mounted())) },
+    scrollTop: {
+      get: () => Math.min(top, app.scroll.scrollHeight - app.scroll.clientHeight),
+      set: value => { top = Math.max(0, Math.min(value, app.scroll.scrollHeight - app.scroll.clientHeight)); },
+    },
+  });
+  function visible(rows, scrollTop) {
+    return rows.filter(row => row.id && row.bottom > scrollTop && row.top < scrollTop + app.scroll.clientHeight)
+      .map(row => ({ id: row.id, top: row.top - scrollTop }));
+  }
+  return {
+    legacy, mountedCounts,
+    expected: savedTop => visible(legacy, Math.min(savedTop, height(legacy) - app.scroll.clientHeight)),
+    actual: () => visible(mounted(), app.scroll.scrollTop),
+  };
+}
+
+test('legacy pixel positions restore the same messages across a page seam and at the clamped end', () => {
+  const messages = longConversation();
+  const app = harness([]);
+  const layout = simulateMessageLayout(app, messages);
+  for (const savedTop of [640, layout.legacy[79].bottom - 8, layout.legacy[165].top + 17, 90000]) {
+    app.view.replaceMessages(messages, { scrollTop: savedTop, followLatest: false });
+    assert.deepEqual(layout.actual(), layout.expected(savedTop));
+    assert.ok(Math.max(...layout.mountedCounts) <= 80, 'each measurement and the final page stay bounded');
+    assert.ok(app.view.getViewState().messageWindow, 'the saved offset is now relative to a page');
+  }
+  assert.equal(app.view.getMessages().length, messages.length);
+  app.view.destroy();
+});
+
+test('legacy pixel positions wait for a hidden workspace to become measurable', () => {
+  let resize;
+  const messages = longConversation();
+  const app = harness([], { documentView: { ResizeObserver: class {
+    constructor(callback) { resize = callback; }
+    observe() {}
+    disconnect() {}
+  } } });
+  const layout = simulateMessageLayout(app, messages);
+  const saved = { scrollTop: layout.legacy[100].top + 12, followLatest: false, readingDetails: true,
+    readingPositions: [{ messageId: 'message-1', key: '0:3', top: 17, left: 25 }] };
+  app.scroll.clientWidth = 0;
+  app.scroll.clientHeight = 0;
+  app.view.replaceMessages(messages, saved);
+  assert.ok(Math.max(...layout.mountedCounts) <= 80);
+  const pending = app.view.getViewState();
+  assert.equal(pending.scrollTop, saved.scrollTop);
+  assert.equal(pending.messageWindow, undefined);
+  assert.deepEqual(pending.readingPositions, saved.readingPositions);
+  app.scroll.clientWidth = 700;
+  app.scroll.clientHeight = 400;
+  resize([{ target: app.scroll, contentRect: { width: 700, height: 400 } }]);
+  assert.deepEqual(layout.actual(), layout.expected(saved.scrollTop));
+  assert.equal(app.view.getViewState().readingDetails, true);
+  assert.ok(app.view.getViewState().messageWindow);
+  assert.deepEqual(app.view.getViewState().readingPositions.find(item => item.messageId === 'message-1'), saved.readingPositions[0]);
+  assert.ok(Math.max(...layout.mountedCounts) <= 80);
+  app.view.destroy();
+});
+
+for (const previouslyMeasured of [false, true]) {
+  test(`legacy position waits for the revealed draft height (${previouslyMeasured ? 'same' : 'first'} input width)`, () => {
+    let resize, frame;
+    const messages = longConversation();
+    const app = harness([], { documentView: {
+      ResizeObserver: class {
+        constructor(callback) { resize = callback; }
+        observe() {}
+        disconnect() {}
+      },
+      requestAnimationFrame(callback) { frame = callback; return 1; },
+      cancelAnimationFrame() {},
+    } });
+    const layout = simulateMessageLayout(app, messages);
+    let shown = true;
+    Object.defineProperty(app.input, 'scrollHeight', { get: () => shown ? 144 : 0 });
+    Object.defineProperty(app.input.style, 'height', { set(value) {
+      if (shown && value !== 'auto') app.scroll.clientHeight = 500 - (Math.max(48, parseFloat(value)) - 48);
+    } });
+    const inputEntry = { target: app.input, contentRect: { width: 700, height: 48 } };
+    if (previouslyMeasured) {
+      resize([inputEntry]);
+      frame();
+      frame = undefined;
+    }
+    const saved = { scrollTop: layout.legacy.at(-1).bottom + 20 - 404 - 95, followLatest: false };
+    shown = false;
+    app.scroll.clientWidth = 0;
+    app.scroll.clientHeight = 0;
+    app.view.replaceMessages(messages, saved);
+    app.view.setDraft('A saved draft with several lines.');
+    shown = true;
+    app.scroll.clientWidth = 700;
+    app.scroll.clientHeight = 500;
+    resize([inputEntry]);
+    app.scroll.dispatch('scroll');
+    assert.equal(app.view.getViewState().messageWindow, undefined, 'the legacy offset is pending until the draft has its visible height');
+    assert.equal(typeof frame, 'function');
+    frame();
+    assert.equal(app.scroll.clientHeight, 404);
+    assert.equal(app.view.getViewState().followLatest, false);
+    assert.deepEqual(layout.actual(), layout.expected(saved.scrollTop));
+    assert.ok(Math.max(...layout.mountedCounts) <= 80);
+    app.view.destroy();
+  });
+}
 
 test('sending from older history returns to the latest page and streaming continues while browsing', () => {
   const app = harness(longConversation());

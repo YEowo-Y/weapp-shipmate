@@ -102,6 +102,8 @@ export function mountConversation(options) {
   let messageWindow = initialMessageWindow();
   /** @type {ViewState | null | undefined} */
   let savedMessageView = null;
+  /** @type {ViewState | null} */
+  let pendingLegacyView = null;
   const earlierPage = pageButton('上一页消息', 'earlier-messages');
   const laterPage = pageButton('下一页消息', 'later-messages');
   let composing = false;
@@ -258,16 +260,18 @@ export function mountConversation(options) {
     return { start: Math.max(0, messages.length - MESSAGES_PER_PAGE), end: messages.length };
   }
 
-  /** @param {ViewState | null} [saved] @returns {MessageWindow} */
+  /** @param {ViewState | null} [saved] @returns {MessageWindow | null} */
+  function savedMessageWindow(saved) {
+    const previous = saved?.messageWindow;
+    return previous && previous.start < previous.end && previous.end <= messages.length
+      ? { start: previous.start, end: Math.min(previous.end, previous.start + MESSAGES_PER_PAGE) }
+      : null;
+  }
+
+  /** @param {ViewState | null} [saved] */
   function initialMessageWindow(saved) {
     if (saved ? saved.followLatest : options.initialScroll === 'bottom') return latestMessageWindow();
-    const previous = saved?.messageWindow;
-    if (previous && previous.start < previous.end && previous.end <= messages.length) {
-      return { start: previous.start, end: Math.min(previous.end, previous.start + MESSAGES_PER_PAGE) };
-    }
-    // Pixel offsets from older backups refer to the full conversation.
-    if (saved?.scrollTop || saved?.readingDetails) return { start: 0, end: messages.length };
-    return { start: 0, end: Math.min(messages.length, MESSAGES_PER_PAGE) };
+    return savedMessageWindow(saved) ?? { start: 0, end: Math.min(messages.length, MESSAGES_PER_PAGE) };
   }
 
   function isNearBottom() {
@@ -301,6 +305,8 @@ export function mountConversation(options) {
   }
 
   function settleViewportResize() {
+    // Wait for the visible composer height before resolving a legacy offset.
+    if (pendingLegacyView) return true;
     if (!viewportResized()) return false;
     settleScroll();
     return true;
@@ -439,13 +445,16 @@ export function mountConversation(options) {
     announce(started ? '已发起完整清单下载，请在浏览器下载列表中查看。' : '无法发起下载，请重试或复制完整清单。');
   }
 
-  function render({ forceBottom = false } = {}) {
-    const shouldFollow = forceBottom || (!readingDetails && (followLatest || isNearBottom()));
-    if (forceBottom) readingDetails = false;
-    const nodes = messages.slice(messageWindow.start, messageWindow.end).map(renderMessage);
+  function mountMessageWindow(nodes = messages.slice(messageWindow.start, messageWindow.end).map(renderMessage)) {
     if (messageWindow.start > 0) nodes.unshift(earlierPage);
     if (messageWindow.end < messages.length) nodes.push(laterPage);
     list.replaceChildren(...nodes);
+  }
+
+  function render({ forceBottom = false } = {}) {
+    const shouldFollow = forceBottom || (!readingDetails && (followLatest || isNearBottom()));
+    if (forceBottom) readingDetails = false;
+    mountMessageWindow();
     if (shouldFollow) {
       scroll.scrollTop = messages.length ? scroll.scrollHeight : 0;
       followLatest = true;
@@ -496,6 +505,7 @@ export function mountConversation(options) {
   /** @param {MessageWindow} range */
   function showMessagePage(range) {
     const saved = getViewState();
+    pendingLegacyView = null;
     cancelStreamFrame();
     clearCopyFeedback();
     messageWindow = range;
@@ -514,6 +524,7 @@ export function mountConversation(options) {
     }
     const article = findArticle(messageId);
     if (!article) return false;
+    pendingLegacyView = null;
     const top = scroll.scrollTop + article.getBoundingClientRect().top - scroll.getBoundingClientRect().top - 16;
     readingDetails = false;
     readingAnchor = null;
@@ -859,7 +870,11 @@ export function mountConversation(options) {
     if (destroyed) return;
     input.style.height = 'auto';
     input.style.height = `${Math.min(input.scrollHeight, 144)}px`;
-    settleViewportResize();
+    if (pendingLegacyView && scroll.clientWidth && scroll.clientHeight) {
+      restoreViewState(pendingLegacyView);
+    } else {
+      settleViewportResize();
+    }
   }
 
   function cancelEdit() {
@@ -1185,9 +1200,16 @@ export function mountConversation(options) {
 
   /** @returns {Required<Omit<ViewState, 'messageWindow'>> & Pick<ViewState, 'messageWindow'>} */
   function getViewState() {
-    const partial = messageWindow.start > 0 || messageWindow.end < messages.length;
-    return { scrollTop: scroll.scrollTop, followLatest, readingDetails, readingAnchor: readingAnchor ? { ...readingAnchor } : null,
-      ...(partial ? { messageWindow: { ...messageWindow } } : {}), ...collectMessageViewState(messageArticles()) };
+    const pending = pendingLegacyView;
+    const partial = !pending && (messageWindow.start > 0 || messageWindow.end < messages.length);
+    const regions = pending ? {
+      guideResults: pending.guideResults ?? [],
+      readingPositions: pending.readingPositions ?? [],
+      disclosures: pending.disclosures ?? [],
+    } : collectMessageViewState(messageArticles());
+    return { scrollTop: pending?.scrollTop ?? scroll.scrollTop, followLatest, readingDetails,
+      readingAnchor: readingAnchor ? { ...readingAnchor } : null,
+      ...(partial ? { messageWindow: { ...messageWindow } } : {}), ...regions };
   }
   /** @param {ViewState | null} [saved] */
   function restoreMessageViewState(saved) {
@@ -1216,14 +1238,65 @@ export function mountConversation(options) {
   /** @param {ViewState | null} [saved] */
   function restoreViewState(saved) {
     if (destroyed) return;
-    restoreMessageViewState(saved);
+    let top = Math.max(0, Number(saved?.scrollTop) || 0);
+    const legacy = saved && !saved.followLatest && top > 0
+      && messages.length > MESSAGES_PER_PAGE && !savedMessageWindow(saved) ? saved : null;
+    pendingLegacyView = legacy && (!scroll.clientWidth || !scroll.clientHeight) ? legacy : null;
+    if (legacy && !pendingLegacyView) top = restoreLegacyScroll(legacy, top);
+    else restoreMessageViewState(saved);
+
     readingDetails = Boolean(saved?.readingDetails);
     readingAnchor = saved?.readingAnchor ? { ...saved.readingAnchor } : null;
     followLatest = saved ? Boolean(saved.followLatest) : options.initialScroll === 'bottom';
-    scroll.scrollTop = !messages.length ? 0 : followLatest ? scroll.scrollHeight : Math.max(0, Number(saved?.scrollTop) || 0);
+    scroll.scrollTop = !messages.length ? 0 : followLatest ? scroll.scrollHeight : top;
     if (!readingDetails && isNearBottom()) followLatest = true;
     jumpButton.hidden = !messages.length || followLatest;
     rememberViewport();
+  }
+
+  /** @param {ViewState} saved @param {number} absoluteTop */
+  function restoreLegacyScroll(saved, absoluteTop) {
+    const viewportTop = scroll.getBoundingClientRect().top + (scroll.clientTop || 0);
+    const lastStart = messages.length - MESSAGES_PER_PAGE;
+    let start = 0;
+    /** @type {number | null} */
+    let originalStart = null;
+
+    while (true) {
+      const articles = messages.slice(start, start + MESSAGES_PER_PAGE).map(renderMessage);
+      list.replaceChildren(...articles);
+      restoreMessageViewState(saved);
+      scroll.scrollTop = 0;
+      const boxes = articles.map(article => article.getBoundingClientRect());
+      /** @type {number} */
+      const shift = originalStart === null ? 0 : originalStart - boxes[0].top;
+      const last = boxes[boxes.length - 1];
+      const atEnd = start === lastStart;
+      const maxTop = atEnd ? Math.max(0, scroll.scrollHeight - scroll.clientHeight + shift) : absoluteTop;
+      const target = viewportTop + Math.min(absoluteTop, maxTop) - shift;
+
+      if (!atEnd && target >= last.bottom) {
+        // Overlap at least one message so sibling spacing is measured at the seam.
+        const next = Math.min(start + MESSAGES_PER_PAGE - 1, lastStart);
+        originalStart = boxes[next - start].top + shift;
+        start = next;
+        continue;
+      }
+
+      const firstVisible = boxes.findIndex(box => box.bottom > target);
+      const anchorIndex = firstVisible < 0 ? boxes.length - 1 : firstVisible;
+      const offset = target - boxes[anchorIndex].top;
+      const anchorId = messages[start + anchorIndex].id;
+      // If the viewport crosses a seam, leave room for those following messages.
+      const pageStart = !atEnd && last.bottom - target < scroll.clientHeight
+        ? Math.min(start + anchorIndex, lastStart) : start;
+      messageWindow = { start: pageStart, end: pageStart + MESSAGES_PER_PAGE };
+      mountMessageWindow(pageStart === start ? articles : undefined);
+      restoreMessageViewState(saved);
+      scroll.scrollTop = 0;
+      const anchor = findArticle(anchorId);
+      return Math.max(0, offset + scroll.scrollTop + (anchor?.getBoundingClientRect().top ?? viewportTop) - viewportTop);
+    }
   }
   function onInput() { autosize(); updateControls(controller.getSnapshot().state); }
   function onCompositionStart() { composing = true; }
@@ -1272,8 +1345,10 @@ export function mountConversation(options) {
       shell.style.setProperty('--conversation-jump-offset', `${Math.max(14, offset)}px`);
     }
     const width = entries.find(entry => !entry.target || entry.target === input)?.contentRect.width;
-    if (width !== undefined && Number.isFinite(width) && width > 0 && width !== observedWidth) {
-      observedWidth = width;
+    const widthChanged = width !== undefined && Number.isFinite(width) && width > 0 && width !== observedWidth;
+    if (widthChanged) observedWidth = width;
+    const restoringVisibleReader = pendingLegacyView && scroll.clientWidth && scroll.clientHeight;
+    if (widthChanged || restoringVisibleReader) {
       // Resizing an observed textarea during delivery can resize its parent
       // reader again. Coalesce that write into the next frame; direct typing
       // still autosizes synchronously in the input handler.
@@ -1332,8 +1407,12 @@ export function mountConversation(options) {
     retry,
     /** @returns {ReturnType<Controller['stop']> | { ok: false; reason: 'destroyed' }} */
     stop: () => destroyed ? { ok: false, reason: 'destroyed' } : controller.stop(),
-    /** @param {readonly ConversationMessage[]} nextMessages @param {ViewState | null} [saved] */
-    replaceMessages(nextMessages, saved) {
+    /**
+     * @param {readonly ConversationMessage[]} nextMessages
+     * @param {ViewState | null} [saved]
+     * @param {{ deferViewRestore?: boolean }} [layout]
+     */
+    replaceMessages(nextMessages, saved, { deferViewRestore = false } = {}) {
       if (destroyed) return;
       viewEpoch++;
       cancelStreamFrame();
@@ -1342,6 +1421,7 @@ export function mountConversation(options) {
       if (isConversationActive(controller.getSnapshot().state)) controller.stop('session-switch');
       controller.dispose();
       messages = nextMessages.map((message) => ({ ...message }));
+      pendingLegacyView = null;
       messageWindow = initialMessageWindow(saved);
       activeAssistantId = null;
       activeSourceUserId = null;
@@ -1349,7 +1429,7 @@ export function mountConversation(options) {
       pendingEdit = null;
       announce('');
       render({ forceBottom: true });
-      restoreViewState(saved);
+      if (!deferViewRestore) restoreViewState(saved);
       updateControls(CONVERSATION_STATES.IDLE);
       emitMessages();
     },
