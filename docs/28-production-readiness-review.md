@@ -334,7 +334,7 @@ Windows WebView2 中确认右栏异步载入 React 与 Base UI 并能切换标�
 |---|---|
 | P1-1 设计令牌 | 共享 `app.css` 的 53 处固定色值清零，生产别名集中在 `design-system.css`，独立预览从自身入口加载原配色。Windows WebView2 157.0.4341.60 在浅深色、1240 px 与 780 px 的首页、设置、提审材料包、拒因反查及规则来源共 20 组采样，2,712 项计算值逐项一致。另用预览样式夹具核对 268 项计算值。本机证据见 `.omx/artifacts/claude-theme-aliases/comparison.json`。 [#70](https://github.com/YEowo-Y/weapp-shipmate/pull/70) · [#73](https://github.com/YEowo-Y/weapp-shipmate/pull/73) |
 | P1-2 流式 Markdown | 同一帧合并绘制。三轮 12,217 B 回复的文本更新由每轮 216 次降到 12 次，实机记录到的主线程长任务从 2 次降到 0 次。 [#103](https://github.com/YEowo-Y/weapp-shipmate/pull/103) |
-| P2-1 长会话 | 1,200 条合成消息的打开与切换各只挂载 80 条，旧版绝对坐标保留既有恢复路径。[#104](https://github.com/YEowo-Y/weapp-shipmate/pull/104) |
+| P2-1 长会话 | 常规打开、翻页和搜索使用最多 80 条的渲染窗口。旧版备份的绝对坐标也按最多 80 条分批测量并换算为页内位置。Windows WebView2 157.0.4341.60 在 1240 px 与 780 px 验证五组 1,200 条合成会话，峰值均由 1,200 降为 80，可见消息及其像素位置一致。覆盖浅层、深层、超范围坐标、隐藏后恢复长草稿及保存的展开状态，切换和重载保留阅读位置。深处的旧坐标需要测量目标前的批次。实机记录见 `.omx/artifacts/legacy-conversation-restore/comparison.json`。 [#104](https://github.com/YEowo-Y/weapp-shipmate/pull/104) |
 | P2-2 右栏草稿 | 草稿按项目订阅，延迟保存回执与对应项目快照一同呈现。跨项目和保存后恢复已实测。[#105](https://github.com/YEowo-Y/weapp-shipmate/pull/105) |
 | P2-3 聊天输入区颜色 | 审计范围 26 处固定色值清零，浅色与深色共 40 项计算样式与基线一致。[#106](https://github.com/YEowo-Y/weapp-shipmate/pull/106) |
 | P3-1 间距 | 四个样式文件的 252 个间距值改用等值令牌，30 组实机样本的计算样式和尺寸与基线一致。[#107](https://github.com/YEowo-Y/weapp-shipmate/pull/107) |
