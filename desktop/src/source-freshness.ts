@@ -1,5 +1,6 @@
 import { createActionButton } from './shared/components/ui-kit.js';
 import { createIcon } from './shared/components/icons.js';
+import { wrapDialogTab } from './dialog-focus';
 import './context.css';
 import './source-freshness.css';
 
@@ -148,11 +149,7 @@ export function mountSourceFreshness(options: Options) {
   dismiss.addEventListener('click', () => dialog.close()); done.addEventListener('click', () => dialog.close()); reload.addEventListener('click', () => { void read(); }); stop.addEventListener('click', () => { void cancel(); }); dialog.addEventListener('close', closed);
   search.addEventListener('input', filterRows); stateFilter.addEventListener('change', filterRows);
   clearFilters.addEventListener('click', () => { search.value = ''; stateFilter.value = 'all'; filterRows(); search.focus(); });
-  dialog.addEventListener('keydown', event => {
-    if (event.key !== 'Tab' || event.defaultPrevented || event.isComposing || event.ctrlKey || event.altKey || event.metaKey) return;
-    const target = event.shiftKey && document.activeElement === dismiss ? done : !event.shiftKey && document.activeElement === done ? dismiss : null;
-    if (target) { event.preventDefault(); target.focus(); }
-  });
+  dialog.addEventListener('keydown', event => wrapDialogTab(dialog, event));
   render();
   return {
     open(opener: HTMLElement | null = null) { if (disposed || dialog.open) return; anchor = opener; epoch++; dialog.showModal(); anchor?.setAttribute('aria-expanded', 'true'); dismiss.focus(); void read(); },
