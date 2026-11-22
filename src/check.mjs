@@ -6,9 +6,9 @@ import { attachCheckEvidence } from "./check-evidence.mjs";
 
 /**
  * @param {string} dir 小程序项目目录
- * @param {{subjectType?:string, includeDrafts?:boolean, evidence?:boolean, onEvidence?:(report: ReturnType<typeof attachCheckEvidence>) => void}} opts
+ * @param {{subjectType?:string, includeDrafts?:boolean, evidence?:boolean, onEvidence?:(report: ReturnType<typeof attachCheckEvidence>) => void, onRules?:(rules: ReturnType<typeof loadData>["rules"]) => void}} opts
  */
-export function runCheck(dir, { subjectType, includeDrafts = false, evidence = false, onEvidence } = {}) {
+export function runCheck(dir, { subjectType, includeDrafts = false, evidence = false, onEvidence, onRules } = {}) {
   // FX-06 校验下沉到引擎层（V1）：非法主体直接拒绝。此前只有 CLI 校验，MCP 客户端传入
   // "Personal"/"个人" 会静默滤掉全部规则，产出看似合规的空报告——与 CLI 修过的缺陷同类。
   if (subjectType != null && !SUBJECT_ENUM.includes(subjectType))
@@ -18,6 +18,7 @@ export function runCheck(dir, { subjectType, includeDrafts = false, evidence = f
   const collected = scan.evidence;
   if (collectEvidence) delete scan.evidence;
   const { rules } = loadData({ includeDrafts });
+  onRules?.(rules);
   const apiSet = new Set(scan.apis);
   const cfgSet = new Set(scan.configKeys);
   const items = [];
