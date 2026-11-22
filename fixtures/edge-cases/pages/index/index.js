@@ -1,6 +1,26 @@
 // 边界夹具：验证扫描器的可信度修复——注释里的 API 不应被当成真实调用；
 // 带端口 / userinfo 的请求域名应被归一为裸 host（否则安全交叉核验会被绕过）。
+// 帮助页展示的调用示例是字符串数据。
+const apiExamples = [
+  "wx.getRecorderManager()",
+  "wx.saveImageToPhotosAlbum({})",
+  "wx.chooseMedia({})",
+  "wx.chooseLocation({})",
+  "wx.chooseInvoiceTitle({})",
+  "wx.openBluetoothAdapter({})",
+  "wx.addPhoneContact({})",
+  "wx.addPhoneCalendar({})",
+  "wx.chooseMessageFile({})",
+  "wx.chooseLicensePlate({})",
+  "wx.getWeRunData({})",
+  "wx.startAccelerometer({})",
+  "wx.startCompass({})",
+  "wx.startDeviceMotionListening({})",
+  "wx.startGyroscope({})",
+];
+
 Page({
+  data: { apiExamples },
   onLoad() {
     // wx.getLocation({ type: "gcj02" })  ← 注释掉的调用，注释剥离后不应命中
     /* wx.getFuzzyLocation()  块注释里的调用同样不应命中 */
