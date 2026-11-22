@@ -281,7 +281,7 @@ export async function mountSessionWorkspace({ host, input, sendButton, scroll, l
     if (activeDialog?.dataset.kind === 'find' && activeDialog.dataset.sessionId !== currentSessionId) activeDialog.close();
     restoring = true;
     const session = current();
-    conversation.replaceMessages(session.messages, session.viewState);
+    conversation.replaceMessages(session.messages, session.viewState, { deferViewRestore: true });
     conversation.setModelSelection(session.modelSelection || null);
     conversation.setDraft(session.draft, session.edit, session.draftView);
     restoring = false; renderTitle(); notifySession();
