@@ -30,6 +30,13 @@ export function removeMapped(text, map, pattern) {
   });
 }
 
+/** @param {unknown} file */
+export function isPortableEvidenceFile(file) {
+  // eslint-disable-next-line no-control-regex -- CLI v1 requires relative paths without these characters
+  return typeof file === "string" && !/^[A-Za-z]:|[\\\u0000-\u001f\u007f\x60]/.test(file) &&
+    file.split("/").every(part => part && part !== "." && part !== "..");
+}
+
 export function createEvidenceCollector() {
   const locations = new Map();
   let truncated = false;
