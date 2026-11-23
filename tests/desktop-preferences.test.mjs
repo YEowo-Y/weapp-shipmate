@@ -51,6 +51,8 @@ function harness({ stored = new Map(), dark = false, reduce = false, readFails =
     getPrivacy: () => ({ allowRead: false, shareResults: false, busy: false, projectName: null }),
     revokePermissions: () => { callbacks.push({ name: 'Revoke' }); },
     getVersions: () => ({ desktop: '1.0.0', core: '2.0.0', rules: null }),
+    checkRelease: async () => ({ status: 'unavailable' }),
+    onReleasePage: async url => { callbacks.push({ name: 'ReleasePage', url }); },
     onSources: anchor => callbacks.push({ name: 'Sources', anchor, open: node('desktop-preferences').open }),
     onArchives: anchor => callbacks.push({ name: 'Archives', anchor, open: node('desktop-preferences').open }),
     onRepository: () => { callbacks.push({ name: 'Repository' }); },
@@ -152,6 +154,72 @@ test('version copy reports completion only after clipboard write and allows retr
   fail = false; h.click('settings-copy-versions'); await act(async () => { await setImmediate(); });
   assert.deepEqual(writes, ['上线船友\n桌面应用 1.0.0\n检查核心 2.0.0\n项目规则 尚未加载']);
   assert.match(h.document.body.textContent, /版本信息已复制/);
+});
+
+test('About checks on explicit action, deduplicates and only opens the resolved page on another action', async () => {
+  const queries = [], opened = [];
+  const release = {
+    status: 'release', tag: 'v0.2.0', comparison: 'public_newer',
+    url: 'https://github.com/YEowo-Y/weapp-shipmate/releases/tag/v0.2.0',
+  };
+  const h = harness({ overrides: {
+    checkRelease: () => new Promise((resolve, reject) => queries.push({ resolve, reject })),
+    onReleasePage: async url => { opened.push(url); },
+  } });
+  await h.app.open(h.anchor, 'about');
+  const check = h.node('settings-check-release'), status = h.node('settings-release-status');
+  assert.equal(status.getAttribute('role'), 'status');
+  assert.equal(queries.length, 0);
+  act(() => { check.focus(); check.click(); check.click(); });
+  assert.equal(queries.length, 1);
+  assert.equal(check.getAttribute('aria-disabled'), 'true');
+  assert.equal(h.document.activeElement, check);
+  assert.equal(status.textContent.trim(), '正在检查更新…');
+  const escape = new h.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+  assert.equal(check.dispatchEvent(escape), true, 'pending check leaves Escape to the dialog');
+  h.click('settings-check-release');
+  assert.equal(queries.length, 1);
+  await act(async () => queries[0].reject(new Error('private runtime error')));
+  assert.equal(status.textContent.trim(), '检查更新失败，请重试。');
+  assert.equal(check.getAttribute('aria-disabled'), 'false');
+  h.click('settings-check-release');
+  await act(async () => queries[1].resolve(release));
+  assert.equal(h.node('settings-release-tag').textContent, release.tag);
+  assert.equal(status.textContent.trim(), '公开稳定版较新。');
+  assert.deepEqual(opened, []);
+  h.click('settings-release-page');
+  assert.deepEqual(opened, [release.url]);
+});
+
+test('Leaving About or closing settings discards in-flight release replies', async () => {
+  const replies = [];
+  const release = {
+    status: 'release', tag: 'v0.1.0', comparison: 'local_newer',
+    url: 'https://github.com/YEowo-Y/weapp-shipmate/releases/tag/v0.1.0',
+  };
+  const h = harness({ overrides: { checkRelease: () => new Promise(resolve => replies.push(resolve)) } });
+  await h.app.open(h.anchor, 'about');
+  h.click('settings-check-release');
+  h.close();
+  await act(async () => replies[0](release));
+  assert.equal(h.document.activeElement, h.anchor);
+  assert.equal(h.node('settings-release-tag')?.textContent ?? null, null);
+
+  await h.app.open(h.anchor, 'about');
+  assert.equal(h.node('settings-release-status').textContent.trim(), '点击后从 GitHub 查询公开稳定版。');
+  h.click('settings-check-release');
+  h.click('preferences-nav-privacy');
+  h.click('preferences-nav-about');
+  await act(async () => replies[1](release));
+  assert.equal(h.node('settings-release-tag')?.textContent ?? null, null);
+  assert.equal(h.node('settings-release-status').textContent.trim(), '点击后从 GitHub 查询公开稳定版。');
+  h.click('settings-check-release');
+  h.click('preferences-categories');
+  h.click('preferences-nav-about');
+  await act(async () => replies[2](release));
+  assert.equal(h.node('settings-release-tag')?.textContent ?? null, null);
+  assert.equal(h.node('settings-release-status').textContent.trim(), '点击后从 GitHub 查询公开稳定版。');
+  assert.equal(replies.length, 3);
 });
 
 test('About keeps full rule versions in a collapsed disclosure and copies them unchanged', async () => {
