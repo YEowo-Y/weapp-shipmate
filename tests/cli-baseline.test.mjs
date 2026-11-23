@@ -53,9 +53,11 @@ function withoutBaseline(report) {
 test("pre-existing evidence CLI stdout and diagnostics match the pre-baseline Windows byte fixture", t => {
   const { dir, project } = workspace(t);
   const result = run(dir, ["check", project, "--subject", "personal", ...evidenceArgs, "--fail-on", "warning"]);
-  report(result, 2, warningDiagnostic);
-  const normalized = result.stdout.replaceAll(JSON.stringify(project).slice(1, -1), "<fixture>");
-  // Captured from the real CLI at 96b88b6. Only the escaped project root varies by machine.
+  const current = report(result, 2, warningDiagnostic);
+  assert.equal(current.meta.scan.scope.policyVersion, "shipmate-static-v2");
+  // Captured at 96b88b6. Reconcile the local root and the scanner policy revision.
+  const normalized = result.stdout.replaceAll(JSON.stringify(project).slice(1, -1), "<fixture>")
+    .replace('"policyVersion": "shipmate-static-v2"', '"policyVersion": "shipmate-static-v1"');
   assert.equal(createHash("sha256").update(normalized).digest("hex"), "37b8833a47e242c9778bc6e13a93e917c5cce602a2acc1fe7220b593669894e0");
 });
 
