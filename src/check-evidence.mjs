@@ -1,5 +1,6 @@
 import { apiMatches } from "./data.mjs";
 import { reportRelativePath } from "./scanner.mjs";
+import { isPortableEvidenceFile } from "./scanner-evidence.mjs";
 import { checkRequiredPrivateInfos, checkBackendApiInFrontend, checkIpOrLocalhost } from "./crosscheck.mjs";
 
 const MAX_ITEM_LOCATIONS = 100;
@@ -50,11 +51,13 @@ function expectedSignals(item, rule, scan) {
 }
 
 /** Enrich an explicitly requested report without changing its findings or scan coverage. */
-export function attachCheckEvidence(report, rules, collected) {
+export function attachCheckEvidence(report, rules, collected, { preserveEvidencePaths = false } = {}) {
   const ruleById = new Map(rules.map(rule => [rule.id, rule]));
   const uniqueLocations = new Map();
   for (const location of collected.locations) {
     const { file, line, column, kind, signal } = location;
+    // Keep recovered credential locations within the existing JSON v1 path format.
+    if (!preserveEvidencePaths && kind === "secret-key" && file.includes("::") && !isPortableEvidenceFile(file)) continue;
     uniqueLocations.set(JSON.stringify([file, line, column, kind, signal]), location);
   }
   const locations = [...uniqueLocations.values()].sort(compareLocations);
