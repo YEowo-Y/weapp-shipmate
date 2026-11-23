@@ -13,8 +13,9 @@ export function runCheck(dir, { subjectType, includeDrafts = false, evidence = f
   // "Personal"/"个人" 会静默滤掉全部规则，产出看似合规的空报告——与 CLI 修过的缺陷同类。
   if (subjectType != null && !SUBJECT_ENUM.includes(subjectType))
     throw new Error(`非法 subject：${subjectType}（可选值：${SUBJECT_ENUM.join(" | ")}）`);
-  const collectEvidence = evidence || onEvidence !== undefined;
-  const scan = scanProject(dir, { evidence: collectEvidence, preserveEvidencePaths: onEvidence !== undefined });
+  const preserveEvidencePaths = onEvidence !== undefined;
+  const collectEvidence = evidence || preserveEvidencePaths;
+  const scan = scanProject(dir, { evidence: collectEvidence, preserveEvidencePaths });
   const collected = scan.evidence;
   if (collectEvidence) delete scan.evidence;
   const { rules } = loadData({ includeDrafts });
@@ -77,7 +78,7 @@ export function runCheck(dir, { subjectType, includeDrafts = false, evidence = f
   const summary = `扫描 ${scan.filesScanned} 个文件：发现 API ${scan.apis.length} 个、域名 ${scan.domains.length} 个、配置信号 ${scan.configKeys.length} 个，命中 ${items.length} 条规则。`;
   const report = { command: "check", meta: { summary, scan }, items, notes };
   if (!collectEvidence) return report;
-  const enriched = attachCheckEvidence(report, rules, collected);
+  const enriched = attachCheckEvidence(report, rules, collected, { preserveEvidencePaths });
   onEvidence?.(enriched);
   return evidence ? enriched : report;
 }
