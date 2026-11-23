@@ -586,9 +586,9 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 **本机实施验收（2026-11-22）。** Windows Node 24.14.0 下，真实 CLI 完成快照与比对，同行新增位置时报告计为当前独有 1、两次均有 1，保存和对照均按 warning 阈值退出 2。另核对移动、改名、同坐标改写、Taro 导入、规则与扫描上下文变更、不完整证据、5 MiB 读写边界和相对路径。独立冷读指出应先校验祖先目录，Windows junction 回归先红后绿，确认拒绝链接前未查找其下文件。15 组旧命令和不带新选项的证据报告保持原有字节与退出码。实际 npm tarball 和 MCPB、Codex、Claude 插件暂存入口通过，另解包实际 .mcpb 验证同一版本的 CLI 往返和原 MCP 预检。lint、全量测试 1,869 项通过（2 项按平台跳过）、71 条引文核验、coverage 及桌面三套严格类型检查通过。MCPB 实测记录见 `.omx/artifacts/t11c2-cli-baseline/mcpb-result.json`。
 
-#### T11D · CLI SARIF 输出（范围待确认）
+#### T11D · CLI SARIF 输出（已批准）
 
-**目标与关口。** 将当前本机预检的发现及其证据导出为 SARIF 2.1.0，便于机器读取和按源文件定位。基于 T11C1 的证据及 T11C2 的门禁边界。按 §3、§6 先确认公共 CLI 契约，再实施。首版验收本机文件与标准 schema，平台上传和告警匹配另定范围。GitHub 的代码扫描只使用首个主位置，且需要位置才能显示发现。 [OASIS SARIF 2.1.0 标准](https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html) · [GitHub SARIF 支持](https://docs.github.com/en/code-security/reference/code-scanning/sarif-files/sarif-support)
+**目标与关口。** 将当前本机预检的发现及其证据导出为 SARIF 2.1.0，便于机器读取和按源文件定位。基于 T11C1 的证据及 T11C2 的门禁边界。维护者已按 §3、§6 批准在 [#117](https://github.com/YEowo-Y/weapp-shipmate/pull/117) 确认的范围内实施。首版验收本机文件与标准 schema，平台上传和告警匹配另定范围。GitHub 的代码扫描只使用首个主位置，且需要位置才能显示发现。 [OASIS SARIF 2.1.0 标准](https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html) · [GitHub SARIF 支持](https://docs.github.com/en/code-security/reference/code-scanning/sarif-files/sarif-support)
 
 **Windows 实测基线。** 在 `main@21a4757` 下使用 Node 24.14.0 与合成项目。现有 CLI 拒绝 `--sarif`，普通证据 JSON 会把文件名里的反引号替换为 `?`。`runCheck` 的内部证据回调保留真实文件名，含中文、空格、`#`、字面 `%20` 和反引号的文件可通过百分号编码的相对 URI 还原。CRLF 文件中非 BMP 字符后的调用报告为第 1 行第 22 列，与 UTF-16 一致。警告阈值返回 2，聚焦后空结果仍返回 2。独立草样以原报告投影出主位置和相关位置，通过未经修改的 OASIS schema 校验。另验证格式对同一输入稳定，扫描不完整有提示，101 处证据只出 100 处且声明截断，草样只投影脱敏证据，实际命中合成密钥及带凭据的 URL，仅保留净化后的域名和键名等允许信息。草样同样核对本机绝对路径、查询值和源码标记的脱敏。文件级与无定位样式使用合成证据验证。记录见 `.omx/artifacts/t11d-sarif-scope/probe-result.json`。 [标准 schema](https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/schemas/sarif-schema-2.1.0.json)
 
@@ -599,6 +599,10 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 5. **验收。** 保留 15 组旧 CLI 字节基线，并逐项对照证据与基线新旧输出。真实子进程覆盖三档严重度、四档阈值、聚焦后空结果、参数冲突、无发现、可导出的不完整扫描、退出 1 时 stdout 为空的大类错误，以及大报告完整写出。README 给出 `.sarif` 重定向示例，在 PowerShell 7.4+ 使用原生 `node` 验证写入 UTF-8、保留 LF 和退出码 2，明确退出 1 时 shell 可能留空文件。用真路径核对 Windows 和 Linux 的 URI、中文、空格、`#`、`%`、反引号、Linux 文件名里的字面反斜杠、换行及非 BMP 列号，覆盖文件级、不可定位、前后主位置顺序、单项和全局截断，以及合成敏感标记的脱敏。用现有 Ajv 校验下载的 OASIS 2.1.0 原始 schema，由 `unicodeRegExp: false` 兼容该版 schema 的旧式正则；常规回归离线核对产物契约。实际 npm tarball、MCPB 与两端插件暂存 CLI 入口复验输出及既有 MCP 冒烟。四项仓库门禁、独立冷读复审与 PR CI 通过后交付。 [Ajv 的正则选项](https://ajv.js.org/options.html#unicoderegexp) · [PowerShell 重定向](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_redirection?view=powershell-7.5#redirecting-output-from-native-commands)
 
 **允许变更的文件。** CLI 适配层、SARIF 专用格式化模块、相关 CLI/分发回归测试及合成夹具、README、本文与 `progress.txt`。保持既有共享扫描、桌面和 MCP 契约，零新增运行时依赖。
+
+**本机实施验收（2026-11-23）。** Windows Node 24.14.0 与 PowerShell 7.6.9 用实际 CLI 保存 SARIF，逐项核对 UTF-8、末尾 LF、真实文件 URI、主位置第 1 行第 22 列和相关位置、规则原文与日期、截断和脱敏。退出 2 时文件完整并保留诊断，目录错误退出 1 且文件为空。原样 OASIS 2.1.0 schema 校验通过。文件名中的字面花括号按 SARIF 消息语法转义，实际文件回归先红后绿。Windows 和 Ubuntu WSL2 各 10 项定向回归通过，包含 Linux 文件名中的字面反斜杠和超过 64 KiB 的输出。15 组旧命令、原证据报告、基线保存和比对保持 stdout、stderr 和退出码一致。实际 npm tarball、MCPB 解包、Codex 和 Claude 插件入口及既有 MCP 冒烟通过。独立冷读复审通过。lint、全量测试 1,879 项通过（2 项按平台跳过）、71 条引文核验、coverage 和桌面三套严格类型检查通过。Windows 及 MCPB 证据见 `.omx/artifacts/t11d-cli-sarif/{windows-result,mcpb-result}.json`。
+
+**已知定位边界。** Ubuntu WSL2 实测，文件名含 `::` 时，现有扫描器仍能给出疑似密钥发现，位置数据缺失。SARIF 对该项输出 `evidenceStatus: unavailable` 和空位置数组。
 
 ### T12 · 桌面分发
 
@@ -943,7 +947,7 @@ Windows 和右栏夹具覆盖安装目录、残留端口文件、未启动、服
 
 ## 7. 当前推进入口
 
-T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并；T11C1 CLI 显式证据已按 [#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47) 批准范围实施并合入 [#49](https://github.com/YEowo-Y/weapp-shipmate/pull/49)。T11C2 已按 [#115](https://github.com/YEowo-Y/weapp-shipmate/pull/115) 批准范围实施并通过本机验收，SARIF 首版范围见 T11D，待维护者确认。通用基线和验证命令见 §2。
+T01–T08、T09A–T09C、T10A–T10B 和 T11A–T11B 已完成。[#37](https://github.com/YEowo-Y/weapp-shipmate/pull/37) 合并后，GitHub 已将根目录 minimatch 告警 #21 标记为 fixed。T11B 已通过 [#45](https://github.com/YEowo-Y/weapp-shipmate/pull/45) 合并；T11C1 CLI 显式证据已按 [#47](https://github.com/YEowo-Y/weapp-shipmate/pull/47) 批准范围实施并合入 [#49](https://github.com/YEowo-Y/weapp-shipmate/pull/49)。T11C2 已按 [#115](https://github.com/YEowo-Y/weapp-shipmate/pull/115) 批准范围实施并通过本机验收，T11D 已按 [#117](https://github.com/YEowo-Y/weapp-shipmate/pull/117) 批准范围实施并通过本机验收。通用基线和验证命令见 §2。
 
 桌面与工程底座工作线的 T12A（[#48](https://github.com/YEowo-Y/weapp-shipmate/pull/48)）、T13A（[#51](https://github.com/YEowo-Y/weapp-shipmate/pull/51)）、T13B（[#52](https://github.com/YEowo-Y/weapp-shipmate/pull/52)）、T14（[#54](https://github.com/YEowo-Y/weapp-shipmate/pull/54)）、**功能 0 · 新外壳**（[#55](https://github.com/YEowo-Y/weapp-shipmate/pull/55)、[#56](https://github.com/YEowo-Y/weapp-shipmate/pull/56)）、**功能 2 · 上线进度进右侧面板**（[#57](https://github.com/YEowo-Y/weapp-shipmate/pull/57)、[#58](https://github.com/YEowo-Y/weapp-shipmate/pull/58)）和 **功能 3 · 提审材料包**（[#59](https://github.com/YEowo-Y/weapp-shipmate/pull/59)、[#60](https://github.com/YEowo-Y/weapp-shipmate/pull/60)）已合并并通过云端验收。**功能 4 · 被拒处理闭环**已按 [#61](https://github.com/YEowo-Y/weapp-shipmate/pull/61) 范围实施，并随 [#62](https://github.com/YEowo-Y/weapp-shipmate/pull/62) 合入。**功能 8 · 交接给 Codex / Claude Code** 已按 [#75](https://github.com/YEowo-Y/weapp-shipmate/pull/75) 范围实施并随 [#76](https://github.com/YEowo-Y/weapp-shipmate/pull/76) 合入。
 

@@ -141,6 +141,20 @@ $snapshotExit = $LASTEXITCODE
 
 规则报告的可选 `confidence` 字段保留规则库的 `high` / `medium` / `low`，Markdown 与可勾选清单显示为高/中/低。这是规则维护者对规则准确性的把握，不是命中概率或过审保证，也不改变严重度。流程导航项、合成检查及缺少字段的历史报告不补造评级；低置信规则仍只通过显式包含草案显示。
 
+#### 本地 SARIF
+
+`check --sarif` 将当前预检结果写到 stdout，格式为 SARIF 2.1.0。调用方可以用重定向保存文件。
+
+```sh
+node bin/weapp-shipmate.mjs check ./my-app --sarif --fail-on warning > ./preflight.sarif
+```
+
+在 Windows PowerShell 7.4 及以上版本可直接使用同一条 `node` 命令，并从 `$LASTEXITCODE` 读取退出码。`>` 保留原生命令的 UTF-8 输出，诊断仍在 stderr。退出 0 或 2 时可读取报告，退出 1 时 shell 可能留下空文件。 [PowerShell 重定向](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_redirection?view=powershell-7.5#redirecting-output-from-native-commands)
+
+查看器可将 `%SRCROOT%` 绑定到扫描时传给 `check` 的项目目录。报告中的 URI 按路径段编码，使用该目录解析，与 `.sarif` 文件的保存位置无关。带行列的证据优先作为主位置，其余位置在 `relatedLocations`。仅有文件级证据时保留文件路径，无位置的发现仍会列出。规则描述携带已有的官方链接、原文和核验日期。 [SARIF 2.1.0 标准](https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/sarif-v2.1.0-os.html)
+
+`--sarif` 可搭配 `--config`、`--subject`、`--include-drafts`、`--fail-on` 和 `--blockers-only`。`--json`、`--json-version`、`--checklist`、`--evidence` 及两个基线选项与其互斥。门禁继续按聚焦前的全部发现项计算。输出中的 `executionSuccessful: true` 表示命令已生成报告，`scanComplete`、`evidenceTruncated` 和运行注记分别说明覆盖情况。
+
 历史GitHub tag或tarball可以用于复现历史版本，但不应作为当前修复后的候选。构建和验证入口见[首跑说明](docs/14-first-run-and-trial.md)。
 
 </details>
