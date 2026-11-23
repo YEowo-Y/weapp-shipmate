@@ -22,6 +22,7 @@ function PanelHost({ element }: { element: HTMLElement }) {
 export function SettingsView({ store, shortcuts, options, section, element, loading, error, onSection, onClose, onRetry, onCanNavigate }: Props) {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
   const [query, setQuery] = useState(''), [resultsOpen, setResultsOpen] = useState(false), [navigation, setNavigation] = useState(false);
+  const [releaseVisit, setReleaseVisit] = useState(0);
   const searchInput = useRef<HTMLInputElement>(null);
   useLayoutEffect(() => {
     if (resultsOpen) searchInput.current?.focus();
@@ -37,6 +38,13 @@ export function SettingsView({ store, shortcuts, options, section, element, load
   const current = sections.find(item => item.id === section)!;
   const results = searchSettings(query, !!options.systemNotifications);
   const choose = (next: SettingsSection, target?: string) => { if (!onCanNavigate()) return; setNavigation(false); setResultsOpen(false); onSection(next, target); };
+  function openCategories() {
+    if (!onCanNavigate()) return;
+    if (section === 'about') setReleaseVisit(visit => visit + 1);
+    setNavigation(true);
+    setResultsOpen(false);
+    window.setTimeout(() => document.getElementById(`preferences-nav-${section}`)?.focus(), 0);
+  }
   return <div className="preferences-layout" data-settings-renderer="react" data-navigation={navigation} data-search={resultsOpen}>
     <aside className="preferences-sidebar">
       <header className="preferences-sidebar-header"><h2 id="preferences-heading">设置</h2></header>
@@ -53,7 +61,7 @@ export function SettingsView({ store, shortcuts, options, section, element, load
       <footer className="preferences-sidebar-footer"><Button id="preferences-dismiss" onClick={onClose}><Icon name="arrow-left" />返回应用</Button></footer>
     </aside>
     <main className="preferences-main">
-      <header className="preferences-content-header"><Button id="preferences-categories" onClick={() => { if (!onCanNavigate()) return; setNavigation(true); setResultsOpen(false); window.setTimeout(() => document.getElementById(`preferences-nav-${section}`)?.focus(), 0); }}><Icon name="arrow-left" />设置分类</Button><Button id="preferences-content-dismiss" aria-label="关闭设置" onClick={onClose}><Icon name="x" /></Button></header>
+      <header className="preferences-content-header"><Button id="preferences-categories" onClick={openCategories}><Icon name="arrow-left" />设置分类</Button><Button id="preferences-content-dismiss" aria-label="关闭设置" onClick={onClose}><Icon name="x" /></Button></header>
       <div id="preferences-body" className="context-body">
         {resultsOpen ? <section className="preferences-results" aria-labelledby="preferences-section-title"><h3 id="preferences-section-title" tabIndex={-1}>搜索结果</h3><p role="status">{results.length ? `${results.length} 项设置` : '未找到匹配设置，请尝试“模型”“备份”或“主题”。'}</p>{results.map(item => <Button key={`${item.section}-${item.target}`} className="preferences-search-result" onClick={() => choose(item.section, item.target)}><span><strong>{item.title}</strong><small>{settingsSections.find(s => s.id === item.section)?.label}</small></span><Icon name="chevron-right" /></Button>)}</section> : <>
           {query.trim() && <Button className="preferences-back-results" onClick={() => { if (onCanNavigate()) setResultsOpen(true); }}><Icon name="arrow-left" />返回搜索结果</Button>}
@@ -61,7 +69,7 @@ export function SettingsView({ store, shortcuts, options, section, element, load
           {error && <div className="preferences-error" role="alert"><p>{error}</p><Button onClick={onRetry}>重试</Button></div>}
           {loading && <p className="preferences-loading" role="status">正在读取设置…</p>}
           {section === 'appearance' && <><Appearance snapshot={snapshot} store={store} hidden={false} /><div className="preferences-feedback"><p id="preferences-status" role="status" data-error={snapshot.error}>{snapshot.error ? snapshot.status : saved}</p>{snapshot.error && <Button id="preferences-retry" onClick={store.read}>重新读取</Button>}</div></>}
-          {['shortcuts', 'privacy', 'about'].includes(section) && <AuxiliarySettings key={section} section={section} options={options} shortcuts={shortcuts} />}
+          {['shortcuts', 'privacy', 'about'].includes(section) && <AuxiliarySettings key={section} section={section} options={options} shortcuts={shortcuts} releaseVisit={releaseVisit} />}
         </>}
         <div hidden={resultsOpen}>{element && <PanelHost element={element} />}</div>
       </div>

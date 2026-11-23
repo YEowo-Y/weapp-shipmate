@@ -49,6 +49,14 @@ test('external references only open web URLs, without file or arbitrary applicat
   assert.ok(!capability.permissions.some(value => /(?:open-path|reveal-item|allow-default-urls)/.test(typeof value === 'string' ? value : value.identifier)));
 });
 
+test('the release check is a parameterless command limited to the local main webview', () => {
+  assert.ok(read('build.rs').includes('"release_check"'));
+  assert.ok(read('src/lib.rs').includes('release_check::release_check'));
+  assert.ok(capability.permissions.includes('allow-release-check'));
+  const command = read('src/release_check.rs');
+  assert.match(command, /pub async fn release_check\(\s*app: tauri::AppHandle,\s*window: tauri::WebviewWindow,\s*checker: tauri::State<'_, ReleaseChecker>,\s*\)[^{]+\{\s*crate::runtime::authorize\(&window\)\?/);
+});
+
 test('dev and build prepare the same complete bundled runtime', () => {
   assert.match(config.build.beforeDevCommand, /prepare:runtime/);
   assert.match(config.build.beforeBuildCommand, /prepare:runtime/);

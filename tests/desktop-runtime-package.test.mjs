@@ -60,6 +60,7 @@ test('relocated Windows runtime executes local entrypoints with empty PATH', asy
   assert.ok(first.files['workflow-catalog.json']);
   assert.ok(first.files['source-catalog.json']);
   assert.ok(first.files['desktop/server/source-check.mjs']);
+  assert.ok(first.files['desktop/server/release-check.mjs']);
   assert.ok(first.files['src/source-text.mjs']);
   assert.ok(!Object.keys(first.files).some(path => path.startsWith('corpus/')));
   assert.ok(first.files['src/project-tool.mjs']);
@@ -74,6 +75,8 @@ test('relocated Windows runtime executes local entrypoints with empty PATH', asy
   const version = run(['--version']);
   assert.equal(version.status, 0, version.stderr);
   assert.equal(version.stdout.trim(), `v${runtimeLock.version}`);
+  const releaseCheck = run(['--check', join(output, 'desktop/server/release-check.mjs')]);
+  assert.equal(releaseCheck.status, 0, releaseCheck.stderr);
   const sources = JSON.parse(await readFile(join(output, 'source-catalog.json'), 'utf8'));
   const manual = sources.sources.find(source => source.baseline?.method === 'manual');
   assert.ok(manual, 'portable fixture has an offline-only manual source');

@@ -10,6 +10,9 @@ export type SettingsPanel = {
 };
 export type PrivacyState = { allowRead: boolean; shareResults: boolean; busy: boolean; projectName: string | null };
 export type VersionInfo = { desktop: string; core: string; rules: string | null };
+export type ReleaseCheckResult =
+  | { status: 'release'; tag: string; comparison: 'public_newer' | 'same' | 'local_newer'; url: string }
+  | { status: 'unavailable' | 'busy' | 'failed' };
 
 export type SettingsOptions = {
   getPanel(section: 'models' | 'data' | 'projects'): SettingsPanel | null | Promise<SettingsPanel | null>;
@@ -18,6 +21,8 @@ export type SettingsOptions = {
   subscribePrivacy?(listener: () => void): () => void;
   revokePermissions(): void | Promise<void>;
   getVersions(): VersionInfo | Promise<VersionInfo>;
+  checkRelease(): Promise<ReleaseCheckResult>;
+  onReleasePage(url: string): Promise<void>;
   copyText?(text: string): Promise<void>;
   onSources(anchor: HTMLElement): void;
   onArchives(anchor: HTMLElement): void;

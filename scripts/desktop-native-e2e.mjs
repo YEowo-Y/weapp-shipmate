@@ -11,6 +11,7 @@ import { checkSourceFreshnessFlows, prepareSourceFreshnessFixture } from './nati
 import { checkSystemNotificationFlows } from './native-system-notification-acceptance.mjs';
 import { checkReadingFlows } from './native-reading-acceptance.mjs';
 import { checkPresentationFlows } from './native-presentation-acceptance.mjs';
+import { checkReleaseFlows, prepareReleaseCheckFixture } from './native-release-check-acceptance.mjs';
 import { checkOpenClaudeChat } from './native-open-claude-acceptance.mjs';
 import { checkResultTrust } from './native-result-trust-acceptance.mjs';
 import { checkProjectRepairFlows } from './native-project-repair-acceptance.mjs';
@@ -22,7 +23,7 @@ import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile, stat, cp, mkdtemp, realpath, rename, readdir } from 'node:fs/promises';
 import { createWriteStream } from 'node:fs';
-import { resolve, dirname, relative, isAbsolute } from 'node:path';
+import { resolve, dirname, basename, relative, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createHash } from 'node:crypto';
@@ -33,6 +34,9 @@ const artifacts = resolve(repo, '.omx/artifacts/desktop-model-native');
 const run = resolve(artifacts, `run-${new Date().toISOString().replace(/[:.]/g, '-')}`);
 const isolated = process.argv.includes('--isolated-runtime');
 const releaseSmoke = process.argv.includes('--release-smoke');
+const releaseCheckFixtureMode = process.argv.includes('--release-check');
+const releaseCheckLive = process.argv.includes('--release-check-live');
+const releaseCheckMode = releaseCheckFixtureMode || releaseCheckLive;
 const projectsMode = process.argv.includes('--projects');
 const restoreMode = process.argv.includes('--restore');
 const repairMode = process.argv.includes('--repair');
@@ -53,6 +57,7 @@ const connectionsMode = process.argv.includes('--connections') || process.argv.i
 const expectedIdentifier = process.argv.find(value => value.startsWith('--expected-identifier='))?.slice('--expected-identifier='.length);
 let projectDatabase;
 const suppliedApplication = process.argv.find(value => value.startsWith('--application='))?.slice('--application='.length);
+const suppliedRuntimeSource = process.argv.find(value => value.startsWith('--runtime-source='))?.slice('--runtime-source='.length);
 let application = suppliedApplication || resolve(repo, 'desktop/src-tauri/target/debug/desktop.exe');
 const processExitChecks = [];
 const maintenanceFrontendErrors = [];
@@ -62,8 +67,11 @@ const readingFrontendErrors = [];
 const presentationFrontendErrors = [];
 let verifiedRuntimeExecutable;
 let verifiedApplication;
+let verifiedApplicationPid;
 let isolatedDirectory;
 let sourceFixture;
+let releaseFixture;
+let releaseProxyCanary, releaseProxyContacts = 0;
 const elementKey = 'element-6066-11e4-a52e-4f735466cecf';
 const realModel = process.argv.includes('--real-ollama');
 const model = realModel ? 'llama3.2:3b' : 'shipmate-native-fixture:latest';
@@ -139,7 +147,7 @@ async function launch() {
   if (notificationsMode) await inspect('window.__notificationAcceptanceErrors=[]; window.addEventListener("error",event=>window.__notificationAcceptanceErrors.push({type:"error",message:event.message,line:event.lineno,column:event.colno})); window.addEventListener("unhandledrejection",event=>window.__notificationAcceptanceErrors.push({type:"unhandledrejection",message:String(event.reason?.message||event.reason)}));');
   if (readingMode) await monitorReadingErrors();
   if (presentationMode) await monitorPresentationErrors();
-  if (builtinProvidersMode || allBatchesMode || repairMode || providerAgentMode || restoreMode || projectsMode || workflowMode || connectionsMode || agentMode || handoffMode || healthMode || memoryMode || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode) {
+  if (builtinProvidersMode || allBatchesMode || repairMode || providerAgentMode || restoreMode || projectsMode || workflowMode || connectionsMode || agentMode || handoffMode || healthMode || memoryMode || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode || releaseCheckMode) {
     await until(() => inspect('return document.querySelector("#desktop-project-select") && !document.querySelector("#desktop-project-select").disabled'), 'project store and session scope ready', 30000);
     assert.ok((await stat(projectDatabase)).isFile(), 'isolated identifier database exists');
   }
@@ -188,6 +196,7 @@ async function ownedRuntimeProcesses() {
               const observedApp = await stat(candidate.ExecutablePath, { bigint: true });
               if (expectedApp.ino === 0n || observedApp.ino !== expectedApp.ino || observedApp.dev !== expectedApp.dev) continue;
               verifiedApplication = candidate.ExecutablePath;
+              verifiedApplicationPid = candidate.ProcessId;
               // The app CIM path can stay virtual while Rust canonicalizes its child path.
               // Verify the direct parent PID and the node file identity independently.
               for (const child of candidates.filter(item => item.ParentProcessId === candidate.ProcessId && item.ExecutablePath)) {
@@ -207,16 +216,37 @@ async function ownedRuntimeProcesses() {
     });
   });
 }
-async function quit() {
+async function closeOwnedNativeWindow() {
+  assert.ok(verifiedApplication && verifiedApplicationPid, 'identify the exact disposable native application first');
+  const powershell = resolve(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe');
+  const source = '$ErrorActionPreference="Stop"; $app=Get-Process -Id ([int]$env:SHIPMATE_ACCEPTANCE_PID); if ($app.Path -ine $env:SHIPMATE_ACCEPTANCE_EXE) { throw "Acceptance process changed" }; if (!$app.CloseMainWindow()) { throw "No acceptance window to close" }';
+  await new Promise((accept, reject) => {
+    const close = spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', source], {
+      windowsHide: true,
+      env: { ...process.env, SHIPMATE_ACCEPTANCE_PID: String(verifiedApplicationPid), SHIPMATE_ACCEPTANCE_EXE: verifiedApplication },
+    });
+    let error = '';
+    close.stderr.on('data', chunk => { error += chunk; });
+    close.on('error', reject);
+    close.on('exit', code => code === 0 ? accept() : reject(new Error(error.trim() || 'Native application close failed')));
+  });
+}
+async function quit({ nativeClose = false } = {}) {
   if (!session) return;
-  const before = releaseSmoke || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode ? await ownedRuntimeProcesses() : [];
+  const before = releaseSmoke || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode || releaseCheckMode ? await ownedRuntimeProcesses() : [];
   if (maintenanceMode) maintenanceFrontendErrors.push(...await inspect('return window.__maintenanceAcceptanceErrors || []'));
   if (sourcesMode) sourceFrontendErrors.push(...await inspect('return window.__sourceAcceptanceErrors || []'));
   if (notificationsMode) notificationFrontendErrors.push(...await inspect('return window.__notificationAcceptanceErrors || []'));
   if (readingMode) readingFrontendErrors.push(...await inspect('return window.__readingAcceptanceErrors || []'));
   if (presentationMode) presentationFrontendErrors.push(...await inspect('return window.__presentationAcceptanceErrors || []'));
-  await command('DELETE', ''); session = null;
-  if (agentMode || healthMode || repairMode || handoffMode || memoryMode || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode) {
+  if (nativeClose) {
+    await closeOwnedNativeWindow();
+    await until(async () => (await ownedRuntimeProcesses()).length === 0, 'held version checker exits on normal window close', 8000);
+  }
+  try { await command('DELETE', ''); }
+  catch (error) { if (!nativeClose || !/invalid session id|no such window|target window already closed/i.test(error.message)) throw error; }
+  session = null;
+  if (agentMode || healthMode || repairMode || handoffMode || memoryMode || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode || releaseCheckMode) {
     // DELETE /session can return before WebView2 finishes writing Preferences.
     // Wait only for this run's explicitly isolated profile; do not kill browsers.
     await until(async () => {
@@ -228,7 +258,7 @@ async function quit() {
       return remaining === 0;
     }, 'isolated persistent WebView2 profile finishes shutdown', 15000);
   }
-  if (releaseSmoke || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode) {
+  if (releaseSmoke || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode || releaseCheckMode) {
     await until(async () => (await ownedRuntimeProcesses()).length === 0, 'installed runtime processes exit after native shutdown', 15000);
     processExitChecks.push({ verifiedPhysicalApplication: verifiedApplication ?? null, verifiedPhysicalExecutable: verifiedRuntimeExecutable ?? null, executable: resolve(dirname(application), 'runtime/node.exe'), before, remaining: [], passed: true });
   }
@@ -1130,10 +1160,11 @@ async function checkConnectionsFlows() {
 }
 
 try {
-  if (builtinProvidersMode || allBatchesMode || repairMode || providerAgentMode || restoreMode || projectsMode || workflowMode || connectionsMode || agentMode || handoffMode || healthMode || memoryMode || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode) {
-    if ([builtinProvidersMode, allBatchesMode, repairMode, providerAgentMode, restoreMode, projectsMode, workflowMode, connectionsMode, agentMode, handoffMode, healthMode, memoryMode, maintenanceMode, sourcesMode, notificationsMode, readingMode, presentationMode].filter(Boolean).length !== 1) throw new Error('Choose exactly one persistence acceptance mode');
-    const pattern = builtinProvidersMode ? /^com\.weappshipmate\.acceptance\.providers\.\d+$/ : (allBatchesMode || repairMode || providerAgentMode || restoreMode) ? /^com\.weappshipmate\.acceptance\.all\.\d+$/ : presentationMode ? /^com\.weappshipmate\.acceptance\.presentation\.\d+$/ : readingMode ? /^com\.weappshipmate\.acceptance\.reading\.\d+$/ : notificationsMode ? /^com\.weappshipmate\.acceptance\.p7notifications\.\d+$/ : sourcesMode ? /^com\.weappshipmate\.acceptance\.p7sources\.\d+$/ : maintenanceMode ? /^com\.weappshipmate\.acceptance\.p7maintenance\.\d+$/ : memoryMode ? /^com\.weappshipmate\.acceptance\.p7memory\.\d+$/ : healthMode ? /^com\.weappshipmate\.acceptance\.p7\.\d+$/ : handoffMode ? /^com\.weappshipmate\.acceptance\.p6\.\d+$/ : agentMode ? /^com\.weappshipmate\.acceptance\.p5\.\d+$/ : connectionsMode ? /^com\.weappshipmate\.acceptance\.p4\.\d+$/ : workflowMode ? /^com\.weappshipmate\.acceptance\.p3\.\d+$/ : /^com\.weappshipmate\.acceptance\.p2\.\d+$/;
-    if (!isolated || releaseSmoke || realModel || !pattern.test(expectedIdentifier ?? '')) throw new Error('Persistence acceptance requires --isolated-runtime and the matching dedicated providers/all/p2-p7/p7memory/p7maintenance/p7sources/p7notifications/reading/presentation --expected-identifier; incompatible with release/model modes');
+  if (releaseCheckFixtureMode && releaseCheckLive) throw new Error('Choose one version-check acceptance mode');
+  if (builtinProvidersMode || allBatchesMode || repairMode || providerAgentMode || restoreMode || projectsMode || workflowMode || connectionsMode || agentMode || handoffMode || healthMode || memoryMode || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode || releaseCheckMode) {
+    if ([builtinProvidersMode, allBatchesMode, repairMode, providerAgentMode, restoreMode, projectsMode, workflowMode, connectionsMode, agentMode, handoffMode, healthMode, memoryMode, maintenanceMode, sourcesMode, notificationsMode, readingMode, presentationMode, releaseCheckMode].filter(Boolean).length !== 1) throw new Error('Choose exactly one persistence acceptance mode');
+    const pattern = releaseCheckMode ? /^com\.weappshipmate\.acceptance\.t12b\.\d+$/ : builtinProvidersMode ? /^com\.weappshipmate\.acceptance\.providers\.\d+$/ : (allBatchesMode || repairMode || providerAgentMode || restoreMode) ? /^com\.weappshipmate\.acceptance\.all\.\d+$/ : presentationMode ? /^com\.weappshipmate\.acceptance\.presentation\.\d+$/ : readingMode ? /^com\.weappshipmate\.acceptance\.reading\.\d+$/ : notificationsMode ? /^com\.weappshipmate\.acceptance\.p7notifications\.\d+$/ : sourcesMode ? /^com\.weappshipmate\.acceptance\.p7sources\.\d+$/ : maintenanceMode ? /^com\.weappshipmate\.acceptance\.p7maintenance\.\d+$/ : memoryMode ? /^com\.weappshipmate\.acceptance\.p7memory\.\d+$/ : healthMode ? /^com\.weappshipmate\.acceptance\.p7\.\d+$/ : handoffMode ? /^com\.weappshipmate\.acceptance\.p6\.\d+$/ : agentMode ? /^com\.weappshipmate\.acceptance\.p5\.\d+$/ : connectionsMode ? /^com\.weappshipmate\.acceptance\.p4\.\d+$/ : workflowMode ? /^com\.weappshipmate\.acceptance\.p3\.\d+$/ : /^com\.weappshipmate\.acceptance\.p2\.\d+$/;
+    if (!isolated || releaseSmoke || realModel || !pattern.test(expectedIdentifier ?? '')) throw new Error('Persistence acceptance requires --isolated-runtime and the matching dedicated providers/all/p2-p7/p7memory/p7maintenance/p7sources/p7notifications/reading/presentation/t12b --expected-identifier; incompatible with release/model modes');
     const bytes = await readFile(application);
     assert.ok(bytes.includes(Buffer.from(expectedIdentifier)), 'expected dedicated identifier must be embedded in the executable before launch');
     projectDatabase = resolve(process.env.APPDATA, expectedIdentifier, 'projects.sqlite3');
@@ -1141,16 +1172,36 @@ try {
   }
   if (releaseSmoke && (!suppliedApplication || !isAbsolute(suppliedApplication) || isolated || realModel)) throw new Error('--release-smoke requires --application=<absolute installed exe> and cannot combine with isolated/runtime model modes');
   if (suppliedApplication && !isAbsolute(suppliedApplication)) throw new Error('--application must be absolute');
+  let runtimeSource = resolve(repo, 'desktop/src-tauri/runtime');
+  if (suppliedRuntimeSource !== undefined) {
+    if (!releaseCheckMode || !isAbsolute(suppliedRuntimeSource)) throw new Error('--runtime-source requires an absolute version-check acceptance runtime');
+    const root = await realpath(resolve(repo, '.omx/artifacts/t12b-version-check/native'));
+    runtimeSource = await realpath(suppliedRuntimeSource);
+    const inside = relative(root, runtimeSource);
+    if (!inside || inside.startsWith('..') || isAbsolute(inside) || basename(runtimeSource) !== 'runtime') {
+      throw new Error('Acceptance runtime must be a runtime directory inside the version-check evidence folder');
+    }
+  }
   if (process.platform !== 'win32') throw new Error('This test requires Windows and real WebView2.');
   await mkdir(run, { recursive: true });
   if (workflowMode) await prepareWorkflowFixture();
   if (isolated) {
     isolatedDirectory = await mkdtemp(resolve(tmpdir(), '上线船友 P1 '));
     await cp(application, resolve(isolatedDirectory, 'desktop.exe'));
-    await cp(resolve(repo, 'desktop/src-tauri/runtime'), resolve(isolatedDirectory, 'runtime'), { recursive: true });
+    await cp(runtimeSource, resolve(isolatedDirectory, 'runtime'), { recursive: true });
     application = resolve(isolatedDirectory, 'desktop.exe');
   }
   if (sourcesMode) sourceFixture = await prepareSourceFreshnessFixture({ run, isolatedDirectory });
+  if (releaseCheckFixtureMode) releaseFixture = await prepareReleaseCheckFixture(isolatedDirectory);
+  if (releaseCheckMode) {
+    // A test-only proxy canary counts connections without reading any request data.
+    releaseProxyCanary = createServer();
+    releaseProxyCanary.on('connection', socket => { releaseProxyContacts++; socket.destroy(); });
+    await new Promise((accept, reject) => {
+      releaseProxyCanary.once('error', reject);
+      releaseProxyCanary.listen(0, '127.0.0.1', accept);
+    });
+  }
   const binary = await stat(application);
   if (Date.now() - binary.mtimeMs > 3600000) throw new Error('Build current desktop first: binary is older than one hour.');
   binarySha256 = createHash('sha256').update(await readFile(application)).digest('hex');
@@ -1158,7 +1209,7 @@ try {
   // Isolate the deterministic upstream. An inherited test-only Node preload below
   // redirects ONLY the fixed built-in provider origins; production code has no test switch.
   const preload = resolve(run, 'fixture-preload.mjs');
-  if (!releaseSmoke) {
+  if (!releaseSmoke && !releaseCheckMode) {
   fixture = createServer(async (req, res) => {
     if (providerAgentFixtureHandler && await providerAgentFixtureHandler(req, res)) return;
     if (agentMode && await agentFixture.handle(req, res)) return;
@@ -1229,8 +1280,11 @@ try {
   driver = spawn(tools.tauriDriver, ['--port', '4444', '--native-port', '4445', '--native-driver', tools.edgeDriver], {
     cwd: isolatedDirectory || repo, windowsHide: true, env: { ...process.env,
       ...((isolated || releaseSmoke) ? { PATH: `${process.env.SystemRoot}\\System32;${process.env.SystemRoot}`, NODE_PATH: '' } : {}),
+      ...(releaseCheckMode ? {
+        NODE_USE_ENV_PROXY: '1', NO_PROXY: '', HTTPS_PROXY: `http://127.0.0.1:${releaseProxyCanary.address().port}`,
+      } : {}),
       WEBVIEW2_USER_DATA_FOLDER: resolve(run, 'webview-profile'),
-      NODE_OPTIONS: releaseSmoke ? '' : realModel ? (process.env.NODE_OPTIONS || '') : `${process.env.NODE_OPTIONS || ''} --import=${pathToFileURL(preload).href}`.trim() },
+      NODE_OPTIONS: releaseSmoke || releaseCheckMode ? '' : realModel ? (process.env.NODE_OPTIONS || '') : `${process.env.NODE_OPTIONS || ''} --import=${pathToFileURL(preload).href}`.trim() },
   });
   driver.stdout.pipe(driverLog); driver.stderr.pipe(driverLog);
   await until(() => wd('GET', '/status'), 'tauri-driver start', 30000);
@@ -1264,7 +1318,10 @@ try {
     assert.equal(csp.executed, false);
     assert.match(csp.directive, /^script-src/);
   });
-  if (builtinProvidersMode) {
+  if (releaseCheckMode) {
+    await checkReleaseFlows({ run, checked, command, inspect, until, click, press, text, screenshot, openSettingsSection, closeSettings, projectInvoke, ownedRuntimeProcesses, quit, fixture: releaseFixture, live: releaseCheckLive });
+    await checked('Version checks send no connection to the inherited opt-in proxy canary', () => assert.equal(releaseProxyContacts, 0));
+  } else if (builtinProvidersMode) {
     await checkBuiltinProviderFlows({ checked, click, fill, press, inspect, text, find, command, until, screenshot, openModelSettings, send, finished, requests, quit, launch, setFixture: handler => { providerAgentFixtureHandler = handler; } });
   } else if (allBatchesMode || repairMode || restoreMode || providerAgentMode) {
     if (allBatchesMode || restoreMode) await checkProjectRestore({ run, checked, click, fill, find, inspect, text, command, until, screenshot, projectInvoke, projectDialog, closeProjects, selectProject, quit, launch, requests });
@@ -2222,12 +2279,17 @@ try {
   }
   console.error(error); process.exitCode = 1;
 } finally {
+  if (session && releaseFixture) {
+    try { await releaseFixture.release(); } catch (error) { checks.push({ name: 'Held version-check fixture release', passed: false, error: error.message }); process.exitCode = 1; }
+  }
   try { await quit(); } catch (error) { checks.push({ name: 'Session cleanup', passed: false, error: error.message }); process.exitCode = 1; }
   try { await sourceFixture?.restore(); } catch (error) { checks.push({ name: 'Source fixture restoration', passed: false, error: error.message }); process.exitCode = 1; }
+  try { await releaseFixture?.restore(); } catch (error) { checks.push({ name: 'Version-check fixture restoration', passed: false, error: error.message }); process.exitCode = 1; }
   driver?.kill(); driverLog?.end();
   if (fixture) { fixture.closeAllConnections(); fixture.close(); }
   if (customFixture) { customFixture.closeAllConnections(); customFixture.close(); }
+  releaseProxyCanary?.close();
   await mkdir(run, { recursive: true });
-  await writeFile(resolve(run, 'results.json'), JSON.stringify({ application, binarySha256, releaseSmoke, allBatchesMode, restoreMode, providerAgentMode, builtinProvidersMode, builtinProvidersAcceptance: builtinProvidersMode ? { expectedIdentifier, fixture: "Actual Windows WebView2, native IPC, broker, connection, selection, cancellation and retry over synthetic DeepSeek/GLM/Kimi upstreams with isolated fake credentials; not real provider account or billing verification." } : null, repairMode, repairAcceptance: (allBatchesMode || repairMode) ? { expectedIdentifier, projectDatabase, fixture: "Actual Windows WebView2, approved single-file native write, backup, recheck, undo, restart and imported-source refusal over labelled temporary projects. No invoke mocks, model or user source writes. Exclusive recoverable write, not atomic replacement or power-loss proof." } : null, projectRestoreAcceptance: (allBatchesMode || restoreMode) ? { expectedIdentifier, projectDatabase, fixture: "Actual native SQLite, backup preview, append restore, archive and restart in Windows WebView2; labelled local files, no invoke mocks or OS picker. Imported records remain unverified." } : null, providerAgentAcceptance: (allBatchesMode || providerAgentMode) ? { expectedIdentifier, projectDatabase, fixture: "Actual official SDKs, private broker, Rust tools and WebView2; synthetic Anthropic/Google protocol streams with fake isolated credentials. No external accounts, real inference or OS folder picker." } : null, projectsMode, workflowMode, connectionsMode, agentMode, handoffMode, healthMode, memoryMode, maintenanceMode, sourcesMode, notificationsMode, readingMode, presentationMode, maintenanceFrontendErrors, sourceFrontendErrors, notificationFrontendErrors, readingFrontendErrors, presentationFrontendErrors, presentationAcceptance: presentationMode ? { expectedIdentifier, projectDatabase, fixture: "Real native SQLite, workflow projection and WebView2 over a labelled temporary project; home navigation, explicit manual confirmations, local appearance settings, refresh/restart and reversible DOM text stress. No invoke mocks, credentials, model calls, external URLs, OS notification submissions or installed-release claim." } : null, readingAcceptance: readingMode ? { expectedIdentifier, projectDatabase, fixture: "Real native SQLite and bundled check/guide/explain over a labelled temporary project; native report reader, history, original Markdown, clipboard, handoff, restart and presentation overrides. No invoke mocks, external links, model calls or overall WCAG conformance claim." } : null, systemNotificationAcceptance: notificationsMode ? { expectedIdentifier, projectDatabase, fixture: "Actual official Tauri notification plugin, native SQLite preferences, real watcher/scanner and WebView2. Submitted means plugin accepted only; no OS-visible toast, installation identity or permission-prompt verification. No OS policy changes, registration or model requests." } : null, sourceFreshnessAcceptance: sourcesMode ? { expectedIdentifier, projectDatabase, fixture: "Actual Rust, SQLite, isolated Node checkSource core and native WebView2; labelled HTTPS request/DNS adapters in disposable runtime only. No public-network, model inference, OS browser or installed-release acceptance claim." } : null, maintenanceAcceptance: maintenanceMode ? { expectedIdentifier, projectDatabase, fixture: "Actual SQLite, Node fs.watch, bundled scanner and preferences in native WebView2. Labelled source edits and isolated CLI timing-only wrappers; real report comparisons and app-local notices. No model requests or OS notification permission, installed identity or visible delivery claim. Suppression checks use documented bounded observation windows." } : null, memoryAcceptance: memoryMode ? { expectedIdentifier, projectDatabase, fixture: "Real native SQLite and WebView2 UI over labelled projects; explicit-memory CRUD, restart, scope denial, live-reference resolution and actual desktop transport to synthetic local Ollama responses. No external model or account, no OS picker." } : null, healthAcceptance: healthMode ? { expectedIdentifier, projectDatabase, fixture: "Real bundled preflight and native SQLite over labelled temporary projects; UI refresh, historical report, rename/subject changes, directory relocation, failures, stop and restart. Fault fixtures modify only the disposable runtime copy and restore it. No OS picker, external account or model calls." } : null, handoffAcceptance: handoffMode ? { expectedIdentifier, projectDatabase, fixture: "Real bundled preflight over labelled temporary project; native JSON/Markdown downloads and WebDriver file input. No OS picker, external account or model calls." } : null, agentAcceptance: agentMode ? { expectedIdentifier, projectDatabase, fixture: "Synthetic OpenAI Responses via actual AI SDK; actual native tools and isolated project DB; no external model or user credentials" } : null, connectionsAcceptance: connectionsMode ? { expectedIdentifier, projectDatabase, credentialNamespace: `${expectedIdentifier}/model-connections/v1/openrouter`, fixture: "Only fake OpenRouter credentials and synthetic protocol responses; actual Windows vault/native bridge/UI. Report attached via UI; file read boundaries through actual IPC, OS file picker not exercised." } : null, workflowAcceptance: workflowMode ? { expectedIdentifier, projectDatabase, fixtureSetup: "Labelled v1 SQLite migration fixture before app launch in fresh acceptance identifier only; real IPC and DOM for all subsequent operations", boundaries: "Native WebView2 only; no production data, invoke mocks or external model calls" } : null, projectAcceptance: projectsMode ? { expectedIdentifier, projectDatabase, fixtureSetup: 'Two labelled directories and project records created via actual typed native IPC; relocation also via IPC. Native OS folder picker not exercised.', interaction: 'DOM clicks for form save, association, export, history, run and stop; observed native select option set with change event; no invoke mocks.', boundaries: 'Native WebView2 only; not a browser preview or clean Windows installation acceptance.' } : null, processExitChecks, foreignOriginNavigation: releaseSmoke ? 'Controlled native WebView localhost document; see named denial check' : 'Not exercised in this mode', isolation: { enabled: isolated, directory: isolatedDirectory ?? null, runtimeSource: releaseSmoke ? 'Actual installed release; no installation writes' : isolated ? 'Copied exe and runtime under Unicode temp directory; no source checkout resolution' : 'Build output', childPath: (isolated || releaseSmoke) ? 'SystemRoot/System32 and SystemRoot only; NODE_PATH empty' : 'Inherited', toolFixtures: builtinProvidersMode ? 'No runtime source mutation; isolated synthetic DeepSeek/GLM/Kimi protocols redirected by child-only test preload; no external credentials or paid requests' : presentationMode ? 'No runtime mutation; labelled project files only, actual SQLite and workflow, reversible DOM-only text size and spacing stress' : readingMode ? 'No runtime mutation; labelled project files only, actual bundled tool results, reversible DOM-only text size and spacing stress overrides' : notificationsMode ? 'No runtime mutation or notification mocks; labelled project files through actual watcher/scanner and official Windows plugin' : sourcesMode ? 'Source CLI wrapper injects labelled HTTPS/DNS adapters into actual checkSource core; timing and malformed-output faults only in disposable runtime, restored after quit; repository rules and archives unchanged' : maintenanceMode ? 'Timing-only guide/check wrapper limited to disposable runtime copy and restored in finally; original scanner output, labelled project writes and temporary root relocation' : memoryMode ? 'No runtime source mutation; labelled temporary project files and session import only; synthetic local Ollama responses via child-only network preload' : healthMode ? 'Malformed output and cancellation affect only isolated runtime copy and are restored in finally; labelled project directory temporarily relocated and restored' : handoffMode ? 'No runtime mutation; labelled temporary project files only' : isolated ? 'Slow CLI and missing CLI affect only isolated copy and are restored in finally; model protocol fixtures remain separately labelled' : 'None', childExitCheck: releaseSmoke || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode ? 'Exact installed runtime node.exe path; CIM query before/after quit; see processExitChecks' : 'Not separately measured by this harness' }, fixture: agentMode ? 'Actual Windows WebView2, native IPC, broker, SQLite and bundled read-only tools. A local OpenAI Responses fixture drives the requests. The isolated child is replaced for failure and cancellation checks.' : builtinProvidersMode ? 'Actual native WebView2, Rust IPC, credential broker and text transport with deterministic DeepSeek/GLM/Kimi protocol fixtures; GLM presets are configured but unverified, no undocumented model discovery endpoint' : presentationMode ? 'Actual SQLite and Windows WebView2; labelled temporary project, explicit UI facts and confirmations, real preferences; no model, external browser or installed-release claim' : readingMode ? 'Actual SQLite, bundled tools and Windows WebView2 report reading; labelled temporary project, no model, OS browser or screenshot-based whole-product conformance claim' : notificationsMode ? 'Actual native settings and official notification submission with real local maintenance; submitted/failed outcomes recorded separately from unverified OS-visible delivery' : sourcesMode ? 'Deterministic HTTPS response adapters through actual source-check core, native Rust validation/SQLite and WebView2 UI; public network checked separately and not claimed here' : maintenanceMode ? 'Actual SQLite, watcher and bundled scanner over labelled temporary projects; app-local notices, real preference UI, restart and scoped shutdown; no model or OS notification delivery' : memoryMode ? 'Labelled temporary projects; actual native SQLite, memory UI, restart and transport; deterministic local Ollama response, not external model inference or OS picker' : healthMode ? 'Labelled temporary projects; actual SQLite, bundled preflight, native maintenance UI and restart; isolated runtime failure/stop injection; no model requests or OS picker' : handoffMode ? 'Labelled temporary project; actual native SQLite, bundled preflight and WebView2 downloads; no model requests or OS picker' : workflowMode ? 'Explicit v1 migration fixture and temporary source files; actual SQLite migration, native IPC, workflow UI and structured bundled tools; malformed tool output limited to isolated runtime copy' : projectsMode ? 'Labelled temporary project directories; actual native SQLite, IPC and bundled guide CLI; isolated slow/missing CLI fault injection restored in finally; no model requests' : releaseSmoke ? 'None: installed release guide, rule lookup and provider catalog; no model requests, preloads or installation mutations' : realModel ? 'None: real installed local Ollama llama3.2:3b; no network preload, paid API or model download' : 'Deterministic Ollama and OpenRouter OAuth protocol fixtures via child-only Node fetch preload; real native IPC, broker and provider parsing; no external account authorization or real LLM', checks, captures, requests }, null, 2));
+  await writeFile(resolve(run, 'results.json'), JSON.stringify({ application, binarySha256, releaseSmoke, releaseCheckMode, releaseCheckLive, allBatchesMode, restoreMode, providerAgentMode, builtinProvidersMode, builtinProvidersAcceptance: builtinProvidersMode ? { expectedIdentifier, fixture: "Actual Windows WebView2, native IPC, broker, connection, selection, cancellation and retry over synthetic DeepSeek/GLM/Kimi upstreams with isolated fake credentials; not real provider account or billing verification." } : null, repairMode, repairAcceptance: (allBatchesMode || repairMode) ? { expectedIdentifier, projectDatabase, fixture: "Actual Windows WebView2, approved single-file native write, backup, recheck, undo, restart and imported-source refusal over labelled temporary projects. No invoke mocks, model or user source writes. Exclusive recoverable write, not atomic replacement or power-loss proof." } : null, projectRestoreAcceptance: (allBatchesMode || restoreMode) ? { expectedIdentifier, projectDatabase, fixture: "Actual native SQLite, backup preview, append restore, archive and restart in Windows WebView2; labelled local files, no invoke mocks or OS picker. Imported records remain unverified." } : null, providerAgentAcceptance: (allBatchesMode || providerAgentMode) ? { expectedIdentifier, projectDatabase, fixture: "Actual official SDKs, private broker, Rust tools and WebView2; synthetic Anthropic/Google protocol streams with fake isolated credentials. No external accounts, real inference or OS folder picker." } : null, projectsMode, workflowMode, connectionsMode, agentMode, handoffMode, healthMode, memoryMode, maintenanceMode, sourcesMode, notificationsMode, readingMode, presentationMode, maintenanceFrontendErrors, sourceFrontendErrors, notificationFrontendErrors, readingFrontendErrors, presentationFrontendErrors, presentationAcceptance: presentationMode ? { expectedIdentifier, projectDatabase, fixture: "Real native SQLite, workflow projection and WebView2 over a labelled temporary project; home navigation, explicit manual confirmations, local appearance settings, refresh/restart and reversible DOM text stress. No invoke mocks, credentials, model calls, external URLs, OS notification submissions or installed-release claim." } : null, readingAcceptance: readingMode ? { expectedIdentifier, projectDatabase, fixture: "Real native SQLite and bundled check/guide/explain over a labelled temporary project; native report reader, history, original Markdown, clipboard, handoff, restart and presentation overrides. No invoke mocks, external links, model calls or overall WCAG conformance claim." } : null, systemNotificationAcceptance: notificationsMode ? { expectedIdentifier, projectDatabase, fixture: "Actual official Tauri notification plugin, native SQLite preferences, real watcher/scanner and WebView2. Submitted means plugin accepted only; no OS-visible toast, installation identity or permission-prompt verification. No OS policy changes, registration or model requests." } : null, sourceFreshnessAcceptance: sourcesMode ? { expectedIdentifier, projectDatabase, fixture: "Actual Rust, SQLite, isolated Node checkSource core and native WebView2; labelled HTTPS request/DNS adapters in disposable runtime only. No public-network, model inference, OS browser or installed-release acceptance claim." } : null, maintenanceAcceptance: maintenanceMode ? { expectedIdentifier, projectDatabase, fixture: "Actual SQLite, Node fs.watch, bundled scanner and preferences in native WebView2. Labelled source edits and isolated CLI timing-only wrappers; real report comparisons and app-local notices. No model requests or OS notification permission, installed identity or visible delivery claim. Suppression checks use documented bounded observation windows." } : null, memoryAcceptance: memoryMode ? { expectedIdentifier, projectDatabase, fixture: "Real native SQLite and WebView2 UI over labelled projects; explicit-memory CRUD, restart, scope denial, live-reference resolution and actual desktop transport to synthetic local Ollama responses. No external model or account, no OS picker." } : null, healthAcceptance: healthMode ? { expectedIdentifier, projectDatabase, fixture: "Real bundled preflight and native SQLite over labelled temporary projects; UI refresh, historical report, rename/subject changes, directory relocation, failures, stop and restart. Fault fixtures modify only the disposable runtime copy and restore it. No OS picker, external account or model calls." } : null, handoffAcceptance: handoffMode ? { expectedIdentifier, projectDatabase, fixture: "Real bundled preflight over labelled temporary project; native JSON/Markdown downloads and WebDriver file input. No OS picker, external account or model calls." } : null, agentAcceptance: agentMode ? { expectedIdentifier, projectDatabase, fixture: "Synthetic OpenAI Responses via actual AI SDK; actual native tools and isolated project DB; no external model or user credentials" } : null, connectionsAcceptance: connectionsMode ? { expectedIdentifier, projectDatabase, credentialNamespace: `${expectedIdentifier}/model-connections/v1/openrouter`, fixture: "Only fake OpenRouter credentials and synthetic protocol responses; actual Windows vault/native bridge/UI. Report attached via UI; file read boundaries through actual IPC, OS file picker not exercised." } : null, workflowAcceptance: workflowMode ? { expectedIdentifier, projectDatabase, fixtureSetup: "Labelled v1 SQLite migration fixture before app launch in fresh acceptance identifier only; real IPC and DOM for all subsequent operations", boundaries: "Native WebView2 only; no production data, invoke mocks or external model calls" } : null, projectAcceptance: projectsMode ? { expectedIdentifier, projectDatabase, fixtureSetup: 'Two labelled directories and project records created via actual typed native IPC; relocation also via IPC. Native OS folder picker not exercised.', interaction: 'DOM clicks for form save, association, export, history, run and stop; observed native select option set with change event; no invoke mocks.', boundaries: 'Native WebView2 only; not a browser preview or clean Windows installation acceptance.' } : null, processExitChecks, foreignOriginNavigation: releaseSmoke || releaseCheckFixtureMode ? 'Controlled native WebView localhost document; see named denial check' : 'Not exercised in this mode', isolation: { enabled: isolated, directory: isolatedDirectory ?? null, runtimeSource: releaseSmoke ? 'Actual installed release; no installation writes' : isolated ? 'Copied exe and runtime under Unicode temp directory; no source checkout resolution' : 'Build output', childPath: (isolated || releaseSmoke) ? 'SystemRoot/System32 and SystemRoot only; NODE_PATH empty' : 'Inherited', toolFixtures: releaseCheckMode ? (releaseCheckLive ? 'Unmodified bundled version checker on the public GitHub API' : 'Deterministic fetch and malformed receipt fixtures confined to the restored disposable runtime') : builtinProvidersMode ? 'No runtime source mutation; isolated synthetic DeepSeek/GLM/Kimi protocols redirected by child-only test preload; no external credentials or paid requests' : presentationMode ? 'No runtime mutation; labelled project files only, actual SQLite and workflow, reversible DOM-only text size and spacing stress' : readingMode ? 'No runtime mutation; labelled project files only, actual bundled tool results, reversible DOM-only text size and spacing stress overrides' : notificationsMode ? 'No runtime mutation or notification mocks; labelled project files through actual watcher/scanner and official Windows plugin' : sourcesMode ? 'Source CLI wrapper injects labelled HTTPS/DNS adapters into actual checkSource core; timing and malformed-output faults only in disposable runtime, restored after quit; repository rules and archives unchanged' : maintenanceMode ? 'Timing-only guide/check wrapper limited to disposable runtime copy and restored in finally; original scanner output, labelled project writes and temporary root relocation' : memoryMode ? 'No runtime source mutation; labelled temporary project files and session import only; synthetic local Ollama responses via child-only network preload' : healthMode ? 'Malformed output and cancellation affect only isolated runtime copy and are restored in finally; labelled project directory temporarily relocated and restored' : handoffMode ? 'No runtime mutation; labelled temporary project files only' : isolated ? 'Slow CLI and missing CLI affect only isolated copy and are restored in finally; model protocol fixtures remain separately labelled' : 'None', childExitCheck: releaseSmoke || maintenanceMode || sourcesMode || notificationsMode || readingMode || presentationMode || releaseCheckMode ? 'Exact installed runtime node.exe path; CIM query before/after quit; see processExitChecks' : 'Not separately measured by this harness' }, fixture: releaseCheckMode ? 'Actual native settings, Rust IPC, packaged Node and WebView2 version check. See t12b-release-check.json for live GitHub or labeled fixture evidence.' : agentMode ? 'Actual Windows WebView2, native IPC, broker, SQLite and bundled read-only tools. A local OpenAI Responses fixture drives the requests. The isolated child is replaced for failure and cancellation checks.' : builtinProvidersMode ? 'Actual native WebView2, Rust IPC, credential broker and text transport with deterministic DeepSeek/GLM/Kimi protocol fixtures; GLM presets are configured but unverified, no undocumented model discovery endpoint' : presentationMode ? 'Actual SQLite and Windows WebView2; labelled temporary project, explicit UI facts and confirmations, real preferences; no model, external browser or installed-release claim' : readingMode ? 'Actual SQLite, bundled tools and Windows WebView2 report reading; labelled temporary project, no model, OS browser or screenshot-based whole-product conformance claim' : notificationsMode ? 'Actual native settings and official notification submission with real local maintenance; submitted/failed outcomes recorded separately from unverified OS-visible delivery' : sourcesMode ? 'Deterministic HTTPS response adapters through actual source-check core, native Rust validation/SQLite and WebView2 UI; public network checked separately and not claimed here' : maintenanceMode ? 'Actual SQLite, watcher and bundled scanner over labelled temporary projects; app-local notices, real preference UI, restart and scoped shutdown; no model or OS notification delivery' : memoryMode ? 'Labelled temporary projects; actual native SQLite, memory UI, restart and transport; deterministic local Ollama response, not external model inference or OS picker' : healthMode ? 'Labelled temporary projects; actual SQLite, bundled preflight, native maintenance UI and restart; isolated runtime failure/stop injection; no model requests or OS picker' : handoffMode ? 'Labelled temporary project; actual native SQLite, bundled preflight and WebView2 downloads; no model requests or OS picker' : workflowMode ? 'Explicit v1 migration fixture and temporary source files; actual SQLite migration, native IPC, workflow UI and structured bundled tools; malformed tool output limited to isolated runtime copy' : projectsMode ? 'Labelled temporary project directories; actual native SQLite, IPC and bundled guide CLI; isolated slow/missing CLI fault injection restored in finally; no model requests' : releaseSmoke ? 'None: installed release guide, rule lookup and provider catalog; no model requests, preloads or installation mutations' : realModel ? 'None: real installed local Ollama llama3.2:3b; no network preload, paid API or model download' : 'Deterministic Ollama and OpenRouter OAuth protocol fixtures via child-only Node fetch preload; real native IPC, broker and provider parsing; no external account authorization or real LLM', checks, captures, requests }, null, 2));
   console.log(`Evidence: ${run}`);
 }

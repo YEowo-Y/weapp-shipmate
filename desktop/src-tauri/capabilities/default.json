@@ -47,6 +47,7 @@
     "allow-source-freshness-check",
     "allow-source-quote-snapshot",
     "allow-source-quote-check",
+    "allow-release-check",
     "allow-system-notifications-snapshot",
     "allow-system-notifications-save",
     "allow-system-notifications-test",

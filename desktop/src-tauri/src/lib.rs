@@ -9,6 +9,7 @@ mod project_maintenance;
 mod project_memory;
 mod project_repair;
 mod project_store;
+mod release_check;
 mod repair_writer;
 mod runtime;
 mod source_freshness;
@@ -94,6 +95,7 @@ pub fn run() {
         .manage(project_store::ProjectArchives::default())
         .manage(project_repair::ProjectRepairs::default())
         .manage(project_maintenance::ProjectMaintenance::default())
+        .manage(release_check::ReleaseChecker::default())
         .manage(system_notifications::SystemNotifications::default())
         .setup(|app| {
             diagnostics::init_for_app(app.handle());
@@ -139,6 +141,7 @@ pub fn run() {
             source_freshness::source_freshness_check,
             source_freshness::quote::source_quote_snapshot,
             source_freshness::quote::source_quote_check,
+            release_check::release_check,
             system_notifications::system_notifications_snapshot,
             system_notifications::system_notifications_save,
             system_notifications::system_notifications_test,
@@ -155,6 +158,7 @@ pub fn run() {
                 app.state::<project_maintenance::ProjectMaintenance>()
                     .shutdown(app);
                 app.state::<tool_runner::ToolRunner>().shutdown();
+                app.state::<release_check::ReleaseChecker>().shutdown();
                 app.state::<model_bridge::ModelBridge>().shutdown();
                 app.state::<project_store::ProjectStore>().shutdown();
                 diagnostics::record_reason("app", "info", "shutdown", "clean_exit");

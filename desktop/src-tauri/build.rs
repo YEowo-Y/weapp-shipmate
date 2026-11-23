@@ -40,6 +40,7 @@ fn main() {
             "source_freshness_check",
             "source_quote_snapshot",
             "source_quote_check",
+            "release_check",
             "system_notifications_snapshot",
             "system_notifications_save",
             "system_notifications_test",
