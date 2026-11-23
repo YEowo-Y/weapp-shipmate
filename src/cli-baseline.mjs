@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { posix, win32 } from "node:path";
 import { SUBJECT_ENUM } from "./data.mjs";
 import { MAX_CLI_JSON_BYTES, readCliJsonFile } from "./cli-config.mjs";
+import { isPortableEvidenceFile } from "./scanner-evidence.mjs";
 
 const VERSION = 1;
 const scanCounters = ["readErrors", "skippedLinks", "skippedDirs", "skippedLargeFiles"];
@@ -35,10 +36,7 @@ function validScan(scan) {
 function validLocation(location) {
   if (!isRecord(location) || Object.keys(location).length !== 5) return false;
   const { file, line, column, kind, signal } = location;
-  // eslint-disable-next-line no-control-regex -- the report excludes control characters in paths
-  if (!isText(file) || /^[A-Za-z]:|[\\\u0000-\u001f\u007f\x60]/.test(file) ||
-      !file.split("/").every(part => part && part !== "." && part !== "..") ||
-      !locationKinds.has(kind) || !isText(signal))
+  if (!isPortableEvidenceFile(file) || !locationKinds.has(kind) || !isText(signal))
     return false;
   return (line === null && column === null) || (isCount(line) && line > 0 && isCount(column) && column > 0);
 }

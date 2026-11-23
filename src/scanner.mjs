@@ -567,7 +567,7 @@ export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES, evidence = fal
     skippedLinks: walkStats.skippedLinks,
     scope: {
       root: resolve(dir),
-      policyVersion: "shipmate-static-v1",
+      policyVersion: "shipmate-static-v2",
       filesHash: createHash("sha256").update(JSON.stringify(scannedFiles.sort())).digest("hex"),
       complete: filesScanned > 0 && !skippedLargeFiles && !walkStats.skippedDirs && !walkStats.readErrors && !walkStats.skippedLinks && !walkStats.truncated && !facts.configErrors.length,
     },
@@ -580,8 +580,9 @@ export function scanProject(dir, { maxEntries = MAX_WALK_ENTRIES, evidence = fal
     configKeys: [...facts.configKeys].sort(),
     configErrors: facts.configErrors,
     secretHints: [...facts.secretHints].sort().map((s) => {
-      const [file, key] = s.split("::");
-      return { file, key };
+      // SECRET_RE 的固定键名不含冒号，POSIX 相对路径可以包含 "::"。
+      const separator = s.lastIndexOf("::");
+      return { file: s.slice(0, separator), key: s.slice(separator + 2) };
     }),
     insecureHosts: [...facts.insecureHosts].sort(),
     ...(collector ? { evidence: collector.result() } : {}),

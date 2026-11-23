@@ -602,7 +602,7 @@ T10B 已在 [#41](https://github.com/YEowo-Y/weapp-shipmate/pull/41) 合并，�
 
 **本机实施验收（2026-11-23）。** Windows Node 24.14.0 与 PowerShell 7.6.9 用实际 CLI 保存 SARIF，逐项核对 UTF-8、末尾 LF、真实文件 URI、主位置第 1 行第 22 列和相关位置、规则原文与日期、截断和脱敏。退出 2 时文件完整并保留诊断，目录错误退出 1 且文件为空。原样 OASIS 2.1.0 schema 校验通过。文件名中的字面花括号按 SARIF 消息语法转义，实际文件回归先红后绿。Windows 和 Ubuntu WSL2 各 10 项定向回归通过，包含 Linux 文件名中的字面反斜杠和超过 64 KiB 的输出。15 组旧命令、原证据报告、基线保存和比对保持 stdout、stderr 和退出码一致。实际 npm tarball、MCPB 解包、Codex 和 Claude 插件入口及既有 MCP 冒烟通过。独立冷读复审通过。lint、全量测试 1,879 项通过（2 项按平台跳过）、71 条引文核验、coverage 和桌面三套严格类型检查通过。Windows 及 MCPB 证据见 `.omx/artifacts/t11d-cli-sarif/{windows-result,mcpb-result}.json`。
 
-**已知定位边界。** Ubuntu WSL2 实测，文件名含 `::` 时，现有扫描器仍能给出疑似密钥发现，位置数据缺失。SARIF 对该项输出 `evidenceStatus: unavailable` 和空位置数组。
+**定位补修（2026-11-23）。** Ubuntu WSL2 复现了文件名或目录名含 `::` 时的疑似密钥定位误拆。修复后，SARIF 输出真实相对 URI 和行列，符合 JSON v1 路径约束的位置也可保存并比较。本次补回的疑似密钥路径若按普通报告的路径格式表示后超出 JSON v1 约束，报告和基线保留文件及键名提示，证据状态按可用位置显示为 `partial` 或 `unavailable`。这类路径仍可通过 SARIF 精确定位。按 T11C2 更新扫描策略为 `shipmate-static-v2`，旧策略快照对照返回 `incomparable` 和 `scan-policy-changed`，新快照对照确认两处共同位置，退出阈值沿用当前发现。实测见 `.omx/artifacts/secret-evidence-path/baseline-after.json`。
 
 ### T12 · 桌面分发
 

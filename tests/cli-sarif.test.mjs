@@ -256,6 +256,81 @@ test("SARIF includes only sanitized facts from source, requests and credential f
   }
 });
 
+test("credential findings keep the complete path and both positions when a POSIX path contains ::", {
+  skip: process.platform === "win32" && "Windows file names cannot contain colons",
+}, t => {
+  const dir = project(t);
+  const folder = "source::backup";
+  const name = "page::copy.js";
+  const file = `${folder}/${name}`;
+  const marker = "SYNTHETIC_CREDENTIAL_NOT_REAL";
+  mkdirSync(join(dir, folder));
+  writeFileSync(join(dir, folder, name),
+    `const one = { AppSecret: "${marker}" };\nconst two = { appsecret: "${marker}" };\n`);
+
+  const output = cli(["check", dir, "--sarif"]);
+  const ruleId = "security.hardcoded-secret";
+  const credential = sarif(output, 2).results.find(item => item.ruleId === ruleId);
+  assert.equal(credential.properties.evidenceStatus, "located");
+  const artifactLocation = { uri: "source%3A%3Abackup/page%3A%3Acopy.js", uriBaseId: "%SRCROOT%" };
+  assert.deepEqual(credential.locations, [
+    { physicalLocation: { artifactLocation, region: { startLine: 1, startColumn: 15 } } },
+  ]);
+  assert.deepEqual(credential.relatedLocations, [
+    { id: 1, physicalLocation: { artifactLocation, region: { startLine: 2, startColumn: 15 } } },
+  ]);
+  assert.equal(fileURLToPath(new URL(artifactLocation.uri, pathToFileURL(dir + sep))), join(dir, folder, name));
+
+  const json = call(["check", dir, "--evidence", "--json", "--json-version", "1"]);
+  assert.equal(json.status, 2, json.stderr);
+  const report = JSON.parse(json.stdout);
+  assert.deepEqual(report.meta.scan.secretHints, [{ file, key: "appsecret" }]);
+  const evidence = report.items.find(item => item.ruleId === ruleId).evidence;
+  assert.equal(evidence.status, "located");
+  assert.deepEqual(evidence.locations, [1, 2].map(line => ({ file, line, column: 15, kind: "secret-key", signal: "appsecret" })));
+  assert.ok(!output.stdout.includes(marker));
+  assert.ok(!json.stdout.includes(marker));
+});
+
+test("SARIF locates credential paths outside the portable v1 evidence format", {
+  skip: process.platform === "win32" && "Windows file names cannot contain colons",
+}, t => {
+  const dir = project(t);
+  const marker = "SYNTHETIC_PORTABLE_PATH_SECRET";
+  const files = ["a::key.js", "\\folder::copy.js", "nested\\..\\key::copy.js"];
+  for (const file of files) {
+    writeFileSync(join(dir, file), `const sample = { appsecret: "${marker}" };\n`);
+  }
+
+  const output = cli(["check", dir, "--sarif"]);
+  const ruleId = "security.hardcoded-secret";
+  const item = sarif(output, 2).results.find(result => result.ruleId === ruleId);
+  assert.equal(item.properties.evidenceStatus, "located");
+  const paths = [...item.locations, ...item.relatedLocations].map(({ physicalLocation }) =>
+    physicalLocation.artifactLocation.uri);
+  assert.deepEqual(paths.sort(), files.map(encodeURIComponent).sort());
+  assert.ok(!output.stdout.includes(marker));
+
+  const snapshotArgs = ["check", dir, "--evidence", "--json", "--json-version", "1", "--baseline-snapshot"];
+  const snapshot = call(snapshotArgs);
+  assert.equal(snapshot.status, 2, snapshot.stderr);
+  const report = JSON.parse(snapshot.stdout);
+  assert.deepEqual(report.items.find(item => item.ruleId === ruleId).evidence, {
+    status: "unavailable",
+    locations: [],
+  });
+  assert.equal(report.meta.scan.secretHints.length, files.length);
+  assert.ok(report.meta.scan.secretHints.every(({ key }) => key === "appsecret"));
+  assert.ok(!snapshot.stdout.includes(marker));
+
+  writeFileSync(join(dir, "source::copy.js"), `const sample = { appsecret: "${marker}" };\n`);
+  const mixed = call(snapshotArgs);
+  assert.equal(mixed.status, 2, mixed.stderr);
+  const mixedEvidence = JSON.parse(mixed.stdout).items.find(item => item.ruleId === ruleId).evidence;
+  assert.equal(mixedEvidence.status, "partial");
+  assert.deepEqual(mixedEvidence.locations.map(({ file }) => file), ["source::copy.js"]);
+});
+
 test("SARIF rejects incompatible commands and options with empty stdout", t => {
   const dir = project(t);
   const check = ["check", dir, "--sarif"];
