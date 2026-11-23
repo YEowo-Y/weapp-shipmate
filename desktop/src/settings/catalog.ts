@@ -31,6 +31,7 @@ export const settingsItems: SearchItem[] = [
   { section: 'privacy', title: '当前会话授权', target: 'settings-permissions', keywords: '授权 权限 隐私 读取 项目 分享 外发 撤销' },
   { section: 'privacy', title: '本机数据与凭据', target: 'settings-storage', keywords: '隐私 privacy 数据 保存 本机 存储 凭据' },
   { section: 'about', title: '版本信息', target: 'settings-versions', keywords: 'about 关于 版本 内核 规则' },
+  { section: 'about', title: '检查更新', target: 'settings-check-release', keywords: '版本 更新 应用 GitHub 公开稳定版 release update' },
   { section: 'about', title: '规则来源', target: 'settings-sources', keywords: '官方 来源 依据 核验 更新 规则' },
   { section: 'about', title: '开源许可', target: 'settings-licenses', keywords: 'license 开源 许可 MIT' },
 ];
