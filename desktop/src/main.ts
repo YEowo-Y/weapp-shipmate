@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import corePackage from '../../package.json';
-import type { SettingsPanel } from './settings/types';
+import type { ReleaseCheckResult, SettingsPanel } from './settings/types';
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { mountProjects, type Artifact, type Project, type ProjectSnapshot } from "./projects";
 import { mountDesktopSessions } from "./sessions";
@@ -710,6 +710,8 @@ window.addEventListener("DOMContentLoaded", () => {
     async revokePermissions() { const workspace = await sessionsReady; if (!workspace) throw new Error('会话不可用'); workspace.revokePermissions(); },
     subscribePrivacy(listener) { const observer = new MutationObserver(listener); observer.observe($('#desktopComposer'), { attributes: true, subtree: true, attributeFilter: ['data-mode', 'data-model-provider', 'data-enabled'] }); return () => observer.disconnect(); },
     async getVersions() { return { desktop: await getVersion(), core: corePackage.version, rules: projects?.getRulesVersion() ?? null }; },
+    checkRelease: () => invoke<ReleaseCheckResult>('release_check'),
+    onReleasePage: url => openUrl(url),
     onSources: anchor => sources?.open(anchor ?? $("#desktop-preferences-open")),
     onArchives: anchor => { if (dataSettings?.canClose?.() !== false && workspace.close()) sessions?.openHistory(anchor, 'archived'); },
     onRepository: () => openUrl('https://github.com/YEowo-Y/weapp-shipmate'),
