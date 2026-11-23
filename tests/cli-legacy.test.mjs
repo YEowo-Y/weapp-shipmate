@@ -23,7 +23,10 @@ for (const example of baseline.cases) {
     });
     assert.ifError(child.error);
     assert.equal(child.status, example.code);
-    assert.equal(child.stdout, restore(example.stdout));
+    // Evidence fixes advance the scanner policy while the historical fixture stays frozen.
+    const expected = restore(example.stdout)
+      .replace('"policyVersion": "shipmate-static-v1"', '"policyVersion": "shipmate-static-v2"');
+    assert.equal(child.stdout, expected);
     assert.equal(child.stderr, restore(example.stderr));
   });
 }
